@@ -80,9 +80,16 @@ func (g *Builder) build(namePrefix string, s *schema.Resource) (*types.Named, *t
 			switch r := sch.Elem.(type) {
 			case *schema.Resource:
 				lParamType, lObsType := g.build(fName, r)
-				if sch.Computed {
+				switch {
+				// There are fields that are computed only if user doesn't supply
+				// input.
+				case sch.Computed && sch.Optional:
+					elemType = lParamType.Obj().Type()
+				// If a field is not optional but computed, then it's definitely
+				// an observation field.
+				case sch.Computed:
 					elemType = lObsType.Obj().Type()
-				} else {
+				default:
 					elemType = lParamType.Obj().Type()
 				}
 			case *schema.Schema:
@@ -128,9 +135,16 @@ func (g *Builder) build(namePrefix string, s *schema.Resource) (*types.Named, *t
 		case schema.TypeInvalid:
 			continue
 		}
-		if sch.Computed {
+		switch {
+		// There are fields that are computed if user doesn't supply
+		// input.
+		case sch.Computed && sch.Optional:
+			paramFields = append(paramFields, field)
+		// If a field is not optional but computed, then it's definitely
+		// an observation field.
+		case sch.Computed:
 			obsFields = append(obsFields, field)
-		} else {
+		default:
 			paramFields = append(paramFields, field)
 		}
 	}
