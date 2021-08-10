@@ -1,0 +1,54 @@
+apiVersion: v1
+data:
+  PLUGIN_MAX_PORT: "25000"
+  PLUGIN_MIN_PORT: "10000"
+  PLUGIN_PROTOCOL_VERSIONS: 5,6
+  TF_PLUGIN_MAGIC_COOKIE: d602bf8f470bc67ca7faa0386276bbdd4330efaf76d1a219cb4d6991ca9872b2
+kind: ConfigMap
+metadata:
+  name: providers-config
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: terraform-provider-aws
+  name: terraform-provider-aws
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: terraform-provider-aws
+  template:
+    metadata:
+      labels:
+        app: terraform-provider-aws
+    spec:
+      containers:
+      - args:
+        - -d
+        image: kind/terraform-provider-aws:0.0.1
+        name: terraform-provider-aws
+        ports:
+        - containerPort: 9000
+        envFrom:
+        - configMapRef:
+            name: providers-config
+        - secretRef:
+            name: terraform-aws-creds
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: terraform-provider-aws
+  name: terraform-provider-aws
+spec:
+  ports:
+    - port: 9000
+      protocol: TCP
+      targetPort: 9000
+  selector:
+    app: terraform-provider-aws
