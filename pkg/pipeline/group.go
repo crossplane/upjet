@@ -21,7 +21,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/muvaf/typewriter/pkg/packages"
 	"github.com/muvaf/typewriter/pkg/wrapper"
 	"github.com/pkg/errors"
 
@@ -34,7 +33,6 @@ func NewVersionGenerator(rootPath, group, version string) *VersionGenerator {
 		RootPath: rootPath,
 		Group:    group,
 		Version:  version,
-		cache:    packages.NewCache(),
 	}
 	// todo: accept cache as option
 	return gg
@@ -45,8 +43,6 @@ type VersionGenerator struct {
 	RootPath string
 	Group    string
 	Version  string
-
-	cache *packages.Cache
 }
 
 // Generate writes doc and group version info files to the disk.
@@ -67,7 +63,7 @@ func (vg *VersionGenerator) Generate() error {
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath("hack/boilerplate.go.txt"), // todo
 	)
-	err := gviFile.Write(filepath.Join(pkgPath, "zz_groupversion_info.go"), vars, os.FileMode(0o664))
+	err := gviFile.Write(filepath.Join(pkgPath, "zz_groupversion_info.go"), vars, os.ModePerm)
 	if err != nil {
 		return errors.Wrap(err, "cannot write group version info file")
 	}
@@ -75,7 +71,7 @@ func (vg *VersionGenerator) Generate() error {
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath("hack/boilerplate.go.txt"), // todo
 	)
-	err = docFile.Write(filepath.Join(pkgPath, "zz_doc.go"), vars, os.FileMode(0o664))
+	err = docFile.Write(filepath.Join(pkgPath, "zz_doc.go"), vars, os.ModePerm)
 	if err != nil {
 		return errors.Wrap(err, "cannot write doc file")
 	}
