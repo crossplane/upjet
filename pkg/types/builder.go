@@ -22,6 +22,7 @@ import (
 	"go/types"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/iancoleman/strcase"
 )
 
 // NewBuilder returns a new Builder.
@@ -59,12 +60,17 @@ func (g *Builder) Build() []*types.Named {
 }
 
 func (g *Builder) build(namePrefix string, s *schema.Resource) (*types.Named, *types.Named) { // nolint:gocyclo
-	if g.genTypes[ParamTypeName(namePrefix)] != nil && g.genTypes[ObsTypeName(namePrefix)] != nil {
-		return g.genTypes[ParamTypeName(namePrefix)], g.genTypes[ObsTypeName(namePrefix)]
+	paramTypeName := strcase.ToCamel(namePrefix) + "Parameters"
+	obsTypeName := strcase.ToCamel(namePrefix) + "Observation"
+	if g.genTypes[paramTypeName] != nil && g.genTypes[obsTypeName] != nil {
+		return g.genTypes[paramTypeName], g.genTypes[obsTypeName]
 	}
 	var paramFields []*types.Var
+	var paramTags []string
 	var obsFields []*types.Var
-	for fName, sch := range s.Schema {
+	var obsTags []string
+	for n, sch := range s.Schema {
+		fName := strcase.ToCamel(n)
 		var field *types.Var
 		switch sch.Type {
 		case schema.TypeBool:
@@ -140,34 +146,27 @@ func (g *Builder) build(namePrefix string, s *schema.Resource) (*types.Named, *t
 		// input.
 		case sch.Computed && sch.Optional:
 			paramFields = append(paramFields, field)
+			paramTags = append(paramTags, fmt.Sprintf("json:\"%s\" tf:\"%s\"", strcase.ToLowerCamel(n), n))
 		// If a field is not optional but computed, then it's definitely
 		// an observation field.
 		case sch.Computed:
 			obsFields = append(obsFields, field)
+			obsTags = append(obsTags, fmt.Sprintf("json:\"%s\" tf:\"%s\"", strcase.ToLowerCamel(n), n))
 		default:
 			paramFields = append(paramFields, field)
+			paramTags = append(paramTags, fmt.Sprintf("json:\"%s\" tf:\"%s\"", strcase.ToLowerCamel(n), n))
 		}
 	}
 	var paramType, obsType *types.Named
 	if len(paramFields) != 0 {
-		tName := types.NewTypeName(token.NoPos, g.Package, ParamTypeName(namePrefix), nil)
-		paramType = types.NewNamed(tName, types.NewStruct(paramFields, nil), nil)
+		tName := types.NewTypeName(token.NoPos, g.Package, paramTypeName, nil)
+		paramType = types.NewNamed(tName, types.NewStruct(paramFields, paramTags), nil)
 		g.genTypes[paramType.Obj().Name()] = paramType
 	}
 	if len(obsFields) != 0 {
-		tName := types.NewTypeName(token.NoPos, g.Package, ObsTypeName(namePrefix), nil)
-		obsType = types.NewNamed(tName, types.NewStruct(obsFields, nil), nil)
+		tName := types.NewTypeName(token.NoPos, g.Package, obsTypeName, nil)
+		obsType = types.NewNamed(tName, types.NewStruct(obsFields, obsTags), nil)
 		g.genTypes[obsType.Obj().Name()] = obsType
 	}
 	return paramType, obsType
-}
-
-// ParamTypeName returns parameters variant of the type name.
-func ParamTypeName(n string) string {
-	return n + "Parameters"
-}
-
-// ObsTypeName returns observation variant of the type name.
-func ObsTypeName(n string) string {
-	return n + "Observation"
 }
