@@ -22,11 +22,11 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/muvaf/typewriter/pkg/packages"
+	"github.com/muvaf/typewriter/pkg/wrapper"
 	"github.com/pkg/errors"
 
 	"github.com/crossplane-contrib/terrajet/pkg/pipeline/templates"
-	"github.com/muvaf/typewriter/pkg/packages"
-	"github.com/muvaf/typewriter/pkg/wrapper"
 )
 
 func NewVersionGenerator(rootPath, group, version string) *VersionGenerator {
@@ -36,7 +36,7 @@ func NewVersionGenerator(rootPath, group, version string) *VersionGenerator {
 		Version:  version,
 		cache:    packages.NewCache(),
 	}
-	// todo: accept cache as
+	// todo: accept cache as option
 	return gg
 }
 
@@ -49,28 +49,33 @@ type VersionGenerator struct {
 }
 
 func (vg *VersionGenerator) Generate() error {
-	pkgPath := filepath.Join(vg.RootPath, "apis", strings.ToLower(strings.Split(vg.Group, ".")[0]), strings.ToLower(vg.Version))
-	pkg, err := vg.cache.GetPackage(pkgPath)
-	if err != nil {
-		return errors.Wrap(err, "cannot get package")
-	}
-	file := wrapper.NewFile(pkg.PkgPath, pkg.Name, templates.GroupVersionInfoTemplate,
-		wrapper.WithGenStatement(GenStatement),
-		wrapper.WithHeaderPath("hack/boilerplate.go.txt"), // todo
-	)
 	vars := map[string]interface{}{
 		"CRD": map[string]string{
 			"APIVersion": vg.Version,
 			"Group":      vg.Group,
 		},
 	}
-	data, err := file.Wrap(vars)
+	pkgPath := filepath.Join(
+		vg.RootPath,
+		"apis",
+		strings.ToLower(strings.Split(vg.Group, ".")[0]),
+		strings.ToLower(vg.Version),
+	)
+	gviFile := wrapper.NewFile(pkgPath, vg.Version, templates.GroupVersionInfoTemplate,
+		wrapper.WithGenStatement(GenStatement),
+		wrapper.WithHeaderPath("hack/boilerplate.go.txt"), // todo
+	)
+	err := gviFile.Write(filepath.Join(pkgPath, fmt.Sprintf("zz_groupversion_info.go")), vars, os.FileMode(0o664))
 	if err != nil {
-		return errors.Wrap(err, "cannot wrap file")
+		return errors.Wrap(err, "cannot write group version info file")
 	}
-	if err := os.MkdirAll(pkgPath, os.ModeDir); err != nil {
-		return errors.Wrap(err, "cannot create directory for version")
+	docFile := wrapper.NewFile(pkgPath, vg.Version, templates.DocTemplate,
+		wrapper.WithGenStatement(GenStatement),
+		wrapper.WithHeaderPath("hack/boilerplate.go.txt"), // todo
+	)
+	err = docFile.Write(filepath.Join(pkgPath, fmt.Sprintf("zz_doc.go")), vars, os.FileMode(0o664))
+	if err != nil {
+		return errors.Wrap(err, "cannot write doc file")
 	}
-	filePath := filepath.Join(pkgPath, fmt.Sprintf("zz_groupversion_info.go"))
-	return errors.Wrap(os.WriteFile(filePath, data, os.FileMode(0o664)), "cannot write groupversion_info file")
+	return nil
 }

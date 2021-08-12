@@ -23,3 +23,6 @@ var CRDTypesTemplate string
 
 //go:embed groupversion_info.go.tmpl
 var GroupVersionInfoTemplate string
+
+//go:embed doc.go.tmpl
+var DocTemplate string

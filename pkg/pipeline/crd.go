@@ -86,7 +86,7 @@ func (cg *CRDGenerator) Generate() error {
 	if err != nil {
 		return errors.Wrap(err, "cannot wrap file")
 	}
-	if err := os.MkdirAll(pkgPath, os.ModeDir); err != nil {
+	if err := os.MkdirAll(pkgPath, os.ModePerm); err != nil {
 		return errors.Wrap(err, "cannot create directory for crd")
 	}
 	filePath := filepath.Join(pkgPath, fmt.Sprintf("zz_%s_types.go", strings.ToLower(cg.Kind)))

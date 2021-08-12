@@ -1,0 +1,11 @@
+{{ .Header }}
+
+{{ .GenStatement }}
+
+// +kubebuilder:object:generate=true
+// Package {{ .CRD.APIVersion }} is the {{ .CRD.APIVersion }} version of the
+// {{ .CRD.Group }} API.
+// +groupName={{ .CRD.Group }}
+// +versionName={{ .CRD.APIVersion }}
+
+package {{ .CRD.APIVersion }}
