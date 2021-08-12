@@ -16,13 +16,16 @@ limitations under the License.
 
 package templates
 
-import _ "embed"
+import _ "embed" // nolint:golint
 
+// CRDTypesTemplate is populated with CRD and type information.
 //go:embed crd_types.go.tmpl
 var CRDTypesTemplate string
 
+// GroupVersionInfoTemplate is populated with group and version information.
 //go:embed groupversion_info.go.tmpl
 var GroupVersionInfoTemplate string
 
+// DocTemplate is populated with group and version information.
 //go:embed doc.go.tmpl
 var DocTemplate string

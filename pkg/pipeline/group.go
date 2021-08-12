@@ -17,7 +17,6 @@ limitations under the License.
 package pipeline
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,6 +28,7 @@ import (
 	"github.com/crossplane-contrib/terrajet/pkg/pipeline/templates"
 )
 
+// NewVersionGenerator returns a new VersionGenerator.
 func NewVersionGenerator(rootPath, group, version string) *VersionGenerator {
 	gg := &VersionGenerator{
 		RootPath: rootPath,
@@ -40,6 +40,7 @@ func NewVersionGenerator(rootPath, group, version string) *VersionGenerator {
 	return gg
 }
 
+// VersionGenerator generates files for a version of a specific group.
 type VersionGenerator struct {
 	RootPath string
 	Group    string
@@ -48,6 +49,7 @@ type VersionGenerator struct {
 	cache *packages.Cache
 }
 
+// Generate writes doc and group version info files to the disk.
 func (vg *VersionGenerator) Generate() error {
 	vars := map[string]interface{}{
 		"CRD": map[string]string{
@@ -65,7 +67,7 @@ func (vg *VersionGenerator) Generate() error {
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath("hack/boilerplate.go.txt"), // todo
 	)
-	err := gviFile.Write(filepath.Join(pkgPath, fmt.Sprintf("zz_groupversion_info.go")), vars, os.FileMode(0o664))
+	err := gviFile.Write(filepath.Join(pkgPath, "zz_groupversion_info.go"), vars, os.FileMode(0o664))
 	if err != nil {
 		return errors.Wrap(err, "cannot write group version info file")
 	}
@@ -73,7 +75,7 @@ func (vg *VersionGenerator) Generate() error {
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath("hack/boilerplate.go.txt"), // todo
 	)
-	err = docFile.Write(filepath.Join(pkgPath, fmt.Sprintf("zz_doc.go")), vars, os.FileMode(0o664))
+	err = docFile.Write(filepath.Join(pkgPath, "zz_doc.go"), vars, os.FileMode(0o664))
 	if err != nil {
 		return errors.Wrap(err, "cannot write doc file")
 	}
