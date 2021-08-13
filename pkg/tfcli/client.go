@@ -168,9 +168,13 @@ func (c *Client) observe() (ObserveResult, error) {
 		// leave retries to the K8s controller
 		result.Completed = *code == 0 || *code == 2
 		result.UpToDate = *code == 0
-		result.Exists, err = tfPlanCheckAdd(stderr)
-		if err != nil {
-			return result, err
+		if !result.UpToDate {
+			result.Exists, err = tfPlanCheckAdd(stderr)
+			if err != nil {
+				return result, err
+			}
+		} else {
+			result.Exists = true
 		}
 
 		if result.Completed {
@@ -353,7 +357,7 @@ func (c *Client) runOperation(command string, storeResult storeResult, args ...s
 	c.pInfo.LogStderr()
 	go func() {
 		logger := c.logger.log.WithValues("args", args, "executable", pathTerraform, "cwd", c.wsPath)
-		logger.Info("Waiting for peocess to terminate gracefully.", "arg-from-process", c.pInfo.GetCmd().String())
+		logger.Info("Waiting for process to terminate gracefully.", "arg-from-process", c.pInfo.GetCmd().String())
 		err := c.pInfo.WaitError()
 		stderr, _ := c.pInfo.StderrAsString()
 		stdout, _ := c.pInfo.StdoutAsString()
