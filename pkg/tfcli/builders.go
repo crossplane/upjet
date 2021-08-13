@@ -18,7 +18,9 @@ package tfcli
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/pkg/errors"
@@ -40,6 +42,8 @@ const (
 	envTFProviderSource        = "XP_TERRAFORM_PROVIDER_SOURCE"
 	envTFProviderConfiguration = "XP_TERRAFORM_PROVIDER_CONFIG"
 	envTFExecTimeout           = "XP_TERRAFORM_CLI_EXEC_TIMEOUT"
+
+	fmtResourceAddress = "%s.%s"
 )
 
 type Builder interface {
@@ -51,6 +55,7 @@ type Builder interface {
 	RequiresLogger
 	BuildCreateClient() (*Client, error)
 	BuildDeletionClient() (*Client, error)
+	BuildIsUpToDateClient() (*Client, error)
 }
 
 type RequiresLogger interface {
@@ -138,6 +143,7 @@ func defaultClient() *Client {
 			log: logging.NewLogrLogger(
 				log.NewLoggerWithServiceContext("tfcli", version.Version, false)),
 		},
+		mu: &sync.Mutex{},
 	}
 }
 
@@ -197,6 +203,10 @@ func (r withResource) validate() error {
 		return errors.Errorf(fmtErrValidationResource, r.labelType, r.labelName)
 	}
 	return nil
+}
+
+func (r withResource) GetAddress() string {
+	return fmt.Sprintf(fmtResourceAddress, r.labelType, r.labelName)
 }
 
 // holds values for the Terraform HCL provider block's source, version and configuration body

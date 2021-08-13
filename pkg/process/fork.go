@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"os"
 	"os/exec"
 	"sync"
 	"time"
@@ -189,6 +190,14 @@ func (pi *Info) WaitError() error {
 		ProcessState: pi.cmd.ProcessState,
 		Stderr:       stderr,
 	}
+}
+
+func (pi *Info) GetProcessState() *os.ProcessState {
+	return pi.cmd.ProcessState
+}
+
+func (pi *Info) GetCmd() *exec.Cmd {
+	return pi.cmd
 }
 
 func (pi *Info) Kill() error {
