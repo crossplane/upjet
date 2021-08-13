@@ -21,6 +21,8 @@ import (
 	"go/token"
 	"go/types"
 
+	"github.com/pkg/errors"
+
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/iancoleman/strcase"
 )
@@ -45,10 +47,13 @@ type Builder struct {
 }
 
 // Build returns parameters and observation types built out of Terraform schema.
-func (g *Builder) Build() []*types.Named {
-	_, _ = g.build(g.Name, g.Source)
+func (g *Builder) Build() ([]*types.Named, error) {
+	_, _, err := g.buildResource(g.Name, g.Source)
+	if err != nil {
+		return nil, errors.Wrapf(err, "cannot build the types")
+	}
 	if len(g.genTypes) == 0 {
-		return nil
+		return nil, nil
 	}
 	result := make([]*types.Named, len(g.genTypes))
 	i := 0
@@ -56,14 +61,14 @@ func (g *Builder) Build() []*types.Named {
 		result[i] = t
 		i++
 	}
-	return result
+	return result, nil
 }
 
-func (g *Builder) build(namePrefix string, s *schema.Resource) (*types.Named, *types.Named) { // nolint:gocyclo
+func (g *Builder) buildResource(namePrefix string, s *schema.Resource) (*types.Named, *types.Named, error) { // nolint:gocyclo
 	paramTypeName := strcase.ToCamel(namePrefix) + "Parameters"
 	obsTypeName := strcase.ToCamel(namePrefix) + "Observation"
 	if g.genTypes[paramTypeName] != nil && g.genTypes[obsTypeName] != nil {
-		return g.genTypes[paramTypeName], g.genTypes[obsTypeName]
+		return g.genTypes[paramTypeName], g.genTypes[obsTypeName], nil
 	}
 	var paramFields []*types.Var
 	var paramTags []string
@@ -81,21 +86,26 @@ func (g *Builder) build(namePrefix string, s *schema.Resource) (*types.Named, *t
 			field = types.NewField(token.NoPos, g.Package, fName, types.Universe.Lookup("int64").Type(), false)
 		case schema.TypeString:
 			field = types.NewField(token.NoPos, g.Package, fName, types.Universe.Lookup("string").Type(), false)
-		case schema.TypeList, schema.TypeSet:
+		case schema.TypeList, schema.TypeSet, schema.TypeMap:
 			var elemType types.Type
 			switch r := sch.Elem.(type) {
 			case *schema.Resource:
-				lParamType, lObsType := g.build(fName, r)
+				lParamType, lObsType, err := g.buildResource(fName, r)
+				if err != nil {
+					return nil, nil, errors.Wrapf(err, "cannot build type for schema of element of list/set field named %s", n)
+				}
 				switch {
 				// There are fields that are computed only if user doesn't supply
-				// input.
-				case sch.Computed && sch.Optional:
-					elemType = lParamType.Obj().Type()
-				// If a field is not optional but computed, then it's definitely
-				// an observation field.
-				case sch.Computed:
+				// input, they should be in parameters.
+				case sch.Computed && !sch.Optional:
+					if lObsType == nil {
+						return nil, nil, errors.Wrapf(err, "field is computed but the underlying schema does not return observation type: %s", n)
+					}
 					elemType = lObsType.Obj().Type()
 				default:
+					if lParamType == nil {
+						return nil, nil, errors.Wrapf(err, "field is configurable but the underlying schema does not return parameter type: %s", n)
+					}
 					elemType = lParamType.Obj().Type()
 				}
 			case *schema.Schema:
@@ -109,47 +119,24 @@ func (g *Builder) build(namePrefix string, s *schema.Resource) (*types.Named, *t
 				case schema.TypeString:
 					elemType = types.Universe.Lookup("string").Type()
 				case schema.TypeMap, schema.TypeList, schema.TypeSet:
-					panic("schema.Schema in list cannot have complex type")
+					return nil, nil, errors.Errorf("element of list cannot have non-basic schema: %s", n)
 				case schema.TypeInvalid:
 					continue
 				}
 			}
-			field = types.NewField(token.NoPos, g.Package, fName, types.NewSlice(elemType), false)
-		case schema.TypeMap:
-			var elemType types.Type
-			switch r := sch.Elem.(type) {
-			case *schema.Schema:
-				switch r.Type {
-				// According to documentation, maps cannot have non-simple element types.
-				case schema.TypeBool:
-					elemType = types.Universe.Lookup("bool").Type()
-				case schema.TypeFloat:
-					elemType = types.Universe.Lookup("float64").Type()
-				case schema.TypeInt:
-					elemType = types.Universe.Lookup("int64").Type()
-				case schema.TypeString:
-					elemType = types.Universe.Lookup("string").Type()
-				case schema.TypeList, schema.TypeMap, schema.TypeSet:
-					panic("value of map cannot be a complex type")
-				case schema.TypeInvalid:
-					continue
-				}
-			default:
-				panic(fmt.Errorf("element of map has to have a schema"))
+			if sch.Type == schema.TypeMap {
+				field = types.NewField(token.NoPos, g.Package, fName, types.NewMap(types.Universe.Lookup("string").Type(), elemType), false)
+			} else {
+				// List and Sets both correspond to slices in Go.
+				field = types.NewField(token.NoPos, g.Package, fName, types.NewSlice(elemType), false)
 			}
-			field = types.NewField(token.NoPos, g.Package, fName, types.NewMap(types.Universe.Lookup("string").Type(), elemType), false)
 		case schema.TypeInvalid:
 			continue
 		}
 		switch {
-		// There are fields that are computed if user doesn't supply
-		// input.
-		case sch.Computed && sch.Optional:
-			paramFields = append(paramFields, field)
-			paramTags = append(paramTags, fmt.Sprintf("json:\"%s\" tf:\"%s\"", strcase.ToLowerCamel(n), n))
 		// If a field is not optional but computed, then it's definitely
 		// an observation field.
-		case sch.Computed:
+		case sch.Computed && !sch.Optional:
 			obsFields = append(obsFields, field)
 			obsTags = append(obsTags, fmt.Sprintf("json:\"%s\" tf:\"%s\"", strcase.ToLowerCamel(n), n))
 		default:
@@ -168,5 +155,9 @@ func (g *Builder) build(namePrefix string, s *schema.Resource) (*types.Named, *t
 		obsType = types.NewNamed(tName, types.NewStruct(obsFields, obsTags), nil)
 		g.genTypes[obsType.Obj().Name()] = obsType
 	}
-	return paramType, obsType
+	return paramType, obsType, nil
+}
+
+func (g *Builder) buildSchema(namePrefix string, s *schema.Schema) (*types.Named, *types.Named, error) {
+	return nil, nil, nil
 }

@@ -71,7 +71,10 @@ func (cg *CRDGenerator) Generate() error {
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath("hack/boilerplate.go.txt"), // todo
 	)
-	typeList := tjtypes.NewBuilder(cg.Kind, cg.TerraformResourceSchema, pkg).Build()
+	typeList, err := tjtypes.NewBuilder(cg.Kind, cg.TerraformResourceSchema, pkg).Build()
+	if err != nil {
+		return errors.Wrapf(err, "cannot build types for %s", cg.Kind)
+	}
 	typePrinter := twtypes.NewTypePrinter(file.Imports, pkg.Scope())
 	typesStr, err := typePrinter.Print(typeList)
 	if err != nil {
