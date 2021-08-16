@@ -1,13 +1,11 @@
 package conversion
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/util/json"
 
-	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	xpmeta "github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 
@@ -21,13 +19,13 @@ type Cli struct {
 	builderBase tfcli.Builder
 }
 
-func NewCli(l logging.Logger, tr resource.Terraformed, cliBuilder tfcli.Builder) *Cli {
+func NewCli(cliBuilder tfcli.Builder) *Cli {
 	return &Cli{
 		builderBase: cliBuilder,
 	}
 }
 
-func (t *Cli) Observe(ctx context.Context, tr resource.Terraformed) (ObserveResult, error) {
+func (t *Cli) Observe(tr resource.Terraformed) (ObserveResult, error) {
 	b, err := t.getBuilderForResource(tr)
 	if err != nil {
 		return ObserveResult{}, errors.Wrap(err, "cannot get builder")
@@ -82,7 +80,7 @@ func (t *Cli) Observe(ctx context.Context, tr resource.Terraformed) (ObserveResu
 	}, nil
 }
 
-func (t *Cli) Create(ctx context.Context, tr resource.Terraformed) (CreateResult, error) {
+func (t *Cli) Create(tr resource.Terraformed) (CreateResult, error) {
 	b, err := t.getBuilderForResource(tr)
 	if err != nil {
 		return CreateResult{}, errors.Wrap(err, "cannot get builder")
@@ -116,7 +114,7 @@ func (t *Cli) Create(ctx context.Context, tr resource.Terraformed) (CreateResult
 }
 
 // Update is a Terraform Cli implementation for Apply function of Adapter interface.
-func (t *Cli) Update(ctx context.Context, tr resource.Terraformed) (UpdateResult, error) {
+func (t *Cli) Update(tr resource.Terraformed) (UpdateResult, error) {
 	b, err := t.getBuilderForResource(tr)
 	if err != nil {
 		return UpdateResult{}, errors.Wrap(err, "cannot get builder")
@@ -148,7 +146,7 @@ func (t *Cli) Update(ctx context.Context, tr resource.Terraformed) (UpdateResult
 }
 
 // Delete is a Terraform Cli implementation for Delete function of Adapter interface.
-func (t *Cli) Delete(ctx context.Context, tr resource.Terraformed) (DeletionResult, error) {
+func (t *Cli) Delete(tr resource.Terraformed) (DeletionResult, error) {
 	b, err := t.getBuilderForResource(tr)
 	if err != nil {
 		return DeletionResult{}, errors.Wrap(err, "cannot get builder")

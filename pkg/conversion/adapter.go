@@ -1,8 +1,6 @@
 package conversion
 
 import (
-	"context"
-
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 
 	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
@@ -55,8 +53,8 @@ type DeletionResult struct {
 
 // A Adapter is used to interact with terraform managed resources
 type Adapter interface {
-	Observe(ctx context.Context, tr resource.Terraformed) (ObserveResult, error)
-	Create(ctx context.Context, tr resource.Terraformed) (CreateResult, error)
-	Update(ctx context.Context, tr resource.Terraformed) (UpdateResult, error)
-	Delete(ctx context.Context, tr resource.Terraformed) (DeletionResult, error)
+	Observe(tr resource.Terraformed) (ObserveResult, error)
+	Create(tr resource.Terraformed) (CreateResult, error)
+	Update(tr resource.Terraformed) (UpdateResult, error)
+	Delete(tr resource.Terraformed) (DeletionResult, error)
 }

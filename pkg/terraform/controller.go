@@ -63,13 +63,14 @@ type connector struct {
 }
 
 func (c *connector) Connect(ctx context.Context, mg xpresource.Managed) (managed.ExternalClient, error) {
-	tr, ok := mg.(resource.Terraformed)
-	if !ok {
-		return nil, errors.New(errUnexpectedObject)
-	}
 
 	// TODO(hasan): create and pass the implementation of tfcli builder once available
-	/*	pc, err := c.providerConfig(ctx, c.kube, mg)
+
+	/*	tr, ok := mg.(resource.Terraformed)
+		if !ok {
+			return nil, errors.New(errUnexpectedObject)
+		}
+		pc, err := c.providerConfig(ctx, c.kube, mg)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to get provider config")
 		}
@@ -82,7 +83,7 @@ func (c *connector) Connect(ctx context.Context, mg xpresource.Managed) (managed
 
 	return &external{
 		kube:   c.kube,
-		tf:     conversion.NewCli(c.logger, tr, nil),
+		tf:     conversion.NewCli(nil),
 		log:    c.logger,
 		record: event.NewNopRecorder(),
 	}, nil
@@ -111,7 +112,7 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 		}, nil
 	}
 
-	res, err := e.tf.Observe(ctx, tr)
+	res, err := e.tf.Observe(tr)
 	if err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot check if resource exists")
 	}
@@ -142,7 +143,7 @@ func (e *external) Create(ctx context.Context, mg xpresource.Managed) (managed.E
 		return managed.ExternalCreation{}, errors.New(errUnexpectedObject)
 	}
 
-	res, err := e.tf.Create(ctx, tr)
+	res, err := e.tf.Create(tr)
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, "failed to create")
 	}
@@ -166,7 +167,7 @@ func (e *external) Update(ctx context.Context, mg xpresource.Managed) (managed.E
 		return managed.ExternalUpdate{}, errors.New(errUnexpectedObject)
 	}
 
-	res, err := e.tf.Update(ctx, tr)
+	res, err := e.tf.Update(tr)
 	if err != nil {
 		return managed.ExternalUpdate{}, errors.Wrap(err, "failed to update")
 	}
@@ -192,7 +193,7 @@ func (e *external) Delete(ctx context.Context, mg xpresource.Managed) error {
 		return errors.New(errUnexpectedObject)
 	}
 
-	_, err := e.tf.Delete(ctx, tr)
+	_, err := e.tf.Delete(tr)
 	if err != nil {
 		return errors.Wrap(err, "failed to delete")
 	}
