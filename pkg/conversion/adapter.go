@@ -10,7 +10,7 @@ import (
 type ObserveResult struct {
 	// Tells whether the observe operation is completed.
 	Completed bool
-	// Terraform state to persist
+	// Base64 encoded Terraform state to persist
 	State string
 	// Sensitive information that is available during creation/update.
 	ConnectionDetails managed.ConnectionDetails
@@ -18,7 +18,7 @@ type ObserveResult struct {
 	UpToDate bool
 	// Does resource exist
 	Exists bool
-
+	// Was the resource late initialized
 	LateInitialized bool
 }
 
@@ -28,9 +28,8 @@ type CreateResult struct {
 	Completed bool
 	// Terraform state to persist
 	ExternalName string
-
+	// Base64 encoded Terraform state to persist
 	State string
-
 	// Sensitive information that is available during creation/update.
 	ConnectionDetails managed.ConnectionDetails
 }
@@ -51,7 +50,7 @@ type DeletionResult struct {
 	Completed bool
 }
 
-// A Adapter is used to interact with terraform managed resources
+// An Adapter is used to interact with terraform managed resources
 type Adapter interface {
 	Observe(tr resource.Terraformed) (ObserveResult, error)
 	Create(tr resource.Terraformed) (CreateResult, error)

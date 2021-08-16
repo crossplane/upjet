@@ -33,6 +33,7 @@ const (
 // like provider credentials used to connect to cloud APIs.
 type ProviderConfigFn func(ctx context.Context, client client.Client, mg xpresource.Managed) ([]byte, error)
 
+// SetupController setups controller for a Terraform managed resource
 func SetupController(mgr ctrl.Manager, l logging.Logger, obj client.Object, of schema.GroupVersionKind, pcFn ProviderConfigFn) error {
 	name := managed.ControllerName(of.GroupKind().String())
 

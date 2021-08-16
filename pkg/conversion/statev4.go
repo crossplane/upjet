@@ -19,6 +19,7 @@ const (
 
 // State file schema from https://github.com/hashicorp/terraform/blob/d9dfd451ea572219871bb9c5503a471418258e40/internal/states/statefile/version4.go
 
+// StateV4 represents a version 4 terraform state
 type StateV4 struct {
 	Version          uint64                   `json:"version"`
 	TerraformVersion string                   `json:"terraform_version"`
@@ -28,12 +29,14 @@ type StateV4 struct {
 	Resources        []ResourceStateV4        `json:"resources"`
 }
 
+// OutputStateV4 represents a version 4 output state
 type OutputStateV4 struct {
 	ValueRaw     json.RawMessage `json:"value"`
 	ValueTypeRaw json.RawMessage `json:"type"`
 	Sensitive    bool            `json:"sensitive,omitempty"`
 }
 
+// ResourceStateV4 represents a version 4 resource state
 type ResourceStateV4 struct {
 	Module         string                  `json:"module,omitempty"`
 	Mode           string                  `json:"mode"`
@@ -44,6 +47,7 @@ type ResourceStateV4 struct {
 	Instances      []InstanceObjectStateV4 `json:"instances"`
 }
 
+// InstanceObjectStateV4 represents a version 4 instance object state
 type InstanceObjectStateV4 struct {
 	IndexKey interface{} `json:"index_key,omitempty"`
 	Status   string      `json:"status,omitempty"`
@@ -61,7 +65,8 @@ type InstanceObjectStateV4 struct {
 	CreateBeforeDestroy bool `json:"create_before_destroy,omitempty"`
 }
 
-func ReadStateV4(data []byte) (*StateV4, error) {
+// ParseStateV4 parses a given Terraform state as StateV4 object
+func ParseStateV4(data []byte) (*StateV4, error) {
 	st := &StateV4{}
 	if err := json.Unmarshal(data, st); err != nil {
 		return nil, errors.Wrap(err, errCannotParseState)
@@ -70,10 +75,11 @@ func ReadStateV4(data []byte) (*StateV4, error) {
 	return st, errors.Wrap(st.Validate(), errInvalidState)
 }
 
-func BuildStateV4(encodedMetadata string, attributesSensitive json.RawMessage) (*StateV4, error) {
+// BuildStateV4 builds a StateV4 object from the given base64 encoded state and sensitive attributes
+func BuildStateV4(encodedState string, attributesSensitive json.RawMessage) (*StateV4, error) {
 	st := &StateV4{}
 
-	m, err := base64.StdEncoding.DecodeString(encodedMetadata)
+	m, err := base64.StdEncoding.DecodeString(encodedState)
 	if err != nil {
 		return nil, errors.Wrap(err, errCannotDecodeMetadata)
 	}
@@ -91,6 +97,7 @@ func BuildStateV4(encodedMetadata string, attributesSensitive json.RawMessage) (
 	return st, nil
 }
 
+// Validate checks if the StateV4 is a valid Terraform managed resource state
 func (st *StateV4) Validate() error {
 	// We only recognize and support state file version 4 right now
 	if st.Version != 4 {
@@ -110,14 +117,17 @@ func (st *StateV4) Validate() error {
 	return nil
 }
 
+// GetAttributes returns attributes of the Terraform managed resource (i.e. first instance of first resource)
 func (st *StateV4) GetAttributes() json.RawMessage {
 	return st.Resources[0].Instances[0].AttributesRaw
 }
 
+// GetSensitiveAttributes returns sensitive attributes of the Terraform managed resource (i.e. first instance of first resource)
 func (st *StateV4) GetSensitiveAttributes() json.RawMessage {
 	return st.Resources[0].Instances[0].AttributeSensitivePaths
 }
 
+// GetEncodedState returns base64 encoded sanitized (i.e. sensitive attributes removed) state
 func (st *StateV4) GetEncodedState() (string, error) {
 	// TODO(hasan): do we need a deep copy, probably
 	st.Resources[0].Instances[0].AttributeSensitivePaths = nil
@@ -129,6 +139,7 @@ func (st *StateV4) GetEncodedState() (string, error) {
 	return base64.StdEncoding.EncodeToString(b), nil
 }
 
+// Serialize serializes StateV4 object to byte array
 func (st *StateV4) Serialize() ([]byte, error) {
 	return json.Marshal(st)
 }

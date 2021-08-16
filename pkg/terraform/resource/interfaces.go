@@ -13,6 +13,7 @@ type TerraformStateHandler interface {
 	SetParameters(data []byte) error
 }
 
+// TerraformMetadataProvider provides Terraform metadata for the Terraform managed resource
 type TerraformMetadataProvider interface {
 	GetTerraformResourceType() string
 	GetTerraformResourceIdField() string

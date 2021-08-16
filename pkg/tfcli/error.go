@@ -2,6 +2,7 @@ package tfcli
 
 import "fmt"
 
+// OperationType is an operation type for terraform cli
 type OperationType int
 
 const (

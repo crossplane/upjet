@@ -19,12 +19,14 @@ type Cli struct {
 	builderBase tfcli.Builder
 }
 
+// NewCli returns a Cli object
 func NewCli(cliBuilder tfcli.Builder) *Cli {
 	return &Cli{
 		builderBase: cliBuilder,
 	}
 }
 
+// Observe is a Terraform Cli implementation for Observe function of Adapter interface.
 func (t *Cli) Observe(tr resource.Terraformed) (ObserveResult, error) {
 	b, err := t.getBuilderForResource(tr)
 	if err != nil {
@@ -80,6 +82,7 @@ func (t *Cli) Observe(tr resource.Terraformed) (ObserveResult, error) {
 	}, nil
 }
 
+// Create is a Terraform Cli implementation for Create function of Adapter interface.
 func (t *Cli) Create(tr resource.Terraformed) (CreateResult, error) {
 	b, err := t.getBuilderForResource(tr)
 	if err != nil {
@@ -113,7 +116,7 @@ func (t *Cli) Create(tr resource.Terraformed) (CreateResult, error) {
 	}, nil
 }
 
-// Update is a Terraform Cli implementation for Apply function of Adapter interface.
+// Update is a Terraform Cli implementation for Update function of Adapter interface.
 func (t *Cli) Update(tr resource.Terraformed) (UpdateResult, error) {
 	b, err := t.getBuilderForResource(tr)
 	if err != nil {
@@ -199,7 +202,7 @@ type consumeStateResponse struct {
 }
 
 func consumeState(state []byte, tr resource.Terraformed, parseExternalID bool) (consumeStateResponse, error) {
-	st, err := ReadStateV4(state)
+	st, err := ParseStateV4(state)
 	if err != nil {
 		return consumeStateResponse{}, errors.Wrap(err, "cannot build state")
 	}

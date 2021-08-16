@@ -7,6 +7,8 @@ import (
 )
 
 const (
+	// AnnotationKeyState is the annotation key to store base64 encoded Terraform state
+	// as an annotation for the Terraform managed resource
 	AnnotationKeyState = "tf.crossplane.io/state"
 )
 
