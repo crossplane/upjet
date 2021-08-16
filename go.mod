@@ -11,4 +11,5 @@ require (
 	github.com/crossplane/crossplane-runtime v0.14.0
 	github.com/pkg/errors v0.9.1
 	github.com/json-iterator/go v1.1.10
+	k8s.io/apimachinery v0.20.1
 )
