@@ -200,21 +200,21 @@ func (e *external) Delete(ctx context.Context, mg xpresource.Managed) error {
 	return nil
 }
 
-func (e *external) persistState(ctx context.Context, tr resource.Terraformed, state, externalName string) error {
+func (e *external) persistState(ctx context.Context, obj xpresource.Object, state, externalName string) error {
 	// We will retry in all cases where the error comes from the api-server.
 	// At one point, context deadline will be exceeded and we'll get out
 	// of the loop. In that case, we warn the user that the external resource
 	// might be leaked.
 	err := retry.OnError(retry.DefaultRetry, xpresource.IsAPIError, func() error {
-		nn := types.NamespacedName{Name: tr.GetName()}
-		if err := e.kube.Get(ctx, nn, tr); err != nil {
+		nn := types.NamespacedName{Name: obj.GetName()}
+		if err := e.kube.Get(ctx, nn, obj); err != nil {
 			return err
 		}
-		if xpmeta.GetExternalName(tr) == "" {
-			xpmeta.SetExternalName(tr, externalName)
+		if xpmeta.GetExternalName(obj) == "" {
+			xpmeta.SetExternalName(obj, externalName)
 		}
-		meta.SetState(tr, state)
-		return e.kube.Update(ctx, tr)
+		meta.SetState(obj, state)
+		return e.kube.Update(ctx, obj)
 	})
 
 	return errors.Wrap(err, "cannot update resource state")

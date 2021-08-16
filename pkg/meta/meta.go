@@ -1,8 +1,9 @@
 package meta
 
 import (
-	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/crossplane/crossplane-runtime/pkg/meta"
 )
 
 const (

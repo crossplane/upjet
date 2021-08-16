@@ -48,6 +48,9 @@ func (t *Cli) Observe(ctx context.Context, tr resource.Terraformed) (ObserveResu
 	}
 
 	tfc, err := t.builderBase.WithState(stRaw).WithResourceBody(attr).BuildCreateClient()
+	if err != nil {
+		return ObserveResult{}, errors.Wrap(err, "cannot build create client")
+	}
 
 	tfRes, err := tfc.Observe(xpmeta.GetExternalName(tr))
 
