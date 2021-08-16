@@ -9,4 +9,6 @@ require (
 	github.com/muvaf/typewriter v0.0.0-20210818141336-01a132960eec
 	github.com/pkg/errors v0.9.1
 	github.com/crossplane/crossplane-runtime v0.14.0
+	github.com/pkg/errors v0.9.1
+	github.com/json-iterator/go v1.1.10
 )
