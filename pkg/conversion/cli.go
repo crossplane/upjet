@@ -28,28 +28,14 @@ func NewCli(l logging.Logger, tr resource.Terraformed, cliBuilder tfcli.Builder)
 }
 
 func (t *Cli) Observe(ctx context.Context, tr resource.Terraformed) (ObserveResult, error) {
-	attr, err := tr.GetParameters()
+	b, err := t.getBuilderForResource(tr)
 	if err != nil {
-		return ObserveResult{}, errors.Wrap(err, "failed to get attributes")
+		return ObserveResult{}, errors.Wrap(err, "cannot get builder")
 	}
 
-	var stRaw []byte
-	if meta.GetState(tr) != "" {
-		stEnc := meta.GetState(tr)
-		st, err := BuildStateV4(stEnc, nil)
-		if err != nil {
-			return ObserveResult{}, errors.Wrap(err, "cannot build state")
-		}
-
-		stRaw, err = st.Serialize()
-		if err != nil {
-			return ObserveResult{}, errors.Wrap(err, "cannot serialize state")
-		}
-	}
-
-	tfc, err := t.builderBase.WithState(stRaw).WithResourceBody(attr).BuildCreateClient()
+	tfc, err := b.BuildObserveClient()
 	if err != nil {
-		return ObserveResult{}, errors.Wrap(err, "cannot build create client")
+		return ObserveResult{}, errors.Wrap(err, "cannot build observe client")
 	}
 
 	tfRes, err := tfc.Observe(xpmeta.GetExternalName(tr))
@@ -58,16 +44,20 @@ func (t *Cli) Observe(ctx context.Context, tr resource.Terraformed) (ObserveResu
 		if opErr.GetOperation() == tfcli.OperationCreate {
 			return ObserveResult{
 				Completed: true,
-				Exists:    false,
+
+				Exists: false,
 			}, nil
 		}
 		if opErr.GetOperation() == tfcli.OperationUpdate || opErr.GetOperation() == tfcli.OperationDelete {
 			return ObserveResult{
 				Completed: true,
-				Exists:    true,
+
+				Exists:   true,
+				UpToDate: false,
 			}, nil
 		}
 	}
+
 	if err != nil {
 		return ObserveResult{}, errors.Wrap(err, "failed to observe with tf cli")
 	}
@@ -78,46 +68,27 @@ func (t *Cli) Observe(ctx context.Context, tr resource.Terraformed) (ObserveResu
 		}, nil
 	}
 
-	newStateRaw := tfc.GetState()
-
-	newSt, err := ReadStateV4(newStateRaw)
+	stParseResp, err := consumeState(tfc.GetState(), tr, false)
 	if err != nil {
-		return ObserveResult{}, errors.Wrap(err, "cannot build state")
-	}
-
-	// TODO(hasan): Handle late initialization
-
-	if err = tr.SetObservation(newSt.GetAttributes()); err != nil {
-		return ObserveResult{}, errors.Wrap(err, "cannot set observation")
-	}
-
-	conn := managed.ConnectionDetails{}
-	if err = json.Unmarshal(newSt.GetSensitiveAttributes(), &conn); err != nil {
-		return ObserveResult{}, errors.Wrap(err, "cannot parse connection details")
-	}
-
-	newStEnc, err := newSt.GetEncodedState()
-	if err != nil {
-		return ObserveResult{}, errors.Wrap(err, "cannot encode new state")
+		return ObserveResult{}, errors.Wrap(err, "cannot parse state")
 	}
 
 	return ObserveResult{
 		Completed:         true,
-		State:             newStEnc,
-		ConnectionDetails: conn,
+		State:             stParseResp.encodedState,
+		ConnectionDetails: stParseResp.connectionDetails,
 		UpToDate:          tfRes.UpToDate,
 		Exists:            tfRes.Exists,
 	}, nil
 }
 
 func (t *Cli) Create(ctx context.Context, tr resource.Terraformed) (CreateResult, error) {
-	attr, err := tr.GetParameters()
+	b, err := t.getBuilderForResource(tr)
 	if err != nil {
-		return CreateResult{}, errors.Wrap(err, "failed to get attributes")
+		return CreateResult{}, errors.Wrap(err, "cannot get builder")
 	}
 
-	tfc, err := t.builderBase.WithResourceBody(attr).BuildCreateClient()
-
+	tfc, err := b.BuildCreateClient()
 	if err != nil {
 		return CreateResult{}, errors.Wrap(err, "cannot build create client")
 	}
@@ -131,71 +102,61 @@ func (t *Cli) Create(ctx context.Context, tr resource.Terraformed) (CreateResult
 		return CreateResult{}, nil
 	}
 
-	stRaw := tfc.GetState()
-	st, err := ReadStateV4(stRaw)
+	stParseResp, err := consumeState(tfc.GetState(), tr, true)
 	if err != nil {
 		return CreateResult{}, errors.Wrap(err, "cannot parse state")
 	}
 
-	stAttr := map[string]interface{}{}
-
-	if err = json.Unmarshal(st.GetAttributes(), &stAttr); err != nil {
-		return CreateResult{}, errors.Wrap(err, "cannot parse state attributes")
-	}
-
-	id, exists := stAttr[tr.GetTerraformResourceIdField()]
-	if !exists {
-		return CreateResult{}, errors.Wrap(err, fmt.Sprintf("no value for id field: %s", tr.GetTerraformResourceIdField()))
-	}
-	en, ok := id.(string)
-	if !ok {
-		return CreateResult{}, errors.Wrap(err, "id field is not a string")
-	}
-
-	conn := managed.ConnectionDetails{}
-	if err = json.Unmarshal(st.GetSensitiveAttributes(), &conn); err != nil {
-		return CreateResult{}, errors.Wrap(err, "cannot parse connection details")
-	}
-
-	stEnc, err := st.GetEncodedState()
-	if err != nil {
-		return CreateResult{}, errors.Wrap(err, "cannot encode new state")
-	}
-
 	return CreateResult{
 		Completed:         true,
-		ExternalName:      en,
-		State:             stEnc,
-		ConnectionDetails: conn,
+		ExternalName:      stParseResp.externalID,
+		State:             stParseResp.encodedState,
+		ConnectionDetails: stParseResp.connectionDetails,
 	}, nil
 }
 
 // Update is a Terraform Cli implementation for Apply function of Adapter interface.
 func (t *Cli) Update(ctx context.Context, tr resource.Terraformed) (UpdateResult, error) {
-	return UpdateResult{}, nil
+	b, err := t.getBuilderForResource(tr)
+	if err != nil {
+		return UpdateResult{}, errors.Wrap(err, "cannot get builder")
+	}
+
+	tfc, err := b.BuildUpdateClient()
+	if err != nil {
+		return UpdateResult{}, errors.Wrap(err, "cannot build update client")
+	}
+
+	completed, err := tfc.Update()
+	if err != nil {
+		return UpdateResult{}, errors.Wrap(err, "update failed")
+	}
+
+	if !completed {
+		return UpdateResult{}, nil
+	}
+
+	stParseResp, err := consumeState(tfc.GetState(), tr, false)
+	if err != nil {
+		return UpdateResult{}, errors.Wrap(err, "cannot parse state")
+	}
+	return UpdateResult{
+		Completed:         true,
+		State:             stParseResp.encodedState,
+		ConnectionDetails: stParseResp.connectionDetails,
+	}, err
 }
 
 // Delete is a Terraform Cli implementation for Delete function of Adapter interface.
 func (t *Cli) Delete(ctx context.Context, tr resource.Terraformed) (DeletionResult, error) {
-	stEnc := meta.GetState(tr)
-	st, err := BuildStateV4(stEnc, nil)
+	b, err := t.getBuilderForResource(tr)
 	if err != nil {
-		return DeletionResult{}, errors.Wrap(err, "cannot build state")
+		return DeletionResult{}, errors.Wrap(err, "cannot get builder")
 	}
 
-	stRaw, err := st.Serialize()
+	tfc, err := b.BuildDeletionClient()
 	if err != nil {
-		return DeletionResult{}, errors.Wrap(err, "cannot serialize state")
-	}
-
-	attr, err := tr.GetParameters()
-	if err != nil {
-		return DeletionResult{}, errors.Wrap(err, "failed to get attributes")
-	}
-
-	tfc, err := t.builderBase.WithState(stRaw).WithResourceBody(attr).BuildDeletionClient()
-	if err != nil {
-		return DeletionResult{}, errors.Wrap(err, "cannot build delete client")
+		return DeletionResult{}, errors.Wrap(err, "cannot build deletion client")
 	}
 
 	completed, err := tfc.Delete()
@@ -208,4 +169,79 @@ func (t *Cli) Delete(ctx context.Context, tr resource.Terraformed) (DeletionResu
 	}
 
 	return DeletionResult{Completed: true}, nil
+}
+
+func (t *Cli) getBuilderForResource(tr resource.Terraformed) (tfcli.Builder, error) {
+	var stateRaw []byte
+	if meta.GetState(tr) != "" {
+		stEnc := meta.GetState(tr)
+		st, err := BuildStateV4(stEnc, nil)
+		if err != nil {
+			return nil, errors.Wrap(err, "cannot build state")
+		}
+
+		stateRaw, err = st.Serialize()
+		if err != nil {
+			return nil, errors.Wrap(err, "cannot serialize state")
+		}
+	}
+
+	attr, err := tr.GetParameters()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get attributes")
+	}
+
+	return t.builderBase.WithState(stateRaw).WithResourceBody(attr), nil
+}
+
+type consumeStateResponse struct {
+	externalID        string
+	encodedState      string
+	connectionDetails managed.ConnectionDetails
+}
+
+func consumeState(state []byte, tr resource.Terraformed, parseExternalID bool) (consumeStateResponse, error) {
+	st, err := ReadStateV4(state)
+	if err != nil {
+		return consumeStateResponse{}, errors.Wrap(err, "cannot build state")
+	}
+
+	var extID string
+	if parseExternalID {
+		stAttr := map[string]interface{}{}
+		if err = json.Unmarshal(st.GetAttributes(), &stAttr); err != nil {
+			return consumeStateResponse{}, errors.Wrap(err, "cannot parse state attributes")
+		}
+
+		id, exists := stAttr[tr.GetTerraformResourceIdField()]
+		if !exists {
+			return consumeStateResponse{}, errors.Wrap(err, fmt.Sprintf("no value for id field: %s", tr.GetTerraformResourceIdField()))
+		}
+		var ok bool
+		extID, ok = id.(string)
+		if !ok {
+			return consumeStateResponse{}, errors.Wrap(err, "id field is not a string")
+		}
+	}
+
+	// TODO(hasan): Handle late initialization
+
+	if err = tr.SetObservation(st.GetAttributes()); err != nil {
+		return consumeStateResponse{}, errors.Wrap(err, "cannot set observation")
+	}
+
+	conn := managed.ConnectionDetails{}
+	if err = json.Unmarshal(st.GetSensitiveAttributes(), &conn); err != nil {
+		return consumeStateResponse{}, errors.Wrap(err, "cannot parse connection details")
+	}
+
+	stEnc, err := st.GetEncodedState()
+	if err != nil {
+		return consumeStateResponse{}, errors.Wrap(err, "cannot encode new state")
+	}
+	return consumeStateResponse{
+		externalID:        extID,
+		encodedState:      stEnc,
+		connectionDetails: conn,
+	}, nil
 }
