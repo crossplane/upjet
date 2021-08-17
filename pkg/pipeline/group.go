@@ -67,13 +67,5 @@ func (vg *VersionGenerator) Generate() error {
 	if err != nil {
 		return errors.Wrap(err, "cannot write group version info file")
 	}
-	docFile := wrapper.NewFile(pkgPath, vg.Version, templates.DocTemplate,
-		wrapper.WithGenStatement(GenStatement),
-		wrapper.WithHeaderPath("hack/boilerplate.go.txt"), // todo
-	)
-	err = docFile.Write(filepath.Join(pkgPath, "zz_doc.go"), vars, os.ModePerm)
-	if err != nil {
-		return errors.Wrap(err, "cannot write doc file")
-	}
 	return nil
 }

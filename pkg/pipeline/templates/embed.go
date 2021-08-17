@@ -25,7 +25,3 @@ var CRDTypesTemplate string
 // GroupVersionInfoTemplate is populated with group and version information.
 //go:embed groupversion_info.go.tmpl
 var GroupVersionInfoTemplate string
-
-// DocTemplate is populated with group and version information.
-//go:embed doc.go.tmpl
-var DocTemplate string
