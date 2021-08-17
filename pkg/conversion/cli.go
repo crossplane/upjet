@@ -1,8 +1,6 @@
 package conversion
 
 import (
-	"fmt"
-
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/util/json"
 
@@ -12,6 +10,14 @@ import (
 	"github.com/crossplane-contrib/terrajet/pkg/meta"
 	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
 	"github.com/crossplane-contrib/terrajet/pkg/tfcli"
+)
+
+const (
+	errCannotGetClientBuilder = "cannot get client builder"
+	errCannotConsumeState     = "cannot consume state"
+
+	errFmtFailedToWithTFCli = "failed to %s with tf cli"
+	errFmtCannotBuildClient = "cannot build %s client"
 )
 
 // Cli is an Adapter implementation for Terraform Cli
@@ -28,38 +34,49 @@ func NewCli(cliBuilder tfcli.Builder) *Cli {
 
 // Observe is a Terraform Cli implementation for Observe function of Adapter interface.
 func (t *Cli) Observe(tr resource.Terraformed) (ObserveResult, error) {
-	b, err := t.getBuilderForResource(tr)
+	b, err := t.getClientBuilderForResource(tr)
 	if err != nil {
-		return ObserveResult{}, errors.Wrap(err, "cannot get builder")
+		return ObserveResult{}, errors.Wrap(err, errCannotGetClientBuilder)
 	}
-
 	tfc, err := b.BuildObserveClient()
 	if err != nil {
-		return ObserveResult{}, errors.Wrap(err, "cannot build observe client")
+		return ObserveResult{}, errors.Wrapf(err, errFmtCannotBuildClient, "observe")
 	}
 
+	// Attempt to make an observation. There are a couple of possibilities at this point:
+	// a. No tfcli operation in progress, we just kick off a new observation. It should
+	//    immediately return "tfRes.Completed" as "false", and we return completed=false in ObserveResult.
+	// b. An "observe" operation is in progress that we kicked off in one of the previous reconciliations.
+	//    This call would return tfRes.Completed as false, and we would return completed=false in ObserveResult.
+	// c. A previously started "observe" operation completed. We can just consume state and return ObserveResult
+	//    accordingly.
+	// d. A previously started "create" operation is in progress or completed but its state needs to be
+	//    read to kick off a new operation. We will return "Exists: false" in order to trigger a Create call.
+	// e. A previously started "update" operation is in progress or completed but its state needs to be
+	//    read to kick off a new operation. We will return "UpToDate: false" in order to trigger an Update call.
+	// f. A previously started "delete" operation is in progress and by returning "Exists: true" and since
+	//    deletion timestamp should already be set, it would trigger a delete call.
 	tfRes, err := tfc.Observe(xpmeta.GetExternalName(tr))
 
-	if opErr, ok := err.(*tfcli.OperationInProgressError); ok {
-		if opErr.GetOperation() == tfcli.OperationCreate {
-			return ObserveResult{
-				Completed: true,
+	if isOperationInProgress(err, tfcli.OperationCreate) {
+		return ObserveResult{
+			Completed: true,
 
-				Exists: false,
-			}, nil
-		}
-		if opErr.GetOperation() == tfcli.OperationUpdate || opErr.GetOperation() == tfcli.OperationDelete {
-			return ObserveResult{
-				Completed: true,
+			Exists: false,
+		}, nil
+	}
 
-				Exists:   true,
-				UpToDate: false,
-			}, nil
-		}
+	if isOperationInProgress(err, tfcli.OperationUpdate) || isOperationInProgress(err, tfcli.OperationDelete) {
+		return ObserveResult{
+			Completed: true,
+
+			Exists:   true,
+			UpToDate: false,
+		}, nil
 	}
 
 	if err != nil {
-		return ObserveResult{}, errors.Wrap(err, "failed to observe with tf cli")
+		return ObserveResult{}, errors.Wrapf(err, errFmtFailedToWithTFCli, "observe")
 	}
 
 	if !tfRes.Completed {
@@ -68,15 +85,14 @@ func (t *Cli) Observe(tr resource.Terraformed) (ObserveResult, error) {
 		}, nil
 	}
 
-	stParseResp, err := consumeState(tfc.GetState(), tr, false)
+	conn, err := consumeState(tfc.GetState(), tr, false)
 	if err != nil {
-		return ObserveResult{}, errors.Wrap(err, "cannot parse state")
+		return ObserveResult{}, errors.Wrap(err, errCannotConsumeState)
 	}
 
 	return ObserveResult{
 		Completed:         true,
-		State:             stParseResp.encodedState,
-		ConnectionDetails: stParseResp.connectionDetails,
+		ConnectionDetails: conn,
 		UpToDate:          tfRes.UpToDate,
 		Exists:            tfRes.Exists,
 	}, nil
@@ -84,95 +100,99 @@ func (t *Cli) Observe(tr resource.Terraformed) (ObserveResult, error) {
 
 // Create is a Terraform Cli implementation for Create function of Adapter interface.
 func (t *Cli) Create(tr resource.Terraformed) (CreateResult, error) {
-	b, err := t.getBuilderForResource(tr)
+	b, err := t.getClientBuilderForResource(tr)
 	if err != nil {
-		return CreateResult{}, errors.Wrap(err, "cannot get builder")
+		return CreateResult{}, errors.Wrap(err, errCannotGetClientBuilder)
 	}
 
 	tfc, err := b.BuildCreateClient()
 	if err != nil {
-		return CreateResult{}, errors.Wrap(err, "cannot build create client")
+		return CreateResult{}, errors.Wrapf(err, errFmtCannotBuildClient, "create")
 	}
 
 	completed, err := tfc.Create()
 	if err != nil {
-		return CreateResult{}, errors.Wrap(err, "create failed with")
+		return CreateResult{}, errors.Wrapf(err, errFmtFailedToWithTFCli, "create")
 	}
 
 	if !completed {
 		return CreateResult{}, nil
 	}
 
-	stParseResp, err := consumeState(tfc.GetState(), tr, true)
+	conn, err := consumeState(tfc.GetState(), tr, true)
 	if err != nil {
-		return CreateResult{}, errors.Wrap(err, "cannot parse state")
+		return CreateResult{}, errors.Wrap(err, errCannotConsumeState)
 	}
 
 	return CreateResult{
 		Completed:         true,
-		ExternalName:      stParseResp.externalID,
-		State:             stParseResp.encodedState,
-		ConnectionDetails: stParseResp.connectionDetails,
+		ConnectionDetails: conn,
 	}, nil
 }
 
 // Update is a Terraform Cli implementation for Update function of Adapter interface.
 func (t *Cli) Update(tr resource.Terraformed) (UpdateResult, error) {
-	b, err := t.getBuilderForResource(tr)
+	b, err := t.getClientBuilderForResource(tr)
 	if err != nil {
-		return UpdateResult{}, errors.Wrap(err, "cannot get builder")
+		return UpdateResult{}, errors.Wrap(err, errCannotGetClientBuilder)
 	}
 
 	tfc, err := b.BuildUpdateClient()
 	if err != nil {
-		return UpdateResult{}, errors.Wrap(err, "cannot build update client")
+		return UpdateResult{}, errors.Wrapf(err, errFmtCannotBuildClient, "update")
 	}
 
 	completed, err := tfc.Update()
 	if err != nil {
-		return UpdateResult{}, errors.Wrap(err, "update failed")
+		return UpdateResult{}, errors.Wrapf(err, errFmtFailedToWithTFCli, "update")
 	}
 
 	if !completed {
 		return UpdateResult{}, nil
 	}
 
-	stParseResp, err := consumeState(tfc.GetState(), tr, false)
+	conn, err := consumeState(tfc.GetState(), tr, false)
 	if err != nil {
-		return UpdateResult{}, errors.Wrap(err, "cannot parse state")
+		return UpdateResult{}, errors.Wrap(err, errCannotConsumeState)
 	}
 	return UpdateResult{
 		Completed:         true,
-		State:             stParseResp.encodedState,
-		ConnectionDetails: stParseResp.connectionDetails,
+		ConnectionDetails: conn,
 	}, err
 }
 
 // Delete is a Terraform Cli implementation for Delete function of Adapter interface.
-func (t *Cli) Delete(tr resource.Terraformed) (DeletionResult, error) {
-	b, err := t.getBuilderForResource(tr)
+func (t *Cli) Delete(tr resource.Terraformed) (bool, error) {
+	b, err := t.getClientBuilderForResource(tr)
 	if err != nil {
-		return DeletionResult{}, errors.Wrap(err, "cannot get builder")
+		return false, errors.Wrap(err, errCannotGetClientBuilder)
 	}
 
 	tfc, err := b.BuildDeletionClient()
 	if err != nil {
-		return DeletionResult{}, errors.Wrap(err, "cannot build deletion client")
+		return false, errors.Wrapf(err, errFmtCannotBuildClient, "delete")
 	}
 
 	completed, err := tfc.Delete()
 	if err != nil {
-		return DeletionResult{}, errors.Wrap(err, "failed to delete")
+		return false, errors.Wrapf(err, errFmtFailedToWithTFCli, "delete")
 	}
 
 	if !completed {
-		return DeletionResult{}, nil
+		return false, nil
 	}
 
-	return DeletionResult{Completed: true}, nil
+	// TODO(hasan): Does it make any sense to call GetState on delete client?
+	// Would delete operation be considered as completed (i.e. allowing a new operation like Observe)
+	// if I didn't call GetState?
+	_ = tfc.GetState()
+
+	return true, nil
 }
 
-func (t *Cli) getBuilderForResource(tr resource.Terraformed) (tfcli.Builder, error) {
+// getClientBuilderForResource returns a tfcli client builder by setting attributes
+// (i.e. desired spec input) and terraform state (if available) on client builder base.
+func (t *Cli) getClientBuilderForResource(tr resource.Terraformed) (tfcli.Builder, error) {
 	var stateRaw []byte
 	if meta.GetState(tr) != "" {
 		stEnc := meta.GetState(tr)
@@ -195,54 +215,58 @@ func (t *Cli) getBuilderForResource(tr resource.Terraformed) (tfcli.Builder, err
 	return t.builderBase.WithState(stateRaw).WithResourceBody(attr), nil
 }
 
-type consumeStateResponse struct {
-	externalID        string
-	encodedState      string
-	connectionDetails managed.ConnectionDetails
-}
-
-func consumeState(state []byte, tr resource.Terraformed, parseExternalID bool) (consumeStateResponse, error) {
+// consumeState parses input tfstate and sets related fields in the custom resource.
+func consumeState(state []byte, tr resource.Terraformed, parseExternalID bool) (managed.ConnectionDetails, error) {
 	st, err := ParseStateV4(state)
 	if err != nil {
-		return consumeStateResponse{}, errors.Wrap(err, "cannot build state")
+		return nil, errors.Wrap(err, "cannot build state")
 	}
 
-	var extID string
 	if parseExternalID {
+		// Terraform stores id for the external resource as an attribute in the resource state.
+		// Key for the attribute holding external identifier is resource specific. We rely on
+		// GetTerraformResourceIdField() function to find out that key.
 		stAttr := map[string]interface{}{}
 		if err = json.Unmarshal(st.GetAttributes(), &stAttr); err != nil {
-			return consumeStateResponse{}, errors.Wrap(err, "cannot parse state attributes")
+			return nil, errors.Wrap(err, "cannot parse state attributes")
 		}
 
 		id, exists := stAttr[tr.GetTerraformResourceIdField()]
 		if !exists {
-			return consumeStateResponse{}, errors.Wrap(err, fmt.Sprintf("no value for id field: %s", tr.GetTerraformResourceIdField()))
+			return nil, errors.Wrapf(err, "no value for id field: %s", tr.GetTerraformResourceIdField())
 		}
-		var ok bool
-		extID, ok = id.(string)
+		extID, ok := id.(string)
 		if !ok {
-			return consumeStateResponse{}, errors.Wrap(err, "id field is not a string")
+			return nil, errors.Wrap(err, "id field is not a string")
 		}
+		xpmeta.SetExternalName(tr, extID)
 	}
 
 	// TODO(hasan): Handle late initialization
 
 	if err = tr.SetObservation(st.GetAttributes()); err != nil {
-		return consumeStateResponse{}, errors.Wrap(err, "cannot set observation")
+		return nil, errors.Wrap(err, "cannot set observation")
 	}
 
 	conn := managed.ConnectionDetails{}
 	if err = json.Unmarshal(st.GetSensitiveAttributes(), &conn); err != nil {
-		return consumeStateResponse{}, errors.Wrap(err, "cannot parse connection details")
+		return nil, errors.Wrap(err, "cannot parse connection details")
 	}
 
 	stEnc, err := st.GetEncodedState()
 	if err != nil {
-		return consumeStateResponse{}, errors.Wrap(err, "cannot encode new state")
+		return nil, errors.Wrap(err, "cannot encoded state")
 	}
-	return consumeStateResponse{
-		externalID:        extID,
-		encodedState:      stEnc,
-		connectionDetails: conn,
-	}, nil
+	meta.SetState(tr, stEnc)
+
+	return conn, nil
+}
+
+func isOperationInProgress(err error, op tfcli.OperationType) bool {
+	if opErr, ok := err.(*tfcli.OperationInProgressError); ok {
+		if opErr.GetOperation() == op {
+			return true
+		}
+	}
+	return false
 }

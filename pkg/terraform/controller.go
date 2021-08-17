@@ -2,7 +2,6 @@ package terraform
 
 import (
 	"context"
-	"time"
 
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -44,7 +43,6 @@ func SetupController(mgr ctrl.Manager, l logging.Logger, obj client.Object, of s
 
 	r := managed.NewReconciler(mgr,
 		xpresource.ManagedKind(of),
-		managed.WithPollInterval(15*time.Second),
 		managed.WithInitializers(),
 		managed.WithExternalConnecter(&connector{kube: mgr.GetClient(), providerConfig: pcFn, logger: l}),
 		managed.WithLogger(l.WithValues("controller", name)),
@@ -90,8 +88,6 @@ func (c *connector) Connect(ctx context.Context, mg xpresource.Managed) (managed
 	}, nil
 }
 
-// external manages lifecycle of a Terraform managed resource by implementing
-// managed.ExternalClient interface.
 type external struct {
 	kube client.Client
 	tf   conversion.Adapter
@@ -107,7 +103,6 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 	}
 
 	if xpmeta.GetExternalName(tr) == "" && meta.GetState(tr) == "" {
-		tr.SetConditions(xpv1.Creating())
 		return managed.ExternalObservation{
 			ResourceExists: false,
 		}, nil
@@ -119,14 +114,23 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 	}
 
 	if !res.Completed {
-		// Observation is in progress, do nothing
+		// Note(hasan): If an async operation is not completed yet, we don't want to reconcile
+		// with exponential backoff since this is not an error condition rather an expected situation.
+		// And checking that frequently wouldn't make much sense since we expect terraform client
+		// invokes to take some seconds. Here, we chose to check again after poll interval,
+		// but to speed things up, we might want to consider adding a special wait that is less frequent
+		// than exponential backoff but more frequent than poll interval.
+
+		// Observation is in progress, do nothing. We will check again after the poll interval.
 		return managed.ExternalObservation{
 			ResourceExists:   true,
 			ResourceUpToDate: true,
 		}, nil
 	}
 
-	if res.UpToDate {
+	// During creation (i.e. apply), Terraform already waits until resource is ready.
+	// So, I believe it would be safe to assume it is available if create step completed (i.e. resource exists).
+	if res.Exists {
 		tr.SetConditions(xpv1.Available())
 	}
 
@@ -149,11 +153,11 @@ func (e *external) Create(ctx context.Context, mg xpresource.Managed) (managed.E
 		return managed.ExternalCreation{}, errors.Wrap(err, "failed to create")
 	}
 	if !res.Completed {
-		// Creation is in progress, do nothing
+		// Creation is in progress, do nothing. We will check again after the poll interval.
 		return managed.ExternalCreation{}, nil
 	}
 
-	if err := e.persistState(ctx, tr, res.State, res.ExternalName); err != nil {
+	if err := e.persistState(ctx, tr); err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, "cannot persist state")
 	}
 
@@ -173,14 +177,12 @@ func (e *external) Update(ctx context.Context, mg xpresource.Managed) (managed.E
 		return managed.ExternalUpdate{}, errors.Wrap(err, "failed to update")
 	}
 	if !res.Completed {
-		// Update is in progress, do nothing
+		// Update is in progress, do nothing. We will check again after the poll interval.
 		return managed.ExternalUpdate{}, nil
 	}
 
-	if meta.GetState(tr) != res.State {
-		if err := e.persistState(ctx, tr, res.State, ""); err != nil {
-			return managed.ExternalUpdate{}, errors.Wrap(err, "cannot persist state")
-		}
+	if err := e.persistState(ctx, tr); err != nil {
+		return managed.ExternalUpdate{}, errors.Wrap(err, "cannot persist state")
 	}
 
 	return managed.ExternalUpdate{
@@ -202,9 +204,12 @@ func (e *external) Delete(ctx context.Context, mg xpresource.Managed) error {
 	return nil
 }
 
-func (e *external) persistState(ctx context.Context, obj xpresource.Object, state, externalName string) error {
+func (e *external) persistState(ctx context.Context, obj xpresource.Object) error {
+	externalName := xpmeta.GetExternalName(obj)
+	newState := meta.GetState(obj)
+
 	// We will retry in all cases where the error comes from the api-server.
-	// At one point, context deadline will be exceeded and we'll get out
+	// At one point, context deadline will be exceeded and, we'll get out
 	// of the loop. In that case, we warn the user that the external resource
 	// might be leaked.
 	err := retry.OnError(retry.DefaultRetry, xpresource.IsAPIError, func() error {
@@ -212,10 +217,15 @@ func (e *external) persistState(ctx context.Context, obj xpresource.Object, stat
 		if err := e.kube.Get(ctx, nn, obj); err != nil {
 			return err
 		}
-		if xpmeta.GetExternalName(obj) == "" {
-			xpmeta.SetExternalName(obj, externalName)
+
+		// We know that external name would never change once it is set
+		if xpmeta.GetExternalName(obj) != "" && xpmeta.GetExternalName(obj) != externalName {
+			return errors.Errorf("external name should not change once it is set. current %s, new %s",
+				xpmeta.GetExternalName(obj), externalName)
 		}
-		meta.SetState(obj, state)
+
+		xpmeta.SetExternalName(obj, externalName)
+		meta.SetState(obj, newState)
 		return e.kube.Update(ctx, obj)
 	})
 
