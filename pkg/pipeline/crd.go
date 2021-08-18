@@ -59,10 +59,6 @@ func (cg *CRDGenerator) Generate(version, kind string, schema *schema.Resource) 
 	// any compilation errors, which is the case before running kubebuilder
 	// generators. For now, we act like the target package is empty.
 	pkg := types.NewPackage(kindPkgPath, strings.ToLower(version))
-	//pkg, err := cg.cache.GetPackage(pkgPath)
-	//if err != nil {
-	//	return errors.Wrap(err, "cannot load target package")
-	//}
 	file := wrapper.NewFile(pkg.Path(), pkg.Name(), templates.CRDTypesTemplate,
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath("hack/boilerplate.go.txt"), // todo

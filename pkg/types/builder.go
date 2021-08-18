@@ -84,8 +84,12 @@ func (g *Builder) buildResource(namePrefix string, s *schema.Resource) (*types.N
 			obsFields = append(obsFields, field)
 			obsTags = append(obsTags, fmt.Sprintf("json:\"%s\" tf:\"%s\"", strcase.ToLowerCamel(n), n))
 		default:
+			if sch.Optional {
+				paramTags = append(paramTags, fmt.Sprintf("json:\"%s,omitempty\" tf:\"%s\"", strcase.ToLowerCamel(n), n))
+			} else {
+				paramTags = append(paramTags, fmt.Sprintf("json:\"%s\" tf:\"%s\"", strcase.ToLowerCamel(n), n))
+			}
 			paramFields = append(paramFields, field)
-			paramTags = append(paramTags, fmt.Sprintf("json:\"%s\" tf:\"%s\"", strcase.ToLowerCamel(n), n))
 		}
 	}
 	// NOTE(muvaf): Types with zero fields are valid. See usage of wafv2EmptySchema()
@@ -105,12 +109,24 @@ func (g *Builder) buildResource(namePrefix string, s *schema.Resource) (*types.N
 func (g *Builder) buildSchema(typeNamePrefix string, sch *schema.Schema) (types.Type, error) {
 	switch sch.Type {
 	case schema.TypeBool:
+		if sch.Optional {
+			return types.NewPointer(types.Universe.Lookup("bool").Type()), nil
+		}
 		return types.Universe.Lookup("bool").Type(), nil
 	case schema.TypeFloat:
+		if sch.Optional {
+			return types.NewPointer(types.Universe.Lookup("float64").Type()), nil
+		}
 		return types.Universe.Lookup("float64").Type(), nil
 	case schema.TypeInt:
+		if sch.Optional {
+			return types.NewPointer(types.Universe.Lookup("int64").Type()), nil
+		}
 		return types.Universe.Lookup("int64").Type(), nil
 	case schema.TypeString:
+		if sch.Optional {
+			return types.NewPointer(types.Universe.Lookup("string").Type()), nil
+		}
 		return types.Universe.Lookup("string").Type(), nil
 	case schema.TypeMap, schema.TypeList, schema.TypeSet:
 		var elemType types.Type
@@ -119,13 +135,13 @@ func (g *Builder) buildSchema(typeNamePrefix string, sch *schema.Schema) (types.
 		case schema.ValueType:
 			switch et {
 			case schema.TypeBool:
-				return types.Universe.Lookup("bool").Type(), nil
+				elemType = types.Universe.Lookup("bool").Type()
 			case schema.TypeFloat:
-				return types.Universe.Lookup("float64").Type(), nil
+				elemType = types.Universe.Lookup("float64").Type()
 			case schema.TypeInt:
-				return types.Universe.Lookup("int64").Type(), nil
+				elemType = types.Universe.Lookup("int64").Type()
 			case schema.TypeString:
-				return types.Universe.Lookup("string").Type(), nil
+				elemType = types.Universe.Lookup("string").Type()
 			default:
 				return nil, errors.Errorf("element type is basic but not one of known basic types")
 			}
@@ -158,14 +174,15 @@ func (g *Builder) buildSchema(typeNamePrefix string, sch *schema.Schema) (types.
 		default:
 			return nil, errors.New("element type should be either schema.Resource or schema.Schema")
 		}
+		// NOTE(muvaf): Maps and slices are already pointers, so we don't need to
+		// wrap them even if they are optional.
 		switch sch.Type {
 		case schema.TypeMap:
 			return types.NewMap(types.Universe.Lookup("string").Type(), elemType), nil
-		case schema.TypeList, schema.TypeSet:
+		default:
 			return types.NewSlice(elemType), nil
 		}
 	default:
 		return nil, errors.Errorf("unexpected schema type %s", sch.Type)
 	}
-	return nil, errors.Errorf("unexpected schema type %s", sch.Type)
 }
