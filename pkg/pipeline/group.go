@@ -28,21 +28,21 @@ import (
 )
 
 // NewVersionGenerator returns a new VersionGenerator.
-func NewVersionGenerator(rootPath, group, version string) *VersionGenerator {
+func NewVersionGenerator(rootDir, group, version string) *VersionGenerator {
 	gg := &VersionGenerator{
-		RootPath: rootPath,
-		Group:    group,
-		Version:  version,
+		RootDir: rootDir,
+		Group:   group,
+		Version: version,
 	}
-	// todo: accept cache as option
 	return gg
 }
 
 // VersionGenerator generates files for a version of a specific group.
 type VersionGenerator struct {
-	RootPath string
-	Group    string
-	Version  string
+	RootDir        string
+	RootModulePath string
+	Group          string
+	Version        string
 }
 
 // Generate writes doc and group version info files to the disk.
@@ -54,7 +54,7 @@ func (vg *VersionGenerator) Generate() error {
 		},
 	}
 	pkgPath := filepath.Join(
-		vg.RootPath,
+		vg.RootDir,
 		"apis",
 		strings.ToLower(strings.Split(vg.Group, ".")[0]),
 		strings.ToLower(vg.Version),

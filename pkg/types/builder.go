@@ -28,10 +28,8 @@ import (
 )
 
 // NewBuilder returns a new Builder.
-func NewBuilder(name string, source *schema.Resource, pkg *types.Package) *Builder {
+func NewBuilder(pkg *types.Package) *Builder {
 	return &Builder{
-		Name:     name,
-		Source:   source,
 		Package:  pkg,
 		genTypes: map[string]*types.Named{},
 	}
@@ -39,21 +37,19 @@ func NewBuilder(name string, source *schema.Resource, pkg *types.Package) *Build
 
 // Builder is used to generate Go type equivalence of given Terraform schema.
 type Builder struct {
-	Source  *schema.Resource
-	Name    string
 	Package *types.Package
 
 	genTypes map[string]*types.Named
 }
 
 // Build returns parameters and observation types built out of Terraform schema.
-func (g *Builder) Build() ([]*types.Named, error) {
-	_, _, err := g.buildResource(g.Name, g.Source)
+func (g *Builder) Build(name string, schema *schema.Resource) ([]*types.Named, error) {
+	_, _, err := g.buildResource(name, schema)
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot build the types")
 	}
 	if len(g.genTypes) == 0 {
-		return nil, errors.Errorf("no type has been generated from resource %s", g.Name)
+		return nil, errors.Errorf("no type has been generated from resource %s", name)
 	}
 	result := make([]*types.Named, len(g.genTypes))
 	i := 0
@@ -139,6 +135,8 @@ func (g *Builder) buildSchema(typeNamePrefix string, sch *schema.Schema) (types.
 				return nil, errors.Wrap(err, "cannot infer type from schema of element type")
 			}
 		case *schema.Resource:
+			// TODO(muvaf): We skip the other type once we choose one of param
+			// or obs types. This might cause some fields to be completely omitted.
 			paramType, obsType, err := g.buildResource(typeNamePrefix, et)
 			if err != nil {
 				return nil, errors.Wrap(err, "cannot infer type from resource schema of element type")
