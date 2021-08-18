@@ -16,39 +16,39 @@ const (
 	errCannotGetClientBuilder = "cannot get client builder"
 	errCannotConsumeState     = "cannot consume state"
 
-	errFmtFailedToWithTFCli = "failed to %s with tf cli"
+	errFmtCannotDoWithTFCli = "cannot %s with tf cli"
 	errFmtCannotBuildClient = "cannot build %s client"
 )
 
-// Cli is an Adapter implementation for Terraform Cli
-type Cli struct {
+// CLI is an Adapter implementation for Terraform CLI
+type CLI struct {
 	builderBase tfcli.Builder
 }
 
-// NewCli returns a Cli object
-func NewCli(cliBuilder tfcli.Builder) *Cli {
-	return &Cli{
+// NewCli returns a CLI object
+func NewCli(cliBuilder tfcli.Builder) *CLI {
+	return &CLI{
 		builderBase: cliBuilder,
 	}
 }
 
-// Observe is a Terraform Cli implementation for Observe function of Adapter interface.
-func (t *Cli) Observe(tr resource.Terraformed) (ObserveResult, error) {
+// Observe is a Terraform CLI implementation for Observe function of Adapter interface.
+func (t *CLI) Observe(tr resource.Terraformed) (Observation, error) {
 	b, err := t.getClientBuilderForResource(tr)
 	if err != nil {
-		return ObserveResult{}, errors.Wrap(err, errCannotGetClientBuilder)
+		return Observation{}, errors.Wrap(err, errCannotGetClientBuilder)
 	}
 	tfc, err := b.BuildObserveClient()
 	if err != nil {
-		return ObserveResult{}, errors.Wrapf(err, errFmtCannotBuildClient, "observe")
+		return Observation{}, errors.Wrapf(err, errFmtCannotBuildClient, "observe")
 	}
 
 	// Attempt to make an observation. There are a couple of possibilities at this point:
 	// a. No tfcli operation in progress, we just kick off a new observation. It should
-	//    immediately return "tfRes.Completed" as "false", and we return completed=false in ObserveResult.
+	//    immediately return "tfRes.Completed" as "false", and we return completed=false in Observation.
 	// b. An "observe" operation is in progress that we kicked off in one of the previous reconciliations.
-	//    This call would return tfRes.Completed as false, and we would return completed=false in ObserveResult.
-	// c. A previously started "observe" operation completed. We can just consume state and return ObserveResult
+	//    This call would return tfRes.Completed as false, and we would return completed=false in Observation.
+	// c. A previously started "observe" operation completed. We can just consume state and return Observation
 	//    accordingly.
 	// d. A previously started "create" operation is in progress or completed but its state needs to be
 	//    read to kick off a new operation. We will return "Exists: false" in order to trigger a Create call.
@@ -59,7 +59,7 @@ func (t *Cli) Observe(tr resource.Terraformed) (ObserveResult, error) {
 	tfRes, err := tfc.Observe(xpmeta.GetExternalName(tr))
 
 	if isOperationInProgress(err, tfcli.OperationCreate) {
-		return ObserveResult{
+		return Observation{
 			Completed: true,
 
 			Exists: false,
@@ -67,7 +67,7 @@ func (t *Cli) Observe(tr resource.Terraformed) (ObserveResult, error) {
 	}
 
 	if isOperationInProgress(err, tfcli.OperationUpdate) || isOperationInProgress(err, tfcli.OperationDelete) {
-		return ObserveResult{
+		return Observation{
 			Completed: true,
 
 			Exists:   true,
@@ -76,21 +76,21 @@ func (t *Cli) Observe(tr resource.Terraformed) (ObserveResult, error) {
 	}
 
 	if err != nil {
-		return ObserveResult{}, errors.Wrapf(err, errFmtFailedToWithTFCli, "observe")
+		return Observation{}, errors.Wrapf(err, errFmtCannotDoWithTFCli, "observe")
 	}
 
 	if !tfRes.Completed {
-		return ObserveResult{
+		return Observation{
 			Completed: false,
 		}, nil
 	}
 
 	conn, err := consumeState(tfc.GetState(), tr, false)
 	if err != nil {
-		return ObserveResult{}, errors.Wrap(err, errCannotConsumeState)
+		return Observation{}, errors.Wrap(err, errCannotConsumeState)
 	}
 
-	return ObserveResult{
+	return Observation{
 		Completed:         true,
 		ConnectionDetails: conn,
 		UpToDate:          tfRes.UpToDate,
@@ -98,71 +98,71 @@ func (t *Cli) Observe(tr resource.Terraformed) (ObserveResult, error) {
 	}, nil
 }
 
-// Create is a Terraform Cli implementation for Create function of Adapter interface.
-func (t *Cli) Create(tr resource.Terraformed) (CreateResult, error) {
+// Create is a Terraform CLI implementation for Create function of Adapter interface.
+func (t *CLI) Create(tr resource.Terraformed) (Creation, error) {
 	b, err := t.getClientBuilderForResource(tr)
 	if err != nil {
-		return CreateResult{}, errors.Wrap(err, errCannotGetClientBuilder)
+		return Creation{}, errors.Wrap(err, errCannotGetClientBuilder)
 	}
 
 	tfc, err := b.BuildCreateClient()
 	if err != nil {
-		return CreateResult{}, errors.Wrapf(err, errFmtCannotBuildClient, "create")
+		return Creation{}, errors.Wrapf(err, errFmtCannotBuildClient, "create")
 	}
 
 	completed, err := tfc.Create()
 	if err != nil {
-		return CreateResult{}, errors.Wrapf(err, errFmtFailedToWithTFCli, "create")
+		return Creation{}, errors.Wrapf(err, errFmtCannotDoWithTFCli, "create")
 	}
 
 	if !completed {
-		return CreateResult{}, nil
+		return Creation{}, nil
 	}
 
 	conn, err := consumeState(tfc.GetState(), tr, true)
 	if err != nil {
-		return CreateResult{}, errors.Wrap(err, errCannotConsumeState)
+		return Creation{}, errors.Wrap(err, errCannotConsumeState)
 	}
 
-	return CreateResult{
+	return Creation{
 		Completed:         true,
 		ConnectionDetails: conn,
 	}, nil
 }
 
-// Update is a Terraform Cli implementation for Update function of Adapter interface.
-func (t *Cli) Update(tr resource.Terraformed) (UpdateResult, error) {
+// Update is a Terraform CLI implementation for Update function of Adapter interface.
+func (t *CLI) Update(tr resource.Terraformed) (Update, error) {
 	b, err := t.getClientBuilderForResource(tr)
 	if err != nil {
-		return UpdateResult{}, errors.Wrap(err, errCannotGetClientBuilder)
+		return Update{}, errors.Wrap(err, errCannotGetClientBuilder)
 	}
 
 	tfc, err := b.BuildUpdateClient()
 	if err != nil {
-		return UpdateResult{}, errors.Wrapf(err, errFmtCannotBuildClient, "update")
+		return Update{}, errors.Wrapf(err, errFmtCannotBuildClient, "update")
 	}
 
 	completed, err := tfc.Update()
 	if err != nil {
-		return UpdateResult{}, errors.Wrapf(err, errFmtFailedToWithTFCli, "update")
+		return Update{}, errors.Wrapf(err, errFmtCannotDoWithTFCli, "update")
 	}
 
 	if !completed {
-		return UpdateResult{}, nil
+		return Update{}, nil
 	}
 
 	conn, err := consumeState(tfc.GetState(), tr, false)
 	if err != nil {
-		return UpdateResult{}, errors.Wrap(err, errCannotConsumeState)
+		return Update{}, errors.Wrap(err, errCannotConsumeState)
 	}
-	return UpdateResult{
+	return Update{
 		Completed:         true,
 		ConnectionDetails: conn,
 	}, err
 }
 
-// Delete is a Terraform Cli implementation for Delete function of Adapter interface.
-func (t *Cli) Delete(tr resource.Terraformed) (bool, error) {
+// Delete is a Terraform CLI implementation for Delete function of Adapter interface.
+func (t *CLI) Delete(tr resource.Terraformed) (bool, error) {
 	b, err := t.getClientBuilderForResource(tr)
 	if err != nil {
 		return false, errors.Wrap(err, errCannotGetClientBuilder)
@@ -175,7 +175,7 @@ func (t *Cli) Delete(tr resource.Terraformed) (bool, error) {
 
 	completed, err := tfc.Delete()
 	if err != nil {
-		return false, errors.Wrapf(err, errFmtFailedToWithTFCli, "delete")
+		return false, errors.Wrapf(err, errFmtCannotDoWithTFCli, "delete")
 	}
 
 	if !completed {
@@ -192,7 +192,7 @@ func (t *Cli) Delete(tr resource.Terraformed) (bool, error) {
 
 // getClientBuilderForResource returns a tfcli client builder by setting attributes
 // (i.e. desired spec input) and terraform state (if available) on client builder base.
-func (t *Cli) getClientBuilderForResource(tr resource.Terraformed) (tfcli.Builder, error) {
+func (t *CLI) getClientBuilderForResource(tr resource.Terraformed) (tfcli.Builder, error) {
 	var stateRaw []byte
 	if meta.GetState(tr) != "" {
 		stEnc := meta.GetState(tr)

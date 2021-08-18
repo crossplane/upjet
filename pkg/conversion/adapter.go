@@ -6,8 +6,8 @@ import (
 	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
 )
 
-// ObserveResult represents result of an observe operation
-type ObserveResult struct {
+// Observation represents result of an observe operation
+type Observation struct {
 	Completed         bool
 	ConnectionDetails managed.ConnectionDetails
 	UpToDate          bool
@@ -15,27 +15,22 @@ type ObserveResult struct {
 	LateInitialized   bool
 }
 
-// CreateResult represents result of a create operation
-type CreateResult struct {
+// Creation represents result of a create operation
+type Creation struct {
 	Completed         bool
 	ConnectionDetails managed.ConnectionDetails
 }
 
-// UpdateResult represents result of an update operation
-type UpdateResult struct {
+// Update represents result of an update operation
+type Update struct {
 	Completed         bool
 	ConnectionDetails managed.ConnectionDetails
-}
-
-// DeletionResult represents result of a delete operation
-type DeletionResult struct {
-	Completed bool
 }
 
 // An Adapter is used to interact with terraform managed resources
 type Adapter interface {
-	Observe(tr resource.Terraformed) (ObserveResult, error)
-	Create(tr resource.Terraformed) (CreateResult, error)
-	Update(tr resource.Terraformed) (UpdateResult, error)
+	Observe(tr resource.Terraformed) (Observation, error)
+	Create(tr resource.Terraformed) (Creation, error)
+	Update(tr resource.Terraformed) (Update, error)
 	Delete(tr resource.Terraformed) (bool, error)
 }

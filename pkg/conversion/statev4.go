@@ -77,19 +77,14 @@ func ParseStateV4(data []byte) (*StateV4, error) {
 
 // BuildStateV4 builds a StateV4 object from the given base64 encoded state and sensitive attributes
 func BuildStateV4(encodedState string, attributesSensitive json.RawMessage) (*StateV4, error) {
-	st := &StateV4{}
-
 	m, err := base64.StdEncoding.DecodeString(encodedState)
 	if err != nil {
 		return nil, errors.Wrap(err, errCannotDecodeMetadata)
 	}
-	err = json.Unmarshal(m, st)
+
+	st, err := ParseStateV4(m)
 	if err != nil {
 		return nil, errors.Wrap(err, errCannotParseState)
-	}
-
-	if err = st.Validate(); err != nil {
-		return nil, errors.Wrap(err, errInvalidState)
 	}
 
 	st.Resources[0].Instances[0].AttributeSensitivePaths = attributesSensitive
