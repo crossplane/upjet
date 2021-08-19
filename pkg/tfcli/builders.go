@@ -50,12 +50,9 @@ type Builder interface {
 	RequiresProvider
 	RequiresResource
 	RequiresState
-	RequiresContext
 	RequiresTimeout
 	RequiresLogger
-	BuildCreateClient() (*Client, error)
-	BuildDeletionClient() (*Client, error)
-	BuildIsUpToDateClient() (*Client, error)
+	Build() (Client, error)
 }
 
 type RequiresLogger interface {
@@ -88,7 +85,7 @@ type RequiresProvider interface {
 }
 
 type clientBuilder struct {
-	c *Client
+	c *client
 }
 
 func NewClientBuilder() *clientBuilder {
@@ -98,7 +95,7 @@ func NewClientBuilder() *clientBuilder {
 	}
 }
 
-func (cb clientBuilder) validateCommon() error {
+func (cb clientBuilder) validateNoState() error {
 	if err := cb.c.resource.validate(); err != nil {
 		return err
 	}
@@ -115,29 +112,18 @@ func (cb clientBuilder) validateWithState() error {
 	if err := cb.c.state.validate(); err != nil {
 		return err
 	}
-	return cb.validateCommon()
+	return cb.validateNoState()
 }
 
-func (cb clientBuilder) BuildCreateClient() (*Client, error) {
-	return cb.c, cb.validateCommon()
+func (cb clientBuilder) Build() (Client, error) {
+	return cb.c, cb.validateNoState()
 }
 
-func (cb clientBuilder) BuildDeletionClient() (*Client, error) {
-	return cb.c, cb.validateWithState()
-}
-
-func (cb clientBuilder) BuildIsUpToDateClient() (*Client, error) {
-	return cb.c, cb.validateWithState()
-}
-
-func defaultClient() *Client {
-	return &Client{
-		state:    &withState{},
-		provider: providerFromEnv(),
-		resource: &withResource{},
-		context: &withContext{
-			ctx: context.Background(),
-		},
+func defaultClient() *client {
+	return &client{
+		state:       &withState{},
+		provider:    providerFromEnv(),
+		resource:    &withResource{},
 		execTimeout: timeoutFromEnv(),
 		logger: &withLogger{
 			log: logging.NewLogrLogger(
@@ -173,10 +159,6 @@ func (l withLogger) validate() error {
 		return errors.New(errValidationNoLogger)
 	}
 	return nil
-}
-
-type withContext struct {
-	ctx context.Context
 }
 
 type withState struct {
@@ -245,11 +227,6 @@ func (cb *clientBuilder) WithLogger(logger logging.Logger) Builder {
 
 func (cb *clientBuilder) WithTimeout(to time.Duration) Builder {
 	cb.c.execTimeout.to = to
-	return cb
-}
-
-func (cb *clientBuilder) WithContext(ctx context.Context) Builder {
-	cb.c.context.ctx = ctx
 	return cb
 }
 

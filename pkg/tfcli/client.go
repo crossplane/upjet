@@ -18,6 +18,7 @@ package tfcli
 
 import (
 	"bytes"
+	"context"
 	"crypto/md5"
 	"encoding/json"
 	"fmt"
@@ -54,7 +55,7 @@ const (
 	errNoProcessState   = "failed to store process state: no process state"
 	errStore            = "failed to store process state"
 	errCheckExitCode    = "failed to check process exit code"
-	errNoID             = "failed to observe the Terraform state: cannot deduce resource ID"
+	errNoID             = "failed to refresh the Terraform state: cannot deduce resource ID"
 	errNoState          = "missing Terraform state file"
 	errImport           = "failed to import resource"
 	errNoPlan           = "plan line not found in Terraform CLI output"
@@ -67,11 +68,43 @@ const (
 	regexpPlanLine = `Plan:.*([\d+]).*to add,.*([\d+]) to change, ([\d+]) to destroy`
 )
 
-type Client struct {
+// RefreshResult holds information about the state of a Cloud resource.
+type RefreshResult struct {
+	// UpToDate is true if the remote Cloud resource configuration
+	// matches the Terraform configuration.
+	UpToDate bool
+	// Exists is true if the remote Cloud resource with the configured
+	// id exists.
+	Exists bool
+	// State holds the Terraform state of the resource.
+	// Because tfcli.Refresh is a synchronous operation,
+	// it's non-nil if tfcli.Refresh does not return an error.
+	State []byte
+	// Completed is set to true when an async operation completes
+	Completed bool
+}
+
+type ApplyResult struct {
+	Completed bool
+	State     []byte
+}
+
+type DestroyResult struct {
+	Completed bool
+}
+
+type Client interface {
+	Refresh(ctx context.Context, id string) (RefreshResult, error)
+	Apply(ctx context.Context) (ApplyResult, error)
+	Destroy(ctx context.Context) (DestroyResult, error)
+	Close(ctx context.Context) error
+	GetHandle() string
+}
+
+type client struct {
 	state       *withState
 	provider    *withProvider
 	resource    *withResource
-	context     *withContext
 	execTimeout *withTimeout
 	logger      *withLogger
 	wsPath      string
@@ -79,76 +112,70 @@ type Client struct {
 	mu          *sync.Mutex
 }
 
-func (c Client) GetState() []byte {
-	return c.state.tfState
-}
-
-func (c Client) GetHandle() string {
-	return c.resource.handle
-}
-
-// Create attempts to provision the resource.
-// Returns false if the operation has not yet been completed.
-func (c *Client) Create() (bool, error) {
-	initLockExists, stateLockExists, err := c.initOperation()
+// Apply attempts to provision the resource.
+// ApplyResult.Completed is false if the operation has not yet been completed.
+// ApplyResult.State is non-nil and holds the fresh Terraform state iff
+// ApplyResult.Completed is true.
+func (c *client) Apply(ctx context.Context) (ApplyResult, error) {
+	initLockExists, stateLockExists, err := c.initOperation(ctx)
 	if err != nil {
-		return false, err
+		return ApplyResult{}, err
 	}
 	if !initLockExists || stateLockExists {
-		return false, nil
+		return ApplyResult{}, nil
 	}
 
 	// then check the state and try to load it if available
 	stateExists, err := c.loadStateFromWorkspace(false)
 	if err != nil {
-		return false, err
+		return ApplyResult{}, err
 	}
 	if stateExists {
 		// and it has been stored
-		return true, nil
+		return ApplyResult{
+			Completed: true,
+			State:     c.state.tfState,
+		}, nil
 	}
 
 	// workspace initialized but no state => run Terraform command
-	return false, c.runOperation(pathTerraform, nil, "apply", "-auto-approve", "-input=false")
+	return ApplyResult{}, c.runOperation(pathTerraform, nil, "apply", "-auto-approve", "-input=false")
 }
 
-// Delete attempts to delete the resource.
-// Returns false if the operation has not yet been completed.
-func (c *Client) Delete() (bool, error) {
-	initLockExists, stateLockExists, err := c.initOperation()
+// Destroy attempts to delete the resource.
+// DestroyResult.Completed is false if the operation has not yet been completed.
+func (c *client) Destroy(ctx context.Context) (DestroyResult, error) {
+	initLockExists, stateLockExists, err := c.initOperation(ctx)
 	if err != nil {
-		return false, err
+		return DestroyResult{}, err
 	}
 	if !initLockExists || stateLockExists {
-		return false, nil
+		return DestroyResult{}, nil
 	}
 	// check if the resource has been removed from workspace state
 	removed, err := c.isRemovedFromState()
 	if err != nil {
-		return false, err
+		return DestroyResult{}, err
 	}
 	if removed {
-		return true, nil
+		return DestroyResult{true}, nil
 	}
 	// try to save the given state
 	if err := c.storeStateInWorkspace(); err != nil {
-		return false, err
+		return DestroyResult{}, err
 	}
 	// now try to delete the resource
-	return false, c.runOperation(pathTerraform, nil, "destroy", "-auto-approve", "-input=false")
+	return DestroyResult{},
+		c.runOperation(pathTerraform, nil, "destroy", "-auto-approve", "-input=false")
 }
 
-type ObserveResult struct {
-	UpToDate  bool
-	Completed bool
-	Exists    bool
-}
-
-// IsUpToDate checks whether the specified resource is up-to-date.
-// Returns false if the operation has not yet been completed.
-func (c *Client) observe() (ObserveResult, error) {
-	initLockExists, stateLockExists, err := c.initOperation()
-	result := ObserveResult{}
+// observe checks whether the specified resource is up-to-date.
+// RefreshResult.Completed is false if the operation has not yet been completed.
+// RefreshResult.State is non-nil and holds the fresh Terraform state iff
+// RefreshResult.Completed is true.
+func (c *client) observe(ctx context.Context) (RefreshResult, error) {
+	initLockExists, stateLockExists, err := c.initOperation(ctx)
+	result := RefreshResult{}
 	if err != nil {
 		return result, err
 	}
@@ -182,6 +209,7 @@ func (c *Client) observe() (ObserveResult, error) {
 			if err != nil {
 				return result, err
 			}
+			result.State = c.state.tfState
 			return result, nil
 		}
 	}
@@ -190,14 +218,13 @@ func (c *Client) observe() (ObserveResult, error) {
 		return result, err
 	}
 	// now try to refresh the resource
-	// TODO(aru): do not use the shell pipeline below
-	return result, c.runOperation("sh", func(c *Client, stdout, _ string) error {
+	return result, c.runOperation("sh", func(c *client, stdout, _ string) error {
 		return c.storeLogLines(stdout)
 	}, "-c", fmt.Sprintf("%s apply -refresh-only -auto-approve -input=false && "+
 		"%s plan -detailed-exitcode -input=false", pathTerraform, pathTerraform))
 }
 
-// retruns true if no resource is to be added according to the plan
+// returns true if no resource is to be added according to the plan
 func tfPlanCheckAdd(log string) (bool, error) {
 	r := regexp.MustCompile(regexpPlanLine)
 	m := r.FindStringSubmatch(log)
@@ -211,19 +238,20 @@ func tfPlanCheckAdd(log string) (bool, error) {
 	return addCount == 0, nil
 }
 
-func (c *Client) Observe(id string) (ObserveResult, error) {
+// Refresh updates local state of the Cloud resource.
+func (c *client) Refresh(ctx context.Context, id string) (RefreshResult, error) {
 	if id == "" && len(c.state.tfState) == 0 {
-		return ObserveResult{}, errors.New(errNoID)
+		return RefreshResult{}, errors.New(errNoID)
 	}
 	if len(c.state.tfState) == 0 {
-		return c.importResource(id)
+		return c.importResource(ctx, id)
 	}
-	return c.observe()
+	return c.observe(ctx)
 }
 
-func (c *Client) importResource(id string) (ObserveResult, error) {
-	result := ObserveResult{}
-	initLockExists, stateLockExists, err := c.initOperation()
+func (c *client) importResource(ctx context.Context, id string) (RefreshResult, error) {
+	result := RefreshResult{}
+	initLockExists, stateLockExists, err := c.initOperation(ctx)
 	if err != nil {
 		return result, err
 	}
@@ -269,12 +297,12 @@ func (c *Client) importResource(id string) (ObserveResult, error) {
 		return result, errors.Wrap(err, errImport)
 	}
 	// now try to refresh the resource
-	return result, c.runOperation(pathTerraform, func(c *Client, _, _ string) error {
+	return result, c.runOperation(pathTerraform, func(c *client, _, _ string) error {
 		return c.storeExitCode()
 	}, "import", "-input=false", c.resource.GetAddress(), id)
 }
 
-func (c *Client) storeExitCode() error {
+func (c *client) storeExitCode() error {
 	ps := c.pInfo.GetProcessState()
 	if ps == nil {
 		return errors.New(errNoProcessState)
@@ -283,7 +311,7 @@ func (c *Client) storeExitCode() error {
 		ioutil.WriteFile(filepath.Join(c.wsPath, fileStore), []byte(strconv.Itoa(ps.ExitCode())), 0644), errStore)
 }
 
-func (c *Client) storeLogLines(log string) error {
+func (c *client) storeLogLines(log string) error {
 	ps := c.pInfo.GetProcessState()
 	if ps == nil {
 		return errors.New(errNoProcessState)
@@ -294,7 +322,7 @@ func (c *Client) storeLogLines(log string) error {
 }
 
 // returns the exit code stored and the string contents
-func (c *Client) getExitCode() (*int, string, error) {
+func (c *client) getExitCode() (*int, string, error) {
 	storeFile := filepath.Join(c.wsPath, fileStore)
 	defer func() {
 		err := os.RemoveAll(storeFile)
@@ -324,7 +352,7 @@ type tfState struct {
 // assumes that there can at most be one resource in state
 // we could also check for <resource type>.<resource name>
 // in state
-func (c *Client) isRemovedFromState() (bool, error) {
+func (c *client) isRemovedFromState() (bool, error) {
 	s := c.state.tfState
 	ok, err := c.loadStateFromWorkspace(false)
 	if err != nil {
@@ -344,9 +372,9 @@ func (c *Client) isRemovedFromState() (bool, error) {
 	return len(state.Resources) == 0, nil
 }
 
-type storeResult func(c *Client, stdout, stderr string) error
+type storeResult func(c *client, stdout, stderr string) error
 
-func (c *Client) runOperation(command string, storeResult storeResult, args ...string) error {
+func (c *client) runOperation(command string, storeResult storeResult, args ...string) error {
 	var err error
 	c.pInfo, err = process.New(command, args, c.wsPath,
 		true, true, false, c.logger.log)
@@ -381,11 +409,11 @@ func (c *Client) runOperation(command string, storeResult storeResult, args ...s
 }
 
 // returns whether there is an active Terraform CLI operation in the workspace
-func (c *Client) initOperation() (bool, bool, error) {
+func (c *client) initOperation(ctx context.Context) (bool, bool, error) {
 	// initialize the workspace, and
 	// check if init lock & state lock exist, i.e., there is an ongoing Terraform CLI operation
 	initLockExists, stateLockExists := false, false
-	err := c.destroyOnError(func() error {
+	err := c.closeOnError(ctx, func() error {
 		var err error
 		initLockExists, stateLockExists, err = c.initWorkspace()
 		return err
@@ -404,7 +432,7 @@ func (c *Client) initOperation() (bool, bool, error) {
 
 // returns true if state file exists
 // TODO(aru): differentiate not-found error
-func (c *Client) loadStateFromWorkspace(errNoState bool) (bool, error) {
+func (c *client) loadStateFromWorkspace(errNoState bool) (bool, error) {
 	pathState := filepath.Join(c.wsPath, fileState)
 	var err error
 	c.state.tfState, err = ioutil.ReadFile(pathState)
@@ -418,7 +446,7 @@ func (c *Client) loadStateFromWorkspace(errNoState bool) (bool, error) {
 	return false, nil
 }
 
-func (c *Client) storeStateInWorkspace() error {
+func (c *client) storeStateInWorkspace() error {
 	pathState := filepath.Join(c.wsPath, fileState)
 	return errors.Wrapf(ioutil.WriteFile(pathState, c.state.tfState, 0600), fmtErrStoreState, pathState)
 }
@@ -438,16 +466,17 @@ func pathExists(path string, isDir bool) (bool, error) {
 	return false, nil
 }
 
-func (c *Client) destroyOnError(f func() error) error {
+func (c *client) closeOnError(ctx context.Context, f func() error) error {
 	err := f()
 	if err != nil {
-		err = multierr.Combine(err, c.Destroy())
+		err = multierr.Combine(err, c.Close(ctx))
 	}
 	return err
 }
 
-// Destroy after a call to Destroy, please do not reuse the same handle
-func (c *Client) Destroy() error {
+// Close releases resources allocated for this client.
+// After a call to Close, do not reuse the same handle.
+func (c *client) Close(_ context.Context) error {
 	var result error
 	if c.pInfo != nil {
 		result = multierr.Combine(errors.Wrap(c.pInfo.Kill(), errDestroyProcess))
@@ -460,7 +489,7 @@ func (c *Client) Destroy() error {
 }
 
 // returns true, true if init, state lock exist, respectively
-func (c *Client) initWorkspace() (bool, bool, error) {
+func (c *client) initWorkspace() (bool, bool, error) {
 	handle, err := c.getHandle()
 	if err != nil {
 		return false, false, errors.Wrap(err, errInitWorkspace)
@@ -501,7 +530,12 @@ func (c *Client) initWorkspace() (bool, bool, error) {
 		errors.Wrap(ioutil.WriteFile(filepath.Join(c.wsPath, tplMain), conf, 0644), errInitWorkspace)
 }
 
-func (c *Client) getHandle() (string, error) {
+// GetHandle returns the handle associated with the client.
+func (c *client) GetHandle() string {
+	return c.resource.handle
+}
+
+func (c *client) getHandle() (string, error) {
 	handle := c.resource.handle
 	// if no handle has been given, generate a new one
 	if handle == "" {
@@ -526,7 +560,7 @@ type tfConfigTemplateParams struct {
 	ResourceBody          []byte
 }
 
-func (c Client) generateTFConfiguration() ([]byte, error) {
+func (c client) generateTFConfiguration() ([]byte, error) {
 	tmpl, err := template.New(tplMain).Parse(templates.TFConfigurationMain)
 	if err != nil {
 		return nil, err
