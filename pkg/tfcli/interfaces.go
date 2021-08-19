@@ -23,33 +23,35 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 )
 
-type ObserveResult struct {
-	UpToDate  bool
+type RefreshResult struct {
+	UpToDate bool
+	Exists   bool
+	State    []byte
+}
+
+type ApplyResult struct {
 	Completed bool
-	Exists    bool
+	State     []byte
+}
+
+type DestroyResult struct {
+	Completed bool
 }
 
 type Client interface {
-	Observe(id string) (ObserveResult, error)
-	Create() (bool, error)
-	Update() (bool, error)
-	Delete() (bool, error)
-	GetHandle() string
-	GetState() []byte
-	Destroy() error
+	Refresh(ctx context.Context, id string) (RefreshResult, error)
+	Apply(ctx context.Context) (ApplyResult, error)
+	Destroy(ctx context.Context) (DestroyResult, error)
+	Close(ctx context.Context) error
 }
 
 type Builder interface {
 	RequiresProvider
 	RequiresResource
 	RequiresState
-	RequiresContext
 	RequiresTimeout
 	RequiresLogger
-	BuildObserveClient() (Client, error)
-	BuildCreateClient() (Client, error)
-	BuildUpdateClient() (Client, error)
-	BuildDeletionClient() (Client, error)
+	BuildClient() (Client, error)
 }
 
 type RequiresLogger interface {
@@ -58,10 +60,6 @@ type RequiresLogger interface {
 
 type RequiresTimeout interface {
 	WithTimeout(d time.Duration) Builder
-}
-
-type RequiresContext interface {
-	WithContext(ctx context.Context) Builder
 }
 
 type RequiresState interface {
