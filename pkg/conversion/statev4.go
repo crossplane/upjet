@@ -2,8 +2,8 @@ package conversion
 
 import (
 	"encoding/base64"
-	"encoding/json"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/pkg/errors"
 )
 
@@ -31,9 +31,9 @@ type StateV4 struct {
 
 // OutputStateV4 represents a version 4 output state
 type OutputStateV4 struct {
-	ValueRaw     json.RawMessage `json:"value"`
-	ValueTypeRaw json.RawMessage `json:"type"`
-	Sensitive    bool            `json:"sensitive,omitempty"`
+	ValueRaw     jsoniter.RawMessage `json:"value"`
+	ValueTypeRaw jsoniter.RawMessage `json:"type"`
+	Sensitive    bool                `json:"sensitive,omitempty"`
 }
 
 // ResourceStateV4 represents a version 4 resource state
@@ -53,10 +53,10 @@ type InstanceObjectStateV4 struct {
 	Status   string      `json:"status,omitempty"`
 	Deposed  string      `json:"deposed,omitempty"`
 
-	SchemaVersion           uint64            `json:"schema_version"`
-	AttributesRaw           json.RawMessage   `json:"attributes,omitempty"`
-	AttributesFlat          map[string]string `json:"attributes_flat,omitempty"`
-	AttributeSensitivePaths json.RawMessage   `json:"sensitive_attributes,omitempty,"`
+	SchemaVersion           uint64              `json:"schema_version"`
+	AttributesRaw           jsoniter.RawMessage `json:"attributes,omitempty"`
+	AttributesFlat          map[string]string   `json:"attributes_flat,omitempty"`
+	AttributeSensitivePaths jsoniter.RawMessage `json:"sensitive_attributes,omitempty,"`
 
 	PrivateRaw []byte `json:"private,omitempty"`
 
@@ -68,7 +68,7 @@ type InstanceObjectStateV4 struct {
 // ParseStateV4 parses a given Terraform state as StateV4 object
 func ParseStateV4(data []byte) (*StateV4, error) {
 	st := &StateV4{}
-	if err := json.Unmarshal(data, st); err != nil {
+	if err := JSParser.Unmarshal(data, st); err != nil {
 		return nil, errors.Wrap(err, errCannotParseState)
 	}
 
@@ -76,7 +76,7 @@ func ParseStateV4(data []byte) (*StateV4, error) {
 }
 
 // BuildStateV4 builds a StateV4 object from the given base64 encoded state and sensitive attributes
-func BuildStateV4(encodedState string, attributesSensitive json.RawMessage) (*StateV4, error) {
+func BuildStateV4(encodedState string, attributesSensitive jsoniter.RawMessage) (*StateV4, error) {
 	m, err := base64.StdEncoding.DecodeString(encodedState)
 	if err != nil {
 		return nil, errors.Wrap(err, errCannotDecodeMetadata)
@@ -113,12 +113,12 @@ func (st *StateV4) Validate() error {
 }
 
 // GetAttributes returns attributes of the Terraform managed resource (i.e. first instance of first resource)
-func (st *StateV4) GetAttributes() json.RawMessage {
+func (st *StateV4) GetAttributes() jsoniter.RawMessage {
 	return st.Resources[0].Instances[0].AttributesRaw
 }
 
 // GetSensitiveAttributes returns sensitive attributes of the Terraform managed resource (i.e. first instance of first resource)
-func (st *StateV4) GetSensitiveAttributes() json.RawMessage {
+func (st *StateV4) GetSensitiveAttributes() jsoniter.RawMessage {
 	return st.Resources[0].Instances[0].AttributeSensitivePaths
 }
 
@@ -126,7 +126,7 @@ func (st *StateV4) GetSensitiveAttributes() json.RawMessage {
 func (st *StateV4) GetEncodedState() (string, error) {
 	// TODO(hasan): do we need a deep copy, probably
 	st.Resources[0].Instances[0].AttributeSensitivePaths = nil
-	b, err := json.Marshal(st)
+	b, err := JSParser.Marshal(st)
 	if err != nil {
 		return "", err
 	}
@@ -136,5 +136,5 @@ func (st *StateV4) GetEncodedState() (string, error) {
 
 // Serialize serializes StateV4 object to byte array
 func (st *StateV4) Serialize() ([]byte, error) {
-	return json.Marshal(st)
+	return JSParser.Marshal(st)
 }

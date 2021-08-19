@@ -23,57 +23,47 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 )
 
+// RefreshResult represents result of a Refresh operation
 type RefreshResult struct {
 	UpToDate bool
 	Exists   bool
 	State    []byte
 }
 
+// ApplyResult represents result of an Apply operation
 type ApplyResult struct {
 	Completed bool
 	State     []byte
 }
 
+// DestroyResult represents result of a Destroy operation
 type DestroyResult struct {
 	Completed bool
 }
 
+// Client is a Terraform cli client
 type Client interface {
+	// Refresh is a "blocking" operation refreshing terraform state and preparing
+	// a RefreshResult based on that.
 	Refresh(ctx context.Context, id string) (RefreshResult, error)
+	// Apply is a "non-blocking" operation triggering a Terraform Apply
 	Apply(ctx context.Context) (ApplyResult, error)
+	// Destroy is a "non-blocking" operation triggering a Terraform Destroy
 	Destroy(ctx context.Context) (DestroyResult, error)
+	// Close destroys this client and underlying workspace for this client
 	Close(ctx context.Context) error
 }
 
+// Builder is a Terraform Client builder
 type Builder interface {
-	RequiresProvider
-	RequiresResource
-	RequiresState
-	RequiresTimeout
-	RequiresLogger
 	BuildClient() (Client, error)
-}
-
-type RequiresLogger interface {
 	WithLogger(logger logging.Logger) Builder
-}
-
-type RequiresTimeout interface {
 	WithTimeout(d time.Duration) Builder
-}
-
-type RequiresState interface {
 	WithState(tfState []byte) Builder
-}
-
-type RequiresResource interface {
 	WithResourceType(labelType string) Builder
 	WithResourceName(labelName string) Builder
 	WithResourceBody(body []byte) Builder
 	WithHandle(handle string) Builder
-}
-
-type RequiresProvider interface {
 	WithProviderSource(source string) Builder
 	WithProviderVersion(version string) Builder
 	WithProviderConfiguration(conf []byte) Builder
