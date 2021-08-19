@@ -29,20 +29,18 @@ import (
 
 // NewVersionGenerator returns a new VersionGenerator.
 func NewVersionGenerator(rootDir, group, version string) *VersionGenerator {
-	gg := &VersionGenerator{
+	return &VersionGenerator{
 		RootDir: rootDir,
 		Group:   group,
 		Version: version,
 	}
-	return gg
 }
 
 // VersionGenerator generates files for a version of a specific group.
 type VersionGenerator struct {
-	RootDir        string
-	RootModulePath string
-	Group          string
-	Version        string
+	RootDir string
+	Group   string
+	Version string
 }
 
 // Generate writes doc and group version info files to the disk.
@@ -63,9 +61,8 @@ func (vg *VersionGenerator) Generate() error {
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath("hack/boilerplate.go.txt"), // todo
 	)
-	err := gviFile.Write(filepath.Join(pkgPath, "zz_groupversion_info.go"), vars, os.ModePerm)
-	if err != nil {
-		return errors.Wrap(err, "cannot write group version info file")
-	}
-	return nil
+	return errors.Wrap(
+		gviFile.Write(filepath.Join(pkgPath, "zz_groupversion_info.go"), vars, os.ModePerm),
+		"cannot write group version info file",
+	)
 }

@@ -70,24 +70,25 @@ func (g *Builder) buildResource(namePrefix string, s *schema.Resource) (*types.N
 	var paramTags []string
 	var obsFields []*types.Var
 	var obsTags []string
-	for n, sch := range s.Schema {
-		fName := strcase.ToCamel(n)
-		fieldType, err := g.buildSchema(fName, sch)
+	for snakeFieldName, sch := range s.Schema {
+		fieldName := strcase.ToCamel(snakeFieldName)
+		lowerCamelFieldName := strcase.ToLowerCamel(snakeFieldName)
+		fieldType, err := g.buildSchema(fieldName, sch)
 		if err != nil {
-			return nil, nil, errors.Wrapf(err, "cannot infer type from schema of field %s", fName)
+			return nil, nil, errors.Wrapf(err, "cannot infer type from schema of field %s", fieldName)
 		}
-		field := types.NewField(token.NoPos, g.Package, fName, fieldType, false)
+		field := types.NewField(token.NoPos, g.Package, fieldName, fieldType, false)
 		switch {
 		// If a field is not optional but computed, then it's definitely
 		// an observation field.
 		case sch.Computed && !sch.Optional:
 			obsFields = append(obsFields, field)
-			obsTags = append(obsTags, fmt.Sprintf("json:\"%s\" tf:\"%s\"", strcase.ToLowerCamel(n), n))
+			obsTags = append(obsTags, fmt.Sprintf("json:\"%s\" tf:\"%s\"", lowerCamelFieldName, snakeFieldName))
 		default:
 			if sch.Optional {
-				paramTags = append(paramTags, fmt.Sprintf("json:\"%s,omitempty\" tf:\"%s\"", strcase.ToLowerCamel(n), n))
+				paramTags = append(paramTags, fmt.Sprintf("json:\"%s,omitempty\" tf:\"%s\"", lowerCamelFieldName, snakeFieldName))
 			} else {
-				paramTags = append(paramTags, fmt.Sprintf("json:\"%s\" tf:\"%s\"", strcase.ToLowerCamel(n), n))
+				paramTags = append(paramTags, fmt.Sprintf("json:\"%s\" tf:\"%s\"", lowerCamelFieldName, snakeFieldName))
 			}
 			paramFields = append(paramFields, field)
 		}
