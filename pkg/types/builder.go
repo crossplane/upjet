@@ -60,7 +60,7 @@ func (g *Builder) Build(name string, schema *schema.Resource) ([]*types.Named, e
 	return result, nil
 }
 
-func (g *Builder) buildResource(namePrefix string, s *schema.Resource) (*types.Named, *types.Named, error) { // nolint:gocyclo
+func (g *Builder) buildResource(namePrefix string, s *schema.Resource) (*types.Named, *types.Named, error) {
 	paramTypeName := strcase.ToCamel(namePrefix) + "Parameters"
 	obsTypeName := strcase.ToCamel(namePrefix) + "Observation"
 	if g.genTypes[paramTypeName] != nil && g.genTypes[obsTypeName] != nil {
@@ -106,7 +106,7 @@ func (g *Builder) buildResource(namePrefix string, s *schema.Resource) (*types.N
 	return paramType, obsType, nil
 }
 
-func (g *Builder) buildSchema(typeNamePrefix string, sch *schema.Schema) (types.Type, error) {
+func (g *Builder) buildSchema(typeNamePrefix string, sch *schema.Schema) (types.Type, error) { // nolint:gocyclo
 	switch sch.Type {
 	case schema.TypeBool:
 		if sch.Optional {
@@ -142,7 +142,7 @@ func (g *Builder) buildSchema(typeNamePrefix string, sch *schema.Schema) (types.
 				elemType = types.Universe.Lookup("int64").Type()
 			case schema.TypeString:
 				elemType = types.Universe.Lookup("string").Type()
-			default:
+			case schema.TypeMap, schema.TypeList, schema.TypeSet, schema.TypeInvalid:
 				return nil, errors.Errorf("element type is basic but not one of known basic types")
 			}
 		case *schema.Schema:
@@ -176,12 +176,12 @@ func (g *Builder) buildSchema(typeNamePrefix string, sch *schema.Schema) (types.
 		}
 		// NOTE(muvaf): Maps and slices are already pointers, so we don't need to
 		// wrap them even if they are optional.
-		switch sch.Type {
-		case schema.TypeMap:
+		if sch.Type == schema.TypeMap {
 			return types.NewMap(types.Universe.Lookup("string").Type(), elemType), nil
-		default:
-			return types.NewSlice(elemType), nil
 		}
+		return types.NewSlice(elemType), nil
+	case schema.TypeInvalid:
+		return nil, errors.Errorf("invalid schema type %s", sch.Type)
 	default:
 		return nil, errors.Errorf("unexpected schema type %s", sch.Type)
 	}
