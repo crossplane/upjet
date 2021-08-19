@@ -1,0 +1,68 @@
+{{ .Header }}
+
+{{ .GenStatement }}
+
+// +kubebuilder:object:generate=true
+// +groupName={{ .CRD.Group }}
+// +versionName={{ .CRD.APIVersion }}
+
+package {{ .CRD.APIVersion }}
+
+import (
+	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	{{ .Imports }}
+)
+
+{{ .Types }}
+
+// {{ .CRD.Kind }}Spec defines the desired state of {{ .CRD.Kind }}
+type {{ .CRD.Kind }}Spec struct {
+	xpv1.ResourceSpec `json:",inline"`
+	ForProvider       {{ .CRD.Kind }}Parameters `json:"forProvider"`
+}
+
+// {{ .CRD.Kind }}Status defines the observed state of {{ .CRD.Kind }}.
+type {{ .CRD.Kind }}Status struct {
+	xpv1.ResourceStatus `json:",inline"`
+	AtProvider          {{ .CRD.Kind }}Observation `json:"atProvider,omitempty"`
+}
+
+// +kubebuilder:object:root=true
+
+// {{ .CRD.Kind }} is the Schema for the {{ .CRD.Kind }}s API
+// +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
+// +kubebuilder:printcolumn:name="SYNCED",type="string",JSONPath=".status.conditions[?(@.type=='Synced')].status"
+// +kubebuilder:printcolumn:name="EXTERNAL-NAME",type="string",JSONPath=".metadata.annotations.crossplane\\.io/external-name"
+// +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
+// +kubebuilder:subresource:status
+// +kubebuilder:resource:scope=Cluster,categories={crossplane,managed,aws}
+type {{ .CRD.Kind }} struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Spec              {{ .CRD.Kind }}Spec   `json:"spec"`
+	Status            {{ .CRD.Kind }}Status `json:"status,omitempty"`
+}
+
+// +kubebuilder:object:root=true
+
+// {{ .CRD.Kind }}List contains a list of {{ .CRD.Kind }}s
+type {{ .CRD.Kind }}List struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []{{ .CRD.Kind }} `json:"items"`
+}
+
+// Repository type metadata.
+var (
+	{{ .CRD.Kind }}Kind             = "{{ .CRD.Kind }}"
+	{{ .CRD.Kind }}GroupKind        = schema.GroupKind{Group: {{ .VersionPackageAlias }}Group, Kind: {{ .CRD.Kind }}Kind}.String()
+	{{ .CRD.Kind }}KindAPIVersion   = {{ .CRD.Kind }}Kind + "." + {{ .VersionPackageAlias }}GroupVersion.String()
+	{{ .CRD.Kind }}GroupVersionKind = {{ .VersionPackageAlias }}GroupVersion.WithKind({{ .CRD.Kind }}Kind)
+)
+
+func init() {
+	{{ .VersionPackageAlias }}SchemeBuilder.Register(&{{ .CRD.Kind }}{}, &{{ .CRD.Kind }}List{})
+}

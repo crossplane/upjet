@@ -14,7 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package schema
+package templates
 
-// Generator is used to generate Go type equivalence of given Terraform schema.
-type Generator struct{}
+import _ "embed" // nolint:golint
+
+// CRDTypesTemplate is populated with CRD and type information.
+//go:embed crd_types.go.tmpl
+var CRDTypesTemplate string
+
+// GroupVersionInfoTemplate is populated with group and version information.
+//go:embed groupversion_info.go.tmpl
+var GroupVersionInfoTemplate string
