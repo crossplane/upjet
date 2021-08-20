@@ -25,6 +25,6 @@ type Update struct {
 // An Adapter is used to interact with terraform managed resources
 type Adapter interface {
 	Observe(ctx context.Context, tr resource.Terraformed) (Observation, error)
-	Update(ctx context.Context, tr resource.Terraformed) (Update, error)
+	CreateOrUpdate(ctx context.Context, tr resource.Terraformed) (Update, error)
 	Delete(ctx context.Context, tr resource.Terraformed) (bool, error)
 }

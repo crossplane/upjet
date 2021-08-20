@@ -148,7 +148,7 @@ func (e *external) Update(ctx context.Context, mg xpresource.Managed) (managed.E
 		return managed.ExternalUpdate{}, errors.New(errUnexpectedObject)
 	}
 
-	res, err := e.tf.Update(ctx, tr)
+	res, err := e.tf.CreateOrUpdate(ctx, tr)
 	if err != nil {
 		return managed.ExternalUpdate{}, errors.Wrap(err, "failed to update")
 	}

@@ -124,7 +124,11 @@ func (st *StateV4) GetSensitiveAttributes() jsoniter.RawMessage {
 
 // GetEncodedState returns base64 encoded sanitized (i.e. sensitive attributes removed) state
 func (st *StateV4) GetEncodedState() (string, error) {
-	// TODO(hasan): do we need a deep copy, probably
+	sensitive := st.Resources[0].Instances[0].AttributeSensitivePaths
+	defer func() {
+		st.Resources[0].Instances[0].AttributeSensitivePaths = sensitive
+	}()
+
 	st.Resources[0].Instances[0].AttributeSensitivePaths = nil
 	b, err := JSParser.Marshal(st)
 	if err != nil {

@@ -61,7 +61,7 @@ func (t *CLI) Observe(ctx context.Context, tr resource.Terraformed) (Observation
 
 	tfRes, err := t.tfcli.Refresh(ctx, xpmeta.GetExternalName(tr))
 
-	if isOperationInProgress(err, tfcli.OperationApply) {
+	if isApplying(err) {
 		//  A previously started "Apply" operation is in progress or completed
 		//  but one last call needs to be done as completed to be able to kick
 		//  off a new operation. We will return "Exists: true, UpToDate: false"
@@ -72,7 +72,7 @@ func (t *CLI) Observe(ctx context.Context, tr resource.Terraformed) (Observation
 		}, nil
 	}
 
-	if isOperationInProgress(err, tfcli.OperationDestroy) {
+	if isDestroying(err) {
 		// A previously started "Destroy" operation is in progress or completed
 		// but one last call needs to be done as completed to be able to kick
 		// off a new operation. We will return "Exists: true, UpToDate: true" in
@@ -103,9 +103,12 @@ func (t *CLI) Observe(ctx context.Context, tr resource.Terraformed) (Observation
 	// - late initializing "spec.forProvider" with "attributes"
 	// - setting observation at "status.atProvider" with "attributes"
 	// - storing base64encoded "tfstate" as an annotation
-	conn, err := consumeState(tfRes.State, tr)
-	if err != nil {
-		return Observation{}, errors.Wrap(err, errCannotConsumeState)
+	var conn managed.ConnectionDetails
+	if tfRes.State != nil {
+		conn, err = consumeState(tfRes.State, tr)
+		if err != nil {
+			return Observation{}, errors.Wrap(err, errCannotConsumeState)
+		}
 	}
 
 	return Observation{
@@ -115,8 +118,8 @@ func (t *CLI) Observe(ctx context.Context, tr resource.Terraformed) (Observation
 	}, nil
 }
 
-// Update is a Terraform CLI implementation for Update function of Adapter interface.
-func (t *CLI) Update(ctx context.Context, tr resource.Terraformed) (Update, error) {
+// CreateOrUpdate is a Terraform CLI implementation for CreateOrUpdate function of Adapter interface.
+func (t *CLI) CreateOrUpdate(ctx context.Context, tr resource.Terraformed) (Update, error) {
 	ar, err := t.tfcli.Apply(ctx)
 	if err != nil {
 		return Update{}, errors.Wrapf(err, errFmtCannotDoWithTFCli, "update")
@@ -199,6 +202,14 @@ func consumeState(state []byte, tr resource.Terraformed) (managed.ConnectionDeta
 	meta.SetState(tr, stEnc)
 
 	return conn, nil
+}
+
+func isApplying(err error) bool {
+	return isOperationInProgress(err, tfcli.OperationApply)
+}
+
+func isDestroying(err error) bool {
+	return isOperationInProgress(err, tfcli.OperationDestroy)
 }
 
 func isOperationInProgress(err error, op tfcli.OperationType) bool {
