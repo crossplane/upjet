@@ -62,11 +62,16 @@ func (g *Builder) Build(name string, schema *schema.Resource) ([]*types.Named, e
 }
 
 func (g *Builder) buildResource(res *schema.Resource, names ...string) (*types.Named, *types.Named, error) {
+	// NOTE(muvaf): There can be fields in the same CRD with same name but in
+	// different types. Since we generate the type using the field name, there
+	// can be collisions. In order to be able to generate unique names consistently,
+	// we need to process all fields in the same order all the time.
+	keys := sortedKeys(res.Schema)
+
 	var paramFields []*types.Var
 	var paramTags []string
 	var obsFields []*types.Var
 	var obsTags []string
-	keys := sortedKeys(res.Schema)
 	for _, snakeFieldName := range keys {
 		sch := res.Schema[snakeFieldName]
 		fieldName := strcase.ToCamel(snakeFieldName)
@@ -76,9 +81,12 @@ func (g *Builder) buildResource(res *schema.Resource, names ...string) (*types.N
 			return nil, nil, errors.Wrapf(err, "cannot infer type from schema of field %s", fieldName)
 		}
 		field := types.NewField(token.NoPos, g.Package, fieldName, fieldType, false)
+
+		// NOTE(muvaf): If a field is not optional but computed, then it's
+		// definitely an observation field.
+		// If it's optional but also computed, then it means the field has a server
+		// side default but user can change it, so it needs to go to parameters.
 		switch {
-		// If a field is not optional but computed, then it's definitely
-		// an observation field.
 		case sch.Computed && !sch.Optional:
 			obsFields = append(obsFields, field)
 			obsTags = append(obsTags, fmt.Sprintf("json:\"%s\" tf:\"%s\"", lowerCamelFieldName, snakeFieldName))
@@ -92,8 +100,13 @@ func (g *Builder) buildResource(res *schema.Resource, names ...string) (*types.N
 		}
 	}
 
-	// NOTE(muvaf): Types with zero fields are valid. See usage of wafv2EmptySchema()
-	// in aws_wafv2_web_acl here: https://github.com/hashicorp/terraform-provider-aws/blob/main/aws/wafv2_helper.go#L13
+	// NOTE(muvaf): Not every struct has both computed and configurable fields,
+	// so some of the types we generate here are empty and unnecessary. However,
+	// there are valid types with zero fields and we don't have the information
+	// to differentiate between valid zero fields and unnecessary one. So we generate
+	// two structs for every complex type.
+	// See usage of wafv2EmptySchema() in aws_wafv2_web_acl here:
+	// https://github.com/hashicorp/terraform-provider-aws/blob/main/aws/wafv2_helper.go#L13
 	var paramType, obsType *types.Named
 
 	paramTypeName := g.generateTypeName("Parameters", names...)
@@ -160,9 +173,12 @@ func (g *Builder) buildSchema(sch *schema.Schema, names []string) (types.Type, e
 			if err != nil {
 				return nil, errors.Wrapf(err, "cannot infer type from resource schema of element type of %s", fieldPath(names...))
 			}
+
+			// NOTE(muvaf): If a field is not optional but computed, then it's
+			// definitely an observation field.
+			// If it's optional but also computed, then it means the field has a server
+			// side default but user can change it, so it needs to go to parameters.
 			switch {
-			// There are fields that are computed only if user doesn't supply
-			// input, they should be in parameters.
 			case sch.Computed && !sch.Optional:
 				if obsType == nil {
 					return nil, errors.Errorf("element type of %s is computed but the underlying schema does not return observation type", fieldPath(names...))
@@ -177,6 +193,7 @@ func (g *Builder) buildSchema(sch *schema.Schema, names []string) (types.Type, e
 		default:
 			return nil, errors.Errorf("element type of %s should be either schema.Resource or schema.Schema", fieldPath(names...))
 		}
+
 		// NOTE(muvaf): Maps and slices are already pointers, so we don't need to
 		// wrap them even if they are optional.
 		if sch.Type == schema.TypeMap {
