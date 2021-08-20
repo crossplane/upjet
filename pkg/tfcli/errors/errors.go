@@ -1,4 +1,4 @@
-package tfcli
+package errors
 
 import "fmt"
 
@@ -31,4 +31,23 @@ func (e *OperationInProgressError) Error() string {
 // GetOperation returns the OperationType that is in progress
 func (e *OperationInProgressError) GetOperation() OperationType {
 	return e.op
+}
+
+// IsApplying returns whether the given error a Apply in progress error
+func IsApplying(err error) bool {
+	return isOperationInProgress(err, OperationApply)
+}
+
+// IsDestroying returns whether the given error a Destroy in progress error
+func IsDestroying(err error) bool {
+	return isOperationInProgress(err, OperationDestroy)
+}
+
+func isOperationInProgress(err error, op OperationType) bool {
+	if opErr, ok := err.(*OperationInProgressError); ok {
+		if opErr.GetOperation() == op {
+			return true
+		}
+	}
+	return false
 }

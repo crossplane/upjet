@@ -10,6 +10,7 @@ import (
 	"github.com/crossplane-contrib/terrajet/pkg/meta"
 	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
 	"github.com/crossplane-contrib/terrajet/pkg/tfcli"
+	tferrors "github.com/crossplane-contrib/terrajet/pkg/tfcli/errors"
 )
 
 const (
@@ -61,7 +62,7 @@ func (t *CLI) Observe(ctx context.Context, tr resource.Terraformed) (Observation
 
 	tfRes, err := t.tfcli.Refresh(ctx, xpmeta.GetExternalName(tr))
 
-	if isApplying(err) {
+	if tferrors.IsApplying(err) {
 		//  A previously started "Apply" operation is in progress or completed
 		//  but one last call needs to be done as completed to be able to kick
 		//  off a new operation. We will return "Exists: true, UpToDate: false"
@@ -72,7 +73,7 @@ func (t *CLI) Observe(ctx context.Context, tr resource.Terraformed) (Observation
 		}, nil
 	}
 
-	if isDestroying(err) {
+	if tferrors.IsDestroying(err) {
 		// A previously started "Destroy" operation is in progress or completed
 		// but one last call needs to be done as completed to be able to kick
 		// off a new operation. We will return "Exists: true, UpToDate: true" in
@@ -202,21 +203,4 @@ func consumeState(state []byte, tr resource.Terraformed) (managed.ConnectionDeta
 	meta.SetState(tr, stEnc)
 
 	return conn, nil
-}
-
-func isApplying(err error) bool {
-	return isOperationInProgress(err, tfcli.OperationApply)
-}
-
-func isDestroying(err error) bool {
-	return isOperationInProgress(err, tfcli.OperationDestroy)
-}
-
-func isOperationInProgress(err error, op tfcli.OperationType) bool {
-	if opErr, ok := err.(*tfcli.OperationInProgressError); ok {
-		if opErr.GetOperation() == op {
-			return true
-		}
-	}
-	return false
 }
