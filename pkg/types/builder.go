@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"go/token"
 	"go/types"
+	"sort"
 
 	"github.com/pkg/errors"
 
@@ -44,7 +45,7 @@ type Builder struct {
 
 // Build returns parameters and observation types built out of Terraform schema.
 func (g *Builder) Build(name string, schema *schema.Resource) ([]*types.Named, error) {
-	_, _, err := g.buildResource(name, schema)
+	_, _, err := g.buildResource(schema, name)
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot build the types")
 	}
@@ -60,20 +61,17 @@ func (g *Builder) Build(name string, schema *schema.Resource) ([]*types.Named, e
 	return result, nil
 }
 
-func (g *Builder) buildResource(namePrefix string, s *schema.Resource) (*types.Named, *types.Named, error) {
-	paramTypeName := strcase.ToCamel(namePrefix) + "Parameters"
-	obsTypeName := strcase.ToCamel(namePrefix) + "Observation"
-	if g.genTypes[paramTypeName] != nil && g.genTypes[obsTypeName] != nil {
-		return g.genTypes[paramTypeName], g.genTypes[obsTypeName], nil
-	}
+func (g *Builder) buildResource(res *schema.Resource, names ...string) (*types.Named, *types.Named, error) {
 	var paramFields []*types.Var
 	var paramTags []string
 	var obsFields []*types.Var
 	var obsTags []string
-	for snakeFieldName, sch := range s.Schema {
+	keys := sortedKeys(res.Schema)
+	for _, snakeFieldName := range keys {
+		sch := res.Schema[snakeFieldName]
 		fieldName := strcase.ToCamel(snakeFieldName)
 		lowerCamelFieldName := strcase.ToLowerCamel(snakeFieldName)
-		fieldType, err := g.buildSchema(fieldName, sch)
+		fieldType, err := g.buildSchema(sch, append(names, fieldName))
 		if err != nil {
 			return nil, nil, errors.Wrapf(err, "cannot infer type from schema of field %s", fieldName)
 		}
@@ -93,13 +91,17 @@ func (g *Builder) buildResource(namePrefix string, s *schema.Resource) (*types.N
 			paramFields = append(paramFields, field)
 		}
 	}
+
 	// NOTE(muvaf): Types with zero fields are valid. See usage of wafv2EmptySchema()
 	// in aws_wafv2_web_acl here: https://github.com/hashicorp/terraform-provider-aws/blob/main/aws/wafv2_helper.go#L13
 	var paramType, obsType *types.Named
+
+	paramTypeName := g.generateTypeName("Parameters", names...)
 	paramName := types.NewTypeName(token.NoPos, g.Package, paramTypeName, nil)
 	paramType = types.NewNamed(paramName, types.NewStruct(paramFields, paramTags), nil)
 	g.genTypes[paramType.Obj().Name()] = paramType
 
+	obsTypeName := g.generateTypeName("Observation", names...)
 	obsName := types.NewTypeName(token.NoPos, g.Package, obsTypeName, nil)
 	obsType = types.NewNamed(obsName, types.NewStruct(obsFields, obsTags), nil)
 	g.genTypes[obsType.Obj().Name()] = obsType
@@ -107,7 +109,7 @@ func (g *Builder) buildResource(namePrefix string, s *schema.Resource) (*types.N
 	return paramType, obsType, nil
 }
 
-func (g *Builder) buildSchema(typeNamePrefix string, sch *schema.Schema) (types.Type, error) { // nolint:gocyclo
+func (g *Builder) buildSchema(sch *schema.Schema, names []string) (types.Type, error) { // nolint:gocyclo
 	switch sch.Type {
 	case schema.TypeBool:
 		if sch.Optional {
@@ -144,36 +146,36 @@ func (g *Builder) buildSchema(typeNamePrefix string, sch *schema.Schema) (types.
 			case schema.TypeString:
 				elemType = types.Universe.Lookup("string").Type()
 			case schema.TypeMap, schema.TypeList, schema.TypeSet, schema.TypeInvalid:
-				return nil, errors.Errorf("element type is basic but not one of known basic types")
+				return nil, errors.Errorf("element type of %s is basic but not one of known basic types", fieldPath(names...))
 			}
 		case *schema.Schema:
-			elemType, err = g.buildSchema(typeNamePrefix, et)
+			elemType, err = g.buildSchema(et, names)
 			if err != nil {
-				return nil, errors.Wrap(err, "cannot infer type from schema of element type")
+				return nil, errors.Wrapf(err, "cannot infer type from schema of element type of %s", fieldPath(names...))
 			}
 		case *schema.Resource:
 			// TODO(muvaf): We skip the other type once we choose one of param
 			// or obs types. This might cause some fields to be completely omitted.
-			paramType, obsType, err := g.buildResource(typeNamePrefix, et)
+			paramType, obsType, err := g.buildResource(et, names...)
 			if err != nil {
-				return nil, errors.Wrap(err, "cannot infer type from resource schema of element type")
+				return nil, errors.Wrapf(err, "cannot infer type from resource schema of element type of %s", fieldPath(names...))
 			}
 			switch {
 			// There are fields that are computed only if user doesn't supply
 			// input, they should be in parameters.
 			case sch.Computed && !sch.Optional:
 				if obsType == nil {
-					return nil, errors.Errorf("field is computed but the underlying schema does not return observation type: %s", typeNamePrefix)
+					return nil, errors.Errorf("element type of %s is computed but the underlying schema does not return observation type", fieldPath(names...))
 				}
 				elemType = obsType
 			default:
 				if paramType == nil {
-					return nil, errors.Errorf("field is configurable but the underlying schema does not return parameter type: %s", typeNamePrefix)
+					return nil, errors.Errorf("fielement type of %s is configurable but the underlying schema does not return parameter type: %s", fieldPath(names...))
 				}
 				elemType = paramType
 			}
 		default:
-			return nil, errors.New("element type should be either schema.Resource or schema.Schema")
+			return nil, errors.Errorf("element type of %s should be either schema.Resource or schema.Schema", fieldPath(names...))
 		}
 		// NOTE(muvaf): Maps and slices are already pointers, so we don't need to
 		// wrap them even if they are optional.
@@ -182,8 +184,44 @@ func (g *Builder) buildSchema(typeNamePrefix string, sch *schema.Schema) (types.
 		}
 		return types.NewSlice(elemType), nil
 	case schema.TypeInvalid:
-		return nil, errors.Errorf("invalid schema type %s", sch.Type)
+		return nil, errors.Errorf("invalid schema type %s", sch.Type.String())
 	default:
-		return nil, errors.Errorf("unexpected schema type %s", sch.Type)
+		return nil, errors.Errorf("unexpected schema type %s", sch.Type.String())
 	}
+}
+
+// generateTypeName generates a unique name for the type if its original name
+// is used by another one. It adds the former field names recursively until it
+// finds a unique name.
+func (g *Builder) generateTypeName(suffix string, names ...string) string {
+	n := names[len(names)-1] + suffix
+	for i := len(names) - 2; i > 0; i-- {
+		if _, ok := g.genTypes[n]; !ok {
+			break
+		}
+		n = names[i] + n
+	}
+	return n
+}
+
+func sortedKeys(m map[string]*schema.Schema) []string {
+	if len(m) == 0 {
+		return nil
+	}
+	keys := make([]string, len(m))
+	i := 0
+	for k := range m {
+		keys[i] = k
+		i++
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func fieldPath(names ...string) string {
+	path := ""
+	for _, n := range names {
+		path += "." + n
+	}
+	return path
 }
