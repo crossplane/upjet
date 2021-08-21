@@ -23,7 +23,7 @@ const (
 // BuildClientForResource returns a tfcli client by setting attributes
 // (i.e. desired spec input) and terraform state (if available) for a given
 // client builder base.
-func BuildClientForResource(builderBase tfcli.Builder, tr resource.Terraformed) (tfcli.Client, error) {
+func BuildClientForResource(ctx context.Context, builderBase tfcli.Builder, tr resource.Terraformed) (tfcli.Client, error) {
 	var stateRaw []byte
 	if meta.GetState(tr) != "" {
 		stEnc := meta.GetState(tr)
@@ -43,7 +43,7 @@ func BuildClientForResource(builderBase tfcli.Builder, tr resource.Terraformed) 
 		return nil, errors.Wrap(err, "failed to get attributes")
 	}
 
-	return builderBase.WithState(stateRaw).WithResourceBody(attr).BuildClient()
+	return builderBase.WithState(stateRaw).WithResourceBody(attr).Build(ctx)
 }
 
 // CLI is an Adapter implementation for Terraform CLI
@@ -63,7 +63,7 @@ func (t *CLI) Observe(ctx context.Context, tr resource.Terraformed) (Observation
 
 	tfRes, err := t.tfcli.Refresh(ctx, xpmeta.GetExternalName(tr))
 
-	if tferrors.IsApplying(err) {
+	if tferrors.IsOperationInProgress(err, tferrors.OperationApply) {
 		//  A previously started "Apply" operation is in progress or completed
 		//  but one last call needs to be done as completed to be able to kick
 		//  off a new operation. We will return "Exists: true, UpToDate: false"
@@ -74,7 +74,7 @@ func (t *CLI) Observe(ctx context.Context, tr resource.Terraformed) (Observation
 		}, nil
 	}
 
-	if tferrors.IsDestroying(err) {
+	if tferrors.IsOperationInProgress(err, tferrors.OperationDestroy) {
 		// A previously started "Destroy" operation is in progress or completed
 		// but one last call needs to be done as completed to be able to kick
 		// off a new operation. We will return "Exists: true, UpToDate: true" in

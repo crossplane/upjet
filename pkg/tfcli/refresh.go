@@ -56,7 +56,7 @@ func (c *client) importResource(ctx context.Context, id string) (RefreshResult, 
 		return result, errors.Wrap(err, errImport)
 	}
 	// now try to run the synchronous import pipeline
-	if err := c.syncPipeline(ctx, pathTerraform, "import", "-input=false", c.resource.GetAddress(), id); err != nil {
+	if err := c.syncPipeline(ctx, true, pathTerraform, "import", "-input=false", c.resource.GetAddress(), id); err != nil {
 		return result, err
 	}
 
@@ -100,7 +100,7 @@ func (c *client) observe(ctx context.Context) (RefreshResult, error) {
 		return result, err
 	}
 	// now try to run the refresh pipeline synchronously
-	if err := c.syncPipeline(ctx, "sh", "-c",
+	if err := c.syncPipeline(ctx, true, "sh", "-c",
 		fmt.Sprintf("%s apply -refresh-only -auto-approve -input=false && %s plan -detailed-exitcode -input=false",
 			pathTerraform, pathTerraform)); err != nil {
 		return result, err

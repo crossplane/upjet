@@ -56,11 +56,8 @@ func (c *client) init(ctx context.Context) error {
 	// remove the lock?
 	if !initLockExists {
 		// then we need to call an init
-		// TODO(aru): may need some sort of locking. Possibly we will run
-		// multiple inits concurrently. init lock is put at the end of init.
-		// may need a custom lock here. Also shared gRPC server configuration
-		// will not involve a lock.
-		return multierr.Combine(c.syncPipeline(ctx, pathTerraform, "init", "-input=false"),
+		// TODO(aru): Shared gRPC server configuration will not involve an init lock.
+		return multierr.Combine(c.syncPipeline(ctx, false, pathTerraform, "init", "-input=false"),
 			c.removeStateStore())
 	}
 	return nil

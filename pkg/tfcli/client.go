@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -231,12 +232,13 @@ func (c *client) asyncPipeline(command string, storeResult storeResult, args ...
 	return nil
 }
 
-func (c *client) syncPipeline(ctx context.Context, command string, args ...string) error {
+func (c *client) syncPipeline(ctx context.Context, ignoreExitErr bool, command string, args ...string) error {
 	var err error
 	if c.pInfo, err = process.New(command, args, c.wsPath, false, true, false, c.logger.log); err != nil {
 		return errors.Wrapf(err, fmtErrSyncRun, command, args, c.wsPath)
 	}
-	if err = c.pInfo.Run(ctx); err != nil {
+	exitErr := &exec.ExitError{}
+	if err = c.pInfo.Run(ctx); err != nil && (!ignoreExitErr || !errors.As(err, &exitErr)) {
 		return errors.Wrapf(err, fmtErrSyncRun, command, args, c.wsPath)
 	}
 	return nil

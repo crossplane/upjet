@@ -1,53 +1,125 @@
+/*
+Copyright 2021 The Crossplane Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package errors
 
-import "fmt"
+import (
+	"fmt"
 
-// OperationType is an operation type for terraform cli
-type OperationType int
+	"github.com/pkg/errors"
+)
 
 const (
-	// OperationUnknown represents an Unknown operation
-	OperationUnknown OperationType = iota
+	fmtErrOperationInProgress = "%s operation is in progress"
+	fmtErrPipelineInProgress  = "pipeline in state: %s"
+)
+
+// OperationType is an operation type for Terraform CLI
+type OperationType int
+
+func (ot OperationType) String() string {
+	return []string{"init", "refresh", "apply", "destroy"}[ot]
+}
+
+const (
+	// OperationInit represents an Init operation
+	OperationInit OperationType = iota
+	// OperationRefresh represents a Refresh operation
+	OperationRefresh
 	// OperationApply represents an Apply operation
 	OperationApply
-	// OperationDestroy respresents a Destrot operation
+	// OperationDestroy represents a Destroy operation
 	OperationDestroy
 )
 
-func (o OperationType) String() string {
-	return []string{"Unknown", "Apply", "Destroy"}[o]
-}
-
-// OperationInProgressError is a custom error indicating there is an ongoing
-// operation which prevents starting a new one.
+// OperationInProgressError is an error indicating that there is an ongoing
+// operation which prevents starting a new one. While an operation
+// is still in-progress, a new one is not allowed to be started
+// until the active one completes and its results are successfully
+// retrieved.
 type OperationInProgressError struct {
 	op OperationType
 }
 
-func (e *OperationInProgressError) Error() string {
-	return fmt.Sprintf("operation %s in progress", e.op.String())
+func (o OperationInProgressError) Error() string {
+	return fmt.Sprintf(fmtErrOperationInProgress, o.op.String())
 }
 
 // GetOperation returns the OperationType that is in progress
-func (e *OperationInProgressError) GetOperation() OperationType {
-	return e.op
+func (o OperationInProgressError) GetOperation() OperationType {
+	return o.op
 }
 
-// IsApplying returns whether the given error a Apply in progress error
-func IsApplying(err error) bool {
-	return isOperationInProgress(err, OperationApply)
+func (o OperationInProgressError) Is(err error) bool {
+	_, ok := err.(OperationInProgressError)
+	return ok
 }
 
-// IsDestroying returns whether the given error a Destroy in progress error
-func IsDestroying(err error) bool {
-	return isOperationInProgress(err, OperationDestroy)
-}
-
-func isOperationInProgress(err error, op OperationType) bool {
-	if opErr, ok := err.(*OperationInProgressError); ok {
-		if opErr.GetOperation() == op {
-			return true
-		}
+// NewOperationInProgressError initializes a new OperationInProgressError
+// of the specified type
+func NewOperationInProgressError(opType OperationType) error {
+	return OperationInProgressError{
+		op: opType,
 	}
-	return false
+}
+
+// IsOperationInProgress returns true if the specified error represents an
+// OperationInProgressError with the specified operation type.
+// If opType is nil, then no operation type check is done.
+func IsOperationInProgress(err error, opType OperationType) bool {
+	opErr := &OperationInProgressError{}
+	return errors.As(err, opErr) && (opType == opErr.GetOperation())
+}
+
+type PipelineState string
+
+const (
+	PipelineNotStarted   PipelineState = "Asynchronous Terraform pipeline not started yet"
+	PipelineStateLocked  PipelineState = "Terraform CLI is still running"
+	PipelineStateNoStore PipelineState = "Result is not available yet"
+)
+
+// PipelineInProgressError indicates that while an asynchronous
+// Terraform pipeline is still in-progress, an attempt has been
+// made to retrieve its results.
+type PipelineInProgressError struct {
+	pipelineState PipelineState
+}
+
+func NewPipelineInProgressError(state PipelineState) error {
+	return PipelineInProgressError{
+		pipelineState: state,
+	}
+}
+
+func (p PipelineInProgressError) Error() string {
+	return fmt.Sprintf(fmtErrPipelineInProgress, p.pipelineState)
+}
+
+func (p PipelineInProgressError) Is(err error) bool {
+	_, ok := err.(PipelineInProgressError)
+	return ok
+}
+
+// IsPipelineInProgress returns true and the observed pipeline state
+// if the specified error represents an PipelineInProgressError.
+func IsPipelineInProgress(err error) (PipelineState, bool) {
+	stateErr := &PipelineInProgressError{}
+	if errors.As(err, stateErr) {
+		return stateErr.pipelineState, true
+	}
+	return "invalid", false
 }

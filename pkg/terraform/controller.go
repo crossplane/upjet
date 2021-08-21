@@ -68,7 +68,7 @@ func (c *Connector) Connect(ctx context.Context, mg xpresource.Managed) (managed
 		tfcli, err := conversion.BuildClientForResource(tfcb, tr)
 	*/
 
-	tfcli, err := conversion.BuildClientForResource(nil, tr)
+	tfcli, err := conversion.BuildClientForResource(ctx, nil, tr)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot build tf client for resource")
 	}

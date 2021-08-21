@@ -26,7 +26,6 @@ import (
 
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 
-	"github.com/crossplane-contrib/terrajet/pkg/log"
 	"github.com/crossplane-contrib/terrajet/pkg/version"
 )
 
@@ -127,10 +126,6 @@ func defaultClient() *client {
 		provider:    providerFromEnv(),
 		resource:    &withResource{},
 		execTimeout: timeoutFromEnv(),
-		logger: &withLogger{
-			log: logging.NewLogrLogger(
-				log.NewLoggerWithServiceContext("tfcli", version.Version, false)),
-		},
 	}
 }
 
@@ -222,7 +217,7 @@ func providerFromEnv() *withProvider {
 }
 
 func (cb *clientBuilder) WithLogger(logger logging.Logger) Builder {
-	cb.c.logger.log = logger
+	cb.c.logger.log = logger.WithValues("tfcli-version", version.Version)
 	return cb
 }
 
