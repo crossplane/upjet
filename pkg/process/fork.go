@@ -86,7 +86,7 @@ type Info struct {
 }
 
 func (pi *Info) StartStdout(processor lineProcessor) {
-	pi.processLines(pi.stdout, processor)
+	pi.processStream(pi.stdout, processor)
 }
 
 func (pi *Info) LogStdout() {
@@ -94,7 +94,7 @@ func (pi *Info) LogStdout() {
 }
 
 func (pi *Info) StartStderr(processor lineProcessor) {
-	pi.processLines(pi.stderr, processor)
+	pi.processStream(pi.stderr, processor)
 }
 
 func (pi *Info) LogStderr() {
@@ -120,37 +120,40 @@ func (pi *Info) StderrAsString() (string, error) {
 	return pi.buffStderr.String(), nil
 }
 
-func (pi *Info) Run(ctx context.Context) ([]byte, error) {
+func (pi *Info) Run(ctx context.Context) error {
 	if pi.cmd == nil {
-		return nil, errors.New(errNotInitialized)
+		return errors.New(errNotInitialized)
 	}
 	// when this routine is scheduled, if ctx is already done, do not start the process
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return ctx.Err()
 
 	default:
 	}
 
-	chErr := make(chan error)
+	chErr := make(chan error, 1)
+	defer close(chErr)
+
 	go func() {
-		chErr <- pi.cmd.Run()
+		if err := pi.cmd.Start(); err != nil {
+			chErr <- err
+		}
+		pi.LogStdout()
+		pi.LogStderr()
+		chErr <- pi.WaitError()
 	}()
 
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return ctx.Err()
 
 	case err := <-chErr:
-		var stderr []byte
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			stderr = exitErr.Stderr
-		}
-		return stderr, err
+		return err
 	}
 }
 
-func (pi *Info) RunWithDeadline(ctx context.Context, to time.Duration) ([]byte, error) {
+func (pi *Info) RunWithDeadline(ctx context.Context, to time.Duration) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -207,7 +210,7 @@ func (pi *Info) Kill() error {
 	return errors.Wrap(pi.cmd.Process.Kill(), errKill)
 }
 
-func (pi *Info) processLines(stream io.ReadCloser, processor lineProcessor) {
+func (pi *Info) processStream(stream io.ReadCloser, processor lineProcessor) {
 	streamName := "<unknown>"
 	var buff *bytes.Buffer
 	switch stream {
@@ -223,13 +226,24 @@ func (pi *Info) processLines(stream io.ReadCloser, processor lineProcessor) {
 	pi.wgStreams.Add(1)
 	go func() {
 		defer pi.wgStreams.Done()
-		logStreamLines(stream, processor,
-			pi.logger.WithValues("stream", streamName, "exec", pi.cmd.Path, "cwd", pi.cmd.Dir),
-			pi.logStreams, buff)
+		if pi.logStreams || processor != nil {
+			processLines(stream, processor,
+				pi.logger.WithValues("stream", streamName, "exec", pi.cmd.Path, "cwd", pi.cmd.Dir),
+				pi.logStreams, buff)
+
+			return
+		}
+
+		if buff == nil {
+			return
+		}
+		if _, err := io.Copy(buff, stream); err != nil {
+			pi.logger.Info("Error during copying", "error", err)
+		}
 	}()
 }
 
-func logStreamLines(reader io.Reader, process lineProcessor, logger logging.Logger,
+func processLines(reader io.Reader, process lineProcessor, logger logging.Logger,
 	logStream bool, buff *bytes.Buffer) {
 	s := bufio.NewScanner(reader)
 	for s.Scan() {

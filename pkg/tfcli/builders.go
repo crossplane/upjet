@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/pkg/errors"
@@ -52,7 +51,11 @@ type Builder interface {
 	RequiresState
 	RequiresTimeout
 	RequiresLogger
-	Build() (Client, error)
+	// Build initializes a Terraform client and its workspace
+	// in a synchronous manner using Terraform CLI.
+	// Workspace initialization is potentially a long-running task
+	// Please see the discussion here:https://github.com/crossplane-contrib/terrajet/pull/14/files#r692547361
+	Build(ctx context.Context) (Client, error)
 }
 
 type RequiresLogger interface {
@@ -108,15 +111,14 @@ func (cb clientBuilder) validateNoState() error {
 	return nil
 }
 
-func (cb clientBuilder) validateWithState() error {
-	if err := cb.c.state.validate(); err != nil {
-		return err
+func (cb clientBuilder) Build(ctx context.Context) (Client, error) {
+	if err := cb.validateNoState(); err != nil {
+		return nil, err
 	}
-	return cb.validateNoState()
-}
-
-func (cb clientBuilder) Build() (Client, error) {
-	return cb.c, cb.validateNoState()
+	if err := cb.c.init(ctx); err != nil {
+		return nil, err
+	}
+	return cb.c, nil
 }
 
 func defaultClient() *client {
@@ -129,7 +131,6 @@ func defaultClient() *client {
 			log: logging.NewLogrLogger(
 				log.NewLoggerWithServiceContext("tfcli", version.Version, false)),
 		},
-		mu: &sync.Mutex{},
 	}
 }
 
