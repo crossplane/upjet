@@ -37,74 +37,33 @@ import (
 	"github.com/crossplane-contrib/terrajet/pkg/process"
 	cliErrors "github.com/crossplane-contrib/terrajet/pkg/tfcli/errors"
 	"github.com/crossplane-contrib/terrajet/pkg/tfcli/templates"
+	"github.com/crossplane-contrib/terrajet/pkg/tfcli/types"
 )
 
 const (
 	tplMain         = "main.tf.json"
-	fileInitLock    = ".terraform.lock.hcl"
 	fileTFStateLock = ".terraform.tfstate.lock.info"
-	fileStateLock   = ".xp.lock"
 	fileState       = "terraform.tfstate"
 	fileStore       = ".store"
 	pathTerraform   = "terraform"
-	prefixWSDir     = "ws-"
 	// error messages
-	errInitWorkspace    = "failed to initialize temporary Terraform workspace"
 	errDestroyProcess   = "failed to kill Terraform CLI process"
 	errDestroyWorkspace = "failed to destroy Terraform workspace"
 	errNoProcessState   = "failed to store process state: no process state"
 	errStore            = "failed to store process state"
 	errCheckExitCode    = "failed to check process exit code"
-	errRefresh          = "failed to refresh the Terraform state"
-	errNoID             = errRefresh + ": cannot deduce resource ID"
-	errImport           = "failed to import resource"
 	errNoPlan           = "plan line not found in Terraform CLI output"
 	errPlan             = "failed to parse the Terraform plan"
 	fmtErrPath          = "failed to check path on filesystem: %s: Expected a dir: %v, found a dir: %v"
-	fmtErrNoWS          = "failed to initialize Terraform configuration: No workspace folder: %s"
 	fmtErrLoadState     = "failed to load state from file: %s"
 	fmtErrStoreState    = "failed to store state into file: %s"
 	fmtErrAsyncRun      = "failed to run async Terraform pipeline %q with args: %v: in dir: %s"
 	fmtErrSyncRun       = "failed to run sync Terraform pipeline %q with args: %v: in dir: %s"
-	fmtErrXPState       = "failed to load Crossplane state file: %s"
-	fmtErrRefreshExit   = errRefresh + ": Terraform pipeline exited with code: %d"
-	fmtErrImport        = errImport + ": %s"
 
 	regexpPlanLine = `Plan:.*([\d+]).*to add,.*([\d+]) to change, ([\d+]) to destroy`
 
 	tfMsgNonExistentResource = "Cannot import non-existent remote object"
 )
-
-// RefreshResult holds information about the state of a Cloud resource.
-type RefreshResult struct {
-	// UpToDate is true if the remote Cloud resource configuration
-	// matches the Terraform configuration.
-	UpToDate bool
-	// Exists is true if the remote Cloud resource with the configured
-	// id exists.
-	Exists bool
-	// State holds the Terraform state of the resource.
-	// Because tfcli.Refresh is a synchronous operation,
-	// it's non-nil if tfcli.Refresh does not return an error.
-	State []byte
-}
-
-type ApplyResult struct {
-	Completed bool
-	State     []byte
-}
-
-type DestroyResult struct {
-	Completed bool
-}
-
-type Client interface {
-	Refresh(ctx context.Context, id string) (RefreshResult, error)
-	Apply(ctx context.Context) (ApplyResult, error)
-	Destroy(ctx context.Context) (DestroyResult, error)
-	Close(ctx context.Context) error
-	GetHandle() string
-}
 
 type client struct {
 	state       *withState
@@ -158,7 +117,7 @@ func (c *client) checkTFStateLock() error {
 // file format assumed <exit code>\n<string output from pipeline>
 // Returns exit code, command output and any errors encountered
 // Returned exit code is non-nil iff there are no errors
-func (c *client) parsePipelineResult(opType cliErrors.OperationType) (*int, string, error) {
+func (c *client) parsePipelineResult(opType types.OperationType) (*int, string, error) {
 	_, err := c.initConfiguration(opType, false)
 	if err != nil && !cliErrors.IsOperationInProgress(err, opType) {
 		return nil, "", err
@@ -307,7 +266,7 @@ func (c *client) Close(_ context.Context) error {
 }
 
 type xpState struct {
-	Operation cliErrors.OperationType `json:"operation"`
+	Operation types.OperationType `json:"operation"`
 }
 
 // GetHandle returns the handle associated with the client.

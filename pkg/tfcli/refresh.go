@@ -26,20 +26,29 @@ import (
 	"github.com/pkg/errors"
 	"go.uber.org/multierr"
 
-	cliErrors "github.com/crossplane-contrib/terrajet/pkg/tfcli/errors"
+	"github.com/crossplane-contrib/terrajet/pkg/tfcli/types"
+)
+
+const (
+	// error messages
+	errRefresh        = "failed to refresh the Terraform state"
+	errNoID           = errRefresh + ": cannot deduce resource ID"
+	errImport         = "failed to import resource"
+	fmtErrRefreshExit = errRefresh + ": Terraform pipeline exited with code: %d"
+	fmtErrImport      = errImport + ": %s"
 )
 
 // Refresh updates local state of the Cloud resource in a synchronous manner
-func (c *client) Refresh(ctx context.Context, id string) (RefreshResult, error) {
+func (c *client) Refresh(ctx context.Context, id string) (types.RefreshResult, error) {
 	if id == "" && len(c.state.tfState) == 0 {
-		return RefreshResult{}, errors.New(errNoID)
+		return types.RefreshResult{}, errors.New(errNoID)
 	}
 
-	if _, err := c.initConfiguration(cliErrors.OperationRefresh, false); err != nil {
-		return RefreshResult{}, err
+	if _, err := c.initConfiguration(types.OperationRefresh, false); err != nil {
+		return types.RefreshResult{}, err
 	}
 
-	var result RefreshResult
+	var result types.RefreshResult
 	var err error
 	if len(c.state.tfState) == 0 {
 		result, err = c.importResource(ctx, id)
@@ -49,8 +58,8 @@ func (c *client) Refresh(ctx context.Context, id string) (RefreshResult, error) 
 	return result, multierr.Combine(err, c.removeStateStore())
 }
 
-func (c *client) importResource(ctx context.Context, id string) (RefreshResult, error) {
-	result := RefreshResult{}
+func (c *client) importResource(ctx context.Context, id string) (types.RefreshResult, error) {
+	result := types.RefreshResult{}
 	// as a precaution, remove any existing state file
 	if err := os.RemoveAll(filepath.Join(c.wsPath, fileState)); err != nil {
 		return result, errors.Wrap(err, errImport)
@@ -93,8 +102,8 @@ func (c *client) importResource(ctx context.Context, id string) (RefreshResult, 
 // using a synchronous pipeline.
 // RefreshResult.State is non-nil and holds the fresh Terraform state iff
 // RefreshResult.Completed is true.
-func (c *client) observe(ctx context.Context) (RefreshResult, error) {
-	result := RefreshResult{}
+func (c *client) observe(ctx context.Context) (types.RefreshResult, error) {
+	result := types.RefreshResult{}
 	// try to save the given state
 	if err := c.storeStateInWorkspace(); err != nil {
 		return result, err

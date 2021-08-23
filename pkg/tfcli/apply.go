@@ -22,6 +22,7 @@ import (
 	"github.com/pkg/errors"
 
 	cliErrors "github.com/crossplane-contrib/terrajet/pkg/tfcli/errors"
+	"github.com/crossplane-contrib/terrajet/pkg/tfcli/types"
 )
 
 const (
@@ -32,11 +33,11 @@ const (
 // ApplyResult.Completed is false if the operation has not yet been completed.
 // ApplyResult.State is non-nil and holds the fresh Terraform state iff
 // ApplyResult.Completed is true.
-func (c *client) Apply(_ context.Context) (ApplyResult, error) {
-	code, tfLog, err := c.parsePipelineResult(cliErrors.OperationApply)
+func (c *client) Apply(_ context.Context) (types.ApplyResult, error) {
+	code, tfLog, err := c.parsePipelineResult(types.OperationApply)
 	pipelineState, ok := cliErrors.IsPipelineInProgress(err)
 	if !ok && err != nil {
-		return ApplyResult{}, err
+		return types.ApplyResult{}, err
 	}
 	// if no pipeline state error and code is 0,
 	// then pipeline has completed successfully
@@ -46,26 +47,26 @@ func (c *client) Apply(_ context.Context) (ApplyResult, error) {
 			// then check the state and try to load it if available
 			_, err := c.loadStateFromWorkspace(true)
 			if err != nil {
-				return ApplyResult{}, err
+				return types.ApplyResult{}, err
 			}
 			// and it has been stored
-			return ApplyResult{
+			return types.ApplyResult{
 				Completed: true,
 				State:     c.state.tfState,
 			}, nil
 
 		default:
-			return ApplyResult{
+			return types.ApplyResult{
 				Completed: true,
 			}, errors.Errorf(fmtErrApply, tfLog)
 		}
 	}
 	// then check pipeline state. If pipeline is already started we need to wait.
 	if pipelineState != cliErrors.PipelineNotStarted {
-		return ApplyResult{}, nil
+		return types.ApplyResult{}, nil
 	}
 	// if pipeline is not started yet, try to start it
-	return ApplyResult{}, c.asyncPipeline(pathTerraform, func(c *client, stdout, _ string) error {
+	return types.ApplyResult{}, c.asyncPipeline(pathTerraform, func(c *client, stdout, _ string) error {
 		return c.storePipelineResult(stdout)
 	}, "apply", "-auto-approve", "-input=false")
 }

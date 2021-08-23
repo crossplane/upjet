@@ -12,6 +12,7 @@ import (
 	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
 	"github.com/crossplane-contrib/terrajet/pkg/tfcli"
 	tferrors "github.com/crossplane-contrib/terrajet/pkg/tfcli/errors"
+	"github.com/crossplane-contrib/terrajet/pkg/tfcli/types"
 )
 
 const (
@@ -23,7 +24,7 @@ const (
 // BuildClientForResource returns a tfcli client by setting attributes
 // (i.e. desired spec input) and terraform state (if available) for a given
 // client builder base.
-func BuildClientForResource(ctx context.Context, builderBase tfcli.Builder, tr resource.Terraformed) (tfcli.Client, error) {
+func BuildClientForResource(ctx context.Context, builderBase tfcli.Builder, tr resource.Terraformed) (types.Client, error) {
 	var stateRaw []byte
 	if meta.GetState(tr) != "" {
 		stEnc := meta.GetState(tr)
@@ -48,11 +49,11 @@ func BuildClientForResource(ctx context.Context, builderBase tfcli.Builder, tr r
 
 // CLI is an Adapter implementation for Terraform CLI
 type CLI struct {
-	tfcli tfcli.Client
+	tfcli types.Client
 }
 
 // NewCli returns a CLI object
-func NewCli(client tfcli.Client) *CLI {
+func NewCli(client types.Client) *CLI {
 	return &CLI{
 		tfcli: client,
 	}
@@ -63,7 +64,7 @@ func (t *CLI) Observe(ctx context.Context, tr resource.Terraformed) (Observation
 
 	tfRes, err := t.tfcli.Refresh(ctx, xpmeta.GetExternalName(tr))
 
-	if tferrors.IsOperationInProgress(err, tferrors.OperationApply) {
+	if tferrors.IsOperationInProgress(err, types.OperationApply) {
 		//  A previously started "Apply" operation is in progress or completed
 		//  but one last call needs to be done as completed to be able to kick
 		//  off a new operation. We will return "Exists: true, UpToDate: false"
@@ -74,7 +75,7 @@ func (t *CLI) Observe(ctx context.Context, tr resource.Terraformed) (Observation
 		}, nil
 	}
 
-	if tferrors.IsOperationInProgress(err, tferrors.OperationDestroy) {
+	if tferrors.IsOperationInProgress(err, types.OperationDestroy) {
 		// A previously started "Destroy" operation is in progress or completed
 		// but one last call needs to be done as completed to be able to kick
 		// off a new operation. We will return "Exists: true, UpToDate: true" in

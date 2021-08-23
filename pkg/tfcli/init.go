@@ -27,12 +27,19 @@ import (
 	"go.uber.org/multierr"
 
 	cliErrors "github.com/crossplane-contrib/terrajet/pkg/tfcli/errors"
+	"github.com/crossplane-contrib/terrajet/pkg/tfcli/types"
 )
 
 const (
+	fileInitLock  = ".terraform.lock.hcl"
+	fileStateLock = ".xp.lock"
+	prefixWSDir   = "ws-"
 	// error messages
+	errInitWorkspace    = "failed to initialize temporary Terraform workspace"
 	fmtErrXPStateRemove = "failed to remove Crossplane state file: %s"
 	fmtErrStoreRemove   = "failed to remove pipeline store file: %s"
+	fmtErrNoWS          = "failed to initialize Terraform configuration: No workspace folder: %s"
+	fmtErrXPState       = "failed to load Crossplane state file: %s"
 )
 
 // init initializes a workspace in a synchronous manner using Terraform CLI
@@ -43,7 +50,7 @@ func (c *client) init(ctx context.Context) error {
 	initLockExists := false
 	err := c.closeOnError(ctx, func() error {
 		var err error
-		initLockExists, err = c.initConfiguration(cliErrors.OperationInit, true)
+		initLockExists, err = c.initConfiguration(types.OperationInit, true)
 		if errors.Is(err, cliErrors.OperationInProgressError{}) && initLockExists {
 			return nil
 		}
@@ -67,7 +74,7 @@ func (c *client) init(ctx context.Context) error {
 // configuration. If client's workspace does not yet exist, it can prepare
 // workspace dir if mkWorkspace is set.
 // Returns true if Terraform Init lock exists.
-func (c *client) initConfiguration(opType cliErrors.OperationType, mkWorkspace bool) (bool, error) {
+func (c *client) initConfiguration(opType types.OperationType, mkWorkspace bool) (bool, error) {
 	handle, err := c.getHandle()
 	if err != nil {
 		return false, errors.Wrap(err, errInitWorkspace)

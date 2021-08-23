@@ -26,6 +26,7 @@ import (
 
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 
+	"github.com/crossplane-contrib/terrajet/pkg/tfcli/types"
 	"github.com/crossplane-contrib/terrajet/pkg/version"
 )
 
@@ -54,7 +55,7 @@ type Builder interface {
 	// in a synchronous manner using Terraform CLI.
 	// Workspace initialization is potentially a long-running task
 	// Please see the discussion here:https://github.com/crossplane-contrib/terrajet/pull/14/files#r692547361
-	Build(ctx context.Context) (Client, error)
+	Build(ctx context.Context) (types.Client, error)
 }
 
 type RequiresLogger interface {
@@ -110,7 +111,7 @@ func (cb clientBuilder) validateNoState() error {
 	return nil
 }
 
-func (cb clientBuilder) Build(ctx context.Context) (Client, error) {
+func (cb clientBuilder) Build(ctx context.Context) (types.Client, error) {
 	if err := cb.validateNoState(); err != nil {
 		return nil, err
 	}
@@ -126,6 +127,7 @@ func defaultClient() *client {
 		provider:    providerFromEnv(),
 		resource:    &withResource{},
 		execTimeout: timeoutFromEnv(),
+		logger:      &withLogger{},
 	}
 }
 

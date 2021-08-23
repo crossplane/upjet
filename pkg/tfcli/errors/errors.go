@@ -20,29 +20,13 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
+
+	"github.com/crossplane-contrib/terrajet/pkg/tfcli/types"
 )
 
 const (
 	fmtErrOperationInProgress = "%s operation is in progress"
 	fmtErrPipelineInProgress  = "pipeline in state: %s"
-)
-
-// OperationType is an operation type for Terraform CLI
-type OperationType int
-
-func (ot OperationType) String() string {
-	return []string{"init", "refresh", "apply", "destroy"}[ot]
-}
-
-const (
-	// OperationInit represents an Init operation
-	OperationInit OperationType = iota
-	// OperationRefresh represents a Refresh operation
-	OperationRefresh
-	// OperationApply represents an Apply operation
-	OperationApply
-	// OperationDestroy represents a Destroy operation
-	OperationDestroy
 )
 
 // OperationInProgressError is an error indicating that there is an ongoing
@@ -51,7 +35,7 @@ const (
 // until the active one completes and its results are successfully
 // retrieved.
 type OperationInProgressError struct {
-	op OperationType
+	op types.OperationType
 }
 
 func (o OperationInProgressError) Error() string {
@@ -59,7 +43,7 @@ func (o OperationInProgressError) Error() string {
 }
 
 // GetOperation returns the OperationType that is in progress
-func (o OperationInProgressError) GetOperation() OperationType {
+func (o OperationInProgressError) GetOperation() types.OperationType {
 	return o.op
 }
 
@@ -70,7 +54,7 @@ func (o OperationInProgressError) Is(err error) bool {
 
 // NewOperationInProgressError initializes a new OperationInProgressError
 // of the specified type
-func NewOperationInProgressError(opType OperationType) error {
+func NewOperationInProgressError(opType types.OperationType) error {
 	return OperationInProgressError{
 		op: opType,
 	}
@@ -79,7 +63,7 @@ func NewOperationInProgressError(opType OperationType) error {
 // IsOperationInProgress returns true if the specified error represents an
 // OperationInProgressError with the specified operation type.
 // If opType is nil, then no operation type check is done.
-func IsOperationInProgress(err error, opType OperationType) bool {
+func IsOperationInProgress(err error, opType types.OperationType) bool {
 	opErr := &OperationInProgressError{}
 	return errors.As(err, opErr) && (opType == opErr.GetOperation())
 }
