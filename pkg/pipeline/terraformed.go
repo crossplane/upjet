@@ -40,7 +40,7 @@ type TerraformedGenerator struct {
 	GroupDir string
 }
 
-// Generate writes doc and group version info files to the disk.
+// Generate writes generated Terraformed interface functions
 func (tg *TerraformedGenerator) Generate(version, kind, terraformName, terraformID string) error {
 	vars := map[string]interface{}{
 		"CRD": map[string]string{
@@ -48,6 +48,12 @@ func (tg *TerraformedGenerator) Generate(version, kind, terraformName, terraform
 			"Kind":       kind,
 		},
 		"Terraform": map[string]string{
+			// TODO(hasan): This identifier is used to generate external name.
+			//  However, external-name generation is not as straightforward as
+			//  just finding out the identifier field since Terraform uses
+			//  more complex logic like combining multiple fields etc.
+			//  I'll revisit this with
+			//  https://github.com/crossplane-contrib/terrajet/issues/11
 			"Identifier":   terraformID,
 			"ResourceType": terraformName,
 		},
@@ -57,6 +63,7 @@ func (tg *TerraformedGenerator) Generate(version, kind, terraformName, terraform
 	trFile := wrapper.NewFile(pkgPath, version, templates.TerraformedTemplate,
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath("hack/boilerplate.go.txt"), // todo
+		wrapper.LinterEnabled(),
 	)
 	filePath := filepath.Join(tg.GroupDir, strings.ToLower(version), strings.ToLower(kind), "zz_generated.terraformed.go")
 	return errors.Wrap(

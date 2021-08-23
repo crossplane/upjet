@@ -30,3 +30,7 @@ var GroupVersionInfoTemplate string
 // Terraformed interface on CRD structs.
 //go:embed terraformed.go.tmpl
 var TerraformedTemplate string
+
+// ControllerTemplate is populated with controller setup functions.
+//go:embed controller.go.tmpl
+var ControllerTemplate string

@@ -1,0 +1,19 @@
+{{ .Header }}
+
+{{ .GenStatement }}
+
+package {{ .Package }}
+
+import (
+	ctrl "sigs.k8s.io/controller-runtime"
+
+	"github.com/crossplane-contrib/terrajet/pkg/terraform"
+	"github.com/crossplane/crossplane-runtime/pkg/logging"
+
+	{{ .Imports }}
+)
+
+// Setup adds a controller that reconciles {{ .CRD.Kind }} managed resources.
+func Setup(mgr ctrl.Manager, l logging.Logger) error {
+	return terraform.SetupController(mgr, l, &{{ .TypePackageAlias }}{{ .CRD.Kind }}{}, {{ .TypePackageAlias }}{{ .CRD.Kind }}GroupVersionKind, {{ .ProviderConfigBuilderPackageAlias }}ProviderConfigBuilder)
+}
