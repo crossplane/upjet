@@ -51,7 +51,10 @@ func (c *client) init(ctx context.Context) error {
 	err := c.closeOnError(ctx, func() error {
 		var err error
 		initLockExists, err = c.initConfiguration(types.OperationInit, true)
-		if errors.Is(err, cliErrors.OperationInProgressError{}) && initLockExists {
+		if (err == nil || errors.Is(err, cliErrors.OperationInProgressError{})) && initLockExists {
+			if err == nil || cliErrors.IsOperationInProgress(err, types.OperationInit) {
+				return c.removeStateStore()
+			}
 			return nil
 		}
 		return err

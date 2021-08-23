@@ -17,6 +17,7 @@ import (
 	"github.com/crossplane-contrib/terrajet/pkg/conversion"
 	"github.com/crossplane-contrib/terrajet/pkg/meta"
 	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
+	"github.com/crossplane-contrib/terrajet/pkg/tfcli"
 )
 
 const (
@@ -52,30 +53,25 @@ func (c *Connector) Connect(ctx context.Context, mg xpresource.Managed) (managed
 		return nil, errors.New(errUnexpectedObject)
 	}
 
-	// TODO(hasan): create and pass the implementation of tfcli builder once available
-	/*
-		pc, err := c.providerConfig(ctx, c.kube, mg)
-		if err != nil {
-			return nil, errors.Wrap(err, "cannot get provider config")
-		}
-		tfcb := tfcli.NewClientBuilder().
-			WithLogger(c.logger).
-			WithResourceName(tr.GetName()).
-			WithHandle(string(tr.GetUID())).
-			WithProviderConfiguration(pc).
-			WithResourceType(tr.GetTerraformResourceType())
+	pc, err := c.providerConfig(ctx, c.kube, mg)
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot get provider config")
+	}
+	tfcb := tfcli.NewClientBuilder().
+		WithLogger(c.logger).
+		WithResourceName(tr.GetName()).
+		WithHandle(string(tr.GetUID())).
+		WithProviderConfiguration(pc).
+		WithResourceType(tr.GetTerraformResourceType())
 
-		tfcli, err := conversion.BuildClientForResource(tfcb, tr)
-	*/
-
-	tfcli, err := conversion.BuildClientForResource(ctx, nil, tr)
+	tfCli, err := conversion.BuildClientForResource(ctx, tfcb, tr)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot build tf client for resource")
 	}
 
 	return &external{
 		kube:   c.kube,
-		tf:     conversion.NewCli(tfcli),
+		tf:     conversion.NewCli(tfCli),
 		log:    c.logger,
 		record: event.NewNopRecorder(),
 	}, nil

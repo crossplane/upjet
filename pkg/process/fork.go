@@ -204,7 +204,7 @@ func (pi *Info) GetCmd() *exec.Cmd {
 }
 
 func (pi *Info) Kill() error {
-	if pi.cmd == nil || pi.cmd.Process == nil {
+	if pi.cmd == nil || pi.cmd.Process == nil || (pi.cmd.ProcessState != nil && pi.cmd.ProcessState.Exited()) {
 		return nil
 	}
 	return errors.Wrap(pi.cmd.Process.Kill(), errKill)
