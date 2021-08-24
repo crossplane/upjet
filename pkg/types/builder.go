@@ -186,7 +186,7 @@ func (g *Builder) buildSchema(sch *schema.Schema, names []string) (types.Type, e
 				elemType = obsType
 			default:
 				if paramType == nil {
-					return nil, errors.Errorf("fielement type of %s is configurable but the underlying schema does not return parameter type: %s", fieldPath(names...))
+					return nil, errors.Errorf("element type of %s is configurable but the underlying schema does not return a parameter type", fieldPath(names...))
 				}
 				elemType = paramType
 			}
