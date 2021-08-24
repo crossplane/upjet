@@ -25,3 +25,12 @@ var CRDTypesTemplate string
 // GroupVersionInfoTemplate is populated with group and version information.
 //go:embed groupversion_info.go.tmpl
 var GroupVersionInfoTemplate string
+
+// TerraformedTemplate is populated with conversion methods implementing
+// Terraformed interface on CRD structs.
+//go:embed terraformed.go.tmpl
+var TerraformedTemplate string
+
+// ControllerTemplate is populated with controller setup functions.
+//go:embed controller.go.tmpl
+var ControllerTemplate string

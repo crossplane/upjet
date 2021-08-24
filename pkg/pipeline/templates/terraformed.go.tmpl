@@ -1,0 +1,37 @@
+{{ .Header }}
+
+{{ .GenStatement }}
+
+package {{ .CRD.APIVersion }}
+
+import "github.com/crossplane-contrib/terrajet/pkg/conversion"
+
+// GetTerraformResourceType returns Terraform resource type for this {{ .CRD.Kind }}
+func (mg *{{ .CRD.Kind }}) GetTerraformResourceType() string {
+	return "{{ .Terraform.ResourceType }}"
+}
+
+// GetTerraformResourceIdField returns Terraform identifier field for this {{ .CRD.Kind }}
+func (tr *{{ .CRD.Kind }}) GetTerraformResourceIdField() string {
+	return "{{ .Terraform.IdentifierField }}"
+}
+
+// GetObservation of this {{ .CRD.Kind }}
+func (tr *{{ .CRD.Kind }}) GetObservation() ([]byte, error) {
+	return conversion.TFParser.Marshal(tr.Status.AtProvider)
+}
+
+// SetObservation for this {{ .CRD.Kind }}
+func (tr *{{ .CRD.Kind }}) SetObservation(data []byte) error {
+	return conversion.TFParser.Unmarshal(data, &tr.Status.AtProvider)
+}
+
+// GetParameters of this {{ .CRD.Kind }}
+func (tr *{{ .CRD.Kind }}) GetParameters() ([]byte, error) {
+	return conversion.TFParser.Marshal(tr.Spec.ForProvider)
+}
+
+// SetParameters for this {{ .CRD.Kind }}
+func (tr *{{ .CRD.Kind }}) SetParameters(data []byte) error {
+	return conversion.TFParser.Unmarshal(data, &tr.Spec.ForProvider)
+}
