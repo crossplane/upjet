@@ -5,6 +5,7 @@ import (
 
 	xpmeta "github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/pkg/errors"
 
 	"github.com/crossplane-contrib/terrajet/pkg/meta"
@@ -192,8 +193,11 @@ func consumeState(state []byte, tr resource.Terraformed) (managed.ConnectionDeta
 	}
 
 	conn := managed.ConnectionDetails{}
-	if err = JSParser.Unmarshal(st.GetSensitiveAttributes(), &conn); err != nil {
-		return nil, errors.Wrap(err, "cannot parse connection details")
+	sensitive := st.GetSensitiveAttributes()
+	if jsoniter.Get(sensitive, '*').Size() > 0 {
+		if err = JSParser.Unmarshal(sensitive, &conn); err != nil {
+			return nil, errors.Wrap(err, "cannot parse connection details")
+		}
 	}
 
 	stEnc, err := st.GetEncodedState()
