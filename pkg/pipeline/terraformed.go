@@ -28,20 +28,24 @@ import (
 )
 
 // NewTerraformedGenerator returns a new TerraformedGenerator.
-func NewTerraformedGenerator(groupDir string) *TerraformedGenerator {
+func NewTerraformedGenerator(groupDir, rootModulePath, group string) *TerraformedGenerator {
 	return &TerraformedGenerator{
-		GroupDir: groupDir,
+		GroupDir:       groupDir,
+		RootModulePath: rootModulePath,
+		Group:          group,
 	}
 }
 
 // TerraformedGenerator generates conversion methods implementing Terraformed
 // interface on CRD structs.
 type TerraformedGenerator struct {
-	GroupDir string
+	GroupDir       string
+	RootModulePath string
+	Group          string
 }
 
 // Generate writes generated Terraformed interface functions
-func (tg *TerraformedGenerator) Generate(version, kind, terraformName, terraformID string) error {
+func (tg *TerraformedGenerator) Generate(version, kind, terraformResourceType, terraformIDField string) error {
 	vars := map[string]interface{}{
 		"CRD": map[string]string{
 			"APIVersion": version,
@@ -54,12 +58,12 @@ func (tg *TerraformedGenerator) Generate(version, kind, terraformName, terraform
 			//  more complex logic like combining multiple fields etc.
 			//  I'll revisit this with
 			//  https://github.com/crossplane-contrib/terrajet/issues/11
-			"Identifier":   terraformID,
-			"ResourceType": terraformName,
+			"IdentifierField": terraformIDField,
+			"ResourceType":    terraformResourceType,
 		},
 	}
 
-	pkgPath := filepath.Join(tg.GroupDir, strings.ToLower(kind))
+	pkgPath := filepath.Join(tg.RootModulePath, "apis", strings.ToLower(strings.Split(tg.Group, ".")[0]), strings.ToLower(version), strings.ToLower(kind))
 	trFile := wrapper.NewFile(pkgPath, version, templates.TerraformedTemplate,
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath("hack/boilerplate.go.txt"), // todo

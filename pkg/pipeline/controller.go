@@ -28,10 +28,9 @@ import (
 )
 
 // NewControllerGenerator returns a new ControllerGenerator.
-func NewControllerGenerator(groupDir, controllerGroupDir, rootModulePath, group, providerConfigBuilderPath string) *ControllerGenerator {
+func NewControllerGenerator(controllerGroupDir, rootModulePath, group, providerConfigBuilderPath string) *ControllerGenerator {
 	return &ControllerGenerator{
 		Group:                     group,
-		GroupDir:                  groupDir,
 		ControllerGroupDir:        controllerGroupDir,
 		RootModulePath:            rootModulePath,
 		ProviderConfigBuilderPath: providerConfigBuilderPath,
@@ -41,7 +40,6 @@ func NewControllerGenerator(groupDir, controllerGroupDir, rootModulePath, group,
 // ControllerGenerator generates controller setup functions.
 type ControllerGenerator struct {
 	Group                     string
-	GroupDir                  string
 	ControllerGroupDir        string
 	RootModulePath            string
 	ProviderConfigBuilderPath string
@@ -52,8 +50,8 @@ func (tg *ControllerGenerator) Generate(version, kind string) error {
 	groupPkgPath := filepath.Join(tg.RootModulePath, "apis", strings.ToLower(strings.Split(tg.Group, ".")[0]), strings.ToLower(version))
 	kindPkgPath := filepath.Join(groupPkgPath, strings.ToLower(kind))
 
-	pkgPath := filepath.Join(tg.ControllerGroupDir, strings.ToLower(kind))
-	ctrlFile := wrapper.NewFile(pkgPath, version, templates.ControllerTemplate,
+	controllerPkgPath := filepath.Join(tg.RootModulePath, "internal", "controller", strings.ToLower(strings.Split(tg.Group, ".")[0]), strings.ToLower(kind))
+	ctrlFile := wrapper.NewFile(controllerPkgPath, version, templates.ControllerTemplate,
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath("hack/boilerplate.go.txt"), // todo
 		wrapper.LinterEnabled(),
