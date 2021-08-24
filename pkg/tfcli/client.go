@@ -36,8 +36,8 @@ import (
 
 	"github.com/crossplane-contrib/terrajet/pkg/process"
 	cliErrors "github.com/crossplane-contrib/terrajet/pkg/tfcli/errors"
+	"github.com/crossplane-contrib/terrajet/pkg/tfcli/model"
 	"github.com/crossplane-contrib/terrajet/pkg/tfcli/templates"
-	"github.com/crossplane-contrib/terrajet/pkg/tfcli/types"
 )
 
 const (
@@ -117,7 +117,7 @@ func (c *client) checkTFStateLock() error {
 // file format assumed <exit code>\n<string output from pipeline>
 // Returns exit code, command output and any errors encountered
 // Returned exit code is non-nil iff there are no errors
-func (c *client) parsePipelineResult(opType types.OperationType) (*int, string, error) {
+func (c *client) parsePipelineResult(opType model.OperationType) (*int, string, error) {
 	_, err := c.initConfiguration(opType, false)
 	if err != nil && !cliErrors.IsOperationInProgress(err, opType) {
 		return nil, "", err
@@ -266,12 +266,7 @@ func (c *client) Close(_ context.Context) error {
 }
 
 type xpState struct {
-	Operation types.OperationType `json:"operation"`
-}
-
-// GetHandle returns the handle associated with the client.
-func (c *client) GetHandle() string {
-	return c.resource.handle
+	Operation model.OperationType `json:"operation"`
 }
 
 func (c *client) getHandle() (string, error) {

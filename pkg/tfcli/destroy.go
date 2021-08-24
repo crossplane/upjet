@@ -22,7 +22,7 @@ import (
 	"github.com/pkg/errors"
 
 	cliErrors "github.com/crossplane-contrib/terrajet/pkg/tfcli/errors"
-	"github.com/crossplane-contrib/terrajet/pkg/tfcli/types"
+	"github.com/crossplane-contrib/terrajet/pkg/tfcli/model"
 )
 
 const (
@@ -31,33 +31,33 @@ const (
 
 // Destroy attempts to delete the resource.
 // DestroyResult.Completed is false if the operation has not yet been completed.
-func (c *client) Destroy(_ context.Context) (types.DestroyResult, error) {
-	code, tfLog, err := c.parsePipelineResult(types.OperationDestroy)
+func (c *client) Destroy(_ context.Context) (model.DestroyResult, error) {
+	code, tfLog, err := c.parsePipelineResult(model.OperationDestroy)
 	pipelineState, ok := cliErrors.IsPipelineInProgress(err)
 	if !ok && err != nil {
-		return types.DestroyResult{}, err
+		return model.DestroyResult{}, err
 	}
 	// if no pipeline state error and code is 0,
 	// then pipeline has completed successfully
 	if err == nil {
 		switch *code {
 		case 0:
-			return types.DestroyResult{
+			return model.DestroyResult{
 				Completed: true,
 			}, nil
 
 		default:
-			return types.DestroyResult{
+			return model.DestroyResult{
 				Completed: true,
 			}, errors.Errorf(fmtErrDestroy, tfLog)
 		}
 	}
 	// then check pipeline state. If pipeline is already started we need to wait.
 	if pipelineState != cliErrors.PipelineNotStarted {
-		return types.DestroyResult{}, nil
+		return model.DestroyResult{}, nil
 	}
 	// if pipeline is not started yet, try to start it
-	return types.DestroyResult{},
+	return model.DestroyResult{},
 		c.asyncPipeline(pathTerraform, func(c *client, stdout, _ string) error {
 			return c.storePipelineResult(stdout)
 		}, "destroy", "-auto-approve", "-input=false")

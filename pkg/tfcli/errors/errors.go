@@ -21,7 +21,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/crossplane-contrib/terrajet/pkg/tfcli/types"
+	"github.com/crossplane-contrib/terrajet/pkg/tfcli/model"
 )
 
 const (
@@ -35,7 +35,7 @@ const (
 // until the active one completes and its results are successfully
 // retrieved.
 type OperationInProgressError struct {
-	op types.OperationType
+	op model.OperationType
 }
 
 func (o OperationInProgressError) Error() string {
@@ -43,7 +43,7 @@ func (o OperationInProgressError) Error() string {
 }
 
 // GetOperation returns the OperationType that is in progress
-func (o OperationInProgressError) GetOperation() types.OperationType {
+func (o OperationInProgressError) GetOperation() model.OperationType {
 	return o.op
 }
 
@@ -54,16 +54,28 @@ func (o OperationInProgressError) Is(err error) bool {
 
 // NewOperationInProgressError initializes a new OperationInProgressError
 // of the specified type
-func NewOperationInProgressError(opType types.OperationType) error {
+func NewOperationInProgressError(opType model.OperationType) error {
 	return OperationInProgressError{
 		op: opType,
 	}
 }
 
+// IsApplying returns true if the specified error represents
+// an OperationInProgressError for an apply operation.
+func IsApplying(err error) bool {
+	return IsOperationInProgress(err, model.OperationApply)
+}
+
+// IsDestroying returns true if the specified error represents
+// an OperationInProgressError for a destroy operation.
+func IsDestroying(err error) bool {
+	return IsOperationInProgress(err, model.OperationDestroy)
+}
+
 // IsOperationInProgress returns true if the specified error represents an
 // OperationInProgressError with the specified operation type.
 // If opType is nil, then no operation type check is done.
-func IsOperationInProgress(err error, opType types.OperationType) bool {
+func IsOperationInProgress(err error, opType model.OperationType) bool {
 	opErr := &OperationInProgressError{}
 	return errors.As(err, opErr) && (opType == opErr.GetOperation())
 }

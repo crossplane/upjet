@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package types
+package model
 
 import "context"
 
@@ -46,7 +46,6 @@ type Client interface {
 	Apply(ctx context.Context) (ApplyResult, error)
 	Destroy(ctx context.Context) (DestroyResult, error)
 	Close(ctx context.Context) error
-	GetHandle() string
 }
 
 // OperationType is an operation type for Terraform CLI

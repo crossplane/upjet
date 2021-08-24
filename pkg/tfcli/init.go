@@ -27,7 +27,7 @@ import (
 	"go.uber.org/multierr"
 
 	cliErrors "github.com/crossplane-contrib/terrajet/pkg/tfcli/errors"
-	"github.com/crossplane-contrib/terrajet/pkg/tfcli/types"
+	"github.com/crossplane-contrib/terrajet/pkg/tfcli/model"
 )
 
 const (
@@ -50,9 +50,9 @@ func (c *client) init(ctx context.Context) error {
 	initLockExists := false
 	err := c.closeOnError(ctx, func() error {
 		var err error
-		initLockExists, err = c.initConfiguration(types.OperationInit, true)
+		initLockExists, err = c.initConfiguration(model.OperationInit, true)
 		if (err == nil || errors.Is(err, cliErrors.OperationInProgressError{})) && initLockExists {
-			if err == nil || cliErrors.IsOperationInProgress(err, types.OperationInit) {
+			if err == nil || cliErrors.IsOperationInProgress(err, model.OperationInit) {
 				return c.removeStateStore()
 			}
 			return nil
@@ -77,7 +77,7 @@ func (c *client) init(ctx context.Context) error {
 // configuration. If client's workspace does not yet exist, it can prepare
 // workspace dir if mkWorkspace is set.
 // Returns true if Terraform Init lock exists.
-func (c *client) initConfiguration(opType types.OperationType, mkWorkspace bool) (bool, error) {
+func (c *client) initConfiguration(opType model.OperationType, mkWorkspace bool) (bool, error) {
 	handle, err := c.getHandle()
 	if err != nil {
 		return false, errors.Wrap(err, errInitWorkspace)
