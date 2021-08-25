@@ -81,6 +81,7 @@ func (cg *CRDGenerator) Generate(version, kind string, schema *schema.Resource) 
 			"Kind":       kind,
 		},
 		"VersionPackageAlias": file.Imports.UsePackage(groupPkgPath),
+		"APISPackageAlias":    file.Imports.UsePackage(filepath.Join(cg.RootModulePath, "apis")),
 	}
 	filePath := filepath.Join(cg.GroupDir, strings.ToLower(version), strings.ToLower(kind), "zz_types.go")
 	return errors.Wrap(file.Write(filePath, vars, os.ModePerm), "cannot write crd file")

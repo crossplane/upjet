@@ -64,5 +64,5 @@ var (
 )
 
 func init() {
-	{{ .VersionPackageAlias }}SchemeBuilder.Register(&{{ .CRD.Kind }}{}, &{{ .CRD.Kind }}List{})
+	{{ .APISPackageAlias }}SchemaMap[{{ .VersionPackageAlias }}GroupVersion] = append({{ .APISPackageAlias }}SchemaMap[{{ .VersionPackageAlias }}GroupVersion], &{{ .CRD.Kind }}{}, &{{ .CRD.Kind }}List{})
 }
