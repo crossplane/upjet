@@ -39,8 +39,8 @@ const (
 )
 
 // Refresh updates local state of the Cloud resource in a synchronous manner
-func (c *client) Refresh(ctx context.Context, id string) (model.RefreshResult, error) {
-	if id == "" && len(c.state.tfState) == 0 {
+func (c *Client) Refresh(ctx context.Context, id string) (model.RefreshResult, error) {
+	if id == "" && len(c.tfState) == 0 {
 		return model.RefreshResult{}, errors.New(errNoID)
 	}
 
@@ -50,7 +50,7 @@ func (c *client) Refresh(ctx context.Context, id string) (model.RefreshResult, e
 
 	var result model.RefreshResult
 	var err error
-	if len(c.state.tfState) == 0 {
+	if len(c.tfState) == 0 {
 		result, err = c.importResource(ctx, id)
 	} else {
 		result, err = c.observe(ctx)
@@ -58,7 +58,7 @@ func (c *client) Refresh(ctx context.Context, id string) (model.RefreshResult, e
 	return result, multierr.Combine(err, c.removeStateStore())
 }
 
-func (c *client) importResource(ctx context.Context, id string) (model.RefreshResult, error) {
+func (c *Client) importResource(ctx context.Context, id string) (model.RefreshResult, error) {
 	result := model.RefreshResult{}
 	// as a precaution, remove any existing state file
 	if err := os.RemoveAll(filepath.Join(c.wsPath, fileState)); err != nil {
@@ -92,9 +92,9 @@ func (c *client) importResource(ctx context.Context, id string) (model.RefreshRe
 	if err != nil {
 		return result, err
 	}
-	result.State = c.state.tfState
+	result.State = c.tfState
 
-	// then refreshed state is in client cache
+	// then refreshed state is in Client cache
 	return result, nil
 }
 
@@ -102,7 +102,7 @@ func (c *client) importResource(ctx context.Context, id string) (model.RefreshRe
 // using a synchronous pipeline.
 // RefreshResult.State is non-nil and holds the fresh Terraform state iff
 // RefreshResult.Completed is true.
-func (c *client) observe(ctx context.Context) (model.RefreshResult, error) {
+func (c *Client) observe(ctx context.Context) (model.RefreshResult, error) {
 	result := model.RefreshResult{}
 	// try to save the given state
 	if err := c.storeStateInWorkspace(); err != nil {
@@ -136,6 +136,6 @@ func (c *client) observe(ctx context.Context) (model.RefreshResult, error) {
 	if err != nil {
 		return result, err
 	}
-	result.State = c.state.tfState
+	result.State = c.tfState
 	return result, nil
 }

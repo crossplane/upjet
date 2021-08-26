@@ -33,7 +33,7 @@ const (
 // ApplyResult.Completed is false if the operation has not yet been completed.
 // ApplyResult.State is non-nil and holds the fresh Terraform state iff
 // ApplyResult.Completed is true.
-func (c *client) Apply(_ context.Context) (model.ApplyResult, error) {
+func (c *Client) Apply(_ context.Context) (model.ApplyResult, error) {
 	code, tfLog, err := c.parsePipelineResult(model.OperationApply)
 	pipelineState, ok := cliErrors.IsPipelineInProgress(err)
 	if !ok && err != nil {
@@ -52,7 +52,7 @@ func (c *client) Apply(_ context.Context) (model.ApplyResult, error) {
 			// and it has been stored
 			return model.ApplyResult{
 				Completed: true,
-				State:     c.state.tfState,
+				State:     c.tfState,
 			}, nil
 
 		default:
@@ -66,7 +66,7 @@ func (c *client) Apply(_ context.Context) (model.ApplyResult, error) {
 		return model.ApplyResult{}, nil
 	}
 	// if pipeline is not started yet, try to start it
-	return model.ApplyResult{}, c.asyncPipeline(pathTerraform, func(c *client, stdout, _ string) error {
+	return model.ApplyResult{}, c.asyncPipeline(pathTerraform, func(c *Client, stdout, _ string) error {
 		return c.storePipelineResult(stdout)
 	}, "apply", "-auto-approve", "-input=false")
 }

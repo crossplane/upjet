@@ -30,6 +30,7 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"go.uber.org/multierr"
@@ -65,14 +66,14 @@ const (
 	tfMsgNonExistentResource = "Cannot import non-existent remote object"
 )
 
-type client struct {
-	state       *withState
-	provider    *withProvider
-	resource    *withResource
-	execTimeout *withTimeout
-	logger      *withLogger
-	wsPath      string
-	pInfo       *process.Info
+type Client struct {
+	provider Provider
+	resource Resource
+	handle   string
+	tfState  []byte
+	logger   logging.Logger
+	wsPath   string
+	pInfo    *process.Info
 }
 
 // returns true if no resource is to be added according to the plan
@@ -89,7 +90,7 @@ func tfPlanCheckAdd(log string) (bool, error) {
 	return addCount == 0, nil
 }
 
-func (c *client) storePipelineResult(log string) error {
+func (c *Client) storePipelineResult(log string) error {
 	ps := c.pInfo.GetProcessState()
 	if ps == nil {
 		return errors.New(errNoProcessState)
@@ -99,7 +100,7 @@ func (c *client) storePipelineResult(log string) error {
 			[]byte(fmt.Sprintf("%d\n%s", ps.ExitCode(), log)), 0644), errStore)
 }
 
-func (c *client) checkTFStateLock() error {
+func (c *Client) checkTFStateLock() error {
 	tfStateLock := filepath.Join(c.wsPath, fileTFStateLock)
 	tfStateLockExists, err := pathExists(tfStateLock, false)
 	if err != nil {
@@ -117,7 +118,7 @@ func (c *client) checkTFStateLock() error {
 // file format assumed <exit code>\n<string output from pipeline>
 // Returns exit code, command output and any errors encountered
 // Returned exit code is non-nil iff there are no errors
-func (c *client) parsePipelineResult(opType model.OperationType) (*int, string, error) {
+func (c *Client) parsePipelineResult(opType model.OperationType) (*int, string, error) {
 	_, err := c.initConfiguration(opType, false)
 	if err != nil && !cliErrors.IsOperationInProgress(err, opType) {
 		return nil, "", err
@@ -155,19 +156,19 @@ func (c *client) parsePipelineResult(opType model.OperationType) (*int, string, 
 	return &storedCode, contents[len(parts[0])+1:], c.removeStateStore()
 }
 
-type storeResult func(c *client, stdout, stderr string) error
+type storeResult func(c *Client, stdout, stderr string) error
 
-func (c *client) asyncPipeline(command string, storeResult storeResult, args ...string) error {
+func (c *Client) asyncPipeline(command string, storeResult storeResult, args ...string) error {
 	var err error
 	c.pInfo, err = process.New(command, args, c.wsPath,
-		true, true, false, c.logger.log)
+		true, true, false, c.logger)
 	if err != nil {
 		return errors.Wrapf(err, fmtErrAsyncRun, command, args, c.wsPath)
 	}
 	c.pInfo.LogStdout()
 	c.pInfo.LogStderr()
 	go func() {
-		logger := c.logger.log.WithValues("args", args, "executable", pathTerraform, "cwd", c.wsPath)
+		logger := c.logger.WithValues("args", args, "executable", pathTerraform, "cwd", c.wsPath)
 		logger.Info("Waiting for process to terminate gracefully.", "arg-from-process", c.pInfo.GetCmd().String())
 		err := c.pInfo.WaitError()
 		stderr, _ := c.pInfo.StderrAsString()
@@ -191,9 +192,9 @@ func (c *client) asyncPipeline(command string, storeResult storeResult, args ...
 	return nil
 }
 
-func (c *client) syncPipeline(ctx context.Context, ignoreExitErr bool, command string, args ...string) error {
+func (c *Client) syncPipeline(ctx context.Context, ignoreExitErr bool, command string, args ...string) error {
 	var err error
-	if c.pInfo, err = process.New(command, args, c.wsPath, false, true, false, c.logger.log); err != nil {
+	if c.pInfo, err = process.New(command, args, c.wsPath, false, true, false, c.logger); err != nil {
 		return errors.Wrapf(err, fmtErrSyncRun, command, args, c.wsPath)
 	}
 	exitErr := &exec.ExitError{}
@@ -205,10 +206,10 @@ func (c *client) syncPipeline(ctx context.Context, ignoreExitErr bool, command s
 
 // returns true if state file exists
 // TODO(aru): differentiate not-found error
-func (c *client) loadStateFromWorkspace(errNoState bool) (bool, error) {
+func (c *Client) loadStateFromWorkspace(errNoState bool) (bool, error) {
 	pathState := filepath.Join(c.wsPath, fileState)
 	var err error
-	c.state.tfState, err = ioutil.ReadFile(pathState)
+	c.tfState, err = ioutil.ReadFile(pathState)
 	if err == nil {
 		return true, nil
 	}
@@ -219,13 +220,13 @@ func (c *client) loadStateFromWorkspace(errNoState bool) (bool, error) {
 	return false, nil
 }
 
-func (c *client) storeStateInWorkspace() error {
-	if c.state.tfState == nil {
+func (c *Client) storeStateInWorkspace() error {
+	if c.tfState == nil {
 		return nil
 	}
 
 	pathState := filepath.Join(c.wsPath, fileState)
-	return errors.Wrapf(ioutil.WriteFile(pathState, c.state.tfState, 0600), fmtErrStoreState, pathState)
+	return errors.Wrapf(ioutil.WriteFile(pathState, c.tfState, 0600), fmtErrStoreState, pathState)
 }
 
 func pathExists(path string, isDir bool) (bool, error) {
@@ -243,7 +244,7 @@ func pathExists(path string, isDir bool) (bool, error) {
 	return false, nil
 }
 
-func (c *client) closeOnError(ctx context.Context, f func() error) error {
+func (c *Client) closeOnError(ctx context.Context, f func() error) error {
 	err := f()
 	if err != nil {
 		err = multierr.Combine(err, c.Close(ctx))
@@ -251,9 +252,9 @@ func (c *client) closeOnError(ctx context.Context, f func() error) error {
 	return err
 }
 
-// Close releases resources allocated for this client.
+// Close releases resources allocated for this Client.
 // After a call to Close, do not reuse the same handle.
-func (c *client) Close(_ context.Context) error {
+func (c *Client) Close(_ context.Context) error {
 	var result error
 	if c.pInfo != nil {
 		result = multierr.Combine(errors.Wrap(c.pInfo.Kill(), errDestroyProcess))
@@ -261,7 +262,7 @@ func (c *client) Close(_ context.Context) error {
 	if c.wsPath != "" {
 		result = multierr.Combine(result, errors.Wrap(os.RemoveAll(c.wsPath), errDestroyWorkspace))
 	}
-	c.resource.handle = ""
+	c.handle = ""
 	return result
 }
 
@@ -269,8 +270,8 @@ type xpState struct {
 	Operation model.OperationType `json:"operation"`
 }
 
-func (c *client) getHandle() (string, error) {
-	handle := c.resource.handle
+func (c *Client) getHandle() (string, error) {
+	handle := c.handle
 	// if no handle has been given, generate a new one
 	if handle == "" {
 		u, err := uuid.NewUUID()
@@ -278,7 +279,7 @@ func (c *client) getHandle() (string, error) {
 			return "", err
 		}
 		handle = u.String()
-		c.resource.handle = handle
+		c.handle = handle
 	}
 	// md5sum the handle so that it's safe to use in paths
 	handle = fmt.Sprintf("%x", md5.Sum([]byte(handle)))
@@ -294,7 +295,7 @@ type tfConfigTemplateParams struct {
 	ResourceBody          []byte
 }
 
-func (c client) generateTFConfiguration() ([]byte, error) {
+func (c Client) generateTFConfiguration() ([]byte, error) {
 	tmpl, err := template.New(tplMain).Parse(templates.TFConfigurationMain)
 	if err != nil {
 		return nil, err
@@ -302,12 +303,12 @@ func (c client) generateTFConfiguration() ([]byte, error) {
 
 	var buff bytes.Buffer
 	if err := tmpl.Execute(&buff, &tfConfigTemplateParams{
-		ProviderSource:        c.provider.source,
-		ProviderVersion:       c.provider.version,
-		ProviderConfiguration: c.provider.configuration,
-		ResourceType:          c.resource.labelType,
-		ResourceName:          c.resource.labelName,
-		ResourceBody:          c.resource.body,
+		ProviderSource:        c.provider.Source,
+		ProviderVersion:       c.provider.Version,
+		ProviderConfiguration: c.provider.Configuration,
+		ResourceType:          c.resource.LabelType,
+		ResourceName:          c.resource.LabelName,
+		ResourceBody:          c.resource.Body,
 	}); err != nil {
 		return nil, err
 	}

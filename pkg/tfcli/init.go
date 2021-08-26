@@ -44,7 +44,7 @@ const (
 
 // init initializes a workspace in a synchronous manner using Terraform CLI
 // Workspace initialization is potentially a long-running task
-func (c *client) init(ctx context.Context) error {
+func (c *Client) init(ctx context.Context) error {
 	// initialize the workspace, and
 	// check if init lock & state lock exist, i.e., there is an ongoing Terraform CLI operation
 	initLockExists := false
@@ -74,10 +74,11 @@ func (c *client) init(ctx context.Context) error {
 }
 
 // initConfiguration checks and initializes a Terraform workspace with a proper
-// configuration. If client's workspace does not yet exist, it can prepare
+// configuration. If Client's workspace does not yet exist, it can prepare
 // workspace dir if mkWorkspace is set.
 // Returns true if Terraform Init lock exists.
-func (c *client) initConfiguration(opType model.OperationType, mkWorkspace bool) (bool, error) {
+func (c *Client) initConfiguration(opType model.OperationType, mkWorkspace bool) (bool, error) { // nolint:gocyclo
+	// the cyclomatic complexity of this method (12) is slightly larger than our goal of 12
 	handle, err := c.getHandle()
 	if err != nil {
 		return false, errors.Wrap(err, errInitWorkspace)
@@ -131,7 +132,7 @@ func (c *client) initConfiguration(opType model.OperationType, mkWorkspace bool)
 		errors.Wrap(ioutil.WriteFile(filepath.Join(c.wsPath, fileStateLock), buff, 0644), errInitWorkspace)
 }
 
-func (c *client) checkOperation() error {
+func (c *Client) checkOperation() error {
 	xpStatePath := filepath.Join(c.wsPath, fileStateLock)
 	// Terraform state lock file does not seem to contain operation type
 	buff, err := ioutil.ReadFile(xpStatePath)
@@ -148,7 +149,7 @@ func (c *client) checkOperation() error {
 
 // removeStateStore removes Crossplane state lock & store
 // returning any errors encountered
-func (c *client) removeStateStore() error {
+func (c *Client) removeStateStore() error {
 	stateFile := filepath.Join(c.wsPath, fileStateLock)
 	storeFile := filepath.Join(c.wsPath, fileStore)
 	return multierr.Combine(errors.Wrapf(os.RemoveAll(stateFile), fmtErrXPStateRemove, stateFile),
