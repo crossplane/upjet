@@ -19,7 +19,6 @@ package tfcli
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/pkg/errors"
@@ -36,11 +35,6 @@ const (
 	errValidationNoLogger    = "no logger has been configured"
 	fmtErrValidationResource = "invalid resource specification: both type and name are required: type=%q and name=%q"
 	fmtErrValidationProvider = "invalid provider specification: both source and version are required: source=%q and version=%q"
-	// env variable names
-	envTFProviderVersion       = "XP_TERRAFORM_PROVIDER_VERSION"
-	envTFProviderSource        = "XP_TERRAFORM_PROVIDER_SOURCE"
-	envTFProviderConfiguration = "XP_TERRAFORM_PROVIDER_CONFIG"
-	envTFExecTimeout           = "XP_TERRAFORM_CLI_EXEC_TIMEOUT"
 
 	fmtResourceAddress = "%s.%s"
 )
@@ -124,28 +118,15 @@ func (cb clientBuilder) Build(ctx context.Context) (model.Client, error) {
 func defaultClient() *client {
 	return &client{
 		state:       &withState{},
-		provider:    providerFromEnv(),
+		provider:    &withProvider{},
 		resource:    &withResource{},
-		execTimeout: timeoutFromEnv(),
+		execTimeout: &withTimeout{},
 		logger:      &withLogger{},
 	}
 }
 
 type withTimeout struct {
 	to time.Duration
-}
-
-func timeoutFromEnv() *withTimeout {
-	result := &withTimeout{}
-	toStr := os.Getenv(envTFExecTimeout)
-	if toStr == "" {
-		return result
-	}
-
-	// silently ignore unparsable timeout errors, we will observe
-	// execution timeout values in logs
-	result.to, _ = time.ParseDuration(toStr)
-	return result
 }
 
 type withLogger struct {
@@ -201,21 +182,6 @@ func (p withProvider) validate() error {
 		return errors.Errorf(fmtErrValidationProvider, p.source, p.version)
 	}
 	return nil
-}
-
-func providerFromEnv() *withProvider {
-	p := &withProvider{}
-	if p.source == "" {
-		p.source = os.Getenv(envTFProviderSource)
-	}
-	if p.version == "" {
-		p.version = os.Getenv(envTFProviderVersion)
-	}
-	if p.configuration == nil {
-		p.configuration = []byte(os.Getenv(envTFProviderConfiguration))
-	}
-
-	return p
 }
 
 func (cb *clientBuilder) WithLogger(logger logging.Logger) Builder {
