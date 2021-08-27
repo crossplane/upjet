@@ -58,7 +58,7 @@ func (cg *CRDGenerator) Generate(version, kind string, schema *schema.Resource) 
 	file := wrapper.NewFile(cg.pkg.Path(), cg.pkg.Name(), templates.CRDTypesTemplate,
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath("hack/boilerplate.go.txt"), // todo
-		//wrapper.LinterEnabled(),
+		// wrapper.LinterEnabled(),
 	)
 	typeList, err := tjtypes.NewBuilder(cg.pkg).Build(kind, schema)
 	if err != nil {

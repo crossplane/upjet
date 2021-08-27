@@ -54,7 +54,7 @@ func (tg *ControllerGenerator) Generate(version, kind string) error {
 	ctrlFile := wrapper.NewFile(controllerPkgPath, version, templates.ControllerTemplate,
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath("hack/boilerplate.go.txt"), // todo
-		wrapper.LinterEnabled(),
+		// wrapper.LinterEnabled(),
 	)
 
 	vars := map[string]interface{}{

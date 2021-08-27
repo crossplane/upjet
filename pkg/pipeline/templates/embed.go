@@ -34,3 +34,7 @@ var TerraformedTemplate string
 // ControllerTemplate is populated with controller setup functions.
 //go:embed controller.go.tmpl
 var ControllerTemplate string
+
+// RegisterTemplate is populated with scheme registration calls.
+//go:embed register.go.tmpl
+var RegisterTemplate string
