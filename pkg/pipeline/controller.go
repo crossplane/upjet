@@ -28,11 +28,11 @@ import (
 )
 
 // NewControllerGenerator returns a new ControllerGenerator.
-func NewControllerGenerator(controllerGroupDir, rootModulePath, group, providerConfigBuilderPath string) *ControllerGenerator {
+func NewControllerGenerator(rootDir, modulePath, group, providerConfigBuilderPath string) *ControllerGenerator {
 	return &ControllerGenerator{
 		Group:                     group,
-		ControllerGroupDir:        controllerGroupDir,
-		RootModulePath:            rootModulePath,
+		ControllerGroupDir:        filepath.Join(rootDir, "internal", "controller", strings.Split(group, ".")[0]),
+		ModulePath:                modulePath,
 		ProviderConfigBuilderPath: providerConfigBuilderPath,
 	}
 }
@@ -41,17 +41,14 @@ func NewControllerGenerator(controllerGroupDir, rootModulePath, group, providerC
 type ControllerGenerator struct {
 	Group                     string
 	ControllerGroupDir        string
-	RootModulePath            string
+	ModulePath                string
 	ProviderConfigBuilderPath string
 }
 
 // Generate writes controller setup functions.
-func (tg *ControllerGenerator) Generate(version, kind string) error {
-	groupPkgPath := filepath.Join(tg.RootModulePath, "apis", strings.ToLower(strings.Split(tg.Group, ".")[0]), strings.ToLower(version))
-	kindPkgPath := filepath.Join(groupPkgPath, strings.ToLower(kind))
-
-	controllerPkgPath := filepath.Join(tg.RootModulePath, "internal", "controller", strings.ToLower(strings.Split(tg.Group, ".")[0]), strings.ToLower(kind))
-	ctrlFile := wrapper.NewFile(controllerPkgPath, version, templates.ControllerTemplate,
+func (tg *ControllerGenerator) Generate(versionPkgPath, kind string) error {
+	controllerPkgPath := filepath.Join(tg.ModulePath, "internal", "controller", strings.ToLower(strings.Split(tg.Group, ".")[0]), strings.ToLower(kind))
+	ctrlFile := wrapper.NewFile(controllerPkgPath, strings.ToLower(kind), templates.ControllerTemplate,
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath("hack/boilerplate.go.txt"), // todo
 		// wrapper.LinterEnabled(),
@@ -60,10 +57,9 @@ func (tg *ControllerGenerator) Generate(version, kind string) error {
 	vars := map[string]interface{}{
 		"Package": strings.ToLower(kind),
 		"CRD": map[string]string{
-			"APIVersion": version,
-			"Kind":       kind,
+			"Kind": kind,
 		},
-		"TypePackageAlias":                  ctrlFile.Imports.UsePackage(kindPkgPath),
+		"TypePackageAlias":                  ctrlFile.Imports.UsePackage(versionPkgPath),
 		"ProviderConfigBuilderPackageAlias": ctrlFile.Imports.UsePackage(tg.ProviderConfigBuilderPath),
 	}
 
