@@ -38,3 +38,7 @@ var ControllerTemplate string
 // RegisterTemplate is populated with scheme registration calls.
 //go:embed register.go.tmpl
 var RegisterTemplate string
+
+// SetupTemplate is populated with controller setup calls.
+//go:embed setup.go.tmpl
+var SetupTemplate string

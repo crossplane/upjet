@@ -46,8 +46,8 @@ type ControllerGenerator struct {
 }
 
 // Generate writes controller setup functions.
-func (tg *ControllerGenerator) Generate(versionPkgPath, kind string) error {
-	controllerPkgPath := filepath.Join(tg.ModulePath, "internal", "controller", strings.ToLower(strings.Split(tg.Group, ".")[0]), strings.ToLower(kind))
+func (cg *ControllerGenerator) Generate(versionPkgPath, kind string) (pkgPath string, err error) {
+	controllerPkgPath := filepath.Join(cg.ModulePath, "internal", "controller", strings.ToLower(strings.Split(cg.Group, ".")[0]), strings.ToLower(kind))
 	ctrlFile := wrapper.NewFile(controllerPkgPath, strings.ToLower(kind), templates.ControllerTemplate,
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath("hack/boilerplate.go.txt"), // todo
@@ -60,11 +60,11 @@ func (tg *ControllerGenerator) Generate(versionPkgPath, kind string) error {
 			"Kind": kind,
 		},
 		"TypePackageAlias":                  ctrlFile.Imports.UsePackage(versionPkgPath),
-		"ProviderConfigBuilderPackageAlias": ctrlFile.Imports.UsePackage(tg.ProviderConfigBuilderPath),
+		"ProviderConfigBuilderPackageAlias": ctrlFile.Imports.UsePackage(cg.ProviderConfigBuilderPath),
 	}
 
-	filePath := filepath.Join(tg.ControllerGroupDir, strings.ToLower(kind), "zz_controller.go")
-	return errors.Wrap(
+	filePath := filepath.Join(cg.ControllerGroupDir, strings.ToLower(kind), "zz_controller.go")
+	return controllerPkgPath, errors.Wrap(
 		ctrlFile.Write(filePath, vars, os.ModePerm),
 		"cannot write controller file",
 	)
