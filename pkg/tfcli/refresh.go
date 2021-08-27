@@ -19,7 +19,6 @@ package tfcli
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -61,7 +60,7 @@ func (c *Client) Refresh(ctx context.Context, id string) (model.RefreshResult, e
 func (c *Client) importResource(ctx context.Context, id string) (model.RefreshResult, error) {
 	result := model.RefreshResult{}
 	// as a precaution, remove any existing state file
-	if err := os.RemoveAll(filepath.Join(c.wsPath, fileState)); err != nil {
+	if err := c.fs.RemoveAll(filepath.Join(c.wsPath, fileState)); err != nil {
 		return result, errors.Wrap(err, errImport)
 	}
 	// now try to run the synchronous import pipeline
@@ -88,8 +87,7 @@ func (c *Client) importResource(ctx context.Context, id string) (model.RefreshRe
 	// the assumption is that MR should be late-initialized
 	// matching the observed state
 	result.UpToDate = true
-	_, err := c.loadStateFromWorkspace(true)
-	if err != nil {
+	if err := c.loadStateFromWorkspace(); err != nil {
 		return result, err
 	}
 	result.State = c.tfState
@@ -132,8 +130,7 @@ func (c *Client) observe(ctx context.Context) (model.RefreshResult, error) {
 		result.Exists = true
 	}
 
-	_, err = c.loadStateFromWorkspace(true)
-	if err != nil {
+	if err := c.loadStateFromWorkspace(); err != nil {
 		return result, err
 	}
 	result.State = c.tfState

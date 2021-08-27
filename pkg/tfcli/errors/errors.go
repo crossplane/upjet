@@ -38,6 +38,7 @@ type OperationInProgressError struct {
 	op model.OperationType
 }
 
+// Error returns the associated error string
 func (o OperationInProgressError) Error() string {
 	return fmt.Sprintf(fmtErrOperationInProgress, o.op.String())
 }
@@ -45,11 +46,6 @@ func (o OperationInProgressError) Error() string {
 // GetOperation returns the OperationType that is in progress
 func (o OperationInProgressError) GetOperation() model.OperationType {
 	return o.op
-}
-
-func (o OperationInProgressError) Is(err error) bool {
-	_, ok := err.(OperationInProgressError)
-	return ok
 }
 
 // NewOperationInProgressError initializes a new OperationInProgressError
@@ -72,6 +68,13 @@ func IsDestroying(err error) bool {
 	return IsOperationInProgress(err, model.OperationDestroy)
 }
 
+// Is returns whether the specified error is an OperationInProgressError
+// regardless of the operation type that's in-progress
+func (o OperationInProgressError) Is(err error) bool {
+	_, ok := err.(OperationInProgressError)
+	return ok
+}
+
 // IsOperationInProgress returns true if the specified error represents an
 // OperationInProgressError with the specified operation type.
 // If opType is nil, then no operation type check is done.
@@ -80,11 +83,15 @@ func IsOperationInProgress(err error, opType model.OperationType) bool {
 	return errors.As(err, opErr) && (opType == opErr.GetOperation())
 }
 
+// PipelineState represents a pipeline of Terraform commands
 type PipelineState string
 
 const (
-	PipelineNotStarted   PipelineState = "Asynchronous Terraform pipeline not started yet"
-	PipelineStateLocked  PipelineState = "Terraform CLI is still running"
+	// PipelineNotStarted states a not-yet-started command pipeline
+	PipelineNotStarted PipelineState = "Asynchronous Terraform pipeline not started yet"
+	// PipelineStateLocked states a running pipeline
+	PipelineStateLocked PipelineState = "Terraform CLI is still running"
+	// PipelineStateNoStore states an async pipeline which has not produced a result yet
 	PipelineStateNoStore PipelineState = "Result is not available yet"
 )
 
@@ -95,16 +102,21 @@ type PipelineInProgressError struct {
 	pipelineState PipelineState
 }
 
+// NewPipelineInProgressError initializes a new PipelineInProgressError
+// for the specified pipeline state.
 func NewPipelineInProgressError(state PipelineState) error {
 	return PipelineInProgressError{
 		pipelineState: state,
 	}
 }
 
+// Error returns the associated error string
 func (p PipelineInProgressError) Error() string {
 	return fmt.Sprintf(fmtErrPipelineInProgress, p.pipelineState)
 }
 
+// Is returns whether the specified error is a PipelineInProgressError
+// regardless of the pipeline state
 func (p PipelineInProgressError) Is(err error) bool {
 	_, ok := err.(PipelineInProgressError)
 	return ok

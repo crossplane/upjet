@@ -19,14 +19,14 @@ package tfcli
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/pkg/errors"
 	"go.uber.org/multierr"
 
-	cliErrors "github.com/crossplane-contrib/terrajet/pkg/tfcli/errors"
+	tferrors "github.com/crossplane-contrib/terrajet/pkg/tfcli/errors"
 	"github.com/crossplane-contrib/terrajet/pkg/tfcli/model"
 )
 
@@ -40,6 +40,7 @@ const (
 	fmtErrStoreRemove   = "failed to remove pipeline store file: %s"
 	fmtErrNoWS          = "failed to initialize Terraform configuration: No workspace folder: %s"
 	fmtErrXPState       = "failed to load Crossplane state file: %s"
+	fmtErrXPStateWrite  = "failed to write Crossplane state file: %s"
 )
 
 // init initializes a workspace in a synchronous manner using Terraform CLI
@@ -47,21 +48,17 @@ const (
 func (c *Client) init(ctx context.Context) error {
 	// initialize the workspace, and
 	// check if init lock & state lock exist, i.e., there is an ongoing Terraform CLI operation
-	initLockExists := false
-	err := c.closeOnError(ctx, func() error {
-		var err error
-		initLockExists, err = c.initConfiguration(model.OperationInit, true)
-		if (err == nil || errors.Is(err, cliErrors.OperationInProgressError{})) && initLockExists {
-			if err == nil || cliErrors.IsOperationInProgress(err, model.OperationInit) {
-				return c.removeStateStore()
-			}
-			return nil
+	initLockExists, err := c.initConfiguration(model.OperationInit, true)
+	if (err == nil || errors.Is(err, tferrors.OperationInProgressError{})) && initLockExists {
+		if err == nil || tferrors.IsOperationInProgress(err, model.OperationInit) {
+			return c.removeStateStore()
 		}
-		return err
-	})
-	if err != nil {
-		return err
+		return nil // async operation is in-progress and workspace is already initialized
 	}
+	if err != nil {
+		return multierr.Combine(err, c.Close(ctx))
+	}
+
 	// TODO(aru): what if Terraform CLI has crashed before having a chance to
 	// remove the lock?
 	if !initLockExists {
@@ -83,10 +80,11 @@ func (c *Client) initConfiguration(opType model.OperationType, mkWorkspace bool)
 	if err != nil {
 		return false, errors.Wrap(err, errInitWorkspace)
 	}
+
 	c.wsPath = filepath.Join(os.TempDir(), prefixWSDir+handle)
 
 	// check if the workspace already exists, i.e. there is an open operation
-	ok, err := pathExists(c.wsPath, true)
+	ok, err := c.pathExists(c.wsPath, true)
 	if err != nil {
 		return false, err
 	}
@@ -96,7 +94,7 @@ func (c *Client) initConfiguration(opType model.OperationType, mkWorkspace bool)
 
 	initLockExists := false
 	if ok {
-		initLockExists, err = pathExists(filepath.Join(c.wsPath, fileInitLock), false)
+		initLockExists, err = c.pathExists(filepath.Join(c.wsPath, fileInitLock), false)
 		if err != nil {
 			return false, err
 		}
@@ -109,7 +107,7 @@ func (c *Client) initConfiguration(opType model.OperationType, mkWorkspace bool)
 	}
 	// workspace does not exist & make workspace is requested or
 	// no state lock file
-	if err := os.MkdirAll(c.wsPath, 0755); err != nil {
+	if err := c.fs.MkdirAll(c.wsPath, 0750); err != nil {
 		return initLockExists, errors.Wrap(err, errInitWorkspace)
 	}
 
@@ -117,34 +115,65 @@ func (c *Client) initConfiguration(opType model.OperationType, mkWorkspace bool)
 	if err != nil {
 		return initLockExists, errors.Wrap(err, errInitWorkspace)
 	}
-	if err := errors.Wrap(ioutil.WriteFile(filepath.Join(c.wsPath, tplMain), conf, 0644), errInitWorkspace); err != nil {
+	if err := errors.Wrap(c.writeFile(filepath.Join(c.wsPath, tplMain), conf, 0644), errInitWorkspace); err != nil {
 		return initLockExists, err
 	}
 
-	xpState := xpState{
+	ts := time.Now()
+	if c.timeout != nil {
+		ts = ts.Add(*c.timeout)
+	}
+	xpState := &xpState{
 		Operation: opType,
+		Ts:        ts,
 	}
-	buff, err := json.Marshal(xpState)
+	return initLockExists, c.writeStateLock(xpState)
+}
+
+func (c *Client) addPidState(pid int) error {
+	xpState, err := c.readStateLock()
 	if err != nil {
-		return initLockExists, errors.Wrap(err, errInitWorkspace)
+		return err
 	}
-	return initLockExists,
-		errors.Wrap(ioutil.WriteFile(filepath.Join(c.wsPath, fileStateLock), buff, 0644), errInitWorkspace)
+	xpState.Pid = pid
+	return c.writeStateLock(xpState)
 }
 
 func (c *Client) checkOperation() error {
+	xpState, err := c.readStateLock()
+	if err != nil {
+		return err
+	}
+	// check if operation timed out if timeout is configured
+	if c.timeout != nil && xpState.Ts.Before(time.Now()) {
+		// then async operation has timed out
+		return c.removeStateStore()
+	}
+	return tferrors.NewOperationInProgressError(xpState.Operation)
+}
+
+func (c *Client) writeStateLock(xpState *xpState) error {
+	xpStatePath := filepath.Join(c.wsPath, fileStateLock)
+	buff, err := json.Marshal(xpState)
+	if err != nil {
+		return errors.Wrapf(err, fmtErrXPStateWrite, xpStatePath)
+	}
+	return errors.Wrapf(c.writeFile(xpStatePath, buff, 0644), fmtErrXPStateWrite, xpStatePath)
+}
+
+func (c *Client) readStateLock() (*xpState, error) {
 	xpStatePath := filepath.Join(c.wsPath, fileStateLock)
 	// Terraform state lock file does not seem to contain operation type
-	buff, err := ioutil.ReadFile(xpStatePath)
+	buff, err := c.readFile(xpStatePath)
 	if err != nil {
-		return errors.Wrapf(err, fmtErrXPState, xpStatePath)
+		return nil, errors.Wrapf(err, fmtErrXPState, xpStatePath)
 	}
 
 	xpState := &xpState{}
 	if err := json.Unmarshal(buff, xpState); err != nil {
-		return errors.Wrapf(err, fmtErrXPState, xpStatePath)
+		return nil, errors.Wrapf(err, fmtErrXPState, xpStatePath)
 	}
-	return cliErrors.NewOperationInProgressError(xpState.Operation)
+	return xpState, nil
 }
 
 // removeStateStore removes Crossplane state lock & store
@@ -152,6 +181,6 @@ func (c *Client) checkOperation() error {
 func (c *Client) removeStateStore() error {
 	stateFile := filepath.Join(c.wsPath, fileStateLock)
 	storeFile := filepath.Join(c.wsPath, fileStore)
-	return multierr.Combine(errors.Wrapf(os.RemoveAll(stateFile), fmtErrXPStateRemove, stateFile),
-		errors.Wrapf(os.RemoveAll(storeFile), fmtErrStoreRemove, storeFile))
+	return multierr.Combine(errors.Wrapf(c.fs.RemoveAll(stateFile), fmtErrXPStateRemove, stateFile),
+		errors.Wrapf(c.fs.RemoveAll(storeFile), fmtErrStoreRemove, storeFile))
 }

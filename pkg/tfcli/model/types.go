@@ -27,20 +27,27 @@ type RefreshResult struct {
 	// id exists.
 	Exists bool
 	// State holds the Terraform state of the resource.
-	// Because tfcli.Refresh is a synchronous operation,
-	// it's non-nil if tfcli.Refresh does not return an error.
+	// Because Client.Refresh is a synchronous operation,
+	// it's non-nil if Client.Refresh does not return an error.
 	State []byte
 }
 
+// ApplyResult represents the status of an asynchronous Client.Apply call
 type ApplyResult struct {
+	// Completed true if the async Client.Apply operation has completed
 	Completed bool
-	State     []byte
+	// State the up-to-date Terraform state if Completed is true
+	State []byte
 }
 
+// DestroyResult represents the status of an asynchronous Client.Destroy call
 type DestroyResult struct {
+	// Completed true if the async Client.Destroy operation has completed
 	Completed bool
 }
 
+// Client represents a Terraform client capable of running
+// Refresh, Apply, Destroy pipelines.
 type Client interface {
 	Refresh(ctx context.Context, id string) (RefreshResult, error)
 	Apply(ctx context.Context) (ApplyResult, error)

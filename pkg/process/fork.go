@@ -24,7 +24,6 @@ import (
 	"os"
 	"os/exec"
 	"sync"
-	"time"
 
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	"github.com/pkg/errors"
@@ -33,13 +32,24 @@ import (
 const (
 	errKill           = "failed to kill process"
 	errNotInitialized = "process not initialized"
+	errNotStarted     = "process not started"
 	errNotBuffered    = "stream not buffered"
 )
 
+// New initializes a new process.Info for running processes.
+// New call is itself is never blocking and can optionally start the process
+// if autoStart is set. The process run the command specified by pathExec
+// passing the command-line arguments specified by args. The process's
+// working directory is specified with cwd. If bufferStreams is set, stdout &
+// stderr are buffered and will be available to the caller when the process
+// terminates. If logStreams is set, then stdout & stderr streams are logged
+// using the specified logger. Even if logStreams is not set, a logger needs to
+// be specified for logging of the library itself.
 func New(pathExec string, args []string, cwd string, autoStart, bufferStreams, logStreams bool,
 	logger logging.Logger) (*Info, error) {
 	result := &Info{
-		cmd:        exec.Command(pathExec, args...),
+		// pathExec or the args are never a user input in tfcli
+		cmd:        exec.Command(pathExec, args...), //nolint:gosec
 		wgStreams:  &sync.WaitGroup{},
 		chStopped:  make(chan bool),
 		logger:     logger,
@@ -73,6 +83,9 @@ func New(pathExec string, args []string, cwd string, autoStart, bufferStreams, l
 
 type lineProcessor func(line string, logger logging.Logger)
 
+// Info represents a command with associated stdout & stderr buffers
+// if buffering is requested. The command can either be run synchronously or
+// asynchronously.
 type Info struct {
 	cmd        *exec.Cmd
 	wgStreams  *sync.WaitGroup
@@ -85,27 +98,35 @@ type Info struct {
 	logStreams bool
 }
 
+// StartStdout starts line processing of stdout stream using the specified
+// lineProcessor
 func (pi *Info) StartStdout(processor lineProcessor) {
 	pi.processStream(pi.stdout, processor)
 }
 
+// LogStdout logs contents of stdout using the configured logger
 func (pi *Info) LogStdout() {
 	pi.StartStdout(nil)
 }
 
+// StartStderr starts line processing of stderr stream using the specified
+// lineProcessor
 func (pi *Info) StartStderr(processor lineProcessor) {
 	pi.processStream(pi.stderr, processor)
 }
 
+// LogStderr logs contents of stderr using the configured logger
 func (pi *Info) LogStderr() {
 	pi.StartStderr(nil)
 }
 
+// Log logs contents of stdout & stderr using the configured logger
 func (pi *Info) Log() {
 	pi.LogStdout()
 	pi.LogStderr()
 }
 
+// StdoutAsString returns the contents of stdout stream as a string
 func (pi *Info) StdoutAsString() (string, error) {
 	if pi.buffStdout == nil {
 		return "", errors.New(errNotBuffered)
@@ -113,6 +134,7 @@ func (pi *Info) StdoutAsString() (string, error) {
 	return pi.buffStdout.String(), nil
 }
 
+// StderrAsString returns the contents of stderr stream as a string
 func (pi *Info) StderrAsString() (string, error) {
 	if pi.buffStderr == nil {
 		return "", errors.New(errNotBuffered)
@@ -120,6 +142,8 @@ func (pi *Info) StderrAsString() (string, error) {
 	return pi.buffStderr.String(), nil
 }
 
+// Run runs the configured command and blocks the caller until the process
+// terminates
 func (pi *Info) Run(ctx context.Context) error {
 	if pi.cmd == nil {
 		return errors.New(errNotInitialized)
@@ -133,11 +157,12 @@ func (pi *Info) Run(ctx context.Context) error {
 	}
 
 	chErr := make(chan error, 1)
-	defer close(chErr)
 
 	go func() {
+		defer close(chErr)
 		if err := pi.cmd.Start(); err != nil {
 			chErr <- err
+			return
 		}
 		pi.LogStdout()
 		pi.LogStderr()
@@ -153,16 +178,9 @@ func (pi *Info) Run(ctx context.Context) error {
 	}
 }
 
-func (pi *Info) RunWithDeadline(ctx context.Context, to time.Duration) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
-	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(to))
-	defer cancel()
-	return pi.Run(ctx)
-}
-
+// Start starts the configured command without blocking the caller.
+// Clients can also request to autostart the process if autoStart is
+// set in the call to process.New.
 func (pi *Info) Start() error {
 	if pi.cmd == nil {
 		return errors.New(errNotInitialized)
@@ -170,17 +188,15 @@ func (pi *Info) Start() error {
 	return pi.cmd.Start()
 }
 
-func (pi *Info) Stopped() chan bool {
-	return pi.chStopped
-}
-
-func (pi *Info) Wait() {
+func (pi *Info) wait() {
 	pi.wgStreams.Wait()
 	close(pi.chStopped)
 }
 
+// WaitError waits for the started process to finish returning an error if
+// the process did not exit with code 0. This is a blocking call.
 func (pi *Info) WaitError() error {
-	pi.Wait()
+	pi.wait()
 	err := pi.cmd.Wait()
 	if _, ok := err.(*exec.ExitError); (!ok && err != nil) || err == nil {
 		return err
@@ -195,14 +211,26 @@ func (pi *Info) WaitError() error {
 	}
 }
 
+// GetProcessState returns the exec.ProcessState associated with the process,
+// if one exists (i.e., if the process has terminated).
 func (pi *Info) GetProcessState() *os.ProcessState {
 	return pi.cmd.ProcessState
 }
 
+// GetPid returns the pid of a started pipeline process
+func (pi *Info) GetPid() (int, error) {
+	if pi.cmd == nil || pi.cmd.Process == nil {
+		return 0, errors.New(errNotStarted)
+	}
+	return pi.cmd.Process.Pid, nil
+}
+
+// GetCmd returns the associated exec.Cmd with the configured command.
 func (pi *Info) GetCmd() *exec.Cmd {
 	return pi.cmd
 }
 
+// Kill attempts to kill the associated process forcefully
 func (pi *Info) Kill() error {
 	if pi.cmd == nil || pi.cmd.Process == nil || (pi.cmd.ProcessState != nil && pi.cmd.ProcessState.Exited()) {
 		return nil
@@ -244,15 +272,17 @@ func (pi *Info) processStream(stream io.ReadCloser, processor lineProcessor) {
 }
 
 func processLines(reader io.Reader, process lineProcessor, logger logging.Logger,
-	logStream bool, buff *bytes.Buffer) {
+	logStream bool, sw io.StringWriter) {
 	s := bufio.NewScanner(reader)
 	for s.Scan() {
 		line := s.Text()
 		if logStream {
 			logger.Info(line)
 		}
-		if buff != nil {
-			buff.WriteString(line)
+		if sw != nil {
+			if _, err := sw.WriteString(line); err != nil {
+				logger.Info("Error while writing to the buffer", "error", err)
+			}
 		}
 		if process != nil {
 			process(line, logger)

@@ -173,6 +173,12 @@ func (t *CLI) CreateOrUpdate(ctx context.Context, tr resource.Terraformed) (Upda
 // Delete is a Terraform CLI implementation for Delete function of Adapter interface.
 func (t *CLI) Delete(ctx context.Context, tr resource.Terraformed) (bool, error) {
 	dr, err := t.tfcli.Destroy(ctx)
+	if tferrors.IsApplying(err) {
+		// then resource was deleted while an apply operation was in-progress
+		// we need to wait/consume this final Apply operation
+		_, err = t.CreateOrUpdate(ctx, tr)
+		return false, errors.Wrapf(err, errFmtCannotDoWithTFCli, "apply")
+	}
 	if err != nil {
 		return false, errors.Wrapf(err, errFmtCannotDoWithTFCli, "delete")
 	}

@@ -19,9 +19,10 @@ package tfcli
 import (
 	"bytes"
 	"context"
-	"crypto/md5"
+	"crypto/sha256"
 	"fmt"
-	"io/ioutil"
+	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -29,14 +30,16 @@ import (
 	"strconv"
 	"strings"
 	"text/template"
+	"time"
 
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"github.com/spf13/afero"
 	"go.uber.org/multierr"
 
 	"github.com/crossplane-contrib/terrajet/pkg/process"
-	cliErrors "github.com/crossplane-contrib/terrajet/pkg/tfcli/errors"
+	tferrors "github.com/crossplane-contrib/terrajet/pkg/tfcli/errors"
 	"github.com/crossplane-contrib/terrajet/pkg/tfcli/model"
 	"github.com/crossplane-contrib/terrajet/pkg/tfcli/templates"
 )
@@ -55,6 +58,8 @@ const (
 	errCheckExitCode    = "failed to check process exit code"
 	errNoPlan           = "plan line not found in Terraform CLI output"
 	errPlan             = "failed to parse the Terraform plan"
+	errWriteFile        = "failed to write file"
+	errReadFile         = "failed to read file"
 	fmtErrPath          = "failed to check path on filesystem: %s: Expected a dir: %v, found a dir: %v"
 	fmtErrLoadState     = "failed to load state from file: %s"
 	fmtErrStoreState    = "failed to store state into file: %s"
@@ -66,6 +71,8 @@ const (
 	tfMsgNonExistentResource = "Cannot import non-existent remote object"
 )
 
+// Client is an implementation of types.Client and represents a
+// Terraform client capable of running Refresh, Apply, Destroy pipelines.
 type Client struct {
 	provider Provider
 	resource Resource
@@ -74,6 +81,8 @@ type Client struct {
 	logger   logging.Logger
 	wsPath   string
 	pInfo    *process.Info
+	fs       afero.Fs
+	timeout  *time.Duration
 }
 
 // returns true if no resource is to be added according to the plan
@@ -96,18 +105,18 @@ func (c *Client) storePipelineResult(log string) error {
 		return errors.New(errNoProcessState)
 	}
 	return errors.Wrap(
-		ioutil.WriteFile(filepath.Join(c.wsPath, fileStore),
+		c.writeFile(filepath.Join(c.wsPath, fileStore),
 			[]byte(fmt.Sprintf("%d\n%s", ps.ExitCode(), log)), 0644), errStore)
 }
 
 func (c *Client) checkTFStateLock() error {
 	tfStateLock := filepath.Join(c.wsPath, fileTFStateLock)
-	tfStateLockExists, err := pathExists(tfStateLock, false)
+	tfStateLockExists, err := c.pathExists(tfStateLock, false)
 	if err != nil {
 		return err
 	}
 	if tfStateLockExists {
-		return cliErrors.NewPipelineInProgressError(cliErrors.PipelineStateLocked)
+		return tferrors.NewPipelineInProgressError(tferrors.PipelineStateLocked)
 	}
 	return nil
 }
@@ -120,7 +129,7 @@ func (c *Client) checkTFStateLock() error {
 // Returned exit code is non-nil iff there are no errors
 func (c *Client) parsePipelineResult(opType model.OperationType) (*int, string, error) {
 	_, err := c.initConfiguration(opType, false)
-	if err != nil && !cliErrors.IsOperationInProgress(err, opType) {
+	if err != nil && !tferrors.IsOperationInProgress(err, opType) {
 		return nil, "", err
 	}
 
@@ -131,7 +140,7 @@ func (c *Client) parsePipelineResult(opType model.OperationType) (*int, string, 
 		if err := c.storeStateInWorkspace(); err != nil {
 			return nil, "", err
 		}
-		return nil, "", cliErrors.NewPipelineInProgressError(cliErrors.PipelineNotStarted)
+		return nil, "", tferrors.NewPipelineInProgressError(tferrors.PipelineNotStarted)
 	}
 
 	if err := c.checkTFStateLock(); err != nil {
@@ -139,9 +148,9 @@ func (c *Client) parsePipelineResult(opType model.OperationType) (*int, string, 
 	}
 	// then no Terraform state lock file
 	storeFile := filepath.Join(c.wsPath, fileStore)
-	buff, err := ioutil.ReadFile(storeFile)
+	buff, err := c.readFile(storeFile)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, "", cliErrors.NewPipelineInProgressError(cliErrors.PipelineStateNoStore)
+		return nil, "", tferrors.NewPipelineInProgressError(tferrors.PipelineStateNoStore)
 	}
 	if err != nil {
 		return nil, "", errors.Wrapf(err, errCheckExitCode)
@@ -164,6 +173,13 @@ func (c *Client) asyncPipeline(command string, storeResult storeResult, args ...
 		true, true, false, c.logger)
 	if err != nil {
 		return errors.Wrapf(err, fmtErrAsyncRun, command, args, c.wsPath)
+	}
+	pid, err := c.pInfo.GetPid()
+	if err != nil {
+		return err
+	}
+	if err := c.addPidState(pid); err != nil {
+		return err
 	}
 	c.pInfo.LogStdout()
 	c.pInfo.LogStderr()
@@ -204,20 +220,15 @@ func (c *Client) syncPipeline(ctx context.Context, ignoreExitErr bool, command s
 	return nil
 }
 
-// returns true if state file exists
-// TODO(aru): differentiate not-found error
-func (c *Client) loadStateFromWorkspace(errNoState bool) (bool, error) {
+// load Terraform state into Client's cache
+func (c *Client) loadStateFromWorkspace() error {
 	pathState := filepath.Join(c.wsPath, fileState)
 	var err error
-	c.tfState, err = ioutil.ReadFile(pathState)
-	if err == nil {
-		return true, nil
+	c.tfState, err = c.readFile(pathState)
+	if err != nil {
+		return errors.Wrapf(err, fmtErrLoadState, pathState)
 	}
-	if !os.IsNotExist(err) || errNoState {
-		return false, errors.Wrapf(err, fmtErrLoadState, pathState)
-	}
-	// then state not found
-	return false, nil
+	return nil
 }
 
 func (c *Client) storeStateInWorkspace() error {
@@ -226,11 +237,11 @@ func (c *Client) storeStateInWorkspace() error {
 	}
 
 	pathState := filepath.Join(c.wsPath, fileState)
-	return errors.Wrapf(ioutil.WriteFile(pathState, c.tfState, 0600), fmtErrStoreState, pathState)
+	return errors.Wrapf(c.writeFile(pathState, c.tfState, 0600), fmtErrStoreState, pathState)
 }
 
-func pathExists(path string, isDir bool) (bool, error) {
-	fInfo, err := os.Stat(path)
+func (c *Client) pathExists(path string, isDir bool) (bool, error) {
+	fInfo, err := c.fs.Stat(path)
 	if err == nil && fInfo.IsDir() == isDir {
 		// path exists and is of expected type
 		return true, nil
@@ -238,18 +249,10 @@ func pathExists(path string, isDir bool) (bool, error) {
 	if err == nil && fInfo.IsDir() != isDir {
 		return false, errors.Errorf(fmtErrPath, path, isDir, fInfo.IsDir())
 	}
-	if err != nil && !os.IsNotExist(err) {
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return false, errors.Wrapf(err, fmtErrPath, path, isDir, fInfo.IsDir())
 	}
 	return false, nil
-}
-
-func (c *Client) closeOnError(ctx context.Context, f func() error) error {
-	err := f()
-	if err != nil {
-		err = multierr.Combine(err, c.Close(ctx))
-	}
-	return err
 }
 
 // Close releases resources allocated for this Client.
@@ -260,7 +263,7 @@ func (c *Client) Close(_ context.Context) error {
 		result = multierr.Combine(errors.Wrap(c.pInfo.Kill(), errDestroyProcess))
 	}
 	if c.wsPath != "" {
-		result = multierr.Combine(result, errors.Wrap(os.RemoveAll(c.wsPath), errDestroyWorkspace))
+		result = multierr.Combine(result, errors.Wrap(c.fs.RemoveAll(c.wsPath), errDestroyWorkspace))
 	}
 	c.handle = ""
 	return result
@@ -268,6 +271,8 @@ func (c *Client) Close(_ context.Context) error {
 
 type xpState struct {
 	Operation model.OperationType `json:"operation"`
+	Pid       int                 `json:"pid"`
+	Ts        time.Time           `json:"ts"`
 }
 
 func (c *Client) getHandle() (string, error) {
@@ -282,7 +287,7 @@ func (c *Client) getHandle() (string, error) {
 		c.handle = handle
 	}
 	// md5sum the handle so that it's safe to use in paths
-	handle = fmt.Sprintf("%x", md5.Sum([]byte(handle)))
+	handle = fmt.Sprintf("%x", sha256.Sum256([]byte(handle)))
 	return handle, nil
 }
 
@@ -314,4 +319,22 @@ func (c Client) generateTFConfiguration() ([]byte, error) {
 	}
 
 	return buff.Bytes(), nil
+}
+
+func (c *Client) writeFile(filename string, data []byte, perm fs.FileMode) error {
+	f, err := c.fs.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
+	if err != nil {
+		return errors.Wrap(err, errWriteFile)
+	}
+	_, err = f.Write(data)
+	return errors.Wrap(err, errWriteFile)
+}
+
+func (c *Client) readFile(filename string) ([]byte, error) {
+	f, err := c.fs.Open(filename)
+	if err != nil {
+		return nil, errors.Wrap(err, errReadFile)
+	}
+	buff, err := io.ReadAll(f)
+	return buff, errors.Wrap(err, errReadFile)
 }

@@ -21,7 +21,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	cliErrors "github.com/crossplane-contrib/terrajet/pkg/tfcli/errors"
+	tferrors "github.com/crossplane-contrib/terrajet/pkg/tfcli/errors"
 	"github.com/crossplane-contrib/terrajet/pkg/tfcli/model"
 )
 
@@ -33,7 +33,7 @@ const (
 // DestroyResult.Completed is false if the operation has not yet been completed.
 func (c *Client) Destroy(_ context.Context) (model.DestroyResult, error) {
 	code, tfLog, err := c.parsePipelineResult(model.OperationDestroy)
-	pipelineState, ok := cliErrors.IsPipelineInProgress(err)
+	pipelineState, ok := tferrors.IsPipelineInProgress(err)
 	if !ok && err != nil {
 		return model.DestroyResult{}, err
 	}
@@ -53,7 +53,7 @@ func (c *Client) Destroy(_ context.Context) (model.DestroyResult, error) {
 		}
 	}
 	// then check pipeline state. If pipeline is already started we need to wait.
-	if pipelineState != cliErrors.PipelineNotStarted {
+	if pipelineState != tferrors.PipelineNotStarted {
 		return model.DestroyResult{}, nil
 	}
 	// if pipeline is not started yet, try to start it

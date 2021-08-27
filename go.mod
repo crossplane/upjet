@@ -10,6 +10,7 @@ require (
 	github.com/json-iterator/go v1.1.10
 	github.com/muvaf/typewriter v0.0.0-20210818141336-01a132960eec
 	github.com/pkg/errors v0.9.1
+	github.com/spf13/afero v1.6.0
 	go.uber.org/multierr v1.7.0
 	k8s.io/apimachinery v0.20.1
 	k8s.io/client-go v0.20.1

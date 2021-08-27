@@ -19,8 +19,10 @@ package tfcli
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/pkg/errors"
+	"github.com/spf13/afero"
 
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 
@@ -28,6 +30,7 @@ import (
 )
 
 const (
+	defaultAsyncTimeout = 2 * time.Minute
 	// error format strings
 	errValidationNoLogger    = "no logger has been configured"
 	fmtErrValidationResource = "invalid resource specification: both type and name are required: type=%q and name=%q"
@@ -36,66 +39,118 @@ const (
 	fmtResourceAddress = "%s.%s"
 )
 
+// A ClientOption configures a Client
 type ClientOption func(c *Client)
 
+// WithState sets the Terraform state cache of a Client
 func WithState(tfState []byte) ClientOption {
 	return func(c *Client) {
 		c.tfState = tfState
 	}
 }
 
+// WithLogger configures the logger to be used by a Client
 func WithLogger(logger logging.Logger) ClientOption {
 	return func(c *Client) {
 		c.logger = logger.WithValues("tfcli-version", version.Version)
 	}
 }
 
+// WithResourceName sets the Terraform resource name to be used in the
+// generated Terraform configuration
 func WithResourceName(resourceName string) ClientOption {
 	return func(c *Client) {
 		c.resource.LabelName = resourceName
 	}
 }
 
+// WithResourceType sets the Terraform resource type to be used in the
+// generated Terraform configuration
 func WithResourceType(resourceType string) ClientOption {
 	return func(c *Client) {
 		c.resource.LabelType = resourceType
 	}
 }
 
+// WithResourceBody sets the Terraform resource body block to be used in the
+// generated  Terraform configuration
 func WithResourceBody(resourceBody []byte) ClientOption {
 	return func(c *Client) {
 		c.resource.Body = resourceBody
 	}
 }
 
+// WithProviderConfiguration sets the Terraform provider
+// configuration block to be used in the generated Terraform configuration
 func WithProviderConfiguration(conf []byte) ClientOption {
 	return func(c *Client) {
 		c.provider.Configuration = conf
 	}
 }
 
+// WithProviderSource sets the Terraform provider
+// source to be used in the generated Terraform configuration
 func WithProviderSource(source string) ClientOption {
 	return func(c *Client) {
 		c.provider.Source = source
 	}
 }
 
+// WithProviderVersion sets the Terraform provider
+// version to be used in the generated Terraform configuration
 func WithProviderVersion(version string) ClientOption {
 	return func(c *Client) {
 		c.provider.Version = version
 	}
 }
 
+// WithHandle is a unique ID used by the Client to associate a
+// requested Terraform pipeline with a Terraform workspace
 func WithHandle(h string) ClientOption {
 	return func(c *Client) {
 		c.handle = h
 	}
 }
 
+// WithAsyncTimeout configures the timeout used for async operations
+func WithAsyncTimeout(timeout time.Duration) ClientOption {
+	return func(c *Client) {
+		c.timeout = &timeout
+	}
+}
+
+// WithStateStoreFs configures the filesystem to be used by a
+// Client. Client uses this filesystem to store locks including
+// Terraform locks & Terraform command pipeline results
+func WithStateStoreFs(fs afero.Fs) ClientOption {
+	return func(c *Client) {
+		c.fs = fs
+	}
+}
+
+// NewClient returns an initialized Client that is used to run
+// Terraform Refresh, Apply, Destroy command pipelines.
+// The workspace configured with WithHandle option is initialized
+// for the returned Client. All Terraform resource block generation options
+// (WithResource*), all Terraform provider block generation options
+// (WithProvider*), the workspace handle option (WithHandle) and a
+// logger (WithLogger) must have been configured for the Client.
+// Returns an error if the supplied options cannot be validated, or
+// if the Terraform init operation run for workspace initialization
+// fails.
 func NewClient(ctx context.Context, opts ...ClientOption) (*Client, error) {
 	c := &Client{}
 	for _, o := range opts {
 		o(c)
+	}
+	// for state store filesystem, default to OS filesystem
+	if c.fs == nil {
+		c.fs = afero.NewOsFs()
+	}
+	// configure default async timeout
+	if c.timeout == nil {
+		d := defaultAsyncTimeout
+		c.timeout = &d
 	}
 	if err := c.validate(); err != nil {
 		return nil, err
@@ -133,6 +188,8 @@ func (r Resource) validate() error {
 	return nil
 }
 
+// GetAddress returns the Terraform configuration resource address of
+// the receiver Resource
 func (r Resource) GetAddress() string {
 	return fmt.Sprintf(fmtResourceAddress, r.LabelType, r.LabelName)
 }

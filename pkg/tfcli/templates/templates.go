@@ -16,7 +16,8 @@ limitations under the License.
 
 package templates
 
-import _ "embed"
+import _ "embed" // imports embed package for the go:embed below
 
+// TFConfigurationMain holds the main Terraform configuration template
 //go:embed main.tf.json.tpl
 var TFConfigurationMain string

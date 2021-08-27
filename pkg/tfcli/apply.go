@@ -21,7 +21,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	cliErrors "github.com/crossplane-contrib/terrajet/pkg/tfcli/errors"
+	tferrors "github.com/crossplane-contrib/terrajet/pkg/tfcli/errors"
 	"github.com/crossplane-contrib/terrajet/pkg/tfcli/model"
 )
 
@@ -35,7 +35,7 @@ const (
 // ApplyResult.Completed is true.
 func (c *Client) Apply(_ context.Context) (model.ApplyResult, error) {
 	code, tfLog, err := c.parsePipelineResult(model.OperationApply)
-	pipelineState, ok := cliErrors.IsPipelineInProgress(err)
+	pipelineState, ok := tferrors.IsPipelineInProgress(err)
 	if !ok && err != nil {
 		return model.ApplyResult{}, err
 	}
@@ -45,8 +45,7 @@ func (c *Client) Apply(_ context.Context) (model.ApplyResult, error) {
 		switch *code {
 		case 0:
 			// then check the state and try to load it if available
-			_, err := c.loadStateFromWorkspace(true)
-			if err != nil {
+			if err := c.loadStateFromWorkspace(); err != nil {
 				return model.ApplyResult{}, err
 			}
 			// and it has been stored
@@ -62,7 +61,7 @@ func (c *Client) Apply(_ context.Context) (model.ApplyResult, error) {
 		}
 	}
 	// then check pipeline state. If pipeline is already started we need to wait.
-	if pipelineState != cliErrors.PipelineNotStarted {
+	if pipelineState != tferrors.PipelineNotStarted {
 		return model.ApplyResult{}, nil
 	}
 	// if pipeline is not started yet, try to start it
