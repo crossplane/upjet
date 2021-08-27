@@ -17,6 +17,8 @@ limitations under the License.
 package pipeline
 
 import (
+	"fmt"
+	"go/types"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,20 +30,19 @@ import (
 )
 
 // NewTerraformedGenerator returns a new TerraformedGenerator.
-func NewTerraformedGenerator(groupDir, rootModulePath, group string) *TerraformedGenerator {
+func NewTerraformedGenerator(pkg *types.Package, localDirectoryPath string) *TerraformedGenerator {
 	return &TerraformedGenerator{
-		GroupDir:       groupDir,
-		RootModulePath: rootModulePath,
-		Group:          group,
+		LocalDirectoryPath: localDirectoryPath,
+		pkg:                pkg,
 	}
 }
 
 // TerraformedGenerator generates conversion methods implementing Terraformed
 // interface on CRD structs.
 type TerraformedGenerator struct {
-	GroupDir       string
-	RootModulePath string
-	Group          string
+	LocalDirectoryPath string
+
+	pkg *types.Package
 }
 
 // Generate writes generated Terraformed interface functions
@@ -62,14 +63,12 @@ func (tg *TerraformedGenerator) Generate(version, kind, terraformResourceType, t
 			"ResourceType":    terraformResourceType,
 		},
 	}
-
-	pkgPath := filepath.Join(tg.RootModulePath, "apis", strings.ToLower(strings.Split(tg.Group, ".")[0]), strings.ToLower(version), strings.ToLower(kind))
-	trFile := wrapper.NewFile(pkgPath, version, templates.TerraformedTemplate,
+	trFile := wrapper.NewFile(tg.pkg.Path(), tg.pkg.Name(), templates.TerraformedTemplate,
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath("hack/boilerplate.go.txt"), // todo
 		wrapper.LinterEnabled(),
 	)
-	filePath := filepath.Join(tg.GroupDir, strings.ToLower(version), strings.ToLower(kind), "zz_generated.terraformed.go")
+	filePath := filepath.Join(tg.LocalDirectoryPath, fmt.Sprintf("zz_%s_terraformed.go", strings.ToLower(kind)))
 	return errors.Wrap(
 		trFile.Write(filePath, vars, os.ModePerm),
 		"cannot write terraformed conversion methods file",

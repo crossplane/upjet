@@ -31,8 +31,7 @@ import (
 // NewBuilder returns a new Builder.
 func NewBuilder(pkg *types.Package) *Builder {
 	return &Builder{
-		Package:  pkg,
-		genTypes: map[string]*types.Named{},
+		Package: pkg,
 	}
 }
 
@@ -40,25 +39,13 @@ func NewBuilder(pkg *types.Package) *Builder {
 type Builder struct {
 	Package *types.Package
 
-	genTypes map[string]*types.Named
+	genTypes []*types.Named
 }
 
 // Build returns parameters and observation types built out of Terraform schema.
 func (g *Builder) Build(name string, schema *schema.Resource) ([]*types.Named, error) {
 	_, _, err := g.buildResource(schema, name)
-	if err != nil {
-		return nil, errors.Wrapf(err, "cannot build the types")
-	}
-	if len(g.genTypes) == 0 {
-		return nil, errors.Errorf("no type has been generated from resource %s", name)
-	}
-	result := make([]*types.Named, len(g.genTypes))
-	i := 0
-	for _, t := range g.genTypes {
-		result[i] = t
-		i++
-	}
-	return result, nil
+	return g.genTypes, errors.Wrapf(err, "cannot build the types")
 }
 
 func (g *Builder) buildResource(res *schema.Resource, names ...string) (*types.Named, *types.Named, error) {
@@ -112,12 +99,14 @@ func (g *Builder) buildResource(res *schema.Resource, names ...string) (*types.N
 	paramTypeName := g.generateTypeName("Parameters", names...)
 	paramName := types.NewTypeName(token.NoPos, g.Package, paramTypeName, nil)
 	paramType = types.NewNamed(paramName, types.NewStruct(paramFields, paramTags), nil)
-	g.genTypes[paramType.Obj().Name()] = paramType
+	g.Package.Scope().Insert(paramType.Obj())
+	g.genTypes = append(g.genTypes, paramType)
 
 	obsTypeName := g.generateTypeName("Observation", names...)
 	obsName := types.NewTypeName(token.NoPos, g.Package, obsTypeName, nil)
 	obsType = types.NewNamed(obsName, types.NewStruct(obsFields, obsTags), nil)
-	g.genTypes[obsType.Obj().Name()] = obsType
+	g.Package.Scope().Insert(obsType.Obj())
+	g.genTypes = append(g.genTypes, obsType)
 
 	return paramType, obsType, nil
 }
@@ -212,8 +201,8 @@ func (g *Builder) buildSchema(sch *schema.Schema, names []string) (types.Type, e
 // finds a unique name.
 func (g *Builder) generateTypeName(suffix string, names ...string) string {
 	n := names[len(names)-1] + suffix
-	for i := len(names) - 2; i > 0; i-- {
-		if _, ok := g.genTypes[n]; !ok {
+	for i := len(names) - 2; i >= 0; i-- {
+		if g.Package.Scope().Lookup(n) == nil {
 			break
 		}
 		n = names[i] + n

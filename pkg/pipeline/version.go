@@ -17,6 +17,7 @@ limitations under the License.
 package pipeline
 
 import (
+	"go/types"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,19 +29,24 @@ import (
 )
 
 // NewVersionGenerator returns a new VersionGenerator.
-func NewVersionGenerator(rootDir, group, version string) *VersionGenerator {
+func NewVersionGenerator(rootDir, modulePath, group, version string) *VersionGenerator {
+	pkgPath := filepath.Join(modulePath, "apis", strings.ToLower(strings.Split(group, ".")[0]), version)
+	directoryPath := filepath.Join(rootDir, "apis", strings.ToLower(strings.Split(group, ".")[0]), version)
 	return &VersionGenerator{
-		RootDir: rootDir,
-		Group:   group,
-		Version: version,
+		directoryPath: directoryPath,
+		Group:         group,
+		Version:       version,
+		pkg:           types.NewPackage(pkgPath, version),
 	}
 }
 
 // VersionGenerator generates files for a version of a specific group.
 type VersionGenerator struct {
-	RootDir string
 	Group   string
 	Version string
+
+	directoryPath string
+	pkg           *types.Package
 }
 
 // Generate writes doc and group version info files to the disk.
@@ -51,18 +57,22 @@ func (vg *VersionGenerator) Generate() error {
 			"Group":      vg.Group,
 		},
 	}
-	pkgPath := filepath.Join(
-		vg.RootDir,
-		"apis",
-		strings.ToLower(strings.Split(vg.Group, ".")[0]),
-		strings.ToLower(vg.Version),
-	)
-	gviFile := wrapper.NewFile(pkgPath, vg.Version, templates.GroupVersionInfoTemplate,
+	gviFile := wrapper.NewFile(vg.pkg.Path(), vg.Version, templates.GroupVersionInfoTemplate,
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath("hack/boilerplate.go.txt"), // todo
 	)
 	return errors.Wrap(
-		gviFile.Write(filepath.Join(pkgPath, "zz_groupversion_info.go"), vars, os.ModePerm),
+		gviFile.Write(filepath.Join(vg.directoryPath, "zz_groupversion_info.go"), vars, os.ModePerm),
 		"cannot write group version info file",
 	)
+}
+
+// Package returns the package of the version that will be generated.
+func (vg *VersionGenerator) Package() *types.Package {
+	return vg.pkg
+}
+
+// DirectoryPath returns the path to the directory of the version.
+func (vg *VersionGenerator) DirectoryPath() string {
+	return vg.directoryPath
 }
