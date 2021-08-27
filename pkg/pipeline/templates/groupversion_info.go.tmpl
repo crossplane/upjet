@@ -2,6 +2,9 @@
 
 {{ .GenStatement }}
 
+// +kubebuilder:object:generate=true
+// +groupName={{ .CRD.Group }}
+// +versionName={{ .CRD.APIVersion }}
 package {{ .CRD.APIVersion }}
 
 import (

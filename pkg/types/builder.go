@@ -96,13 +96,19 @@ func (g *Builder) buildResource(res *schema.Resource, names ...string) (*types.N
 	// https://github.com/hashicorp/terraform-provider-aws/blob/main/aws/wafv2_helper.go#L13
 	var paramType, obsType *types.Named
 
-	paramTypeName := g.generateTypeName("Parameters", names...)
+	paramTypeName, err := g.generateTypeName("Parameters", names...)
+	if err != nil {
+		return nil, nil, errors.Wrapf(err, "cannot generate parameters type name of %s", fieldPath(names...))
+	}
 	paramName := types.NewTypeName(token.NoPos, g.Package, paramTypeName, nil)
 	paramType = types.NewNamed(paramName, types.NewStruct(paramFields, paramTags), nil)
 	g.Package.Scope().Insert(paramType.Obj())
 	g.genTypes = append(g.genTypes, paramType)
 
-	obsTypeName := g.generateTypeName("Observation", names...)
+	obsTypeName, err := g.generateTypeName("Observation", names...)
+	if err != nil {
+		return nil, nil, errors.Wrapf(err, "cannot generate observation type name of %s", fieldPath(names...))
+	}
 	obsName := types.NewTypeName(token.NoPos, g.Package, obsTypeName, nil)
 	obsType = types.NewNamed(obsName, types.NewStruct(obsFields, obsTags), nil)
 	g.Package.Scope().Insert(obsType.Obj())
@@ -199,15 +205,18 @@ func (g *Builder) buildSchema(sch *schema.Schema, names []string) (types.Type, e
 // generateTypeName generates a unique name for the type if its original name
 // is used by another one. It adds the former field names recursively until it
 // finds a unique name.
-func (g *Builder) generateTypeName(suffix string, names ...string) string {
+func (g *Builder) generateTypeName(suffix string, names ...string) (string, error) {
 	n := names[len(names)-1] + suffix
 	for i := len(names) - 2; i >= 0; i-- {
 		if g.Package.Scope().Lookup(n) == nil {
-			break
+			return n, nil
 		}
 		n = names[i] + n
 	}
-	return n
+	if g.Package.Scope().Lookup(n) == nil {
+		return n, nil
+	}
+	return "", errors.Errorf("could not generate a unique name for %s", n)
 }
 
 func sortedKeys(m map[string]*schema.Schema) []string {
