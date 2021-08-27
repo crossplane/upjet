@@ -19,6 +19,7 @@ package pipeline
 import (
 	"os"
 	"path/filepath"
+	"sort"
 
 	"github.com/muvaf/typewriter/pkg/wrapper"
 	"github.com/pkg/errors"
@@ -52,6 +53,7 @@ func (rg *RegisterGenerator) Generate(versionPkgList []string) error {
 	for i, pkgPath := range versionPkgList {
 		aliases[i] = registerFile.Imports.UsePackage(pkgPath)
 	}
+	sort.Strings(aliases)
 	vars := map[string]interface{}{
 		"Aliases": aliases,
 	}
