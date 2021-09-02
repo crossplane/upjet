@@ -51,7 +51,6 @@ func (cg *ControllerGenerator) Generate(versionPkgPath, kind string) (pkgPath st
 	ctrlFile := wrapper.NewFile(controllerPkgPath, strings.ToLower(kind), templates.ControllerTemplate,
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath("hack/boilerplate.go.txt"), // todo
-		// wrapper.LinterEnabled(),
 	)
 
 	vars := map[string]interface{}{

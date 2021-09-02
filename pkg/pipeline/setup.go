@@ -35,7 +35,7 @@ func NewSetupGenerator(rootDir, modulePath string) *SetupGenerator {
 	}
 }
 
-// SetupGenerator generates scheme registration file.
+// SetupGenerator generates controller setup file.
 type SetupGenerator struct {
 	LocalDirectoryPath string
 	ModulePath         string
@@ -47,7 +47,6 @@ func (rg *SetupGenerator) Generate(versionPkgList []string) error {
 	setupFile := wrapper.NewFile(filepath.Join(rg.ModulePath, "apis"), "apis", templates.SetupTemplate,
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath("hack/boilerplate.go.txt"),
-		// wrapper.LinterEnabled(),
 	)
 	aliases := make([]string, len(versionPkgList))
 	for i, pkgPath := range versionPkgList {

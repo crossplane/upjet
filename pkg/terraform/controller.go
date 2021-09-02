@@ -3,6 +3,8 @@ package terraform
 import (
 	"context"
 
+	"k8s.io/client-go/util/workqueue"
+
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -15,7 +17,6 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/event"
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	xpmeta "github.com/crossplane/crossplane-runtime/pkg/meta"
-	"github.com/crossplane/crossplane-runtime/pkg/ratelimiter"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 
@@ -33,14 +34,15 @@ const (
 type ProviderConfigFn func(ctx context.Context, client client.Client, mg xpresource.Managed) ([]byte, error)
 
 // SetupController setups controller for a Terraform managed resource
-func SetupController(mgr ctrl.Manager, l logging.Logger, obj client.Object, of schema.GroupVersionKind, pcFn ProviderConfigFn) error {
+func SetupController(
+	mgr ctrl.Manager,
+	l logging.Logger,
+	rl workqueue.RateLimiter,
+	obj client.Object,
+	of schema.GroupVersionKind,
+	pcFn ProviderConfigFn,
+) error {
 	name := managed.ControllerName(of.GroupKind().String())
-
-	rl := ratelimiter.NewDefaultProviderRateLimiter(ratelimiter.DefaultProviderRPS)
-	o := controller.Options{
-		RateLimiter: ratelimiter.NewDefaultManagedRateLimiter(rl),
-	}
-
 	r := managed.NewReconciler(mgr,
 		xpresource.ManagedKind(of),
 		managed.WithInitializers(),
@@ -50,7 +52,7 @@ func SetupController(mgr ctrl.Manager, l logging.Logger, obj client.Object, of s
 
 	return ctrl.NewControllerManagedBy(mgr).
 		Named(name).
-		WithOptions(o).
+		WithOptions(controller.Options{RateLimiter: rl}).
 		For(obj).
 		Complete(r)
 }

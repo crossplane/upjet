@@ -29,7 +29,7 @@ import (
 // the supplied manager.
 func Setup(mgr ctrl.Manager, l logging.Logger, wl workqueue.RateLimiter) error {
 	for _, setup := range []func(ctrl.Manager, logging.Logger, workqueue.RateLimiter) error{
-	  {{- range $alias := .Aliases }}
+		{{- range $alias := .Aliases }}
 		{{ $alias }}Setup,
 		{{- end }}
 	} {

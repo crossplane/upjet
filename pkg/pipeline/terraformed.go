@@ -66,7 +66,6 @@ func (tg *TerraformedGenerator) Generate(version, kind, terraformResourceType, t
 	trFile := wrapper.NewFile(tg.pkg.Path(), tg.pkg.Name(), templates.TerraformedTemplate,
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath("hack/boilerplate.go.txt"), // todo
-		// wrapper.LinterEnabled(),
 	)
 	filePath := filepath.Join(tg.LocalDirectoryPath, fmt.Sprintf("zz_%s_terraformed.go", strings.ToLower(kind)))
 	return errors.Wrap(

@@ -15,6 +15,6 @@ import (
 )
 
 // Setup adds a controller that reconciles {{ .CRD.Kind }} managed resources.
-func Setup(mgr ctrl.Manager, l logging.Logger, _ workqueue.RateLimiter) error {
-	return terraform.SetupController(mgr, l, &{{ .TypePackageAlias }}{{ .CRD.Kind }}{}, {{ .TypePackageAlias }}{{ .CRD.Kind }}GroupVersionKind, {{ .ProviderConfigBuilderPackageAlias }}ProviderConfigBuilder)
+func Setup(mgr ctrl.Manager, l logging.Logger, rl workqueue.RateLimiter) error {
+	return terraform.SetupController(mgr, l, rl, &{{ .TypePackageAlias }}{{ .CRD.Kind }}{}, {{ .TypePackageAlias }}{{ .CRD.Kind }}GroupVersionKind, {{ .ProviderConfigBuilderPackageAlias }}ProviderConfigBuilder)
 }

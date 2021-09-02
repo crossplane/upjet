@@ -47,7 +47,6 @@ func (rg *RegisterGenerator) Generate(versionPkgList []string) error {
 	registerFile := wrapper.NewFile(filepath.Join(rg.ModulePath, "apis"), "apis", templates.RegisterTemplate,
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath("hack/boilerplate.go.txt"),
-		// wrapper.LinterEnabled(),
 	)
 	aliases := make([]string, len(versionPkgList))
 	for i, pkgPath := range versionPkgList {
