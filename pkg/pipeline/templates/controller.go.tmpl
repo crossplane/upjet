@@ -9,12 +9,28 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	"github.com/crossplane-contrib/terrajet/pkg/terraform"
+	"github.com/crossplane/crossplane-runtime/pkg/event"
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
+	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
+	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 
 	{{ .Imports }}
 )
 
 // Setup adds a controller that reconciles {{ .CRD.Kind }} managed resources.
 func Setup(mgr ctrl.Manager, l logging.Logger, rl workqueue.RateLimiter) error {
-	return terraform.SetupController(mgr, l, rl, &{{ .TypePackageAlias }}{{ .CRD.Kind }}{}, {{ .TypePackageAlias }}{{ .CRD.Kind }}GroupVersionKind, {{ .ProviderConfigBuilderPackageAlias }}ProviderConfigBuilder)
+	name := managed.ControllerName({{ .TypePackageAlias }}{{ .CRD.Kind }}GroupVersionKind.String())
+	r := managed.NewReconciler(mgr,
+		xpresource.ManagedKind({{ .TypePackageAlias }}{{ .CRD.Kind }}GroupVersionKind),
+		managed.WithInitializers(),
+		managed.WithExternalConnecter(terraform.NewConnector(mgr.GetClient(), l, {{ .ProviderConfigBuilderPackageAlias }}ProviderConfigBuilder)),
+		managed.WithLogger(l.WithValues("controller", name)),
+		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))))
+
+	return ctrl.NewControllerManagedBy(mgr).
+		Named(name).
+		WithOptions(controller.Options{RateLimiter: rl}).
+		For(&{{ .TypePackageAlias }}{{ .CRD.Kind }}{}).
+		Complete(r)
 }
