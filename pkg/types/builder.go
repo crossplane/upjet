@@ -22,10 +22,12 @@ import (
 	"go/types"
 	"sort"
 
-	"github.com/pkg/errors"
-
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/iancoleman/strcase"
+	"github.com/pkg/errors"
+
+	"github.com/crossplane-contrib/terrajet/pkg/comments"
+	"github.com/crossplane-contrib/terrajet/pkg/markers"
 )
 
 // NewBuilder returns a new Builder.
@@ -42,13 +44,23 @@ type Builder struct {
 	genTypes []*types.Named
 }
 
+var (
+	markerRequired string
+	markerOptional string
+)
+
+func init() {
+	markerRequired = markers.Must(markers.MarkerForConfig(markers.ValidationRequired{}))
+	markerOptional = markers.Must(markers.MarkerForConfig(markers.ValidationOptional{}))
+}
+
 // Build returns parameters and observation types built out of Terraform schema.
 func (g *Builder) Build(name string, schema *schema.Resource) ([]*types.Named, error) {
 	_, _, err := g.buildResource(schema, name)
 	return g.genTypes, errors.Wrapf(err, "cannot build the types")
 }
 
-func (g *Builder) buildResource(res *schema.Resource, names ...string) (*types.Named, *types.Named, error) {
+func (g *Builder) buildResource(res *schema.Resource, names ...string) (*types.Named, *types.Named, error) { //nolint:gocyclo
 	// NOTE(muvaf): There can be fields in the same CRD with same name but in
 	// different types. Since we generate the type using the field name, there
 	// can be collisions. In order to be able to generate unique names consistently,
@@ -61,8 +73,22 @@ func (g *Builder) buildResource(res *schema.Resource, names ...string) (*types.N
 	var obsTags []string
 	for _, snakeFieldName := range keys {
 		sch := res.Schema[snakeFieldName]
+		tfTag := snakeFieldName
+		jsonTag := strcase.ToLowerCamel(snakeFieldName)
+		commentsBuilder := &comments.Builder{}
+		if err := commentsBuilder.AddComment(sch.Description); err != nil {
+			return nil, nil, errors.Wrapf(err, "cannot add schema description as comment")
+		}
+
+		ct := commentsBuilder.Options.CRDTag
+		if ct.TF != nil {
+			tfTag = *ct.TF
+		}
+		if ct.JSON != nil {
+			jsonTag = *ct.JSON
+		}
+
 		fieldName := strcase.ToCamel(snakeFieldName)
-		lowerCamelFieldName := strcase.ToLowerCamel(snakeFieldName)
 		fieldType, err := g.buildSchema(sch, append(names, fieldName))
 		if err != nil {
 			return nil, nil, errors.Wrapf(err, "cannot infer type from schema of field %s", fieldName)
@@ -76,15 +102,23 @@ func (g *Builder) buildResource(res *schema.Resource, names ...string) (*types.N
 		switch {
 		case sch.Computed && !sch.Optional:
 			obsFields = append(obsFields, field)
-			obsTags = append(obsTags, fmt.Sprintf("json:\"%s\" tf:\"%s\"", lowerCamelFieldName, snakeFieldName))
+			obsTags = append(obsTags, fmt.Sprintf("json:\"%s\" tf:\"%s\"", jsonTag, tfTag))
 		default:
 			if sch.Optional {
-				paramTags = append(paramTags, fmt.Sprintf("json:\"%s,omitempty\" tf:\"%s\"", lowerCamelFieldName, snakeFieldName))
+				if err = commentsBuilder.AddComment(markerOptional); err != nil {
+					return nil, nil, errors.Wrap(err, "cannot add validation optional marker")
+				}
+				paramTags = append(paramTags, fmt.Sprintf("json:\"%s,omitempty\" tf:\"%s\"", jsonTag, tfTag))
 			} else {
-				paramTags = append(paramTags, fmt.Sprintf("json:\"%s\" tf:\"%s\"", lowerCamelFieldName, snakeFieldName))
+				if err = commentsBuilder.AddComment(markerRequired); err != nil {
+					return nil, nil, errors.Wrap(err, "cannot add validation required marker")
+				}
+				paramTags = append(paramTags, fmt.Sprintf("json:\"%s\" tf:\"%s\"", jsonTag, tfTag))
 			}
 			paramFields = append(paramFields, field)
 		}
+		// TODO(hasan): Build comments and set for fields to print properly
+		//  with "commentsBuilder.Build()"
 	}
 
 	// NOTE(muvaf): Not every struct has both computed and configurable fields,
