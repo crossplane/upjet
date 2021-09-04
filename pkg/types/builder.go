@@ -31,8 +31,7 @@ import (
 // NewBuilder returns a new Builder.
 func NewBuilder(pkg *types.Package) *Builder {
 	return &Builder{
-		Package:  pkg,
-		genTypes: map[string]*types.Named{},
+		Package: pkg,
 	}
 }
 
@@ -40,25 +39,13 @@ func NewBuilder(pkg *types.Package) *Builder {
 type Builder struct {
 	Package *types.Package
 
-	genTypes map[string]*types.Named
+	genTypes []*types.Named
 }
 
 // Build returns parameters and observation types built out of Terraform schema.
 func (g *Builder) Build(name string, schema *schema.Resource) ([]*types.Named, error) {
 	_, _, err := g.buildResource(schema, name)
-	if err != nil {
-		return nil, errors.Wrapf(err, "cannot build the types")
-	}
-	if len(g.genTypes) == 0 {
-		return nil, errors.Errorf("no type has been generated from resource %s", name)
-	}
-	result := make([]*types.Named, len(g.genTypes))
-	i := 0
-	for _, t := range g.genTypes {
-		result[i] = t
-		i++
-	}
-	return result, nil
+	return g.genTypes, errors.Wrapf(err, "cannot build the types")
 }
 
 func (g *Builder) buildResource(res *schema.Resource, names ...string) (*types.Named, *types.Named, error) {
@@ -109,15 +96,23 @@ func (g *Builder) buildResource(res *schema.Resource, names ...string) (*types.N
 	// https://github.com/hashicorp/terraform-provider-aws/blob/main/aws/wafv2_helper.go#L13
 	var paramType, obsType *types.Named
 
-	paramTypeName := g.generateTypeName("Parameters", names...)
+	paramTypeName, err := g.generateTypeName("Parameters", names...)
+	if err != nil {
+		return nil, nil, errors.Wrapf(err, "cannot generate parameters type name of %s", fieldPath(names...))
+	}
 	paramName := types.NewTypeName(token.NoPos, g.Package, paramTypeName, nil)
 	paramType = types.NewNamed(paramName, types.NewStruct(paramFields, paramTags), nil)
-	g.genTypes[paramType.Obj().Name()] = paramType
+	g.Package.Scope().Insert(paramType.Obj())
+	g.genTypes = append(g.genTypes, paramType)
 
-	obsTypeName := g.generateTypeName("Observation", names...)
+	obsTypeName, err := g.generateTypeName("Observation", names...)
+	if err != nil {
+		return nil, nil, errors.Wrapf(err, "cannot generate observation type name of %s", fieldPath(names...))
+	}
 	obsName := types.NewTypeName(token.NoPos, g.Package, obsTypeName, nil)
 	obsType = types.NewNamed(obsName, types.NewStruct(obsFields, obsTags), nil)
-	g.genTypes[obsType.Obj().Name()] = obsType
+	g.Package.Scope().Insert(obsType.Obj())
+	g.genTypes = append(g.genTypes, obsType)
 
 	return paramType, obsType, nil
 }
@@ -210,15 +205,18 @@ func (g *Builder) buildSchema(sch *schema.Schema, names []string) (types.Type, e
 // generateTypeName generates a unique name for the type if its original name
 // is used by another one. It adds the former field names recursively until it
 // finds a unique name.
-func (g *Builder) generateTypeName(suffix string, names ...string) string {
+func (g *Builder) generateTypeName(suffix string, names ...string) (string, error) {
 	n := names[len(names)-1] + suffix
-	for i := len(names) - 2; i > 0; i-- {
-		if _, ok := g.genTypes[n]; !ok {
-			break
+	for i := len(names) - 2; i >= 0; i-- {
+		if g.Package.Scope().Lookup(n) == nil {
+			return n, nil
 		}
 		n = names[i] + n
 	}
-	return n
+	if g.Package.Scope().Lookup(n) == nil {
+		return n, nil
+	}
+	return "", errors.Errorf("could not generate a unique name for %s", n)
 }
 
 func sortedKeys(m map[string]*schema.Schema) []string {

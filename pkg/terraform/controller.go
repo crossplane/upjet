@@ -3,21 +3,16 @@ package terraform
 import (
 	"context"
 
-	"github.com/pkg/errors"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/util/retry"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
-
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/event"
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	xpmeta "github.com/crossplane/crossplane-runtime/pkg/meta"
-	"github.com/crossplane/crossplane-runtime/pkg/ratelimiter"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
+	"github.com/pkg/errors"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/crossplane-contrib/terrajet/pkg/conversion"
 	"github.com/crossplane-contrib/terrajet/pkg/meta"
@@ -32,36 +27,26 @@ const (
 // like provider credentials used to connect to cloud APIs.
 type ProviderConfigFn func(ctx context.Context, client client.Client, mg xpresource.Managed) ([]byte, error)
 
-// SetupController setups controller for a Terraform managed resource
-func SetupController(mgr ctrl.Manager, l logging.Logger, obj client.Object, of schema.GroupVersionKind, pcFn ProviderConfigFn) error {
-	name := managed.ControllerName(of.GroupKind().String())
-
-	rl := ratelimiter.NewDefaultProviderRateLimiter(ratelimiter.DefaultProviderRPS)
-	o := controller.Options{
-		RateLimiter: ratelimiter.NewDefaultManagedRateLimiter(rl),
+// NewConnector returns a new Connector object.
+func NewConnector(kube client.Client, l logging.Logger, providerConfigFn ProviderConfigFn) *Connector {
+	return &Connector{
+		kube:           kube,
+		logger:         l,
+		providerConfig: providerConfigFn,
 	}
-
-	r := managed.NewReconciler(mgr,
-		xpresource.ManagedKind(of),
-		managed.WithInitializers(),
-		managed.WithExternalConnecter(&connector{kube: mgr.GetClient(), providerConfig: pcFn, logger: l}),
-		managed.WithLogger(l.WithValues("controller", name)),
-		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))))
-
-	return ctrl.NewControllerManagedBy(mgr).
-		Named(name).
-		WithOptions(o).
-		For(obj).
-		Complete(r)
 }
 
-type connector struct {
+// Connector initializes the external client with credentials and other configuration
+// parameters.
+type Connector struct {
 	kube           client.Client
 	providerConfig ProviderConfigFn
 	logger         logging.Logger
 }
 
-func (c *connector) Connect(ctx context.Context, mg xpresource.Managed) (managed.ExternalClient, error) {
+// Connect makes sure the underlying client is ready to issue requests to the
+// provider API.
+func (c *Connector) Connect(ctx context.Context, mg xpresource.Managed) (managed.ExternalClient, error) {
 	tr, ok := mg.(resource.Terraformed)
 	if !ok {
 		return nil, errors.New(errUnexpectedObject)

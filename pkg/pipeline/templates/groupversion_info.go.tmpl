@@ -2,10 +2,14 @@
 
 {{ .GenStatement }}
 
+// +kubebuilder:object:generate=true
+// +groupName={{ .CRD.Group }}
+// +versionName={{ .CRD.APIVersion }}
 package {{ .CRD.APIVersion }}
 
 import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"sigs.k8s.io/controller-runtime/pkg/scheme"
 )
 
 // Package type metadata.
@@ -14,5 +18,13 @@ const (
 	Version = "{{ .CRD.APIVersion }}"
 )
 
-// GroupVersion is the API Group Version used to register the objects
-var GroupVersion = schema.GroupVersion{Group: Group, Version: Version}
+var (
+	// GroupVersion is the API Group Version used to register the objects
+	GroupVersion = schema.GroupVersion{Group: Group, Version: Version}
+
+	// SchemeBuilder is used to add go types to the GroupVersionKind scheme
+	SchemeBuilder = &scheme.Builder{GroupVersion: GroupVersion}
+
+	// AddToScheme adds the types in this group-version to the given scheme.
+	AddToScheme = SchemeBuilder.AddToScheme
+)
