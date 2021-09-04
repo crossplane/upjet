@@ -4,19 +4,23 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/crossplane/crossplane-runtime/pkg/test"
 	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
 
 	"github.com/crossplane-contrib/terrajet/pkg/markers"
 )
 
-func TestBuilder_Build(t *testing.T) {
+func TestBuilder_BuildAndOpts(t *testing.T) {
 	customArg := "custom"
 
 	type args struct {
 		comments []string
 	}
 	type want struct {
-		out string
+		out  string
+		opts *markers.Options
+		err  error
 	}
 
 	cases := map[string]struct {
@@ -30,7 +34,8 @@ func TestBuilder_Build(t *testing.T) {
 				},
 			},
 			want: want{
-				out: `// hello world`,
+				out:  `// hello world`,
+				opts: &markers.Options{},
 			},
 		},
 		"MultipleCommentLines": {
@@ -45,6 +50,7 @@ func TestBuilder_Build(t *testing.T) {
 				out: `// hello world
 // this is a test
 // yes, this is a test`,
+				opts: &markers.Options{},
 			},
 		},
 		"TrimsSpacesIgnoresEmptyLines": {
@@ -60,6 +66,23 @@ func TestBuilder_Build(t *testing.T) {
 				out: `// hello world
 // this is a test
 // yes, this is a test`,
+				opts: &markers.Options{},
+			},
+		},
+		"CannotBuildOptions": {
+			args: args{
+				comments: []string{
+					"hello world",
+					"+terrajet:crdschema:Tag:unknownkey=custom",
+					"yes, this is a test",
+				},
+			},
+			want: want{
+				out: `// hello world
+// yes, this is a test
+// +terrajet:crdschema:Tag:unknownkey=custom`,
+				err: errors.Wrap(errors.Wrapf(errors.New("[unknown argument \"unknownkey\" (at <input>:1:11) extra arguments provided: \"custom\" (at <input>:1:12)]"),
+					"cannot parse marker line: %s", "+terrajet:crdschema:Tag:unknownkey=custom"), errCannotParseAsFieldMarker),
 			},
 		},
 		"MixedMarkersAndComments": {
@@ -74,6 +97,11 @@ func TestBuilder_Build(t *testing.T) {
 				out: fmt.Sprintf(`// hello world
 // yes, this is a test
 // %s`, markers.Must(markers.MarkerForConfig(markers.CRDTag{TF: &customArg}))),
+				opts: &markers.Options{
+					CRDTag: markers.CRDTag{
+						TF: &customArg,
+					},
+				},
 			},
 		},
 		"MixedMarkersAndCommentsAlsoWithKubebuilder": {
@@ -92,6 +120,11 @@ func TestBuilder_Build(t *testing.T) {
 // %s
 // +kubebuilder:validation:Required
 // +kubebuilder:validation:Minimum=1`, markers.Must(markers.MarkerForConfig(markers.CRDTag{TF: &customArg}))),
+				opts: &markers.Options{
+					CRDTag: markers.CRDTag{
+						TF: &customArg,
+					},
+				},
 			},
 		},
 	}
@@ -100,13 +133,18 @@ func TestBuilder_Build(t *testing.T) {
 			b := &Builder{}
 
 			for _, c := range tc.args.comments {
-				if err := b.AddComment(c); err != nil {
-					t.Errorf("unexpected error during AddComment: %v", err)
-				}
+				b.AddComment(c)
 			}
 			got := b.Build()
 			if diff := cmp.Diff(tc.want.out, got); diff != "" {
 				t.Errorf("Build() out = %v, want %v", got, tc.want.out)
+			}
+			gotOpts, gotErr := b.BuildOptions()
+			if diff := cmp.Diff(tc.want.err, gotErr, test.EquateErrors()); diff != "" {
+				t.Errorf("GetOptions() error = %v, wantErr %v", gotErr, tc.want.err)
+			}
+			if diff := cmp.Diff(tc.want.opts, gotOpts); diff != "" {
+				t.Errorf("GetOptions() out = %v, want %v", gotOpts, tc.want.opts)
 			}
 		})
 	}

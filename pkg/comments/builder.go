@@ -17,22 +17,16 @@ const (
 type Builder struct {
 	lines       []string
 	markerLines []string
-
-	// Options represents terrajet options built with the comments
-	Options markers.Options
 }
 
 // AddComment adds comment to the comments builder
-func (b *Builder) AddComment(comment string) error {
+func (b *Builder) AddComment(comment string) {
 	for _, line := range strings.Split(comment, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
 		if strings.HasPrefix(line, markers.Prefix) {
-			if err := markers.ParseIfMarkerForField(&b.Options, line); err != nil {
-				return errors.Wrap(err, errCannotParseAsFieldMarker)
-			}
 			b.markerLines = append(b.markerLines, line)
 			continue
 		}
@@ -40,7 +34,6 @@ func (b *Builder) AddComment(comment string) error {
 		//  character limit.
 		b.lines = append(b.lines, line)
 	}
-	return nil
 }
 
 // Build builds comments using added comments by first printing non-marker
@@ -54,4 +47,15 @@ func (b *Builder) Build() string {
 		c = c + "\n// " + strings.Join(b.markerLines, "\n// ")
 	}
 	return c
+}
+
+// BuildOptions returns terrajet options built with the comments
+func (b *Builder) BuildOptions() (*markers.Options, error) {
+	opts := &markers.Options{}
+	for _, rawMarker := range b.markerLines {
+		if err := markers.ParseIfMarkerForField(opts, rawMarker); err != nil {
+			return nil, errors.Wrap(err, errCannotParseAsFieldMarker)
+		}
+	}
+	return opts, nil
 }

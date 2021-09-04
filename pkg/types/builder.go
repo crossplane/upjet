@@ -76,16 +76,18 @@ func (g *Builder) buildResource(res *schema.Resource, names ...string) (*types.N
 		tfTag := snakeFieldName
 		jsonTag := strcase.ToLowerCamel(snakeFieldName)
 		commentsBuilder := &comments.Builder{}
-		if err := commentsBuilder.AddComment(sch.Description); err != nil {
+		commentsBuilder.AddComment(sch.Description)
+
+		opts, err := commentsBuilder.BuildOptions()
+		if err != nil {
 			return nil, nil, errors.Wrapf(err, "cannot add schema description as comment")
 		}
-
-		ct := commentsBuilder.Options.CRDTag
-		if ct.TF != nil {
-			tfTag = *ct.TF
+		tagOpts := opts.CRDTag
+		if tagOpts.TF != nil {
+			tfTag = *tagOpts.TF
 		}
-		if ct.JSON != nil {
-			jsonTag = *ct.JSON
+		if tagOpts.JSON != nil {
+			jsonTag = *tagOpts.JSON
 		}
 
 		fieldName := strcase.ToCamel(snakeFieldName)
@@ -105,14 +107,10 @@ func (g *Builder) buildResource(res *schema.Resource, names ...string) (*types.N
 			obsTags = append(obsTags, fmt.Sprintf("json:\"%s\" tf:\"%s\"", jsonTag, tfTag))
 		default:
 			if sch.Optional {
-				if err = commentsBuilder.AddComment(markerOptional); err != nil {
-					return nil, nil, errors.Wrap(err, "cannot add validation optional marker")
-				}
+				commentsBuilder.AddComment(markerOptional)
 				paramTags = append(paramTags, fmt.Sprintf("json:\"%s,omitempty\" tf:\"%s\"", jsonTag, tfTag))
 			} else {
-				if err = commentsBuilder.AddComment(markerRequired); err != nil {
-					return nil, nil, errors.Wrap(err, "cannot add validation required marker")
-				}
+				commentsBuilder.AddComment(markerRequired)
 				paramTags = append(paramTags, fmt.Sprintf("json:\"%s\" tf:\"%s\"", jsonTag, tfTag))
 			}
 			paramFields = append(paramFields, field)

@@ -35,18 +35,18 @@ type Options struct {
 	CRDTag CRDTag
 }
 
-var markersRegistry = &markers.Registry{}
+var registry = &markers.Registry{}
 
 func init() {
-	if err := markers.RegisterAll(markersRegistry, terrajetMarkers...); err != nil {
+	if err := markers.RegisterAll(registry, terrajetMarkers...); err != nil {
 		panic(errors.Wrap(err, "failed to register terrajet markers"))
 	}
 }
 
 // ParseIfMarkerForField parses input line as a terrajet marker if it is a
 // valid marker describing a field.
-func ParseIfMarkerForField(cfg *Options, line string) error {
-	md := markersRegistry.Lookup(line, markers.DescribesField)
+func ParseIfMarkerForField(opts *Options, line string) error {
+	md := registry.Lookup(line, markers.DescribesField)
 	if md == nil {
 		return nil
 	}
@@ -57,7 +57,7 @@ func ParseIfMarkerForField(cfg *Options, line string) error {
 
 	switch val := val.(type) {
 	case CRDTag:
-		cfg.CRDTag = val
+		opts.CRDTag = val
 	default:
 		return errors.Errorf(errFmtUnknownTerrajetMarker, md.Name)
 	}
