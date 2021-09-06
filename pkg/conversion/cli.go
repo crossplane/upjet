@@ -40,7 +40,7 @@ const (
 // BuildClientForResource returns a tfcli client by setting attributes
 // (i.e. desired spec input) and terraform state (if available) for a given
 // client builder base.
-func BuildClientForResource(ctx context.Context, cliOpts []tfcli.ClientOption, tr resource.Terraformed) (model.Client, error) {
+func BuildClientForResource(ctx context.Context, tr resource.Terraformed, opts ...tfcli.ClientOption) (model.Client, error) {
 	var stateRaw []byte
 	if meta.GetState(tr) != "" {
 		stEnc := meta.GetState(tr)
@@ -60,7 +60,7 @@ func BuildClientForResource(ctx context.Context, cliOpts []tfcli.ClientOption, t
 		return nil, errors.Wrap(err, "failed to get attributes")
 	}
 
-	return tfcli.NewClient(ctx, append(cliOpts,
+	return tfcli.NewClient(ctx, append(opts,
 		tfcli.WithState(stateRaw),
 		tfcli.WithResourceBody(attr),
 		tfcli.WithResourceName(tr.GetName()),
@@ -73,8 +73,8 @@ type CLI struct {
 	tfcli model.Client
 }
 
-// NewCli returns a CLI object
-func NewCli(client model.Client) *CLI {
+// NewCLI returns a CLI object
+func NewCLI(client model.Client) *CLI {
 	return &CLI{
 		tfcli: client,
 	}
@@ -171,13 +171,12 @@ func (t *CLI) CreateOrUpdate(ctx context.Context, tr resource.Terraformed) (Upda
 }
 
 // Delete is a Terraform CLI implementation for Delete function of Adapter interface.
-func (t *CLI) Delete(ctx context.Context, tr resource.Terraformed) (bool, error) {
+func (t *CLI) Delete(ctx context.Context, _ resource.Terraformed) (bool, error) {
 	dr, err := t.tfcli.Destroy(ctx)
 	if tferrors.IsApplying(err) {
 		// then resource was deleted while an apply operation was in-progress
-		// we need to wait/consume this final Apply operation
-		_, err = t.CreateOrUpdate(ctx, tr)
-		return false, errors.Wrapf(err, errFmtCannotDoWithTFCli, "apply")
+		// we will wait for it to terminate and discard its result
+		return false, errors.Wrapf(t.tfcli.DiscardOperation(ctx), errFmtCannotDoWithTFCli, "delete")
 	}
 	if err != nil {
 		return false, errors.Wrapf(err, errFmtCannotDoWithTFCli, "delete")

@@ -73,19 +73,15 @@ func (c *Connector) Connect(ctx context.Context, mg xpresource.Managed) (managed
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot get provider config")
 	}
-	opts := []tfcli.ClientOption{
-		tfcli.WithLogger(c.logger),
-		tfcli.WithProviderConfiguration(pc),
-	}
 
-	tfCli, err := conversion.BuildClientForResource(ctx, opts, tr)
+	tfCli, err := conversion.BuildClientForResource(ctx, tr, tfcli.WithLogger(c.logger), tfcli.WithProviderConfiguration(pc))
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot build tf client for resource")
 	}
 
 	return &external{
 		kube:   c.kube,
-		tf:     conversion.NewCli(tfCli),
+		tf:     conversion.NewCLI(tfCli),
 		log:    c.logger,
 		record: event.NewNopRecorder(),
 	}, nil

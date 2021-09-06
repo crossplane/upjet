@@ -17,10 +17,14 @@ limitations under the License.
 package tfcli
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"text/template"
 	"time"
 
 	"github.com/pkg/errors"
@@ -28,6 +32,7 @@ import (
 
 	tferrors "github.com/crossplane-contrib/terrajet/pkg/tfcli/errors"
 	"github.com/crossplane-contrib/terrajet/pkg/tfcli/model"
+	"github.com/crossplane-contrib/terrajet/pkg/tfcli/templates"
 )
 
 const (
@@ -70,19 +75,19 @@ func (c *Client) init(ctx context.Context) error {
 	return nil
 }
 
+func (c *Client) initWSPath() {
+	// md5sum the handle so that it's safe to use in paths
+	handle := fmt.Sprintf("%x", sha256.Sum256([]byte(c.handle)))
+	c.wsPath = filepath.Join(os.TempDir(), prefixWSDir+handle)
+}
+
 // initConfiguration checks and initializes a Terraform workspace with a proper
 // configuration. If Client's workspace does not yet exist, it can prepare
 // workspace dir if mkWorkspace is set.
 // Returns true if Terraform Init lock exists.
 func (c *Client) initConfiguration(opType model.OperationType, mkWorkspace bool) (bool, error) { // nolint:gocyclo
-	// the cyclomatic complexity of this method (12) is slightly larger than our goal of 12
-	handle, err := c.getHandle()
-	if err != nil {
-		return false, errors.Wrap(err, errInitWorkspace)
-	}
-
-	c.wsPath = filepath.Join(os.TempDir(), prefixWSDir+handle)
-
+	// the cyclomatic complexity of this method (11) is slightly larger than our goal of 10
+	c.initWSPath()
 	// check if the workspace already exists, i.e. there is an open operation
 	ok, err := c.pathExists(c.wsPath, true)
 	if err != nil {
@@ -128,6 +133,42 @@ func (c *Client) initConfiguration(opType model.OperationType, mkWorkspace bool)
 		Ts:        ts,
 	}
 	return initLockExists, c.writeStateLock(xpState)
+}
+
+type tfConfigTemplateParams struct {
+	ProviderSource        string
+	ProviderVersion       string
+	ProviderConfiguration []byte
+	ResourceType          string
+	ResourceName          string
+	ResourceBody          []byte
+}
+
+func (c Client) generateTFConfiguration() ([]byte, error) {
+	tmpl, err := template.New(tplMain).Parse(templates.TFConfigurationMain)
+	if err != nil {
+		return nil, err
+	}
+
+	var buff bytes.Buffer
+	if err := tmpl.Execute(&buff, &tfConfigTemplateParams{
+		ProviderSource:        c.provider.Source,
+		ProviderVersion:       c.provider.Version,
+		ProviderConfiguration: c.provider.Configuration,
+		ResourceType:          c.resource.LabelType,
+		ResourceName:          c.resource.LabelName,
+		ResourceBody:          c.resource.Body,
+	}); err != nil {
+		return nil, err
+	}
+
+	return buff.Bytes(), nil
+}
+
+type xpState struct {
+	Operation model.OperationType `json:"operation"`
+	Pid       int                 `json:"pid"`
+	Ts        time.Time           `json:"ts"`
 }
 
 func (c *Client) addPidState(pid int) error {

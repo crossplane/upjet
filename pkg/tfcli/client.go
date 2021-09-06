@@ -17,23 +17,18 @@ limitations under the License.
 package tfcli
 
 import (
-	"bytes"
 	"context"
-	"crypto/sha256"
 	"fmt"
 	"io"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
-	"text/template"
 	"time"
 
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
-	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/spf13/afero"
 	"go.uber.org/multierr"
@@ -41,7 +36,6 @@ import (
 	"github.com/crossplane-contrib/terrajet/pkg/process"
 	tferrors "github.com/crossplane-contrib/terrajet/pkg/tfcli/errors"
 	"github.com/crossplane-contrib/terrajet/pkg/tfcli/model"
-	"github.com/crossplane-contrib/terrajet/pkg/tfcli/templates"
 )
 
 const (
@@ -60,6 +54,7 @@ const (
 	errPlan             = "failed to parse the Terraform plan"
 	errWriteFile        = "failed to write file"
 	errReadFile         = "failed to read file"
+	fmtErrCheckTFState  = "failed to check Terraform state lock: %s"
 	fmtErrPath          = "failed to check path on filesystem: %s: Expected a dir: %v, found a dir: %v"
 	fmtErrLoadState     = "failed to load state from file: %s"
 	fmtErrStoreState    = "failed to store state into file: %s"
@@ -85,20 +80,6 @@ type Client struct {
 	timeout  *time.Duration
 }
 
-// returns true if no resource is to be added according to the plan
-func tfPlanCheckAdd(log string) (bool, error) {
-	r := regexp.MustCompile(regexpPlanLine)
-	m := r.FindStringSubmatch(log)
-	if len(m) != 4 || len(m[1]) == 0 {
-		return false, errors.New(errNoPlan)
-	}
-	addCount, err := strconv.Atoi(m[1])
-	if err != nil {
-		return false, errors.Wrap(err, errPlan)
-	}
-	return addCount == 0, nil
-}
-
 func (c *Client) storePipelineResult(log string) error {
 	ps := c.pInfo.GetProcessState()
 	if ps == nil {
@@ -113,7 +94,7 @@ func (c *Client) checkTFStateLock() error {
 	tfStateLock := filepath.Join(c.wsPath, fileTFStateLock)
 	tfStateLockExists, err := c.pathExists(tfStateLock, false)
 	if err != nil {
-		return err
+		return errors.Wrapf(err, fmtErrCheckTFState, tfStateLock)
 	}
 	if tfStateLockExists {
 		return tferrors.NewPipelineInProgressError(tferrors.PipelineStateLocked)
@@ -255,72 +236,6 @@ func (c *Client) pathExists(path string, isDir bool) (bool, error) {
 	return false, nil
 }
 
-// Close releases resources allocated for this Client.
-// After a call to Close, do not reuse the same handle.
-func (c *Client) Close(_ context.Context) error {
-	var result error
-	if c.pInfo != nil {
-		result = multierr.Combine(errors.Wrap(c.pInfo.Kill(), errDestroyProcess))
-	}
-	if c.wsPath != "" {
-		result = multierr.Combine(result, errors.Wrap(c.fs.RemoveAll(c.wsPath), errDestroyWorkspace))
-	}
-	c.handle = ""
-	return result
-}
-
-type xpState struct {
-	Operation model.OperationType `json:"operation"`
-	Pid       int                 `json:"pid"`
-	Ts        time.Time           `json:"ts"`
-}
-
-func (c *Client) getHandle() (string, error) {
-	handle := c.handle
-	// if no handle has been given, generate a new one
-	if handle == "" {
-		u, err := uuid.NewUUID()
-		if err != nil {
-			return "", err
-		}
-		handle = u.String()
-		c.handle = handle
-	}
-	// md5sum the handle so that it's safe to use in paths
-	handle = fmt.Sprintf("%x", sha256.Sum256([]byte(handle)))
-	return handle, nil
-}
-
-type tfConfigTemplateParams struct {
-	ProviderSource        string
-	ProviderVersion       string
-	ProviderConfiguration []byte
-	ResourceType          string
-	ResourceName          string
-	ResourceBody          []byte
-}
-
-func (c Client) generateTFConfiguration() ([]byte, error) {
-	tmpl, err := template.New(tplMain).Parse(templates.TFConfigurationMain)
-	if err != nil {
-		return nil, err
-	}
-
-	var buff bytes.Buffer
-	if err := tmpl.Execute(&buff, &tfConfigTemplateParams{
-		ProviderSource:        c.provider.Source,
-		ProviderVersion:       c.provider.Version,
-		ProviderConfiguration: c.provider.Configuration,
-		ResourceType:          c.resource.LabelType,
-		ResourceName:          c.resource.LabelName,
-		ResourceBody:          c.resource.Body,
-	}); err != nil {
-		return nil, err
-	}
-
-	return buff.Bytes(), nil
-}
-
 func (c *Client) writeFile(filename string, data []byte, perm fs.FileMode) error {
 	f, err := c.fs.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
 	if err != nil {
@@ -337,4 +252,44 @@ func (c *Client) readFile(filename string) ([]byte, error) {
 	}
 	buff, err := io.ReadAll(f)
 	return buff, errors.Wrap(err, errReadFile)
+}
+
+// Close releases resources allocated for this Client.
+// After a call to Close, do not reuse the same handle.
+func (c *Client) Close(_ context.Context) error {
+	var result error
+	if c.pInfo != nil {
+		result = multierr.Combine(errors.Wrap(c.pInfo.Kill(), errDestroyProcess))
+	}
+	if c.wsPath != "" {
+		result = multierr.Combine(result, errors.Wrap(c.fs.RemoveAll(c.wsPath), errDestroyWorkspace))
+	}
+	c.handle = ""
+	return result
+}
+
+// DiscardOperation discards an operation's unconsumed result without
+// interrupting an active pipeline
+func (c *Client) DiscardOperation(_ context.Context) error {
+	c.initWSPath()
+	storeExists, err := c.pathExists(filepath.Join(c.wsPath, fileStore), false)
+	if err != nil {
+		return err
+	}
+	err = c.checkOperation()
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if !errors.Is(err, tferrors.OperationInProgressError{}) {
+		return err
+	}
+	// then discard the result of the operation
+	if storeExists {
+		return c.removeStateStore()
+	}
+	// then check for an active pipeline not to disturb it
+	if tfErr := c.checkTFStateLock(); tfErr != nil {
+		return tfErr
+	}
+	return err
 }

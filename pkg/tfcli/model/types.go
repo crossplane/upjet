@@ -53,6 +53,7 @@ type Client interface {
 	Apply(ctx context.Context) (ApplyResult, error)
 	Destroy(ctx context.Context) (DestroyResult, error)
 	Close(ctx context.Context) error
+	DiscardOperation(ctx context.Context) error
 }
 
 // OperationType is an operation type for Terraform CLI

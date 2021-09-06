@@ -33,6 +33,7 @@ const (
 	defaultAsyncTimeout = 2 * time.Minute
 	// error format strings
 	errValidationNoLogger    = "no logger has been configured"
+	errValidationNoHandle    = "no workspace handle has been configured"
 	fmtErrValidationResource = "invalid resource specification: both type and name are required: type=%q and name=%q"
 	fmtErrValidationProvider = "invalid provider specification: both source and version are required: source=%q and version=%q"
 
@@ -170,6 +171,9 @@ func (c Client) validate() error {
 	}
 	if c.logger == nil {
 		return errors.New(errValidationNoLogger)
+	}
+	if c.handle == "" {
+		return errors.New(errValidationNoHandle)
 	}
 	return nil
 }

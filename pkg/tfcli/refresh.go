@@ -20,6 +20,8 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -135,4 +137,18 @@ func (c *Client) observe(ctx context.Context) (model.RefreshResult, error) {
 	}
 	result.State = c.tfState
 	return result, nil
+}
+
+// returns true if no resource is to be added according to the plan
+func tfPlanCheckAdd(log string) (bool, error) {
+	r := regexp.MustCompile(regexpPlanLine)
+	m := r.FindStringSubmatch(log)
+	if len(m) != 4 || len(m[1]) == 0 {
+		return false, errors.New(errNoPlan)
+	}
+	addCount, err := strconv.Atoi(m[1])
+	if err != nil {
+		return false, errors.Wrap(err, errPlan)
+	}
+	return addCount == 0, nil
 }
