@@ -77,7 +77,7 @@ func (g *Builder) buildResource(res *schema.Resource, names ...string) (*types.N
 
 		fieldType, err := g.buildSchema(sch, append(names, fieldName.Camel))
 		if err != nil {
-			return nil, nil, errors.Wrapf(err, "cannot infer type from schema of field %s", fieldName.Camel)
+			return nil, nil, errors.Wrapf(err, "cannot infer type from schema of field %s", fieldName.Snake)
 		}
 		field := types.NewField(token.NoPos, g.Package, fieldName.Camel, fieldType, false)
 
