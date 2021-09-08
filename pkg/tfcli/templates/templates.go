@@ -14,12 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package conversion
+package templates
 
-import jsoniter "github.com/json-iterator/go"
+import _ "embed" // imports embed package for the go:embed below
 
-// TFParser is a json parser to marshal/unmarshal using "tf" tag.
-var TFParser = jsoniter.Config{TagKey: "tf"}.Froze()
-
-// JSParser is a json parser to marshal/unmarshal using "json" tag.
-var JSParser = jsoniter.Config{TagKey: "json"}.Froze()
+// TFConfigurationMain holds the main Terraform configuration template
+//go:embed main.tf.json.tpl
+var TFConfigurationMain string

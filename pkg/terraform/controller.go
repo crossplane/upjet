@@ -1,3 +1,19 @@
+/*
+Copyright 2021 The Crossplane Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package terraform
 
 import (
@@ -17,6 +33,7 @@ import (
 	"github.com/crossplane-contrib/terrajet/pkg/conversion"
 	"github.com/crossplane-contrib/terrajet/pkg/meta"
 	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
+	"github.com/crossplane-contrib/terrajet/pkg/tfcli"
 )
 
 const (
@@ -52,30 +69,19 @@ func (c *Connector) Connect(ctx context.Context, mg xpresource.Managed) (managed
 		return nil, errors.New(errUnexpectedObject)
 	}
 
-	// TODO(hasan): create and pass the implementation of tfcli builder once available
-	/*
-		pc, err := c.providerConfig(ctx, c.kube, mg)
-		if err != nil {
-			return nil, errors.Wrap(err, "cannot get provider config")
-		}
-		tfcb := tfcli.NewClientBuilder().
-			WithLogger(c.logger).
-			WithResourceName(tr.GetName()).
-			WithHandle(string(tr.GetUID())).
-			WithProviderConfiguration(pc).
-			WithResourceType(tr.GetTerraformResourceType())
+	pc, err := c.providerConfig(ctx, c.kube, mg)
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot get provider config")
+	}
 
-		tfcli, err := conversion.BuildClientForResource(tfcb, tr)
-	*/
-
-	tfcli, err := conversion.BuildClientForResource(nil, tr)
+	tfCli, err := conversion.BuildClientForResource(ctx, tr, tfcli.WithLogger(c.logger), tfcli.WithProviderConfiguration(pc))
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot build tf client for resource")
 	}
 
 	return &external{
 		kube:   c.kube,
-		tf:     conversion.NewCli(tfcli),
+		tf:     conversion.NewCLI(tfCli),
 		log:    c.logger,
 		record: event.NewNopRecorder(),
 	}, nil

@@ -1,3 +1,19 @@
+/*
+Copyright 2021 The Crossplane Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package conversion
 
 import (
@@ -12,6 +28,7 @@ import (
 	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
 	"github.com/crossplane-contrib/terrajet/pkg/tfcli"
 	tferrors "github.com/crossplane-contrib/terrajet/pkg/tfcli/errors"
+	"github.com/crossplane-contrib/terrajet/pkg/tfcli/model"
 )
 
 const (
@@ -23,7 +40,7 @@ const (
 // BuildClientForResource returns a tfcli client by setting attributes
 // (i.e. desired spec input) and terraform state (if available) for a given
 // client builder base.
-func BuildClientForResource(builderBase tfcli.Builder, tr resource.Terraformed) (tfcli.Client, error) {
+func BuildClientForResource(ctx context.Context, tr resource.Terraformed, opts ...tfcli.ClientOption) (model.Client, error) {
 	var stateRaw []byte
 	if meta.GetState(tr) != "" {
 		stEnc := meta.GetState(tr)
@@ -43,16 +60,21 @@ func BuildClientForResource(builderBase tfcli.Builder, tr resource.Terraformed) 
 		return nil, errors.Wrap(err, "failed to get attributes")
 	}
 
-	return builderBase.WithState(stateRaw).WithResourceBody(attr).BuildClient()
+	return tfcli.NewClient(ctx, append(opts,
+		tfcli.WithState(stateRaw),
+		tfcli.WithResourceBody(attr),
+		tfcli.WithResourceName(tr.GetName()),
+		tfcli.WithHandle(string(tr.GetUID())),
+		tfcli.WithResourceType(tr.GetTerraformResourceType()))...)
 }
 
 // CLI is an Adapter implementation for Terraform CLI
 type CLI struct {
-	tfcli tfcli.Client
+	tfcli model.Client
 }
 
-// NewCli returns a CLI object
-func NewCli(client tfcli.Client) *CLI {
+// NewCLI returns a CLI object
+func NewCLI(client model.Client) *CLI {
 	return &CLI{
 		tfcli: client,
 	}
@@ -149,8 +171,13 @@ func (t *CLI) CreateOrUpdate(ctx context.Context, tr resource.Terraformed) (Upda
 }
 
 // Delete is a Terraform CLI implementation for Delete function of Adapter interface.
-func (t *CLI) Delete(ctx context.Context, tr resource.Terraformed) (bool, error) {
+func (t *CLI) Delete(ctx context.Context, _ resource.Terraformed) (bool, error) {
 	dr, err := t.tfcli.Destroy(ctx)
+	if tferrors.IsApplying(err) {
+		// then resource was deleted while an apply operation was in-progress
+		// we will wait for it to terminate and discard its result
+		return false, errors.Wrapf(t.tfcli.DiscardOperation(ctx), errFmtCannotDoWithTFCli, "delete")
+	}
 	if err != nil {
 		return false, errors.Wrapf(err, errFmtCannotDoWithTFCli, "delete")
 	}
