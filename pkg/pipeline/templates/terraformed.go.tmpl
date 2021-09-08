@@ -60,3 +60,8 @@ func (tr *{{ .CRD.Kind }}) SetParameters(params map[string]interface{}) error {
 	}
 	return json.TFParser.Unmarshal(p, &tr.Spec.ForProvider)
 }
+
+// GetForProvider of this {{ .CRD.Kind }}
+func (tr *{{ .CRD.Kind }}) GetForProvider() interface{} {
+	return &tr.Spec.ForProvider
+}

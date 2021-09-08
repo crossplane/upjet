@@ -19,10 +19,11 @@ package conversion
 import (
 	"context"
 
-	xpmeta "github.com/crossplane/crossplane-runtime/pkg/meta"
-	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/pkg/errors"
+
+	xpmeta "github.com/crossplane/crossplane-runtime/pkg/meta"
+	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 
 	"github.com/crossplane-contrib/terrajet/pkg/json"
 	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
