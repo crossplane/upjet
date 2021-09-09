@@ -25,6 +25,10 @@ import (
 )
 
 const (
+	// CNameWildcard can be used as the canonical name of a value filter option
+	// that will apply to all fields of a struct
+	CNameWildcard = ""
+
 	fmtCanonical = "%s.%s"
 )
 
@@ -34,10 +38,11 @@ type Option interface {
 }
 
 // lateInitOptions Contains options for late-initialization processing of a managed resource.
-//   Initialized in a managed resource's setup method to customize late-initialization behavior for the resource.
+// Initialized in a managed resource's setup method to customize late-initialization behavior for the resource.
 type lateInitOptions struct {
-	nameMappers mapperArr
-	nameFilters filterArr
+	nameMappers  mapperArr
+	nameFilters  filterArr
+	valueFilters valueFilterArr
 }
 
 // apply Store the specified list of `Option`s in the receiver `lateInitOptions`
@@ -47,9 +52,93 @@ func (opts *lateInitOptions) apply(opt ...Option) {
 	}
 }
 
-// nameFilter defines a filter on CR filed names as a `Option`.
-//   Fields with matching canonical names will not be processed
-//   during late-initialization.
+// ValueFilter defines a filter on CR filed values and types as an `Option`.
+// Fields with matching canonical names will not be processed
+// during late-initialization.
+type valueFilter func(string, reflect.StructField, reflect.Value) bool
+
+// apply Applies the receiver `nameFilter` to the specified `lateInitOptions`
+func (filter valueFilter) apply(options *lateInitOptions) {
+	options.valueFilters = append(options.valueFilters, filter)
+}
+
+func (filter valueFilter) filter(cName string, f reflect.StructField, val reflect.Value) bool {
+	if filter == nil {
+		return false
+	}
+
+	return filter(cName, f, val)
+}
+
+func isZeroValueOmitted(tag string) bool {
+	for _, p := range strings.Split(tag, ",") {
+		if p == "omitempty" {
+			return true
+		}
+	}
+	return false
+}
+
+// ZeroValueJSONOmitEmptyFilter is a late-initialization option that
+// skips initialization of a zero-valued field that has omitempty JSON tag
+func ZeroValueJSONOmitEmptyFilter(cName string) Option {
+	return valueFilter(func(cn string, f reflect.StructField, v reflect.Value) bool {
+		if cName != CNameWildcard && cName != cn {
+			return false
+		}
+
+		if !isZeroValueOmitted(f.Tag.Get("json")) {
+			return false
+		}
+
+		k := v.Kind()
+		switch {
+		case !v.IsValid():
+			return false
+		case v.IsZero():
+			return true
+		case k == reflect.Slice && v.Len() == 0:
+			return true
+		default:
+			return false
+		}
+	})
+}
+
+// ZeroElemPtrFilter is a late-initialization option that
+// skips initialization of a pointer field with a zero-valued element
+func ZeroElemPtrFilter(cName string) Option {
+	return valueFilter(func(cn string, f reflect.StructField, v reflect.Value) bool {
+		if cName != CNameWildcard && cName != cn {
+			return false
+		}
+
+		t := v.Type()
+		if t.Kind() != reflect.Ptr || v.IsNil() {
+			return false
+		}
+		if v.Elem().IsZero() {
+			return true
+		}
+		return false
+	})
+}
+
+type valueFilterArr []valueFilter
+
+func (vArr valueFilterArr) filter(name string, sf reflect.StructField, val reflect.Value) bool {
+	for _, f := range vArr {
+		if f.filter(name, sf, val) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// nameFilter defines a filter on CR filed names as an `Option`.
+// Fields with matching canonical names will not be processed
+// during late-initialization.
 type nameFilter func(string) bool
 
 // apply Applies the receiver `nameFilter` to the specified `lateInitOptions`
@@ -213,6 +302,11 @@ func LateInitializeFromResponse(parentName string, crObject interface{}, respons
 		responseFieldValue := valueOfResponseObject.FieldByName(mappedResponseFieldName)
 		var crFieldInitialized, crKeepField bool
 		var err error
+
+		if options.valueFilters.filter(cName, responseStructField, responseFieldValue) {
+			// corresponding field value is filtered
+			continue
+		}
 
 		switch crStructField.Type.Kind() { // nolint:exhaustive
 		// handle pointer struct field

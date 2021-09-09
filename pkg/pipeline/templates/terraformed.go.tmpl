@@ -5,6 +5,8 @@
 package {{ .CRD.APIVersion }}
 
 import (
+    "github.com/pkg/errors"
+
 	"github.com/crossplane-contrib/terrajet/pkg/json"
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	{{ .Imports }}
@@ -61,7 +63,14 @@ func (tr *{{ .CRD.Kind }}) SetParameters(params map[string]interface{}) error {
 	return json.TFParser.Unmarshal(p, &tr.Spec.ForProvider)
 }
 
-// GetForProvider of this {{ .CRD.Kind }}
-func (tr *{{ .CRD.Kind }}) GetForProvider() interface{} {
-	return &tr.Spec.ForProvider
+// LateInitialize this {{ .CRD.Kind }} using its observed tfState.
+// returns True if there are any spec changes for the resource.
+func (tr *{{ .CRD.Kind }}) LateInitialize(tfState []byte) (bool, error) {
+	stateObject := &{{ .CRD.Kind }}Parameters{}
+	if err := conversion.TFParser.Unmarshal(tfState, stateObject); err != nil {
+		return false, errors.Wrap(err, "failed to unmarshal Terraform state for late initialization")
+	}
+
+	return lateinit.LateInitializeFromResponse("", &tr.Spec.ForProvider, stateObject,
+		lateinit.ZeroValueJSONOmitEmptyFilter(lateinit.CNameWildcard), lateinit.ZeroElemPtrFilter(lateinit.CNameWildcard))
 }

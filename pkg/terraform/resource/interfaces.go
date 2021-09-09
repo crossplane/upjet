@@ -39,6 +39,13 @@ type MetadataProvider interface {
 	GetTerraformResourceIdField() string
 }
 
+// LateInitializer late-initializes the managed resource from observed Terraform state
+type LateInitializer interface {
+	// LateInitialize this Terraformed resource using its observed tfState.
+	// returns True if the there are any spec changes for the resource.
+	LateInitialize(map[string]interface{}) (bool, error)
+}
+
 // Terraformed is a Kubernetes object representing a concrete terraform managed resource
 type Terraformed interface {
 	resource.Managed
@@ -46,4 +53,5 @@ type Terraformed interface {
 	MetadataProvider
 	Observable
 	Parameterizable
+	LateInitializer
 }
