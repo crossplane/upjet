@@ -1,66 +1,51 @@
 package markers
 
 import (
-	"github.com/pkg/errors"
-	"sigs.k8s.io/controller-tools/pkg/markers"
+	"fmt"
+	"strings"
 )
 
 const (
-	// Prefix is the comment marker prefix
-	Prefix = "+"
-
-	markerPrefixCRDTag = "terrajet:crdschema:Tag"
-
-	errFmtCannotParseMarkerLine = "cannot parse marker line: %s"
-	errFmtUnknownTerrajetMarker = "unknown terrajet marker %q"
+	markerPrefixTerrajet = "+terrajet:"
 )
 
-// CRDTag is a marker option to set tag for fields in CRD schema
-type CRDTag struct {
-	TF   *string `marker:"tf,optional,omitempty"`
-	JSON *string `marker:"json,optional,omitempty"`
+var (
+	markerPrefixCRDTFTag   = fmt.Sprintf("%scrdfield:TFTag=", markerPrefixTerrajet)
+	markerPrefixCRDJsonTag = fmt.Sprintf("%scrdfield:JsonTag=", markerPrefixTerrajet)
+)
+
+// TerrajetOptions represents the whole terrajet options that could be
+// controlled with markers.
+type TerrajetOptions struct {
+	FieldTFTag   *string
+	FieldJsonTag *string
 }
 
-func (c CRDTag) getMarkerPrefix() string {
-	return markerPrefixCRDTag
-}
+func (o TerrajetOptions) String() string {
+	m := ""
 
-var terrajetMarkers = []*markers.Definition{
-	markers.Must(markers.MakeDefinition(markerPrefixCRDTag, markers.DescribesField, CRDTag{})),
-}
-
-// Options represents the whole terrajet options that could be controlled with
-// markers.
-type Options struct {
-	CRDTag CRDTag
-}
-
-var registry = &markers.Registry{}
-
-func init() {
-	if err := markers.RegisterAll(registry, terrajetMarkers...); err != nil {
-		panic(errors.Wrap(err, "failed to register terrajet markers"))
+	if o.FieldTFTag != nil {
+		m += fmt.Sprintf("%s%s\n", markerPrefixCRDTFTag, *o.FieldTFTag)
 	}
-}
-
-// ParseIfMarkerForField parses input line as a terrajet marker if it is a
-// valid marker describing a field.
-func ParseIfMarkerForField(opts *Options, line string) error {
-	md := registry.Lookup(line, markers.DescribesField)
-	if md == nil {
-		return nil
-	}
-	val, err := md.Parse(line)
-	if err != nil {
-		return errors.Wrapf(err, errFmtCannotParseMarkerLine, line)
+	if o.FieldJsonTag != nil {
+		m += fmt.Sprintf("%s%s\n", markerPrefixCRDJsonTag, *o.FieldJsonTag)
 	}
 
-	switch val := val.(type) {
-	case CRDTag:
-		opts.CRDTag = val
-	default:
-		return errors.Errorf(errFmtUnknownTerrajetMarker, md.Name)
-	}
+	return m
+}
 
-	return nil
+func ParseAsTerrajetOption(opts *TerrajetOptions, line string) bool {
+	parsed := false
+	ln := strings.TrimSpace(line)
+	if strings.HasPrefix(ln, markerPrefixCRDTFTag) {
+		t := strings.TrimPrefix(ln, markerPrefixCRDTFTag)
+		opts.FieldTFTag = &t
+		parsed = true
+	}
+	if strings.HasPrefix(ln, markerPrefixCRDJsonTag) {
+		t := strings.TrimPrefix(ln, markerPrefixCRDJsonTag)
+		opts.FieldJsonTag = &t
+		parsed = true
+	}
+	return parsed
 }

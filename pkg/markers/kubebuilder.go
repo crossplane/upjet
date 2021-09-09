@@ -2,36 +2,30 @@ package markers
 
 import "fmt"
 
-const markerPrefixValidation = "kubebuilder:validation"
-
-// ValidationRequired represents a kubebuilder validation required marker.
-type ValidationRequired struct{}
-
-func (v ValidationRequired) getMarkerPrefix() string {
-	return fmt.Sprintf("%s:Required", markerPrefixValidation)
+// KubebuilderOptions represents the kubebuilder options that terrajet would
+// need to control
+type KubebuilderOptions struct {
+	Required *bool
+	Minimum  *int
+	Maximum  *int
 }
 
-// ValidationOptional represents a kubebuilder validation optional marker.
-type ValidationOptional struct{}
+func (o KubebuilderOptions) String() string {
+	m := ""
 
-func (v ValidationOptional) getMarkerPrefix() string {
-	return fmt.Sprintf("%s:Optional", markerPrefixValidation)
-}
+	if o.Required != nil {
+		if *o.Required {
+			m += "+kubebuilder:validation:Required\n"
+		} else {
+			m += "+kubebuilder:validation:Optional\n"
+		}
+	}
+	if o.Minimum != nil {
+		m += fmt.Sprintf("+kubebuilder:validation:Minimum=%d\n", *o.Minimum)
+	}
+	if o.Maximum != nil {
+		m += fmt.Sprintf("+kubebuilder:validation:Maximum=%d\n", *o.Maximum)
+	}
 
-// ValidationMinimum represents a kubebuilder validation minimum marker.
-type ValidationMinimum struct {
-	Minimum int
-}
-
-func (v ValidationMinimum) getMarkerPrefix() string {
-	return markerPrefixValidation
-}
-
-// ValidationMaximum represents a kubebuilder validation maximum marker.
-type ValidationMaximum struct {
-	Maximum int
-}
-
-func (v ValidationMaximum) getMarkerPrefix() string {
-	return markerPrefixValidation
+	return m
 }

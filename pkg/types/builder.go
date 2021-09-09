@@ -27,7 +27,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/crossplane-contrib/terrajet/pkg/comments"
-	"github.com/crossplane-contrib/terrajet/pkg/markers"
 )
 
 // NewBuilder returns a new Builder.
@@ -42,16 +41,6 @@ type Builder struct {
 	Package *types.Package
 
 	genTypes []*types.Named
-}
-
-var (
-	markerRequired string
-	markerOptional string
-)
-
-func init() {
-	markerRequired = markers.Must(markers.MarkerForConfig(markers.ValidationRequired{}))
-	markerOptional = markers.Must(markers.MarkerForConfig(markers.ValidationOptional{}))
 }
 
 // Build returns parameters and observation types built out of Terraform schema.
@@ -75,19 +64,14 @@ func (g *Builder) buildResource(res *schema.Resource, names ...string) (*types.N
 		sch := res.Schema[snakeFieldName]
 		tfTag := snakeFieldName
 		jsonTag := strcase.ToLowerCamel(snakeFieldName)
-		commentsBuilder := &comments.Builder{}
-		commentsBuilder.AddComment(sch.Description)
+		comment := comments.New(sch.Description)
 
-		opts, err := commentsBuilder.BuildOptions()
-		if err != nil {
-			return nil, nil, errors.Wrapf(err, "cannot add schema description as comment")
+		tOpts := comment.TerrajetOptions
+		if tOpts.FieldTFTag != nil {
+			tfTag = *tOpts.FieldTFTag
 		}
-		tagOpts := opts.CRDTag
-		if tagOpts.TF != nil {
-			tfTag = *tagOpts.TF
-		}
-		if tagOpts.JSON != nil {
-			jsonTag = *tagOpts.JSON
+		if tOpts.FieldJsonTag != nil {
+			jsonTag = *tOpts.FieldJsonTag
 		}
 
 		fieldName := strcase.ToCamel(snakeFieldName)
@@ -107,16 +91,16 @@ func (g *Builder) buildResource(res *schema.Resource, names ...string) (*types.N
 			obsTags = append(obsTags, fmt.Sprintf("json:\"%s\" tf:\"%s\"", jsonTag, tfTag))
 		default:
 			if sch.Optional {
-				commentsBuilder.AddComment(markerOptional)
 				paramTags = append(paramTags, fmt.Sprintf("json:\"%s,omitempty\" tf:\"%s\"", jsonTag, tfTag))
 			} else {
-				commentsBuilder.AddComment(markerRequired)
 				paramTags = append(paramTags, fmt.Sprintf("json:\"%s\" tf:\"%s\"", jsonTag, tfTag))
 			}
+			req := !sch.Optional
+			comment.Required = &req
 			paramFields = append(paramFields, field)
 		}
 		// TODO(hasan): Build comments and set for fields to print properly
-		//  with "commentsBuilder.Build()"
+		//  with "comment.Build()"
 	}
 
 	// NOTE(muvaf): Not every struct has both computed and configurable fields,
