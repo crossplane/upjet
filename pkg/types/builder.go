@@ -64,14 +64,17 @@ func (g *Builder) buildResource(res *schema.Resource, names ...string) (*types.N
 		sch := res.Schema[snakeFieldName]
 		tfTag := snakeFieldName
 		jsonTag := strcase.ToLowerCamel(snakeFieldName)
-		comment := comments.New(sch.Description)
+		comment, err := comments.New(sch.Description)
+		if err != nil {
+			return nil, nil, errors.Wrapf(err, "cannot build comment for description: %s", sch.Description)
+		}
 
 		tOpts := comment.TerrajetOptions
 		if tOpts.FieldTFTag != nil {
 			tfTag = *tOpts.FieldTFTag
 		}
-		if tOpts.FieldJsonTag != nil {
-			jsonTag = *tOpts.FieldJsonTag
+		if tOpts.FieldJSONTag != nil {
+			jsonTag = *tOpts.FieldJSONTag
 		}
 
 		fieldName := strcase.ToCamel(snakeFieldName)

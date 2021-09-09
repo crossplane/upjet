@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/pkg/errors"
+
+	"github.com/crossplane/crossplane-runtime/pkg/test"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -16,8 +19,9 @@ func Test_parseAsTerrajetOption(t *testing.T) {
 		line string
 	}
 	type want struct {
-		opts *TerrajetOptions
-		err  error
+		opts   *TerrajetOptions
+		parsed bool
+		err    error
 	}
 	cases := map[string]struct {
 		args
@@ -32,6 +36,7 @@ func Test_parseAsTerrajetOption(t *testing.T) {
 				opts: &TerrajetOptions{
 					FieldTFTag: &customTF,
 				},
+				parsed: true,
 			},
 		},
 		"CRDBothTags": {
@@ -44,8 +49,9 @@ func Test_parseAsTerrajetOption(t *testing.T) {
 			want: want{
 				opts: &TerrajetOptions{
 					FieldTFTag:   &customTF,
-					FieldJsonTag: &customJSON,
+					FieldJSONTag: &customJSON,
 				},
+				parsed: true,
 			},
 		},
 		"UnknownMarker": {
@@ -54,15 +60,36 @@ func Test_parseAsTerrajetOption(t *testing.T) {
 				line: "+some:other:marker:key=value",
 			},
 			want: want{
+				opts:   &TerrajetOptions{},
+				parsed: false,
+				err:    nil,
+			},
+		},
+		"CannotParse": {
+			args: args{
 				opts: &TerrajetOptions{},
-				err:  nil,
+				line: "+terrajet:unknownmarker:key=value",
+			},
+			want: want{
+				opts:   &TerrajetOptions{},
+				parsed: false,
+				err:    errors.Errorf(errFmtCannotParse, "+terrajet:unknownmarker:key=value"),
 			},
 		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			opts := tc.args.opts
-			ParseAsTerrajetOption(opts, tc.args.line)
+			gotParsed, gotErr := ParseAsTerrajetOption(opts, tc.args.line)
+
+			if diff := cmp.Diff(tc.want.err, gotErr, test.EquateErrors()); diff != "" {
+				t.Fatalf("ParseAsTerrajetOption(...): -want error, +got error: %s", diff)
+			}
+
+			if diff := cmp.Diff(tc.want.parsed, gotParsed); diff != "" {
+				t.Errorf("ParseAsTerrajetOption() parsed = %v, wantParsed %v", gotParsed, tc.want.parsed)
+			}
+
 			if diff := cmp.Diff(tc.want.opts, opts); diff != "" {
 				t.Errorf("ParseAsTerrajetOption() opts = %v, wantOpts %v", opts, tc.want.opts)
 			}

@@ -3,10 +3,14 @@ package markers
 import (
 	"fmt"
 	"strings"
+
+	"github.com/pkg/errors"
 )
 
 const (
 	markerPrefixTerrajet = "+terrajet:"
+
+	errFmtCannotParse = "cannot parse as a terrajet prefix: %s"
 )
 
 var (
@@ -18,7 +22,7 @@ var (
 // controlled with markers.
 type TerrajetOptions struct {
 	FieldTFTag   *string
-	FieldJsonTag *string
+	FieldJSONTag *string
 }
 
 func (o TerrajetOptions) String() string {
@@ -27,25 +31,29 @@ func (o TerrajetOptions) String() string {
 	if o.FieldTFTag != nil {
 		m += fmt.Sprintf("%s%s\n", markerPrefixCRDTFTag, *o.FieldTFTag)
 	}
-	if o.FieldJsonTag != nil {
-		m += fmt.Sprintf("%s%s\n", markerPrefixCRDJsonTag, *o.FieldJsonTag)
+	if o.FieldJSONTag != nil {
+		m += fmt.Sprintf("%s%s\n", markerPrefixCRDJsonTag, *o.FieldJSONTag)
 	}
 
 	return m
 }
 
-func ParseAsTerrajetOption(opts *TerrajetOptions, line string) bool {
-	parsed := false
+// ParseAsTerrajetOption parses input line as a terrajet option, if it is a
+// valid Terrajet Option. Returns whether it is parsed or not.
+func ParseAsTerrajetOption(opts *TerrajetOptions, line string) (bool, error) {
+	if !strings.HasPrefix(line, markerPrefixTerrajet) {
+		return false, nil
+	}
 	ln := strings.TrimSpace(line)
 	if strings.HasPrefix(ln, markerPrefixCRDTFTag) {
 		t := strings.TrimPrefix(ln, markerPrefixCRDTFTag)
 		opts.FieldTFTag = &t
-		parsed = true
+		return true, nil
 	}
 	if strings.HasPrefix(ln, markerPrefixCRDJsonTag) {
 		t := strings.TrimPrefix(ln, markerPrefixCRDJsonTag)
-		opts.FieldJsonTag = &t
-		parsed = true
+		opts.FieldJSONTag = &t
+		return true, nil
 	}
-	return parsed
+	return false, errors.Errorf(errFmtCannotParse, line)
 }
