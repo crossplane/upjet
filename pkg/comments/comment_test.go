@@ -3,10 +3,9 @@ package comments
 import (
 	"testing"
 
-	"github.com/pkg/errors"
-
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
 
 	"github.com/crossplane-contrib/terrajet/pkg/markers"
 )
@@ -53,12 +52,12 @@ yes, this is a test`,
 		"TextWithTerrajetMarker": {
 			args: args{
 				text: `hello world!
-+terrajet:crdfield:TFTag=-
++terrajet:crd:field:TFTag=-
 `,
 			},
 			want: want{
 				out: `// hello world!
-// +terrajet:crdfield:TFTag=-
+// +terrajet:crd:field:TFTag=-
 `,
 				mopts: markers.Options{
 					TerrajetOptions: markers.TerrajetOptions{
@@ -89,7 +88,7 @@ yes, this is a test`,
 			},
 			want: want{
 				out: `// hello world!
-// +terrajet:crdfield:TFTag=-
+// +terrajet:crd:field:TFTag=-
 `,
 				mopts: markers.Options{
 					TerrajetOptions: markers.TerrajetOptions{
@@ -108,7 +107,7 @@ yes, this is a test`,
 			},
 			want: want{
 				out: `// hello world!
-// +terrajet:crdfield:TFTag=-
+// +terrajet:crd:field:TFTag=-
 // +crossplane:generate:reference:type=Subnet
 `,
 				mopts: markers.Options{
@@ -124,7 +123,7 @@ yes, this is a test`,
 		"CommentWithUnsupportedTerrajetMarker": {
 			args: args{
 				text: `hello world!
-+terrajet:crdfield:TFTag=-
++terrajet:crd:field:TFTag=-
 +terrajet:unsupported:key=value
 `,
 			},

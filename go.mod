@@ -5,7 +5,6 @@ go 1.16
 require (
 	github.com/crossplane/crossplane-runtime v0.15.0
 	github.com/google/go-cmp v0.5.6
-	github.com/hashicorp/hcl/v2 v2.8.2 // indirect
 	github.com/hashicorp/terraform-plugin-sdk/v2 v2.7.0
 	github.com/iancoleman/strcase v0.2.0
 	github.com/json-iterator/go v1.1.11

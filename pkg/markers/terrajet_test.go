@@ -4,10 +4,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/pkg/errors"
-
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
 )
 
 func Test_parseAsTerrajetOption(t *testing.T) {
@@ -44,7 +43,7 @@ func Test_parseAsTerrajetOption(t *testing.T) {
 				opts: &TerrajetOptions{
 					FieldTFTag: &customTF,
 				},
-				line: fmt.Sprintf("%s%s\n", markerPrefixCRDJsonTag, customJSON),
+				line: fmt.Sprintf("%s%s\n", markerPrefixCRDJSONTag, customJSON),
 			},
 			want: want{
 				opts: &TerrajetOptions{

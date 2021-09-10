@@ -14,8 +14,8 @@ const (
 )
 
 var (
-	markerPrefixCRDTFTag   = fmt.Sprintf("%scrdfield:TFTag=", markerPrefixTerrajet)
-	markerPrefixCRDJsonTag = fmt.Sprintf("%scrdfield:JsonTag=", markerPrefixTerrajet)
+	markerPrefixCRDTFTag   = fmt.Sprintf("%scrd:field:TFTag=", markerPrefixTerrajet)
+	markerPrefixCRDJSONTag = fmt.Sprintf("%scrd:field:JSONTag=", markerPrefixTerrajet)
 )
 
 // TerrajetOptions represents the whole terrajet options that could be
@@ -32,7 +32,7 @@ func (o TerrajetOptions) String() string {
 		m += fmt.Sprintf("%s%s\n", markerPrefixCRDTFTag, *o.FieldTFTag)
 	}
 	if o.FieldJSONTag != nil {
-		m += fmt.Sprintf("%s%s\n", markerPrefixCRDJsonTag, *o.FieldJSONTag)
+		m += fmt.Sprintf("%s%s\n", markerPrefixCRDJSONTag, *o.FieldJSONTag)
 	}
 
 	return m
@@ -50,8 +50,8 @@ func ParseAsTerrajetOption(opts *TerrajetOptions, line string) (bool, error) {
 		opts.FieldTFTag = &t
 		return true, nil
 	}
-	if strings.HasPrefix(ln, markerPrefixCRDJsonTag) {
-		t := strings.TrimPrefix(ln, markerPrefixCRDJsonTag)
+	if strings.HasPrefix(ln, markerPrefixCRDJSONTag) {
+		t := strings.TrimPrefix(ln, markerPrefixCRDJSONTag)
 		opts.FieldJSONTag = &t
 		return true, nil
 	}

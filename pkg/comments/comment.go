@@ -28,9 +28,10 @@ func New(text string, opts ...Option) (*Comment, error) {
 	to := markers.TerrajetOptions{}
 
 	var lines []string
-	for _, line := range strings.Split(text, "\n") {
+	for _, line := range strings.Split(strings.TrimSpace(text), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
+			lines = append(lines, line)
 			continue
 		}
 		// Only add raw marker line if not processed as an option (i.e. if it is
