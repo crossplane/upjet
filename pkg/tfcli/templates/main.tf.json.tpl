@@ -2,23 +2,30 @@
     "terraform": {
         "required_providers": {
             "tf-provider": {
-                "source":  "{{ .ProviderSource }}",
-                "version": "{{ .ProviderVersion }}"
+                "source":  "{{ .Provider.Source }}",
+                "version": "{{ .Provider.Version }}"
             }
         }
     },
 
-    {{ if .ProviderConfiguration -}}
+    {{ if .Provider.Configuration -}}
     "provider": {
         "tf-provider": [
-            {{ .ProviderConfiguration | printf "%s" }}
+            {{ .Provider.Configuration | printf "%s" }}
         ]
     },
     {{ end }}
 
     "resource": {
-        "{{ .ResourceType }}": {
-            "{{ .ResourceName }}": {{ .ResourceBody | printf "%s" }}
+        "{{ .Resource.LabelType }}": {
+            "{{ .Resource.LabelName }}": {
+                {{ .Resource.Body | printf "%s" }}
+                {{ if .Lifecycle.PreventDestroy -}}
+                    ,"lifecycle" : {
+                    "prevent_destroy": true
+                    }
+                {{ end }}
+            }
         }
     }
 }
