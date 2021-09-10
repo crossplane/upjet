@@ -23,7 +23,6 @@ import (
 	"sort"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/iancoleman/strcase"
 	"github.com/pkg/errors"
 
 	"github.com/crossplane-contrib/terrajet/pkg/comments"
@@ -62,27 +61,25 @@ func (g *Builder) buildResource(res *schema.Resource, names ...string) (*types.N
 	var obsTags []string
 	for _, snakeFieldName := range keys {
 		sch := res.Schema[snakeFieldName]
-		tfTag := snakeFieldName
-		jsonTag := strcase.ToLowerCamel(snakeFieldName)
+		fieldName := NewNameFromSnake(snakeFieldName)
 		comment, err := comments.New(sch.Description)
 		if err != nil {
 			return nil, nil, errors.Wrapf(err, "cannot build comment for description: %s", sch.Description)
 		}
-
-		tOpts := comment.TerrajetOptions
-		if tOpts.FieldTFTag != nil {
-			tfTag = *tOpts.FieldTFTag
+		tfTag := fieldName.Snake
+		jsonTag := fieldName.LowerCamelComputed
+		if comment.TerrajetOptions.FieldTFTag != nil {
+			tfTag = *comment.TerrajetOptions.FieldTFTag
 		}
-		if tOpts.FieldJSONTag != nil {
-			jsonTag = *tOpts.FieldJSONTag
+		if comment.TerrajetOptions.FieldJSONTag != nil {
+			jsonTag = *comment.TerrajetOptions.FieldJSONTag
 		}
 
-		fieldName := strcase.ToCamel(snakeFieldName)
-		fieldType, err := g.buildSchema(sch, append(names, fieldName))
+		fieldType, err := g.buildSchema(sch, append(names, fieldName.Camel))
 		if err != nil {
-			return nil, nil, errors.Wrapf(err, "cannot infer type from schema of field %s", fieldName)
+			return nil, nil, errors.Wrapf(err, "cannot infer type from schema of field %s", fieldName.Snake)
 		}
-		field := types.NewField(token.NoPos, g.Package, fieldName, fieldType, false)
+		field := types.NewField(token.NoPos, g.Package, fieldName.Camel, fieldType, false)
 
 		// NOTE(muvaf): If a field is not optional but computed, then it's
 		// definitely an observation field.
@@ -91,12 +88,12 @@ func (g *Builder) buildResource(res *schema.Resource, names ...string) (*types.N
 		switch {
 		case sch.Computed && !sch.Optional:
 			obsFields = append(obsFields, field)
-			obsTags = append(obsTags, fmt.Sprintf("json:\"%s\" tf:\"%s\"", jsonTag, tfTag))
+			obsTags = append(obsTags, fmt.Sprintf(`json:"%s" tf:"%s"`, jsonTag, tfTag))
 		default:
 			if sch.Optional {
-				paramTags = append(paramTags, fmt.Sprintf("json:\"%s,omitempty\" tf:\"%s\"", jsonTag, tfTag))
+				paramTags = append(paramTags, fmt.Sprintf(`json:"%s,omitempty" tf:"%s"`, jsonTag, tfTag))
 			} else {
-				paramTags = append(paramTags, fmt.Sprintf("json:\"%s\" tf:\"%s\"", jsonTag, tfTag))
+				paramTags = append(paramTags, fmt.Sprintf(`json:"%s" tf:"%s"`, jsonTag, tfTag))
 			}
 			req := !sch.Optional
 			comment.Required = &req
