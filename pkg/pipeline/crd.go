@@ -61,7 +61,7 @@ func (cg *CRDGenerator) Generate(version, kind string, schema *schema.Resource) 
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath("hack/boilerplate.go.txt"), // todo
 	)
-	typeList, err := tjtypes.NewBuilder(cg.pkg).Build(kind, schema)
+	typeList, comments, err := tjtypes.NewBuilder(cg.pkg).Build(kind, schema)
 	if err != nil {
 		return errors.Wrapf(err, "cannot build types for %s", kind)
 	}
@@ -71,7 +71,7 @@ func (cg *CRDGenerator) Generate(version, kind string, schema *schema.Resource) 
 	// any compilation errors, which is the case before running kubebuilder
 	// generators. For now, we act like the target package is empty.
 	pkg := types.NewPackage(cg.pkg.Path(), cg.pkg.Name())
-	typePrinter := twtypes.NewTypePrinter(file.Imports, pkg.Scope())
+	typePrinter := twtypes.NewPrinter(file.Imports, pkg.Scope(), twtypes.WithComments(comments))
 	typesStr, err := typePrinter.Print(typeList)
 	if err != nil {
 		return errors.Wrap(err, "cannot print the type list")

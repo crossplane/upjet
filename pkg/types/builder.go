@@ -23,6 +23,7 @@ import (
 	"sort"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	twtypes "github.com/muvaf/typewriter/pkg/types"
 	"github.com/pkg/errors"
 
 	"github.com/crossplane-contrib/terrajet/pkg/comments"
@@ -31,7 +32,8 @@ import (
 // NewBuilder returns a new Builder.
 func NewBuilder(pkg *types.Package) *Builder {
 	return &Builder{
-		Package: pkg,
+		Package:  pkg,
+		comments: twtypes.Comments{},
 	}
 }
 
@@ -40,12 +42,13 @@ type Builder struct {
 	Package *types.Package
 
 	genTypes []*types.Named
+	comments twtypes.Comments
 }
 
 // Build returns parameters and observation types built out of Terraform schema.
-func (g *Builder) Build(name string, schema *schema.Resource) ([]*types.Named, error) {
+func (g *Builder) Build(name string, schema *schema.Resource) ([]*types.Named, twtypes.Comments, error) {
 	_, _, err := g.buildResource(schema, name)
-	return g.genTypes, errors.Wrapf(err, "cannot build the types")
+	return g.genTypes, g.comments, errors.Wrapf(err, "cannot build the types")
 }
 
 func (g *Builder) buildResource(res *schema.Resource, names ...string) (*types.Named, *types.Named, error) { //nolint:gocyclo
@@ -54,6 +57,18 @@ func (g *Builder) buildResource(res *schema.Resource, names ...string) (*types.N
 	// can be collisions. In order to be able to generate unique names consistently,
 	// we need to process all fields in the same order all the time.
 	keys := sortedKeys(res.Schema)
+
+	paramTypeName, err := g.generateTypeName("Parameters", names...)
+	if err != nil {
+		return nil, nil, errors.Wrapf(err, "cannot generate parameters type name of %s", fieldPath(names...))
+	}
+	paramName := types.NewTypeName(token.NoPos, g.Package, paramTypeName, nil)
+
+	obsTypeName, err := g.generateTypeName("Observation", names...)
+	if err != nil {
+		return nil, nil, errors.Wrapf(err, "cannot generate observation type name of %s", fieldPath(names...))
+	}
+	obsName := types.NewTypeName(token.NoPos, g.Package, obsTypeName, nil)
 
 	var paramFields []*types.Var
 	var paramTags []string
@@ -89,6 +104,7 @@ func (g *Builder) buildResource(res *schema.Resource, names ...string) (*types.N
 		case sch.Computed && !sch.Optional:
 			obsFields = append(obsFields, field)
 			obsTags = append(obsTags, fmt.Sprintf(`json:"%s" tf:"%s"`, jsonTag, tfTag))
+			g.comments.AddFieldComment(obsName, field.Name(), comment.Build())
 		default:
 			if sch.Optional {
 				paramTags = append(paramTags, fmt.Sprintf(`json:"%s,omitempty" tf:"%s"`, jsonTag, tfTag))
@@ -98,9 +114,8 @@ func (g *Builder) buildResource(res *schema.Resource, names ...string) (*types.N
 			req := !sch.Optional
 			comment.Required = &req
 			paramFields = append(paramFields, field)
+			g.comments.AddFieldComment(paramName, field.Name(), comment.Build())
 		}
-		// TODO(hasan): Build comments and set for fields to print properly
-		//  with "comment.Build()"
 	}
 
 	// NOTE(muvaf): Not every struct has both computed and configurable fields,
@@ -110,23 +125,11 @@ func (g *Builder) buildResource(res *schema.Resource, names ...string) (*types.N
 	// two structs for every complex type.
 	// See usage of wafv2EmptySchema() in aws_wafv2_web_acl here:
 	// https://github.com/hashicorp/terraform-provider-aws/blob/main/aws/wafv2_helper.go#L13
-	var paramType, obsType *types.Named
-
-	paramTypeName, err := g.generateTypeName("Parameters", names...)
-	if err != nil {
-		return nil, nil, errors.Wrapf(err, "cannot generate parameters type name of %s", fieldPath(names...))
-	}
-	paramName := types.NewTypeName(token.NoPos, g.Package, paramTypeName, nil)
-	paramType = types.NewNamed(paramName, types.NewStruct(paramFields, paramTags), nil)
+	paramType := types.NewNamed(paramName, types.NewStruct(paramFields, paramTags), nil)
 	g.Package.Scope().Insert(paramType.Obj())
 	g.genTypes = append(g.genTypes, paramType)
 
-	obsTypeName, err := g.generateTypeName("Observation", names...)
-	if err != nil {
-		return nil, nil, errors.Wrapf(err, "cannot generate observation type name of %s", fieldPath(names...))
-	}
-	obsName := types.NewTypeName(token.NoPos, g.Package, obsTypeName, nil)
-	obsType = types.NewNamed(obsName, types.NewStruct(obsFields, obsTags), nil)
+	obsType := types.NewNamed(obsName, types.NewStruct(obsFields, obsTags), nil)
 	g.Package.Scope().Insert(obsType.Obj())
 	g.genTypes = append(g.genTypes, obsType)
 

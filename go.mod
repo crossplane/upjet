@@ -8,7 +8,7 @@ require (
 	github.com/hashicorp/terraform-plugin-sdk/v2 v2.7.0
 	github.com/iancoleman/strcase v0.2.0
 	github.com/json-iterator/go v1.1.11
-	github.com/muvaf/typewriter v0.0.0-20210818141336-01a132960eec
+	github.com/muvaf/typewriter v0.0.0-20210910160850-80e49fe1eb32
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/afero v1.6.0
 	go.uber.org/multierr v1.7.0

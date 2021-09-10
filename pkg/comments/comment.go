@@ -68,6 +68,9 @@ type Comment struct {
 
 // String returns a string representation of this Comment (no "// " prefix)
 func (c *Comment) String() string {
+	if c.Text == "" {
+		return c.Options.String()
+	}
 	return c.Text + "\n" + c.Options.String()
 }
 
