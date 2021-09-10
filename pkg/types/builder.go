@@ -22,10 +22,11 @@ import (
 	"go/types"
 	"sort"
 
-	"github.com/pkg/errors"
-
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/iancoleman/strcase"
+	"github.com/pkg/errors"
+
+	"github.com/crossplane-contrib/terrajet/pkg/comments"
 )
 
 // NewBuilder returns a new Builder.
@@ -48,7 +49,7 @@ func (g *Builder) Build(name string, schema *schema.Resource) ([]*types.Named, e
 	return g.genTypes, errors.Wrapf(err, "cannot build the types")
 }
 
-func (g *Builder) buildResource(res *schema.Resource, names ...string) (*types.Named, *types.Named, error) {
+func (g *Builder) buildResource(res *schema.Resource, names ...string) (*types.Named, *types.Named, error) { //nolint:gocyclo
 	// NOTE(muvaf): There can be fields in the same CRD with same name but in
 	// different types. Since we generate the type using the field name, there
 	// can be collisions. In order to be able to generate unique names consistently,
@@ -61,8 +62,22 @@ func (g *Builder) buildResource(res *schema.Resource, names ...string) (*types.N
 	var obsTags []string
 	for _, snakeFieldName := range keys {
 		sch := res.Schema[snakeFieldName]
+		tfTag := snakeFieldName
+		jsonTag := strcase.ToLowerCamel(snakeFieldName)
+		comment, err := comments.New(sch.Description)
+		if err != nil {
+			return nil, nil, errors.Wrapf(err, "cannot build comment for description: %s", sch.Description)
+		}
+
+		tOpts := comment.TerrajetOptions
+		if tOpts.FieldTFTag != nil {
+			tfTag = *tOpts.FieldTFTag
+		}
+		if tOpts.FieldJSONTag != nil {
+			jsonTag = *tOpts.FieldJSONTag
+		}
+
 		fieldName := strcase.ToCamel(snakeFieldName)
-		lowerCamelFieldName := strcase.ToLowerCamel(snakeFieldName)
 		fieldType, err := g.buildSchema(sch, append(names, fieldName))
 		if err != nil {
 			return nil, nil, errors.Wrapf(err, "cannot infer type from schema of field %s", fieldName)
@@ -76,15 +91,19 @@ func (g *Builder) buildResource(res *schema.Resource, names ...string) (*types.N
 		switch {
 		case sch.Computed && !sch.Optional:
 			obsFields = append(obsFields, field)
-			obsTags = append(obsTags, fmt.Sprintf("json:\"%s\" tf:\"%s\"", lowerCamelFieldName, snakeFieldName))
+			obsTags = append(obsTags, fmt.Sprintf("json:\"%s\" tf:\"%s\"", jsonTag, tfTag))
 		default:
 			if sch.Optional {
-				paramTags = append(paramTags, fmt.Sprintf("json:\"%s,omitempty\" tf:\"%s\"", lowerCamelFieldName, snakeFieldName))
+				paramTags = append(paramTags, fmt.Sprintf("json:\"%s,omitempty\" tf:\"%s\"", jsonTag, tfTag))
 			} else {
-				paramTags = append(paramTags, fmt.Sprintf("json:\"%s\" tf:\"%s\"", lowerCamelFieldName, snakeFieldName))
+				paramTags = append(paramTags, fmt.Sprintf("json:\"%s\" tf:\"%s\"", jsonTag, tfTag))
 			}
+			req := !sch.Optional
+			comment.Required = &req
 			paramFields = append(paramFields, field)
 		}
+		// TODO(hasan): Build comments and set for fields to print properly
+		//  with "comment.Build()"
 	}
 
 	// NOTE(muvaf): Not every struct has both computed and configurable fields,
