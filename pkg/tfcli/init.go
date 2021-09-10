@@ -116,11 +116,14 @@ func (c *Client) initConfiguration(opType model.OperationType, mkWorkspace bool)
 		return initLockExists, errors.Wrap(err, errInitWorkspace)
 	}
 
+	c.resource.Lifecycle.PreventDestroy = opType != model.OperationDestroy
 	conf, err := c.generateTFConfiguration()
 	if err != nil {
 		return initLockExists, errors.Wrap(err, errInitWorkspace)
 	}
-	if err := errors.Wrap(c.writeFile(filepath.Join(c.wsPath, tplMain), conf, 0644), errInitWorkspace); err != nil {
+	// Terraform configuration file can potentially contain credentials, hence
+	// no read permissions for group & others.
+	if err := errors.Wrap(c.writeFile(filepath.Join(c.wsPath, tplMain), conf, 0600), errInitWorkspace); err != nil {
 		return initLockExists, err
 	}
 
@@ -136,12 +139,9 @@ func (c *Client) initConfiguration(opType model.OperationType, mkWorkspace bool)
 }
 
 type tfConfigTemplateParams struct {
-	ProviderSource        string
-	ProviderVersion       string
-	ProviderConfiguration []byte
-	ResourceType          string
-	ResourceName          string
-	ResourceBody          []byte
+	Provider  Provider
+	Resource  Resource
+	Lifecycle Lifecycle
 }
 
 func (c Client) generateTFConfiguration() ([]byte, error) {
@@ -152,12 +152,19 @@ func (c Client) generateTFConfiguration() ([]byte, error) {
 
 	var buff bytes.Buffer
 	if err := tmpl.Execute(&buff, &tfConfigTemplateParams{
-		ProviderSource:        c.provider.Source,
-		ProviderVersion:       c.provider.Version,
-		ProviderConfiguration: c.provider.Configuration,
-		ResourceType:          c.resource.LabelType,
-		ResourceName:          c.resource.LabelName,
-		ResourceBody:          c.resource.Body,
+		Provider: Provider{
+			Source:        c.provider.Source,
+			Version:       c.provider.Version,
+			Configuration: c.provider.Configuration,
+		},
+		Resource: Resource{
+			LabelType: c.resource.LabelType,
+			LabelName: c.resource.LabelName,
+			Body:      c.resource.Body,
+		},
+		Lifecycle: Lifecycle{
+			PreventDestroy: c.resource.Lifecycle.PreventDestroy,
+		},
 	}); err != nil {
 		return nil, err
 	}

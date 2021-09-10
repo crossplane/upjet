@@ -73,11 +73,16 @@ func WithResourceType(resourceType string) ClientOption {
 	}
 }
 
-// WithResourceBody sets the Terraform resource body block to be used in the
-// generated  Terraform configuration
+// WithResourceBody sets the Terraform resource body parameter block to
+// be used in the generated  Terraform configuration. resourceBody
+// must be a whole JSON document containing the serialized resource
+// parameters.
 func WithResourceBody(resourceBody []byte) ClientOption {
 	return func(c *Client) {
-		c.resource.Body = resourceBody
+		// common controller serializes resource parameter block into
+		// a JSON object. However, we would like to add new fields
+		// to this JSON object and thus here we capture only the parameters.
+		c.resource.Body = resourceBody[1 : len(resourceBody)-1]
 	}
 }
 
@@ -183,6 +188,13 @@ type Resource struct {
 	LabelType string
 	LabelName string
 	Body      []byte
+	Lifecycle Lifecycle
+}
+
+// Lifecycle holds values for the Terraform HCL resource block's lifecycle options:
+// https://www.terraform.io/docs/language/meta-arguments/lifecycle.html
+type Lifecycle struct {
+	PreventDestroy bool
 }
 
 func (r Resource) validate() error {
