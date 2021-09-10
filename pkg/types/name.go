@@ -27,25 +27,43 @@ import (
 func NewNameFromSnake(s string) Name {
 	originals := strings.Split(s, "_")
 	camels := make([]string, len(originals))
+	computedCamels := make([]string, len(originals))
 	for i, org := range originals {
+		computedCamels[i] = strcase.ToCamel(org)
 		if known, ok := lowerToCamelAcronyms[strings.ToLower(org)]; ok {
 			camels[i] = known
 			continue
 		}
-		camels[i] = strcase.ToCamel(org)
+		camels[i] = computedCamels[i]
 	}
 	return Name{
-		Snake:      s,
-		Camel:      strings.Join(camels, ""),
-		LowerCamel: strings.Join(append([]string{strings.ToLower(camels[0])}, camels[1:]...), ""),
+		Snake:              s,
+		Camel:              strings.Join(camels, ""),
+		CamelComputed:      strings.Join(computedCamels, ""),
+		LowerCamel:         strings.Join(append([]string{strings.ToLower(camels[0])}, camels[1:]...), ""),
+		LowerCamelComputed: strings.Join(append([]string{strings.ToLower(computedCamels[0])}, computedCamels[1:]...), ""),
 	}
 }
 
 // Name holds different variants of a name.
 type Name struct {
-	Snake      string
-	Camel      string
+	// Snake is the snake case version of the string: rds_instance
+	Snake string
+
+	// Camel is the camel case version of the string where known acronyms are
+	// are uppercase: RDSInstance
+	Camel string
+
+	// LowerCamel is the camel case version with the first word being lower case
+	// and the known acronyms are uppercase if they are not the first word: rdsInstance
 	LowerCamel string
+
+	// CamelComputed is the camel case version without any acronym changes: RdsInstance
+	CamelComputed string
+
+	// LowerCamelComputed is the camel case version without any acronym changes
+	// and the first word is lower case: rdsInstance
+	LowerCamelComputed string
 }
 
 // Add acronyms that can be safely assumed to be common for any kind of provider.
@@ -64,6 +82,9 @@ var (
 
 // AddAcronym is used to add exception words that will be used to intervene
 // the conversion from lower case to camel case.
+// It is suggested that users of this package make all AddAcronym calls before
+// any usage (like init()) so that the conversions are consistent across the
+// board.
 func AddAcronym(lower, camel string) {
 	lowerToCamelAcronyms[lower] = camel
 }

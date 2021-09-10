@@ -67,7 +67,7 @@ func (g *Builder) buildResource(res *schema.Resource, names ...string) (*types.N
 			return nil, nil, errors.Wrapf(err, "cannot build comment for description: %s", sch.Description)
 		}
 		tfTag := fieldName.Snake
-		jsonTag := fieldName.LowerCamel
+		jsonTag := fieldName.LowerCamelComputed
 		if comment.TerrajetOptions.FieldTFTag != nil {
 			tfTag = *comment.TerrajetOptions.FieldTFTag
 		}
@@ -88,12 +88,12 @@ func (g *Builder) buildResource(res *schema.Resource, names ...string) (*types.N
 		switch {
 		case sch.Computed && !sch.Optional:
 			obsFields = append(obsFields, field)
-			obsTags = append(obsTags, fmt.Sprintf("json:\"%s\" tf:\"%s\"", jsonTag, tfTag))
+			obsTags = append(obsTags, fmt.Sprintf(`json:"%s" tf:"%s"`, jsonTag, tfTag))
 		default:
 			if sch.Optional {
-				paramTags = append(paramTags, fmt.Sprintf("json:\"%s,omitempty\" tf:\"%s\"", jsonTag, tfTag))
+				paramTags = append(paramTags, fmt.Sprintf(`json:"%s,omitempty" tf:"%s"`, jsonTag, tfTag))
 			} else {
-				paramTags = append(paramTags, fmt.Sprintf("json:\"%s\" tf:\"%s\"", jsonTag, tfTag))
+				paramTags = append(paramTags, fmt.Sprintf(`json:"%s" tf:"%s"`, jsonTag, tfTag))
 			}
 			req := !sch.Optional
 			comment.Required = &req
