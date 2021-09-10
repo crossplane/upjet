@@ -323,6 +323,13 @@ func LateInitializeFromResponse(parentName string, crObject interface{}, respons
 			})
 			crKeepField, err = handleSlice(cName, crFieldInitialized, crFieldValue,
 				responseFieldValue, &responseStructField, opts...)
+
+		case reflect.Map:
+			crFieldInitialized = allocate(crFieldValue, func(store, allocTypeValue reflect.Value) {
+				store.Set(reflect.MakeMap(allocTypeValue.Elem().Type()))
+			})
+			crKeepField, err = handleMap(cName, crFieldInitialized, crFieldValue,
+				responseFieldValue, &responseStructField, opts...)
 		}
 
 		if err != nil {
@@ -441,6 +448,12 @@ func handleSlice(cName string, crFieldInitialized bool, crFieldValue, responseFi
 			case reflect.Slice:
 				_, err = handleSlice(cName, crFieldInitialized, item.Elem(), responseFieldValue.Index(i), nil,
 					opts...)
+			case reflect.String, reflect.Bool, reflect.Int, reflect.Uint,
+				reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+				reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+				reflect.Float32, reflect.Float64:
+				// set primitive type
+				item.Elem().Set(responseFieldValue.Index(i))
 			// other slice item types are not supported
 			default:
 				return false, errors.Errorf("slice items of kind %q is not supported for canonical name: %s",
@@ -454,6 +467,66 @@ func handleSlice(cName string, crFieldInitialized bool, crFieldValue, responseFi
 			if newItem {
 				crFieldValue.Set(reflect.Append(crFieldValue, item.Elem()))
 			}
+		}
+
+		crKeepField = true
+	}
+
+	return crKeepField, nil
+}
+
+// nolint:gocyclo
+func handleMap(cName string, crFieldInitialized bool, crFieldValue, responseFieldValue reflect.Value,
+	responseStructField *reflect.StructField, opts ...Option) (bool, error) {
+	crKeepField := false
+
+	switch {
+	// we need the initialization above to be able to check cr field's map type
+	case responseStructField != nil && responseStructField.Type.Kind() != reflect.Map:
+		return false, errors.Errorf("response field kind %q is not map for canonical field name: %s",
+			responseFieldValue.Type().Kind().String(), cName)
+
+	case responseFieldValue.IsNil():
+	// noop
+	case crFieldValue.Type().Kind() != responseFieldValue.Type().Kind():
+		return false, errors.Errorf("response field kind %q does not match CR field kind %q for canonical field name: %s",
+			responseFieldValue.Type().Kind().String(), crFieldValue.Type().Kind().String(), cName)
+
+	case crFieldInitialized || // then cr object's field is not set but response object contains a value, carry it
+		(crFieldValue.Type().Elem().Kind() == reflect.Ptr &&
+			crFieldValue.Type().Elem().Elem().Kind() == reflect.Struct): // or CR field is a map of pointer to structs
+		// copy map items from response field
+		for _, k := range responseFieldValue.MapKeys() {
+			// allocate a new item for the CR
+			item := reflect.New(crFieldValue.Type().Elem())
+			// error from processing the next element of the map
+			var err error
+			// check map item's kind (not map type)
+			switch item.Elem().Kind() { // nolint:exhaustive
+			// if dealing with a slice of pointers
+			case reflect.Ptr:
+				_, err = handlePtr(cName, crFieldInitialized, item.Elem(), responseFieldValue.MapIndex(k), nil,
+					opts...)
+			// else if dealing with a slice of slices
+			case reflect.Slice:
+				_, err = handleSlice(cName, crFieldInitialized, item.Elem(), responseFieldValue.MapIndex(k), nil,
+					opts...)
+			case reflect.String, reflect.Bool, reflect.Int, reflect.Uint,
+				reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+				reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+				reflect.Float32, reflect.Float64:
+				// set primitive type
+				item.Elem().Set(responseFieldValue.MapIndex(k))
+			// other slice item types are not supported
+			default:
+				return false, errors.Errorf("map items of kind %q is not supported for canonical name: %s",
+					item.Elem().Kind().String(), cName)
+			}
+			if err != nil {
+				return false, err
+			}
+			// set value at current key
+			crFieldValue.SetMapIndex(k, item.Elem())
 		}
 
 		crKeepField = true

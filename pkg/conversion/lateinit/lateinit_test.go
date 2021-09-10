@@ -361,7 +361,9 @@ func TestLateInitializeFromResponse(t *testing.T) {
 		opts           []Option
 	}
 
+	testKeyCRField := "test-key-crField"
 	testStringCRField := "test-string-crField"
+	testKeyResonseField := "test-key-responseField"
 	testStringResponseField := "test-string-responseField"
 	testInt64ResponseField := 1
 
@@ -386,6 +388,22 @@ func TestLateInitializeFromResponse(t *testing.T) {
 
 	type nestedStruct5 struct {
 		F1 [][]string
+	}
+
+	type nestedStruct6 struct {
+		F1 []string
+	}
+
+	type nestedStruct7 struct {
+		F1 map[string]string
+	}
+
+	type nestedStruct8 struct {
+		F1 map[string]*string
+	}
+
+	type nestedStruct9 struct {
+		F1 map[string][]string
 	}
 
 	tests := map[string]struct {
@@ -596,7 +614,43 @@ func TestLateInitializeFromResponse(t *testing.T) {
 				},
 			},
 		},
-		"TestUnsupportedSliceOfSliceField": {
+		"TestInitializedSliceOfStringField": {
+			args: args{
+				crObject: &nestedStruct6{
+					F1: []string{
+						testStringCRField,
+					},
+				},
+				responseObject: &nestedStruct6{
+					F1: []string{
+						testStringResponseField,
+					},
+				},
+			},
+			wantModified: false,
+			wantCRObject: &nestedStruct6{
+				F1: []string{
+					testStringCRField,
+				},
+			},
+		},
+		"TestUninitializedSliceOfStringField": {
+			args: args{
+				crObject: &nestedStruct6{},
+				responseObject: &nestedStruct6{
+					F1: []string{
+						testStringResponseField,
+					},
+				},
+			},
+			wantModified: true,
+			wantCRObject: &nestedStruct6{
+				F1: []string{
+					testStringResponseField,
+				},
+			},
+		},
+		"TestUninitializedSliceOfSliceField": {
 			args: args{
 				crObject: &nestedStruct5{},
 				responseObject: &nestedStruct5{
@@ -607,7 +661,148 @@ func TestLateInitializeFromResponse(t *testing.T) {
 					},
 				},
 			},
-			wantErr: true,
+			wantModified: true,
+			wantCRObject: &nestedStruct5{
+				F1: [][]string{
+					{
+						testStringResponseField,
+					},
+				},
+			},
+		},
+		"TestInitializedSliceOfSliceField": {
+			args: args{
+				crObject: &nestedStruct5{
+					F1: [][]string{
+						{
+							testStringCRField,
+						},
+					},
+				},
+				responseObject: &nestedStruct5{
+					F1: [][]string{
+						{
+							testStringResponseField,
+						},
+					},
+				},
+			},
+			wantModified: false,
+			wantCRObject: &nestedStruct5{
+				F1: [][]string{
+					{
+						testStringCRField,
+					},
+				},
+			},
+		},
+		"TestInitializedMapOfStringField": {
+			args: args{
+				crObject: &nestedStruct7{
+					F1: map[string]string{
+						testKeyCRField: testStringCRField,
+					},
+				},
+				responseObject: &nestedStruct7{
+					F1: map[string]string{
+						testKeyResonseField: testStringResponseField,
+					},
+				},
+			},
+			wantModified: false,
+			wantCRObject: &nestedStruct7{
+				F1: map[string]string{
+					testKeyCRField: testStringCRField,
+				},
+			},
+		},
+		"TestUninitializedMapOfStringField": {
+			args: args{
+				crObject: &nestedStruct7{},
+				responseObject: &nestedStruct7{
+					F1: map[string]string{
+						testKeyResonseField: testStringResponseField,
+					},
+				},
+			},
+			wantModified: true,
+			wantCRObject: &nestedStruct7{
+				F1: map[string]string{
+					testKeyResonseField: testStringResponseField,
+				},
+			},
+		},
+		"TestInitializedMapOfPointerStringField": {
+			args: args{
+				crObject: &nestedStruct8{
+					F1: map[string]*string{
+						testKeyCRField: &testStringCRField,
+					},
+				},
+				responseObject: &nestedStruct8{
+					F1: map[string]*string{
+						testKeyResonseField: &testStringResponseField,
+					},
+				},
+			},
+			wantModified: false,
+			wantCRObject: &nestedStruct8{
+				F1: map[string]*string{
+					testKeyCRField: &testStringCRField,
+				},
+			},
+		},
+		"TestUninitializedMapOfPointerStringField": {
+			args: args{
+				crObject: &nestedStruct8{},
+				responseObject: &nestedStruct8{
+					F1: map[string]*string{
+						testKeyResonseField: &testStringResponseField,
+					},
+				},
+			},
+			wantModified: true,
+			wantCRObject: &nestedStruct8{
+				F1: map[string]*string{
+					testKeyResonseField: &testStringResponseField,
+				},
+			},
+		},
+		"TestInitializedMapOfStringSliceField": {
+			args: args{
+				crObject: &nestedStruct9{
+					F1: map[string][]string{
+						testKeyCRField: {testStringCRField},
+					},
+				},
+				responseObject: &nestedStruct9{
+					F1: map[string][]string{
+						testKeyResonseField: {testStringResponseField},
+					},
+				},
+			},
+			wantModified: false,
+			wantCRObject: &nestedStruct9{
+				F1: map[string][]string{
+					testKeyCRField: {testStringCRField},
+				},
+			},
+		},
+		"TestUninitializedMapOfStringSliceField": {
+			args: args{
+				crObject: &nestedStruct9{},
+				responseObject: &nestedStruct9{
+					F1: map[string][]string{
+						testKeyResonseField: {testStringResponseField},
+					},
+				},
+			},
+			wantModified: true,
+			wantCRObject: &nestedStruct9{
+				F1: map[string][]string{
+					testKeyResonseField: {testStringResponseField},
+				},
+			},
 		},
 	}
 
