@@ -103,7 +103,7 @@ func (g *Builder) buildResource(res *schema.Resource, names ...string) (*types.N
 		switch {
 		case sch.Computed && !sch.Optional:
 			obsFields = append(obsFields, field)
-			obsTags = append(obsTags, fmt.Sprintf(`json:"%s" tf:"%s"`, jsonTag, tfTag))
+			obsTags = append(obsTags, fmt.Sprintf(`json:"%s,omitempty" tf:"%s"`, jsonTag, tfTag))
 			g.comments.AddFieldComment(obsName, field.Name(), comment.Build())
 		default:
 			if sch.Optional {
