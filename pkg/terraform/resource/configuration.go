@@ -16,6 +16,8 @@ limitations under the License.
 
 package resource
 
+import "github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
 func NopExternalNameInject(_ map[string]interface{}, _ string) {}
 
 // NOTE(muvaf): Unfortunately, there is no way to get the package path and the
@@ -41,17 +43,24 @@ func WithExternalName(e ExternalName) ConfigurationOption {
 	}
 }
 
-func NewConfiguration(version, kind, terraformResourceType string, opts ...ConfigurationOption) *Configuration {
+func WithTerraformIDFieldName(n string) ConfigurationOption {
+	return func(c *Configuration) {
+		c.TerraformIDFieldName = n
+	}
+}
+
+func NewConfiguration(version, kind, terraformResourceType string, sch *schema.Resource, opts ...ConfigurationOption) *Configuration {
 	c := &Configuration{
-		Version:               version,
-		Kind:                  kind,
-		TerraformResourceType: terraformResourceType,
+		Version: version,
+		Kind:    kind,
 		ExternalName: ExternalName{
 			// TODO(muvaf): Not a good idea.
 			InjectFuncPath: "github.com/crossplane-contrib/terrajet/pkg/terraform/resource.NopExternalNameInject",
 			OmittedFields:  map[string]struct{}{},
 		},
-		TerraformIDFieldName: "id",
+		TerraformResourceType: terraformResourceType,
+		TerraformIDFieldName:  "id",
+		TerraformSchema:       sch,
 	}
 	for _, f := range opts {
 		f(c)
@@ -65,4 +74,5 @@ type Configuration struct {
 	ExternalName          ExternalName
 	TerraformResourceType string
 	TerraformIDFieldName  string
+	TerraformSchema       *schema.Resource
 }

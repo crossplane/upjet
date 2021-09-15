@@ -23,7 +23,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
+
 	twtypes "github.com/muvaf/typewriter/pkg/types"
 	"github.com/muvaf/typewriter/pkg/wrapper"
 	"github.com/pkg/errors"
@@ -56,14 +57,17 @@ type CRDGenerator struct {
 }
 
 // Generate builds and writes a new CRD out of Terraform resource definition.
-func (cg *CRDGenerator) Generate(version, kind string, schema *schema.Resource) error {
+func (cg *CRDGenerator) Generate(c *resource.Configuration) error {
 	file := wrapper.NewFile(cg.pkg.Path(), cg.pkg.Name(), templates.CRDTypesTemplate,
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath("hack/boilerplate.go.txt"), // todo
 	)
-	typeList, comments, err := tjtypes.NewBuilder(cg.pkg).Build(kind, schema)
+	for omit := range c.ExternalName.OmittedFields {
+		delete(c.TerraformSchema.Schema, omit)
+	}
+	typeList, comments, err := tjtypes.NewBuilder(cg.pkg).Build(c.Kind, c.TerraformSchema)
 	if err != nil {
-		return errors.Wrapf(err, "cannot build types for %s", kind)
+		return errors.Wrapf(err, "cannot build types for %s", c.Kind)
 	}
 	// TODO(muvaf): TypePrinter uses the given scope to see if the type exists
 	// before printing. We should ideally load the package in file system but
@@ -79,14 +83,14 @@ func (cg *CRDGenerator) Generate(version, kind string, schema *schema.Resource) 
 	vars := map[string]interface{}{
 		"Types": typesStr,
 		"CRD": map[string]string{
-			"APIVersion": version,
+			"APIVersion": c.Version,
 			"Group":      cg.Group,
-			"Kind":       kind,
+			"Kind":       c.Kind,
 		},
 		"Provider": map[string]string{
 			"ShortName": cg.ProviderShortName,
 		},
 	}
-	filePath := filepath.Join(cg.LocalDirectoryPath, fmt.Sprintf("zz_%s_types.go", strings.ToLower(kind)))
+	filePath := filepath.Join(cg.LocalDirectoryPath, fmt.Sprintf("zz_%s_types.go", strings.ToLower(c.Kind)))
 	return errors.Wrap(file.Write(filePath, vars, os.ModePerm), "cannot write crd file")
 }
