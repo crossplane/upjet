@@ -18,8 +18,6 @@ package resource
 
 import "github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 
-func NopExternalNameInject(_ map[string]interface{}, _ string) {}
-
 // NOTE(muvaf): Unfortunately, there is no way to get the package path and the
 // name of an anonymous function in runtime. So, we have to get a full path.
 
@@ -51,13 +49,8 @@ func WithTerraformIDFieldName(n string) ConfigurationOption {
 
 func NewConfiguration(version, kind, terraformResourceType string, sch *schema.Resource, opts ...ConfigurationOption) *Configuration {
 	c := &Configuration{
-		Version: version,
-		Kind:    kind,
-		ExternalName: ExternalName{
-			// TODO(muvaf): Not a good idea.
-			InjectFuncPath: "github.com/crossplane-contrib/terrajet/pkg/terraform/resource.NopExternalNameInject",
-			OmittedFields:  map[string]struct{}{},
-		},
+		Version:               version,
+		Kind:                  kind,
 		TerraformResourceType: terraformResourceType,
 		TerraformIDFieldName:  "id",
 		TerraformSchema:       sch,
