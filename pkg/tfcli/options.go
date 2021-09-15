@@ -81,12 +81,9 @@ func WithResourceType(resourceType string) ClientOption {
 // be used in the generated  Terraform configuration. resourceBody
 // must be a whole JSON document containing the serialized resource
 // parameters.
-func WithResourceBody(resourceBody []byte) ClientOption {
+func WithResourceBody(body map[string]interface{}) ClientOption {
 	return func(c *Client) {
-		// common controller serializes resource parameter block into
-		// a JSON object. However, we would like to add new fields
-		// to this JSON object and thus here we capture only the parameters.
-		c.resource.Body = resourceBody[1 : len(resourceBody)-1]
+		c.resource.Body = body
 	}
 }
 
@@ -197,7 +194,7 @@ func (c Client) validate() error {
 type Resource struct {
 	LabelType string
 	LabelName string
-	Body      []byte
+	Body      map[string]interface{}
 	Lifecycle Lifecycle
 }
 

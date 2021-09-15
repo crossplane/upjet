@@ -24,6 +24,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/pkg/errors"
 
+	"github.com/crossplane-contrib/terrajet/pkg/json"
 	"github.com/crossplane-contrib/terrajet/pkg/meta"
 	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
 	"github.com/crossplane-contrib/terrajet/pkg/tfcli"
@@ -44,7 +45,7 @@ func BuildClientForResource(ctx context.Context, tr resource.Terraformed, opts .
 	var stateRaw []byte
 	if meta.GetState(tr) != "" {
 		stEnc := meta.GetState(tr)
-		st, err := BuildStateV4(stEnc, nil)
+		st, err := json.BuildStateV4(stEnc, nil)
 		if err != nil {
 			return nil, errors.Wrap(err, "cannot build state")
 		}
@@ -55,14 +56,14 @@ func BuildClientForResource(ctx context.Context, tr resource.Terraformed, opts .
 		}
 	}
 
-	attr, err := tr.GetParameters()
+	params, err := tr.GetParameters()
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to get attributes")
+		return nil, errors.Wrap(err, "failed to get parameters")
 	}
 
 	return tfcli.NewClient(ctx, append(opts,
 		tfcli.WithState(stateRaw),
-		tfcli.WithResourceBody(attr),
+		tfcli.WithResourceBody(params),
 		tfcli.WithResourceName(tr.GetName()),
 		tfcli.WithHandle(string(tr.GetUID())),
 		tfcli.WithResourceType(tr.GetTerraformResourceType()))...)
@@ -187,7 +188,7 @@ func (t *CLI) Delete(ctx context.Context, _ resource.Terraformed) (bool, error) 
 
 // consumeState parses input tfstate and sets related fields in the custom resource.
 func consumeState(state []byte, tr resource.Terraformed) (managed.ConnectionDetails, error) {
-	st, err := ParseStateV4(state)
+	st, err := json.UnmarshalStateV4(state)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot build state")
 	}
@@ -198,7 +199,7 @@ func consumeState(state []byte, tr resource.Terraformed) (managed.ConnectionDeta
 		// resource specific. We rely on GetTerraformResourceIdField() function
 		// to find out that key.
 		stAttr := map[string]interface{}{}
-		if err = JSParser.Unmarshal(st.GetAttributes(), &stAttr); err != nil {
+		if err = json.JSParser.Unmarshal(st.GetAttributes(), &stAttr); err != nil {
 			return nil, errors.Wrap(err, "cannot parse state attributes")
 		}
 
@@ -222,7 +223,7 @@ func consumeState(state []byte, tr resource.Terraformed) (managed.ConnectionDeta
 	conn := managed.ConnectionDetails{}
 	sensitive := st.GetSensitiveAttributes()
 	if jsoniter.Get(sensitive, '*').Size() > 0 {
-		if err = JSParser.Unmarshal(sensitive, &conn); err != nil {
+		if err = json.JSParser.Unmarshal(sensitive, &conn); err != nil {
 			return nil, errors.Wrap(err, "cannot parse connection details")
 		}
 	}

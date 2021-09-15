@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -30,6 +29,7 @@ import (
 	"github.com/pkg/errors"
 	"go.uber.org/multierr"
 
+	"github.com/crossplane-contrib/terrajet/pkg/json"
 	tferrors "github.com/crossplane-contrib/terrajet/pkg/tfcli/errors"
 	"github.com/crossplane-contrib/terrajet/pkg/tfcli/model"
 	"github.com/crossplane-contrib/terrajet/pkg/tfcli/templates"
@@ -116,8 +116,7 @@ func (c *Client) initConfiguration(opType model.OperationType, mkWorkspace bool)
 		return initLockExists, errors.Wrap(err, errInitWorkspace)
 	}
 
-	c.resource.Lifecycle.PreventDestroy = opType != model.OperationDestroy
-	conf, err := c.generateTFConfiguration()
+	conf, err := c.generateTFConfiguration(opType != model.OperationDestroy)
 	if err != nil {
 		return initLockExists, errors.Wrap(err, errInitWorkspace)
 	}
@@ -138,37 +137,36 @@ func (c *Client) initConfiguration(opType model.OperationType, mkWorkspace bool)
 	return initLockExists, c.writeStateLock(xpState)
 }
 
-type tfConfigTemplateParams struct {
-	Provider  Provider
-	Resource  Resource
-	Lifecycle Lifecycle
-}
-
-func (c Client) generateTFConfiguration() ([]byte, error) {
+func (c Client) generateTFConfiguration(preventDestroy bool) ([]byte, error) {
 	tmpl, err := template.New(tplMain).Parse(templates.TFConfigurationMain)
 	if err != nil {
 		return nil, err
 	}
-
+	c.resource.Body["lifecycle"] = map[string]bool{
+		"prevent_destroy": preventDestroy,
+	}
+	body, err := json.JSParser.Marshal(c.resource.Body)
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot marshal resource body")
+	}
 	var buff bytes.Buffer
-	if err := tmpl.Execute(&buff, &tfConfigTemplateParams{
-		Provider: Provider{
-			Source:        c.provider.Source,
-			Version:       c.provider.Version,
-			Configuration: c.provider.Configuration,
+	vars := map[string]interface{}{
+		"Provider": map[string]interface{}{
+			"Source":        c.provider.Source,
+			"Version":       c.provider.Version,
+			"Configuration": c.provider.Configuration,
 		},
-		Resource: Resource{
-			LabelType: c.resource.LabelType,
-			LabelName: c.resource.LabelName,
-			Body:      c.resource.Body,
+		"Resource": map[string]interface{}{
+			"LabelType": c.resource.LabelType,
+			"LabelName": c.resource.LabelName,
+			"Body":      body,
 		},
-		Lifecycle: Lifecycle{
-			PreventDestroy: c.resource.Lifecycle.PreventDestroy,
-		},
-	}); err != nil {
+	}
+	// NOTE(muvaf): If you run this as part of return statement, buff.Bytes() will
+	// be called before execution and it will be empty.
+	if err := tmpl.Execute(&buff, &vars); err != nil {
 		return nil, err
 	}
-
 	return buff.Bytes(), nil
 }
 
@@ -202,7 +200,7 @@ func (c *Client) checkOperation() error {
 
 func (c *Client) writeStateLock(xpState *xpState) error {
 	xpStatePath := filepath.Join(c.wsPath, fileStateLock)
-	buff, err := json.Marshal(xpState)
+	buff, err := json.JSParser.Marshal(xpState)
 	if err != nil {
 		return errors.Wrapf(err, fmtErrXPStateWrite, xpStatePath)
 	}
@@ -218,7 +216,7 @@ func (c *Client) readStateLock() (*xpState, error) {
 	}
 
 	xpState := &xpState{}
-	if err := json.Unmarshal(buff, xpState); err != nil {
+	if err := json.JSParser.Unmarshal(buff, xpState); err != nil {
 		return nil, errors.Wrapf(err, fmtErrXPState, xpStatePath)
 	}
 	return xpState, nil

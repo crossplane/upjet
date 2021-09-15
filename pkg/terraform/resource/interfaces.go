@@ -4,17 +4,18 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 )
 
-// TerraformStateHandler handles terraform state
-type TerraformStateHandler interface {
+type Observable interface {
 	GetObservation() ([]byte, error)
 	SetObservation(data []byte) error
-
-	GetParameters() ([]byte, error)
-	SetParameters(data []byte) error
 }
 
-// TerraformMetadataProvider provides Terraform metadata for the Terraform managed resource
-type TerraformMetadataProvider interface {
+type Parameterizable interface {
+	GetParameters() (map[string]interface{}, error)
+	SetParameters(map[string]interface{}) error
+}
+
+// MetadataProvider provides Terraform metadata for the Terraform managed resource
+type MetadataProvider interface {
 	GetTerraformResourceType() string
 	GetTerraformResourceIdField() string
 }
@@ -23,6 +24,7 @@ type TerraformMetadataProvider interface {
 type Terraformed interface {
 	resource.Managed
 
-	TerraformMetadataProvider
-	TerraformStateHandler
+	MetadataProvider
+	Observable
+	Parameterizable
 }
