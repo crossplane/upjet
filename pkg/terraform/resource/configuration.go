@@ -16,44 +16,34 @@ limitations under the License.
 
 package resource
 
-import "github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+// ConfigureWithNameFn functions configure the base resource fields by using
+// given name value.
+type ConfigureWithNameFn func(base map[string]interface{}, name string)
 
-// NOTE(muvaf): Unfortunately, there is no way to get the package path and the
-// name of an anonymous function in runtime. So, we have to get a full path.
-
-type ExternalName struct {
-	// InjectFuncPath is the path to the inject function.
-	// Example: github.com/crossplane/provider-aws/apis/rds/v1alpha1.InjectExternalName
-	// By default, a no-op function is used.
-	InjectFuncPath string
-
-	// OmittedFields are the ones you'd like to be removed from the schema since
-	// they are specified via external name. You can omit only the top level fields.
-	// No field is omitted by default.
-	OmittedFields map[string]struct{}
-}
-
+// ConfigurationOption allows setting optional fields of a Configuration object.
 type ConfigurationOption func(*Configuration)
 
-func WithExternalName(e ExternalName) ConfigurationOption {
+// WithExternalName allows you to set an ExternalNamer for given Configuration.
+func WithExternalName(e ExternalNamer) ConfigurationOption {
 	return func(c *Configuration) {
-		c.ExternalName = e
+		c.ExternalNamer = e
 	}
 }
 
+// WithTerraformIDFieldName allows you to set TerraformIDFieldName.
 func WithTerraformIDFieldName(n string) ConfigurationOption {
 	return func(c *Configuration) {
 		c.TerraformIDFieldName = n
 	}
 }
 
-func NewConfiguration(version, kind, terraformResourceType string, sch *schema.Resource, opts ...ConfigurationOption) *Configuration {
+// NewConfiguration returns a new *Configuration.
+func NewConfiguration(version, kind, terraformResourceType string, opts ...ConfigurationOption) *Configuration {
 	c := &Configuration{
 		Version:               version,
 		Kind:                  kind,
 		TerraformResourceType: terraformResourceType,
 		TerraformIDFieldName:  "id",
-		TerraformSchema:       sch,
 	}
 	for _, f := range opts {
 		f(c)
@@ -61,11 +51,42 @@ func NewConfiguration(version, kind, terraformResourceType string, sch *schema.R
 	return c
 }
 
+// ExternalNamer contains all information that is necessary for naming operations,
+// such as removal of those fields from spec schema and calling Configure function
+// to fill attributes with information given in external name.
+type ExternalNamer struct {
+	// SelfVarPath is the Go path to the variable that an instance of this struct
+	// is assigned to. It's necessary since there is no way to know a package
+	// path of a given variable in runtime.
+	SelfVarPath string
+
+	// Configure name attributes of the given configuration using external name.
+	Configure ConfigureWithNameFn
+
+	// OmittedFields are the ones you'd like to be removed from the schema since
+	// they are specified via external name. You can omit only the top level fields.
+	// No field is omitted by default.
+	OmittedFields []string
+}
+
+// Configuration is the set of information that you can override at different steps
+// of the code generation pipeline.
 type Configuration struct {
-	Version               string
-	Kind                  string
-	ExternalName          ExternalName
+	// Version is the version CRD will have.
+	Version string
+
+	// Kind is the kind of the CRD.
+	Kind string
+
+	// TerraformResourceType is the name of the resource type in Terraform,
+	// like aws_rds_cluster.
 	TerraformResourceType string
-	TerraformIDFieldName  string
-	TerraformSchema       *schema.Resource
+
+	// ExternalNamer allows you to specify a custom ExternalNamer.
+	ExternalNamer ExternalNamer
+
+	// TerraformIDFieldName is the name of the ID field in Terraform state of
+	// the resource. Its default is "id" and in almost all cases, you don't need
+	// to overwrite it.
+	TerraformIDFieldName string
 }

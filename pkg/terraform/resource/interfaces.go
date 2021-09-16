@@ -20,11 +20,14 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 )
 
+// Observable structs can get and set observations in the form of Terraform JSON.
 type Observable interface {
 	GetObservation() ([]byte, error)
 	SetObservation(data []byte) error
 }
 
+// Parameterizable structs can get and set parameters of the managed resource
+// using map form of Terraform JSON.
 type Parameterizable interface {
 	GetParameters() (map[string]interface{}, error)
 	SetParameters(map[string]interface{}) error

@@ -38,7 +38,7 @@ func (tr *{{ .CRD.Kind }}) GetParameters() (map[string]interface{}, error) {
 	}
 	base := map[string]interface{}{}
 	{{- if .CRD.ExternalNameInjectFn }}
-	{{ .CRD.ExternalNameInjectFn }}(base, meta.GetExternalName(tr))
+	{{ .CRD.ExternalNameInjectFn }}.Configure(base, meta.GetExternalName(tr))
 	{{- end }}
 	return base, json.JSParser.Unmarshal(p, &base)
 }

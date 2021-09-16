@@ -23,13 +23,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
-
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	twtypes "github.com/muvaf/typewriter/pkg/types"
 	"github.com/muvaf/typewriter/pkg/wrapper"
 	"github.com/pkg/errors"
 
 	"github.com/crossplane-contrib/terrajet/pkg/pipeline/templates"
+	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
 	tjtypes "github.com/crossplane-contrib/terrajet/pkg/types"
 )
 
@@ -57,15 +57,15 @@ type CRDGenerator struct {
 }
 
 // Generate builds and writes a new CRD out of Terraform resource definition.
-func (cg *CRDGenerator) Generate(c *resource.Configuration) error {
+func (cg *CRDGenerator) Generate(c *resource.Configuration, sch *schema.Resource) error {
 	file := wrapper.NewFile(cg.pkg.Path(), cg.pkg.Name(), templates.CRDTypesTemplate,
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath("hack/boilerplate.go.txt"), // todo
 	)
-	for omit := range c.ExternalName.OmittedFields {
-		delete(c.TerraformSchema.Schema, omit)
+	for _, omit := range c.ExternalNamer.OmittedFields {
+		delete(sch.Schema, omit)
 	}
-	typeList, comments, err := tjtypes.NewBuilder(cg.pkg).Build(c.Kind, c.TerraformSchema)
+	typeList, comments, err := tjtypes.NewBuilder(cg.pkg).Build(c.Kind, sch)
 	if err != nil {
 		return errors.Wrapf(err, "cannot build types for %s", c.Kind)
 	}
