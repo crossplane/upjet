@@ -67,6 +67,13 @@ type ExternalNamer struct {
 	// they are specified via external name. You can omit only the top level fields.
 	// No field is omitted by default.
 	OmittedFields []string
+
+	// DisableNameInitializer allows you to specify whether the name initializer
+	// that sets external name to metadata.name if none specified should be disabled.
+	// It needs to be disabled for resources whose external name includes information
+	// more than the actual name of the resource, like subscription ID or region
+	// etc. which is unlikely to be included in metadata.name
+	DisableNameInitializer bool
 }
 
 // Configuration is the set of information that you can override at different steps
