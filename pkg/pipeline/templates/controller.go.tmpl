@@ -19,7 +19,7 @@ import (
 )
 
 // Setup adds a controller that reconciles {{ .CRD.Kind }} managed resources.
-func Setup(mgr ctrl.Manager, l logging.Logger, rl workqueue.RateLimiter) error {
+func Setup(mgr ctrl.Manager, l logging.Logger, rl workqueue.RateLimiter, concurrency int) error {
 	name := managed.ControllerName({{ .TypePackageAlias }}{{ .CRD.Kind }}GroupVersionKind.String())
 	r := managed.NewReconciler(mgr,
 		xpresource.ManagedKind({{ .TypePackageAlias }}{{ .CRD.Kind }}GroupVersionKind),
@@ -30,7 +30,7 @@ func Setup(mgr ctrl.Manager, l logging.Logger, rl workqueue.RateLimiter) error {
 
 	return ctrl.NewControllerManagedBy(mgr).
 		Named(name).
-		WithOptions(controller.Options{RateLimiter: rl}).
+		WithOptions(controller.Options{RateLimiter: rl, MaxConcurrentReconciles: concurrency}).
 		For(&{{ .TypePackageAlias }}{{ .CRD.Kind }}{}).
 		Complete(r)
 }
