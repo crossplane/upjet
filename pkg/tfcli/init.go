@@ -194,8 +194,14 @@ func (c *Client) checkOperation() error {
 	}
 	// check if operation timed out if timeout is configured
 	if c.timeout != nil && xpState.Ts.Before(time.Now()) {
-		// then async operation has timed out
-		return c.removeStateStore()
+		storeExists, err := c.pathExists(filepath.Join(c.wsPath, fileStore), false)
+		if err != nil {
+			return err
+		}
+		// then async operation has timed out before generating a store file
+		if !storeExists {
+			return c.removeStateStore()
+		}
 	}
 	return tferrors.NewOperationInProgressError(xpState.Operation)
 }
