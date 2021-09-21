@@ -20,6 +20,10 @@ package resource
 // given name value.
 type ConfigureWithNameFn func(base map[string]interface{}, name string)
 
+// NopConfigureWithName does nothing. It's useful for cases where the external
+// name is calculated by provider and doesn't have any effect on spec fields.
+func NopConfigureWithName(_ map[string]interface{}, _ string) {}
+
 // ConfigurationOption allows setting optional fields of a Configuration object.
 type ConfigurationOption func(*Configuration)
 

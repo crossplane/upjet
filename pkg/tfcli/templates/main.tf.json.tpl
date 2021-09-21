@@ -18,9 +18,7 @@
 
     "resource": {
         "{{ .Resource.LabelType }}": {
-            "{{ .Resource.LabelName }}": {
-                {{ .Resource.Body | printf "%s" }}
-            }
+            "{{ .Resource.LabelName }}": {{ .Resource.Body | printf "%s" }}
         }
     }
 }
