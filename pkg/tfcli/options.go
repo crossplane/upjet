@@ -19,7 +19,6 @@ package tfcli
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/pkg/errors"
@@ -37,9 +36,6 @@ const (
 	errValidationNoHandle    = "no workspace handle has been configured"
 	fmtErrValidationResource = "invalid resource specification: both type and name are required: type=%q and name=%q"
 	fmtErrValidationProvider = "invalid provider specification: both source and version are required: source=%q and version=%q"
-	// env variable names
-	envTFProviderVersion = "XP_TERRAFORM_PROVIDER_VERSION"
-	envTFProviderSource  = "XP_TERRAFORM_PROVIDER_SOURCE"
 
 	fmtResourceAddress = "%s.%s"
 )
@@ -158,12 +154,6 @@ func NewClient(ctx context.Context, opts ...ClientOption) (*Client, error) {
 	if c.timeout == nil {
 		d := defaultAsyncTimeout
 		c.timeout = &d
-	}
-	if c.provider.Version == "" {
-		c.provider.Version = os.Getenv(envTFProviderVersion)
-	}
-	if c.provider.Source == "" {
-		c.provider.Source = os.Getenv(envTFProviderSource)
 	}
 	if err := c.validate(); err != nil {
 		return nil, err
