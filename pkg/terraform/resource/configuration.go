@@ -27,10 +27,11 @@ func NopConfigureWithName(_ map[string]interface{}, _ string) {}
 // ConfigurationOption allows setting optional fields of a Configuration object.
 type ConfigurationOption func(*Configuration)
 
-// WithExternalName allows you to set an ExternalNamer for given Configuration.
-func WithExternalName(e ExternalNamer) ConfigurationOption {
+// WithExternalNameConfiguration allows you to set an ExternalNameConfiguration
+// for given Configuration.
+func WithExternalNameConfiguration(e ExternalNameConfiguration) ConfigurationOption {
 	return func(c *Configuration) {
-		c.ExternalNamer = e
+		c.ExternalName = e
 	}
 }
 
@@ -55,10 +56,10 @@ func NewConfiguration(version, kind, terraformResourceType string, opts ...Confi
 	return c
 }
 
-// ExternalNamer contains all information that is necessary for naming operations,
+// ExternalNameConfiguration contains all information that is necessary for naming operations,
 // such as removal of those fields from spec schema and calling Configure function
 // to fill attributes with information given in external name.
-type ExternalNamer struct {
+type ExternalNameConfiguration struct {
 	// SelfVarPath is the Go path to the variable that an instance of this struct
 	// is assigned to. It's necessary since there is no way to know a package
 	// path of a given variable in runtime.
@@ -93,8 +94,8 @@ type Configuration struct {
 	// like aws_rds_cluster.
 	TerraformResourceType string
 
-	// ExternalNamer allows you to specify a custom ExternalNamer.
-	ExternalNamer ExternalNamer
+	// ExternalName allows you to specify a custom ExternalNameConfiguration.
+	ExternalName ExternalNameConfiguration
 
 	// TerraformIDFieldName is the name of the ID field in Terraform state of
 	// the resource. Its default is "id" and in almost all cases, you don't need

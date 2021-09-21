@@ -59,7 +59,7 @@ func (cg *ControllerGenerator) Generate(c *resource.Configuration, typesPkgPath 
 		"CRD": map[string]string{
 			"Kind": c.Kind,
 		},
-		"DisableNameInitializer":            c.ExternalNamer.DisableNameInitializer,
+		"DisableNameInitializer":            c.ExternalName.DisableNameInitializer,
 		"TypePackageAlias":                  ctrlFile.Imports.UsePackage(typesPkgPath),
 		"ProviderConfigBuilderPackageAlias": ctrlFile.Imports.UsePackage(cg.ProviderConfigBuilderPath),
 	}

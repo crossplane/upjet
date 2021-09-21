@@ -62,7 +62,7 @@ func (cg *CRDGenerator) Generate(c *resource.Configuration, sch *schema.Resource
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath("hack/boilerplate.go.txt"), // todo
 	)
-	for _, omit := range c.ExternalNamer.OmittedFields {
+	for _, omit := range c.ExternalName.OmittedFields {
 		delete(sch.Schema, omit)
 	}
 	typeList, comments, err := tjtypes.NewBuilder(cg.pkg).Build(c.Kind, sch)
