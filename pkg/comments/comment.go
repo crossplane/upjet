@@ -26,6 +26,7 @@ func WithTFTag(t string) Option {
 // New returns a Comment by parsing Terrajet markers as Options
 func New(text string, opts ...Option) (*Comment, error) {
 	to := markers.TerrajetOptions{}
+	co := markers.CrossplaneOptions{}
 
 	var lines []string
 	for _, line := range strings.Split(strings.TrimSpace(text), "\n") {
@@ -34,22 +35,32 @@ func New(text string, opts ...Option) (*Comment, error) {
 			lines = append(lines, line)
 			continue
 		}
-		// Only add raw marker line if not processed as an option (i.e. if it is
-		// not a Terrejet marker.) Terrajet markers will still be printed as
+		// Only add raw marker line if not processed as an option (e.g. if it is
+		// not a known marker.) Known markers will still be printed as
 		// comments while building from options.
 		parsed, err := markers.ParseAsTerrajetOption(&to, line)
 		if err != nil {
 			return nil, err
 		}
-		if !parsed {
-			lines = append(lines, line)
+		if parsed {
+			continue
 		}
+		parsed, err = markers.ParseAsCrossplaneOption(&co, line)
+		if err != nil {
+			return nil, err
+		}
+		if parsed {
+			continue
+		}
+
+		lines = append(lines, line)
 	}
 
 	c := &Comment{
 		Text: strings.Join(lines, "\n"),
 		Options: markers.Options{
-			TerrajetOptions: to,
+			TerrajetOptions:   to,
+			CrossplaneOptions: co,
 		},
 	}
 

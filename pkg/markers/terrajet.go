@@ -10,7 +10,7 @@ import (
 const (
 	markerPrefixTerrajet = "+terrajet:"
 
-	errFmtCannotParse = "cannot parse as a terrajet prefix: %s"
+	errFmtCannotParseAsTerrajet = "cannot parse as a terrajet prefix: %s"
 )
 
 var (
@@ -55,5 +55,5 @@ func ParseAsTerrajetOption(opts *TerrajetOptions, line string) (bool, error) {
 		opts.FieldJSONTag = &t
 		return true, nil
 	}
-	return false, errors.Errorf(errFmtCannotParse, line)
+	return false, errors.Errorf(errFmtCannotParseAsTerrajet, line)
 }
