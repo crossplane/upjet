@@ -40,25 +40,25 @@ const (
 	errUnexpectedObject = "the managed resource is not an Terraformed resource"
 )
 
-// ProviderConfigFn is a function that returns provider specific configuration
+// ProviderSetupFn is a function that returns provider specific configuration
 // like provider credentials used to connect to cloud APIs.
-type ProviderConfigFn func(ctx context.Context, client client.Client, mg xpresource.Managed) ([]byte, error)
+type ProviderSetupFn func(ctx context.Context, client client.Client, mg xpresource.Managed) (tfcli.ProviderRequirement, tfcli.ProviderConfiguration, error)
 
 // NewConnector returns a new Connector object.
-func NewConnector(kube client.Client, l logging.Logger, providerConfigFn ProviderConfigFn) *Connector {
+func NewConnector(kube client.Client, l logging.Logger, ps ProviderSetupFn) *Connector {
 	return &Connector{
-		kube:           kube,
-		logger:         l,
-		providerConfig: providerConfigFn,
+		kube:          kube,
+		logger:        l,
+		providerSetup: ps,
 	}
 }
 
 // Connector initializes the external client with credentials and other configuration
 // parameters.
 type Connector struct {
-	kube           client.Client
-	providerConfig ProviderConfigFn
-	logger         logging.Logger
+	kube          client.Client
+	providerSetup ProviderSetupFn
+	logger        logging.Logger
 }
 
 // Connect makes sure the underlying client is ready to issue requests to the
@@ -69,12 +69,12 @@ func (c *Connector) Connect(ctx context.Context, mg xpresource.Managed) (managed
 		return nil, errors.New(errUnexpectedObject)
 	}
 
-	pc, err := c.providerConfig(ctx, c.kube, mg)
+	pr, pc, err := c.providerSetup(ctx, c.kube, mg)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot get provider config")
 	}
 
-	tfCli, err := conversion.BuildClientForResource(ctx, tr, tfcli.WithLogger(c.logger), tfcli.WithProviderConfiguration(pc))
+	tfCli, err := conversion.BuildClientForResource(ctx, tr, tfcli.WithLogger(c.logger), tfcli.WithProviderConfiguration(pc), tfcli.WithProviderRequirement(pr))
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot build tf client for resource")
 	}

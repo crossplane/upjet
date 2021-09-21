@@ -152,8 +152,8 @@ func (c Client) generateTFConfiguration(preventDestroy bool) ([]byte, error) {
 	var buff bytes.Buffer
 	vars := map[string]interface{}{
 		"Provider": map[string]interface{}{
-			"Source":        c.provider.Source,
-			"Version":       c.provider.Version,
+			"Source":        c.provider.Requirement.Source,
+			"Version":       c.provider.Requirement.Version,
 			"Configuration": c.provider.Configuration,
 		},
 		"Resource": map[string]interface{}{

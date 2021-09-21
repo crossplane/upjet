@@ -19,11 +19,11 @@ import (
 )
 
 // Setup adds a controller that reconciles {{ .CRD.Kind }} managed resources.
-func Setup(mgr ctrl.Manager, l logging.Logger, rl workqueue.RateLimiter, concurrency int) error {
+func Setup(mgr ctrl.Manager, l logging.Logger, rl workqueue.RateLimiter, ps terraform.ProviderSetupFn, concurrency int) error {
 	name := managed.ControllerName({{ .TypePackageAlias }}{{ .CRD.Kind }}GroupVersionKind.String())
 	r := managed.NewReconciler(mgr,
 		xpresource.ManagedKind({{ .TypePackageAlias }}{{ .CRD.Kind }}GroupVersionKind),
-		managed.WithExternalConnecter(terraform.NewConnector(mgr.GetClient(), l, {{ .ProviderConfigBuilderPackageAlias }}ProviderConfigBuilder)),
+		managed.WithExternalConnecter(terraform.NewConnector(mgr.GetClient(), l, ps)),
 		managed.WithLogger(l.WithValues("controller", name)),
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
 		{{- if .DisableNameInitializer }}

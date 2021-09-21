@@ -91,19 +91,11 @@ func WithProviderConfiguration(conf []byte) ClientOption {
 	}
 }
 
-// WithProviderSource sets the Terraform provider
-// source to be used in the generated Terraform configuration
-func WithProviderSource(source string) ClientOption {
+// WithProviderRequirement sets the Terraform provider
+// requirement to be used in the generated Terraform configuration
+func WithProviderRequirement(req ProviderRequirement) ClientOption {
 	return func(c *Client) {
-		c.provider.Source = source
-	}
-}
-
-// WithProviderVersion sets the Terraform provider
-// version to be used in the generated Terraform configuration
-func WithProviderVersion(version string) ClientOption {
-	return func(c *Client) {
-		c.provider.Version = version
+		c.provider.Requirement = req
 	}
 }
 
@@ -207,16 +199,24 @@ func (r Resource) GetAddress() string {
 	return fmt.Sprintf(fmtResourceAddress, r.LabelType, r.LabelName)
 }
 
+// ProviderRequirement holds values for the Terraform HCL provider requirements
+type ProviderRequirement struct {
+	Source  string
+	Version string
+}
+
+// ProviderConfiguration holds the provider configuration body
+type ProviderConfiguration []byte
+
 // Provider holds values for the Terraform HCL provider block's source, version and configuration body
 type Provider struct {
-	Source        string
-	Version       string
-	Configuration []byte
+	Requirement   ProviderRequirement
+	Configuration ProviderConfiguration
 }
 
 func (p Provider) validate() error {
-	if p.Source == "" || p.Version == "" {
-		return errors.Errorf(fmtErrValidationProvider, p.Source, p.Version)
+	if p.Requirement.Source == "" || p.Requirement.Version == "" {
+		return errors.Errorf(fmtErrValidationProvider, p.Requirement.Source, p.Requirement.Version)
 	}
 	return nil
 }
