@@ -23,10 +23,13 @@ func Setup(mgr ctrl.Manager, l logging.Logger, rl workqueue.RateLimiter, concurr
 	name := managed.ControllerName({{ .TypePackageAlias }}{{ .CRD.Kind }}GroupVersionKind.String())
 	r := managed.NewReconciler(mgr,
 		xpresource.ManagedKind({{ .TypePackageAlias }}{{ .CRD.Kind }}GroupVersionKind),
-		managed.WithInitializers(),
 		managed.WithExternalConnecter(terraform.NewConnector(mgr.GetClient(), l, {{ .ProviderConfigBuilderPackageAlias }}ProviderConfigBuilder)),
 		managed.WithLogger(l.WithValues("controller", name)),
-		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))))
+		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
+		{{- if .DisableNameInitializer }}
+		managed.WithInitializers(),
+		{{- end}}
+		)
 
 	return ctrl.NewControllerManagedBy(mgr).
 		Named(name).

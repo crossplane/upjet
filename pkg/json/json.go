@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package conversion
+package json
 
 import jsoniter "github.com/json-iterator/go"
 

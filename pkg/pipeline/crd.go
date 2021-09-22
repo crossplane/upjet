@@ -29,6 +29,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/crossplane-contrib/terrajet/pkg/pipeline/templates"
+	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
 	tjtypes "github.com/crossplane-contrib/terrajet/pkg/types"
 )
 
@@ -56,14 +57,17 @@ type CRDGenerator struct {
 }
 
 // Generate builds and writes a new CRD out of Terraform resource definition.
-func (cg *CRDGenerator) Generate(version, kind string, schema *schema.Resource) error {
+func (cg *CRDGenerator) Generate(c *resource.Configuration, sch *schema.Resource) error {
 	file := wrapper.NewFile(cg.pkg.Path(), cg.pkg.Name(), templates.CRDTypesTemplate,
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath("hack/boilerplate.go.txt"), // todo
 	)
-	typeList, comments, err := tjtypes.NewBuilder(cg.pkg).Build(kind, schema)
+	for _, omit := range c.ExternalName.OmittedFields {
+		delete(sch.Schema, omit)
+	}
+	typeList, comments, err := tjtypes.NewBuilder(cg.pkg).Build(c.Kind, sch)
 	if err != nil {
-		return errors.Wrapf(err, "cannot build types for %s", kind)
+		return errors.Wrapf(err, "cannot build types for %s", c.Kind)
 	}
 	// TODO(muvaf): TypePrinter uses the given scope to see if the type exists
 	// before printing. We should ideally load the package in file system but
@@ -79,14 +83,14 @@ func (cg *CRDGenerator) Generate(version, kind string, schema *schema.Resource) 
 	vars := map[string]interface{}{
 		"Types": typesStr,
 		"CRD": map[string]string{
-			"APIVersion": version,
+			"APIVersion": c.Version,
 			"Group":      cg.Group,
-			"Kind":       kind,
+			"Kind":       c.Kind,
 		},
 		"Provider": map[string]string{
 			"ShortName": cg.ProviderShortName,
 		},
 	}
-	filePath := filepath.Join(cg.LocalDirectoryPath, fmt.Sprintf("zz_%s_types.go", strings.ToLower(kind)))
+	filePath := filepath.Join(cg.LocalDirectoryPath, fmt.Sprintf("zz_%s_types.go", strings.ToLower(c.Kind)))
 	return errors.Wrap(file.Write(filePath, vars, os.ModePerm), "cannot write crd file")
 }

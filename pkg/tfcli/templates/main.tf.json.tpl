@@ -18,14 +18,7 @@
 
     "resource": {
         "{{ .Resource.LabelType }}": {
-            "{{ .Resource.LabelName }}": {
-                {{ .Resource.Body | printf "%s" }}
-                {{ if .Lifecycle.PreventDestroy -}}
-                    ,"lifecycle" : {
-                    "prevent_destroy": true
-                    }
-                {{ end }}
-            }
+            "{{ .Resource.LabelName }}": {{ .Resource.Body | printf "%s" }}
         }
     }
 }

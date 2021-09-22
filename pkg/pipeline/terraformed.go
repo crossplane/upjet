@@ -27,6 +27,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/crossplane-contrib/terrajet/pkg/pipeline/templates"
+	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
 )
 
 // NewTerraformedGenerator returns a new TerraformedGenerator.
@@ -46,11 +47,16 @@ type TerraformedGenerator struct {
 }
 
 // Generate writes generated Terraformed interface functions
-func (tg *TerraformedGenerator) Generate(version, kind, terraformResourceType, terraformIDField string) error {
+func (tg *TerraformedGenerator) Generate(c *resource.Configuration) error {
+	trFile := wrapper.NewFile(tg.pkg.Path(), tg.pkg.Name(), templates.TerraformedTemplate,
+		wrapper.WithGenStatement(GenStatement),
+		wrapper.WithHeaderPath("hack/boilerplate.go.txt"), // todo
+	)
 	vars := map[string]interface{}{
 		"CRD": map[string]string{
-			"APIVersion": version,
-			"Kind":       kind,
+			"APIVersion":      c.Version,
+			"Kind":            c.Kind,
+			"ConfigureWithFn": trFile.Imports.UseType(c.ExternalName.SelfVarPath),
 		},
 		"Terraform": map[string]string{
 			// TODO(hasan): This identifier is used to generate external name.
@@ -59,15 +65,12 @@ func (tg *TerraformedGenerator) Generate(version, kind, terraformResourceType, t
 			//  more complex logic like combining multiple fields etc.
 			//  I'll revisit this with
 			//  https://github.com/crossplane-contrib/terrajet/issues/11
-			"IdentifierField": terraformIDField,
-			"ResourceType":    terraformResourceType,
+			"IdentifierField": c.TerraformIDFieldName,
+			"ResourceType":    c.TerraformResourceType,
 		},
 	}
-	trFile := wrapper.NewFile(tg.pkg.Path(), tg.pkg.Name(), templates.TerraformedTemplate,
-		wrapper.WithGenStatement(GenStatement),
-		wrapper.WithHeaderPath("hack/boilerplate.go.txt"), // todo
-	)
-	filePath := filepath.Join(tg.LocalDirectoryPath, fmt.Sprintf("zz_%s_terraformed.go", strings.ToLower(kind)))
+
+	filePath := filepath.Join(tg.LocalDirectoryPath, fmt.Sprintf("zz_%s_terraformed.go", strings.ToLower(c.Kind)))
 	return errors.Wrap(
 		trFile.Write(filePath, vars, os.ModePerm),
 		"cannot write terraformed conversion methods file",

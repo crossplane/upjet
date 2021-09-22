@@ -4,7 +4,11 @@
 
 package {{ .CRD.APIVersion }}
 
-import "github.com/crossplane-contrib/terrajet/pkg/conversion"
+import (
+	"github.com/crossplane-contrib/terrajet/pkg/json"
+	"github.com/crossplane/crossplane-runtime/pkg/meta"
+	{{ .Imports }}
+)
 
 // GetTerraformResourceType returns Terraform resource type for this {{ .CRD.Kind }}
 func (mg *{{ .CRD.Kind }}) GetTerraformResourceType() string {
@@ -18,20 +22,32 @@ func (tr *{{ .CRD.Kind }}) GetTerraformResourceIdField() string {
 
 // GetObservation of this {{ .CRD.Kind }}
 func (tr *{{ .CRD.Kind }}) GetObservation() ([]byte, error) {
-	return conversion.TFParser.Marshal(tr.Status.AtProvider)
+	return json.TFParser.Marshal(tr.Status.AtProvider)
 }
 
 // SetObservation for this {{ .CRD.Kind }}
 func (tr *{{ .CRD.Kind }}) SetObservation(data []byte) error {
-	return conversion.TFParser.Unmarshal(data, &tr.Status.AtProvider)
+	return json.TFParser.Unmarshal(data, &tr.Status.AtProvider)
 }
 
 // GetParameters of this {{ .CRD.Kind }}
-func (tr *{{ .CRD.Kind }}) GetParameters() ([]byte, error) {
-	return conversion.TFParser.Marshal(tr.Spec.ForProvider)
+func (tr *{{ .CRD.Kind }}) GetParameters() (map[string]interface{}, error) {
+	p, err := json.TFParser.Marshal(tr.Spec.ForProvider)
+	if err != nil {
+		return nil, err
+	}
+	base := map[string]interface{}{}
+	{{- if .CRD.ConfigureWithFn }}
+	{{ .CRD.ConfigureWithFn }}.Configure(base, meta.GetExternalName(tr))
+	{{- end }}
+	return base, json.JSParser.Unmarshal(p, &base)
 }
 
 // SetParameters for this {{ .CRD.Kind }}
-func (tr *{{ .CRD.Kind }}) SetParameters(data []byte) error {
-	return conversion.TFParser.Unmarshal(data, &tr.Spec.ForProvider)
+func (tr *{{ .CRD.Kind }}) SetParameters(params map[string]interface{}) error {
+	p, err := json.TFParser.Marshal(params)
+	if err != nil {
+		return err
+	}
+	return json.TFParser.Unmarshal(p, &tr.Spec.ForProvider)
 }

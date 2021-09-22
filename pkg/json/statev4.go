@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package conversion
+package json
 
 import (
 	"encoding/base64"
@@ -81,8 +81,8 @@ type InstanceObjectStateV4 struct {
 	CreateBeforeDestroy bool `json:"create_before_destroy,omitempty"`
 }
 
-// ParseStateV4 parses a given Terraform state as StateV4 object
-func ParseStateV4(data []byte) (*StateV4, error) {
+// UnmarshalStateV4 parses a given Terraform state as StateV4 object
+func UnmarshalStateV4(data []byte) (*StateV4, error) {
 	st := &StateV4{}
 	if err := JSParser.Unmarshal(data, st); err != nil {
 		return nil, errors.Wrap(err, errCannotParseState)
@@ -98,7 +98,7 @@ func BuildStateV4(encodedState string, attributesSensitive jsoniter.RawMessage) 
 		return nil, errors.Wrap(err, errCannotDecodeMetadata)
 	}
 
-	st, err := ParseStateV4(m)
+	st, err := UnmarshalStateV4(m)
 	if err != nil {
 		return nil, errors.Wrap(err, errCannotParseState)
 	}
