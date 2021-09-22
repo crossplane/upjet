@@ -22,8 +22,8 @@ import (
 
 // Observable structs can get and set observations in the form of Terraform JSON.
 type Observable interface {
-	GetObservation() ([]byte, error)
-	SetObservation(data []byte) error
+	GetObservation() (map[string]interface{}, error)
+	SetObservation(map[string]interface{}) error
 }
 
 // Parameterizable structs can get and set parameters of the managed resource
