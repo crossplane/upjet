@@ -70,10 +70,15 @@ func (g *Builder) buildResource(res *schema.Resource, names ...string) (*types.N
 	}
 	obsName := types.NewTypeName(token.NoPos, g.Package, obsTypeName, nil)
 
-	var paramFields []*types.Var
-	var paramTags []string
-	var obsFields []*types.Var
-	var obsTags []string
+	// Note(turkenh): We don't know how many number of fields would be a
+	// parameter or an observation in advance, hence opted for not to
+	// preallocate (//nolint:prealloc). But we know a rough upper bound,
+	// which is, len(keys), should we still do a preallocation here? Leaving
+	// as it is given performance is not big concern during code generation.
+	var paramFields []*types.Var //nolint:prealloc
+	var paramTags []string       //nolint:prealloc
+	var obsFields []*types.Var   //nolint:prealloc
+	var obsTags []string         //nolint:prealloc
 	for _, snakeFieldName := range keys {
 		sch := res.Schema[snakeFieldName]
 		fieldName := NewNameFromSnake(snakeFieldName)
@@ -116,6 +121,10 @@ func (g *Builder) buildResource(res *schema.Resource, names ...string) (*types.N
 			paramFields = append(paramFields, field)
 			g.comments.AddFieldComment(paramName, field.Name(), comment.Build())
 		}
+
+		refFields, refTags := g.getReferenceFields(paramName, comment.CrossplaneOptions)
+		paramTags = append(paramTags, refTags...)
+		paramFields = append(paramFields, refFields...)
 	}
 
 	// NOTE(muvaf): Not every struct has both computed and configurable fields,

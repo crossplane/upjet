@@ -10,16 +10,37 @@ import (
 type Option func(*Comment)
 
 // WithReferenceTo returns a comment options with reference to input type
-func WithReferenceTo(t string) Option {
+func WithReferenceTo(s string) Option {
 	return func(c *Comment) {
-		c.ReferenceToType = t
+		c.ReferenceToType = s
+	}
+}
+
+// WithReferenceExtractor returns a comment option with reference extractor
+func WithReferenceExtractor(s string) Option {
+	return func(c *Comment) {
+		c.ReferenceExtractor = s
+	}
+}
+
+// WithReferenceFieldName returns a comment option with reference field name
+func WithReferenceFieldName(s string) Option {
+	return func(c *Comment) {
+		c.ReferenceFieldName = s
+	}
+}
+
+// WithReferenceSelectorFieldName returns a comment option with reference selector field name
+func WithReferenceSelectorFieldName(s string) Option {
+	return func(c *Comment) {
+		c.ReferenceSelectorFieldName = s
 	}
 }
 
 // WithTFTag returns a comment options with input tf tag
-func WithTFTag(t string) Option {
+func WithTFTag(s string) Option {
 	return func(c *Comment) {
-		c.FieldTFTag = &t
+		c.FieldTFTag = &s
 	}
 }
 
@@ -28,24 +49,25 @@ func New(text string, opts ...Option) (*Comment, error) {
 	to := markers.TerrajetOptions{}
 	co := markers.CrossplaneOptions{}
 
-	var lines []string
-	for _, line := range strings.Split(strings.TrimSpace(text), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			lines = append(lines, line)
+	rawLines := strings.Split(strings.TrimSpace(text), "\n")
+	lines := make([]string, 0, len(rawLines))
+	for _, rl := range rawLines {
+		rl = strings.TrimSpace(rl)
+		if rl == "" {
+			lines = append(lines, rl)
 			continue
 		}
 		// Only add raw marker line if not processed as an option (e.g. if it is
 		// not a known marker.) Known markers will still be printed as
 		// comments while building from options.
-		parsed, err := markers.ParseAsTerrajetOption(&to, line)
+		parsed, err := markers.ParseAsTerrajetOption(&to, rl)
 		if err != nil {
 			return nil, err
 		}
 		if parsed {
 			continue
 		}
-		parsed, err = markers.ParseAsCrossplaneOption(&co, line)
+		parsed, err = markers.ParseAsCrossplaneOption(&co, rl)
 		if err != nil {
 			return nil, err
 		}
@@ -53,7 +75,7 @@ func New(text string, opts ...Option) (*Comment, error) {
 			continue
 		}
 
-		lines = append(lines, line)
+		lines = append(lines, rl)
 	}
 
 	c := &Comment{
