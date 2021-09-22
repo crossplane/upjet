@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go/token"
 	"go/types"
+	"strings"
 
 	"github.com/pkg/errors"
 	"golang.org/x/tools/go/packages"
@@ -24,18 +25,20 @@ var typeXPRef types.Type
 var typeXPSelector types.Type
 var commentOptional *comments.Comment
 
-func (g *Builder) getReferenceFields(t *types.TypeName, opts markers.CrossplaneOptions) ([]*types.Var, []string) {
+func (g *Builder) getReferenceFields(t *types.TypeName, f *types.Var, opts markers.CrossplaneOptions) ([]*types.Var, []string) {
 	if opts.ReferenceToType == "" {
 		return nil, nil
 	}
 
+	isSlice := strings.HasPrefix(f.Type().String(), "[]")
+
 	rfn := opts.ReferenceFieldName
 	if rfn == "" {
-		rfn = defaultReferenceFieldName()
+		rfn = defaultReferenceFieldName(f.Name(), isSlice)
 	}
 	sfn := opts.ReferenceSelectorFieldName
 	if sfn == "" {
-		sfn = defaultReferenceSelectorName()
+		sfn = defaultReferenceSelectorName(f.Name())
 	}
 
 	rn := NewNameFromCamel(rfn)
@@ -43,7 +46,12 @@ func (g *Builder) getReferenceFields(t *types.TypeName, opts markers.CrossplaneO
 	refTag := fmt.Sprintf(`json:"%s,omitempty" tf:"-"`, rn.LowerCamel)
 	selTag := fmt.Sprintf(`json:"%s,omitempty" tf:"-"`, sn.LowerCamel)
 
-	ref := types.NewField(token.NoPos, g.Package, rfn, typeXPRef, false)
+	tr := typeXPRef
+
+	if isSlice {
+		tr = types.NewSlice(typeXPRef)
+	}
+	ref := types.NewField(token.NoPos, g.Package, rfn, tr, false)
 	sel := types.NewField(token.NoPos, g.Package, sfn, types.NewPointer(typeXPSelector), false)
 
 	g.comments.AddFieldComment(t, rfn, commentOptional.Build())
@@ -52,12 +60,16 @@ func (g *Builder) getReferenceFields(t *types.TypeName, opts markers.CrossplaneO
 	return []*types.Var{ref, sel}, []string{refTag, selTag}
 }
 
-func defaultReferenceFieldName() string {
-	return ""
+func defaultReferenceFieldName(fieldName string, isSlice bool) string {
+	fn := fieldName + "Ref"
+	if isSlice {
+		fn += "s"
+	}
+	return fn
 }
 
-func defaultReferenceSelectorName() string {
-	return ""
+func defaultReferenceSelectorName(fieldName string) string {
+	return fieldName + "Selector"
 }
 
 func init() {

@@ -122,7 +122,7 @@ func (g *Builder) buildResource(res *schema.Resource, names ...string) (*types.N
 			g.comments.AddFieldComment(paramName, field.Name(), comment.Build())
 		}
 
-		refFields, refTags := g.getReferenceFields(paramName, comment.CrossplaneOptions)
+		refFields, refTags := g.getReferenceFields(paramName, field, comment.CrossplaneOptions)
 		paramTags = append(paramTags, refTags...)
 		paramFields = append(paramFields, refFields...)
 	}
