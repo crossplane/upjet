@@ -33,6 +33,14 @@ const (
 	errNotOneInstance = "state file should contain exactly 1 instance"
 )
 
+// NewStateV4 returns a new base StateV4 object.
+func NewStateV4() *StateV4 {
+	return &StateV4{
+		Version: 4,
+		Serial:  1,
+	}
+}
+
 // State file schema from https://github.com/hashicorp/terraform/blob/d9dfd451ea572219871bb9c5503a471418258e40/internal/states/statefile/version4.go
 
 // StateV4 represents a version 4 terraform state

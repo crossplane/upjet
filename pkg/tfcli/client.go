@@ -55,12 +55,9 @@ const (
 	errReadFile         = "failed to read file"
 	fmtErrCheckTFState  = "failed to check Terraform state lock: %s"
 	fmtErrPath          = "failed to check path on filesystem: %s: Expected a dir: %v, found a dir: %v"
-	fmtErrLoadState     = "failed to load state from file: %s"
 	fmtErrStoreState    = "failed to store state into file: %s"
 	fmtErrAsyncRun      = "failed to run async Terraform pipeline %q with args: %v: in dir: %s"
 	fmtErrSyncRun       = "failed to run sync Terraform pipeline %q with args: %v: in dir: %s"
-
-	tfMsgNonExistentResource = "Cannot import non-existent remote object"
 )
 
 // Client is an implementation of types.Client and represents a
@@ -207,25 +204,22 @@ func (c *Client) storeStateInWorkspace() error {
 	if err != nil {
 		return errors.Wrap(err, "cannot marshal produced state attributes")
 	}
-	st := &json.StateV4{
-		Version:          4,
-		TerraformVersion: c.setup.Version,
-		Serial:           1,
-		Lineage:          c.resource.UID,
-		RootOutputs:      nil,
-		Resources: []json.ResourceStateV4{
-			{
-				Mode: "managed",
-				Type: c.resource.LabelType,
-				Name: c.resource.LabelName,
-				// todo: we should get the full URL from Dockerfile
-				ProviderConfig: fmt.Sprintf(`provider["registry.terraform.io/%s"]`, c.setup.Requirement.Source),
-				Instances: []json.InstanceObjectStateV4{
-					{
-						SchemaVersion: 0,
-						PrivateRaw:    []byte(c.resource.PrivateRaw),
-						AttributesRaw: attr,
-					},
+	st := json.NewStateV4()
+	st.TerraformVersion = c.setup.Version
+	st.Lineage = c.resource.UID
+	st.Resources = []json.ResourceStateV4{
+		{
+			Mode: "managed",
+			Type: c.resource.LabelType,
+			Name: c.resource.LabelName,
+			// TODO(muvaf): we should get the full URL from Dockerfile since
+			// providers don't have to be hosted in registry.terraform.io
+			ProviderConfig: fmt.Sprintf(`provider["registry.terraform.io/%s"]`, c.setup.Requirement.Source),
+			Instances: []json.InstanceObjectStateV4{
+				{
+					SchemaVersion: 0,
+					PrivateRaw:    []byte(c.resource.PrivateRaw),
+					AttributesRaw: attr,
 				},
 			},
 		},

@@ -64,7 +64,6 @@ type Connector struct {
 // Connect makes sure the underlying client is ready to issue requests to the
 // provider API.
 func (c *Connector) Connect(ctx context.Context, mg xpresource.Managed) (managed.ExternalClient, error) {
-	c.logger.Info("reconciled")
 	tr, ok := mg.(resource.Terraformed)
 	if !ok {
 		return nil, errors.New(errUnexpectedObject)
@@ -75,7 +74,9 @@ func (c *Connector) Connect(ctx context.Context, mg xpresource.Managed) (managed
 		return nil, errors.Wrap(err, "cannot get provider setup")
 	}
 
-	tfCli, err := conversion.BuildClientForResource(ctx, tr, tfcli.WithLogger(c.logger), tfcli.WithTerraformSetup(ps))
+	tfCli, err := conversion.BuildClientForResource(ctx, tr,
+		tfcli.WithLogger(c.logger),
+		tfcli.WithTerraformSetup(ps))
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot build tf client for resource")
 	}

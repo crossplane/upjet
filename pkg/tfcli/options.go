@@ -30,8 +30,11 @@ import (
 )
 
 const (
-	defaultAsyncTimeout              = 2 * time.Minute
-	fmtResourceAddress               = "%s.%s"
+	defaultAsyncTimeout = 2 * time.Minute
+	fmtResourceAddress  = "%s.%s"
+	// AnnotationKeyPrivateRawAttribute is the key that points to private attribute
+	// of the Terraform State. It's non-sensitive and used by provider to store
+	// arbitrary metadata, usually details about schema version.
 	AnnotationKeyPrivateRawAttribute = "terrajet.crossplane.io/private-raw"
 )
 
@@ -168,6 +171,8 @@ func (r *Resource) GetAddress() string {
 	return fmt.Sprintf(fmtResourceAddress, r.LabelType, r.LabelName)
 }
 
+// ProduceStateAttributes returns all information we have about the resource
+// that can be used as attributes in the state file.
 func (r *Resource) ProduceStateAttributes() map[string]interface{} {
 	base := make(map[string]interface{})
 	// NOTE(muvaf): Since we try to produce the current state, observation
