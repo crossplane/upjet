@@ -50,8 +50,6 @@ const (
 	errNoProcessState   = "failed to store process state: no process state"
 	errStore            = "failed to store process state"
 	errCheckExitCode    = "failed to check process exit code"
-	errNoPlan           = "plan line not found in Terraform CLI output"
-	errPlan             = "failed to parse the Terraform plan"
 	errWriteFile        = "failed to write file"
 	errReadFile         = "failed to read file"
 	fmtErrCheckTFState  = "failed to check Terraform state lock: %s"
@@ -60,8 +58,6 @@ const (
 	fmtErrStoreState    = "failed to store state into file: %s"
 	fmtErrAsyncRun      = "failed to run async Terraform pipeline %q with args: %v: in dir: %s"
 	fmtErrSyncRun       = "failed to run sync Terraform pipeline %q with args: %v: in dir: %s"
-
-	regexpPlanLine = `Plan:.*([\d+]).*to add,.*([\d+]) to change, ([\d+]) to destroy`
 
 	tfMsgNonExistentResource = "Cannot import non-existent remote object"
 )

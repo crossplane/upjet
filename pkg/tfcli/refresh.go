@@ -20,23 +20,24 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
-	"regexp"
-	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
 	"go.uber.org/multierr"
 
+	"github.com/crossplane-contrib/terrajet/pkg/json"
 	"github.com/crossplane-contrib/terrajet/pkg/tfcli/model"
 )
 
 const (
 	// error messages
-	errRefresh        = "failed to refresh the Terraform state"
-	errNoID           = errRefresh + ": cannot deduce resource ID"
-	errImport         = "failed to import resource"
-	fmtErrRefreshExit = errRefresh + ": Terraform pipeline exited with code: %d"
-	fmtErrImport      = errImport + ": %s"
+	errRefresh      = "failed to refresh the Terraform state"
+	errNoID         = errRefresh + ": cannot deduce resource ID"
+	errImport       = "failed to import resource"
+	errFmtObserve   = "observe exited with code %d with the following error: %s"
+	errFmtImport    = errImport + ": %s"
+	errFmtNoPlan    = "plan line not found in Terraform CLI output: %s"
+	errFmtParsePlan = "failed to parse Terraform plan output: %s"
 )
 
 // Refresh updates local state of the Cloud resource in a synchronous manner
@@ -82,7 +83,7 @@ func (c *Client) importResource(ctx context.Context, id string) (model.RefreshRe
 		}
 		// if import failed for another reason
 		// we should return an error
-		return result, errors.Errorf(fmtErrImport, stderr)
+		return result, errors.Errorf(errFmtImport, stderr)
 	}
 
 	result.Exists = true
@@ -103,52 +104,64 @@ func (c *Client) importResource(ctx context.Context, id string) (model.RefreshRe
 // RefreshResult.State is non-nil and holds the fresh Terraform state iff
 // RefreshResult.Completed is true.
 func (c *Client) observe(ctx context.Context) (model.RefreshResult, error) {
-	result := model.RefreshResult{}
 	// try to save the given state
 	if err := c.storeStateInWorkspace(); err != nil {
-		return result, err
+		return model.RefreshResult{}, err
 	}
 	// now try to run the refresh pipeline synchronously
 	if err := c.syncPipeline(ctx, true, "sh", "-c",
-		fmt.Sprintf("%s apply -refresh-only -auto-approve -input=false && %s plan -detailed-exitcode -refresh=false -input=false",
+		fmt.Sprintf("%s apply -refresh-only -auto-approve -input=false && %s plan -detailed-exitcode -refresh=false -input=false -json",
 			pathTerraform, pathTerraform)); err != nil {
-		return result, err
+		return model.RefreshResult{}, err
 	}
 	code := c.pInfo.GetProcessState().ExitCode()
 	stdout, err := c.pInfo.StdoutAsString()
 	if err != nil {
-		return result, err
+		return model.RefreshResult{}, err
 	}
+	stderr, err := c.pInfo.StderrAsString()
+	if err != nil {
+		return model.RefreshResult{}, err
+	}
+	// Code 2 means that we need to make a change and that's a valid case for
+	// us, so we don't treat it as an error case.
 	if code != 0 && code != 2 {
-		return result, errors.Errorf(fmtErrRefreshExit, code)
+		return model.RefreshResult{}, errors.Errorf(errFmtObserve, code, stderr)
 	}
-	result.UpToDate = code == 0
-	if !result.UpToDate {
-		result.Exists, err = tfPlanCheckAdd(stdout)
-		if err != nil {
-			return result, err
-		}
-	} else {
-		result.Exists = true
+	needAdd, needChange, err := parsePlan(stdout)
+	if err != nil {
+		return model.RefreshResult{}, errors.Wrapf(err, errFmtParsePlan, stdout)
 	}
-
 	if err := c.loadStateFromWorkspace(); err != nil {
-		return result, err
+		return model.RefreshResult{}, err
 	}
-	result.State = c.tfState
-	return result, nil
+	return model.RefreshResult{
+		Exists:   !needAdd,
+		UpToDate: !needChange,
+		State:    c.tfState,
+	}, nil
 }
 
-// returns true if no resource is to be added according to the plan
-func tfPlanCheckAdd(log string) (bool, error) {
-	r := regexp.MustCompile(regexpPlanLine)
-	m := r.FindStringSubmatch(log)
-	if len(m) != 4 || len(m[1]) == 0 {
-		return false, errors.New(errNoPlan)
+func parsePlan(log string) (needAdd bool, needChange bool, err error) {
+	line := ""
+	for _, l := range strings.Split(log, "\n") {
+		if strings.Contains(l, `"type":"change_summary"`) {
+			line = l
+			break
+		}
 	}
-	addCount, err := strconv.Atoi(m[1])
-	if err != nil {
-		return false, errors.Wrap(err, errPlan)
+	if line == "" {
+		return false, false, errors.Errorf(errFmtNoPlan, log)
 	}
-	return addCount == 0, nil
+	type plan struct {
+		Changes struct {
+			Add    float64 `json:"add,omitempty"`
+			Change float64 `json:"change,omitempty"`
+		} `json:"changes,omitempty"`
+	}
+	p := &plan{}
+	if err := json.JSParser.Unmarshal([]byte(line), p); err != nil {
+		return false, false, errors.Wrap(err, "cannot unmarshal change summary json")
+	}
+	return p.Changes.Add > 0, p.Changes.Change > 0, nil
 }
