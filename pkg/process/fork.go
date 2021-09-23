@@ -23,6 +23,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"regexp"
 	"sync"
 
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
@@ -34,6 +35,10 @@ const (
 	errNotInitialized = "process not initialized"
 	errNotStarted     = "process not started"
 	errNotBuffered    = "stream not buffered"
+)
+
+var (
+	ansiEscaper = regexp.MustCompile("[\u001B\u009B][[\\]()#;?]*(?:(?:(?:[a-zA-Z\\d]*(?:;[a-zA-Z\\d]*)*)?\u0007)|(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PRZcf-ntqry=><~]))")
 )
 
 // New initializes a new process.Info for running processes.
@@ -131,7 +136,7 @@ func (pi *Info) StdoutAsString() (string, error) {
 	if pi.buffStdout == nil {
 		return "", errors.New(errNotBuffered)
 	}
-	return pi.buffStdout.String(), nil
+	return ansiEscaper.ReplaceAllString(pi.buffStdout.String(), ""), nil
 }
 
 // StderrAsString returns the contents of stderr stream as a string
@@ -139,7 +144,7 @@ func (pi *Info) StderrAsString() (string, error) {
 	if pi.buffStderr == nil {
 		return "", errors.New(errNotBuffered)
 	}
-	return pi.buffStderr.String(), nil
+	return ansiEscaper.ReplaceAllString(pi.buffStderr.String(), ""), nil
 }
 
 // Run runs the configured command and blocks the caller until the process

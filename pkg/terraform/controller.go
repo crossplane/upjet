@@ -19,6 +19,9 @@ package terraform
 import (
 	"context"
 
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
+
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/event"
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
@@ -26,12 +29,9 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/pkg/errors"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/crossplane-contrib/terrajet/pkg/conversion"
-	"github.com/crossplane-contrib/terrajet/pkg/meta"
 	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
 	"github.com/crossplane-contrib/terrajet/pkg/tfcli"
 )
@@ -64,6 +64,7 @@ type Connector struct {
 // Connect makes sure the underlying client is ready to issue requests to the
 // provider API.
 func (c *Connector) Connect(ctx context.Context, mg xpresource.Managed) (managed.ExternalClient, error) {
+	c.logger.Info("reconciled")
 	tr, ok := mg.(resource.Terraformed)
 	if !ok {
 		return nil, errors.New(errUnexpectedObject)
@@ -101,7 +102,7 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 		return managed.ExternalObservation{}, errors.New(errUnexpectedObject)
 	}
 
-	if xpmeta.GetExternalName(tr) == "" && meta.GetState(tr) == "" {
+	if xpmeta.GetExternalName(tr) == "" {
 		return managed.ExternalObservation{
 			ResourceExists: false,
 		}, nil
@@ -175,7 +176,7 @@ func (e *external) Delete(ctx context.Context, mg xpresource.Managed) error {
 // the object.
 func (e *external) persistState(ctx context.Context, obj xpresource.Object) error {
 	externalName := xpmeta.GetExternalName(obj)
-	newState := meta.GetState(obj)
+	privateRaw := obj.GetAnnotations()[tfcli.AnnotationKeyPrivateRawAttribute]
 
 	err := retry.OnError(retry.DefaultRetry, xpresource.IsAPIError, func() error {
 		nn := types.NamespacedName{Name: obj.GetName()}
@@ -184,7 +185,7 @@ func (e *external) persistState(ctx context.Context, obj xpresource.Object) erro
 		}
 
 		xpmeta.SetExternalName(obj, externalName)
-		meta.SetState(obj, newState)
+		xpmeta.AddAnnotations(obj, map[string]string{tfcli.AnnotationKeyPrivateRawAttribute: privateRaw})
 		return e.kube.Update(ctx, obj)
 	})
 

@@ -138,6 +138,12 @@ func (st *StateV4) GetSensitiveAttributes() jsoniter.RawMessage {
 	return st.Resources[0].Instances[0].AttributeSensitivePaths
 }
 
+// GetPrivateRaw returns private attribute of the Terraform managed resource
+// that is used as metadata by the Terraform provider
+func (st *StateV4) GetPrivateRaw() []byte {
+	return st.Resources[0].Instances[0].PrivateRaw
+}
+
 // GetEncodedState returns base64 encoded sanitized (i.e. sensitive attributes removed) state
 func (st *StateV4) GetEncodedState() (string, error) {
 	sensitive := st.Resources[0].Instances[0].AttributeSensitivePaths

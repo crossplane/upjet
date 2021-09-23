@@ -16,7 +16,11 @@ limitations under the License.
 
 package model
 
-import "context"
+import (
+	"context"
+
+	"github.com/crossplane-contrib/terrajet/pkg/json"
+)
 
 // RefreshResult holds information about the state of a Cloud resource.
 type RefreshResult struct {
@@ -29,7 +33,7 @@ type RefreshResult struct {
 	// State holds the Terraform state of the resource.
 	// Because Client.Refresh is a synchronous operation,
 	// it's non-nil if Client.Refresh does not return an error.
-	State []byte
+	State *json.StateV4
 }
 
 // ApplyResult represents the status of an asynchronous Client.Apply call
@@ -37,7 +41,7 @@ type ApplyResult struct {
 	// Completed true if the async Client.Apply operation has completed
 	Completed bool
 	// State the up-to-date Terraform state if Completed is true
-	State []byte
+	State *json.StateV4
 }
 
 // DestroyResult represents the status of an asynchronous Client.Destroy call
