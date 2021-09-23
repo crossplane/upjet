@@ -110,7 +110,7 @@ func (c *Client) observe(ctx context.Context) (model.RefreshResult, error) {
 	}
 	// now try to run the refresh pipeline synchronously
 	if err := c.syncPipeline(ctx, true, "sh", "-c",
-		fmt.Sprintf("%s apply -refresh-only -auto-approve -input=false && %s plan -detailed-exitcode -input=false",
+		fmt.Sprintf("%s apply -refresh-only -auto-approve -input=false && %s plan -detailed-exitcode -refresh=false -input=false",
 			pathTerraform, pathTerraform)); err != nil {
 		return result, err
 	}
