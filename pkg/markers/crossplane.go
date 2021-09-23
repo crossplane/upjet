@@ -2,9 +2,8 @@ package markers
 
 import (
 	"fmt"
-	"strings"
 
-	"github.com/pkg/errors"
+	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
 )
 
 const (
@@ -23,10 +22,7 @@ var (
 // CrossplaneOptions represents the Crossplane marker options that terrajet
 // would need to interact
 type CrossplaneOptions struct {
-	ReferenceToType            string
-	ReferenceExtractor         string
-	ReferenceFieldName         string
-	ReferenceSelectorFieldName string
+	resource.FieldReferenceConfiguration
 }
 
 func (o CrossplaneOptions) String() string {
@@ -46,34 +42,4 @@ func (o CrossplaneOptions) String() string {
 	}
 
 	return m
-}
-
-// ParseAsCrossplaneOption parses input line as a crossplane option, if it is a
-// valid Crossplane Option. Returns whether it is parsed or not.
-func ParseAsCrossplaneOption(opts *CrossplaneOptions, line string) (bool, error) {
-	if !strings.HasPrefix(line, markerPrefixCrossplane) {
-		return false, nil
-	}
-	ln := strings.TrimSpace(line)
-	if strings.HasPrefix(ln, markerPrefixRefType) {
-		t := strings.TrimPrefix(ln, markerPrefixRefType)
-		opts.ReferenceToType = t
-		return true, nil
-	}
-	if strings.HasPrefix(ln, markerPrefixRefExtractor) {
-		t := strings.TrimPrefix(ln, markerPrefixRefExtractor)
-		opts.ReferenceExtractor = t
-		return true, nil
-	}
-	if strings.HasPrefix(ln, markerPrefixRefFieldName) {
-		t := strings.TrimPrefix(ln, markerPrefixRefFieldName)
-		opts.ReferenceFieldName = t
-		return true, nil
-	}
-	if strings.HasPrefix(ln, markerPrefixRefSelectorName) {
-		t := strings.TrimPrefix(ln, markerPrefixRefSelectorName)
-		opts.ReferenceSelectorFieldName = t
-		return true, nil
-	}
-	return false, errors.Errorf(errFmtCannotParseAsCrossplane, line)
 }

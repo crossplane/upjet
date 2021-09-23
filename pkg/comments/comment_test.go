@@ -1,7 +1,10 @@
 package comments
 
 import (
+	"reflect"
 	"testing"
+
+	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
 
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	"github.com/google/go-cmp/cmp"
@@ -102,20 +105,24 @@ yes, this is a test`,
 				text: `hello world!`,
 				opts: []Option{
 					WithTFTag("-"),
-					WithReferenceTo("Subnet"),
+					WithReferenceConfig(resource.FieldReferenceConfiguration{
+						ReferenceToType: reflect.TypeOf(Comment{}).String(),
+					}),
 				},
 			},
 			want: want{
 				out: `// hello world!
 // +terrajet:crd:field:TFTag=-
-// +crossplane:generate:reference:type=Subnet
+// +crossplane:generate:reference:type=comments.Comment
 `,
 				mopts: markers.Options{
 					TerrajetOptions: markers.TerrajetOptions{
 						FieldTFTag: &tftag,
 					},
 					CrossplaneOptions: markers.CrossplaneOptions{
-						ReferenceToType: "Subnet",
+						FieldReferenceConfiguration: resource.FieldReferenceConfiguration{
+							ReferenceToType: "comments.Comment",
+						},
 					},
 				},
 			},

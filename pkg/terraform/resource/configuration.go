@@ -27,14 +27,6 @@ func NopConfigureWithName(_ map[string]interface{}, _ string) {}
 // ConfigurationOption allows setting optional fields of a Configuration object.
 type ConfigurationOption func(*Configuration)
 
-// WithExternalNameConfiguration allows you to set an ExternalNameConfiguration
-// for given Configuration.
-func WithExternalNameConfiguration(e ExternalNameConfiguration) ConfigurationOption {
-	return func(c *Configuration) {
-		c.ExternalName = e
-	}
-}
-
 // WithTerraformIDFieldName allows you to set TerraformIDFieldName.
 func WithTerraformIDFieldName(n string) ConfigurationOption {
 	return func(c *Configuration) {
@@ -60,11 +52,6 @@ func NewConfiguration(version, kind, terraformResourceType string, opts ...Confi
 // such as removal of those fields from spec schema and calling Configure function
 // to fill attributes with information given in external name.
 type ExternalNameConfiguration struct {
-	// SelfVarPath is the Go path to the variable that an instance of this struct
-	// is assigned to. It's necessary since there is no way to know a package
-	// path of a given variable in runtime.
-	SelfVarPath string
-
 	// Configure name attributes of the given configuration using external name.
 	Configure ConfigureWithNameFn
 
@@ -97,8 +84,30 @@ type Configuration struct {
 	// ExternalName allows you to specify a custom ExternalNameConfiguration.
 	ExternalName ExternalNameConfiguration
 
+	Reference map[string]FieldReferenceConfiguration
 	// TerraformIDFieldName is the name of the ID field in Terraform state of
 	// the resource. Its default is "id" and in almost all cases, you don't need
 	// to overwrite it.
 	TerraformIDFieldName string
+}
+
+// FieldReferenceConfiguration represents the Crossplane options used to generate
+// reference resolvers
+type FieldReferenceConfiguration struct {
+	ReferenceToType            string
+	ReferenceExtractor         string
+	ReferenceFieldName         string
+	ReferenceSelectorFieldName string
+}
+
+func (c *Configuration) SetCustomConfiguration(cc CustomConfiguration) {
+	if ce := cc.ExternalName[c.TerraformResourceType]; ce != nil {
+		c.ExternalName = *ce
+	}
+	if cr := cc.Reference[c.TerraformResourceType]; cr != nil {
+		c.Reference = cr
+	}
+	if id := cc.TerraformIDFieldName[c.TerraformResourceType]; id != "" {
+		c.TerraformIDFieldName = id
+	}
 }

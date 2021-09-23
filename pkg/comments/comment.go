@@ -3,16 +3,18 @@ package comments
 import (
 	"strings"
 
+	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
+
 	"github.com/crossplane-contrib/terrajet/pkg/markers"
 )
 
 // Option is a comment option
 type Option func(*Comment)
 
-// WithReferenceTo returns a comment options with reference to input type
-func WithReferenceTo(s string) Option {
+// WithReferenceConfig returns a comment options with the given reference config
+func WithReferenceConfig(cfg resource.FieldReferenceConfiguration) Option {
 	return func(c *Comment) {
-		c.ReferenceToType = s
+		c.FieldReferenceConfiguration = cfg
 	}
 }
 
@@ -61,13 +63,6 @@ func New(text string, opts ...Option) (*Comment, error) {
 		// not a known marker.) Known markers will still be printed as
 		// comments while building from options.
 		parsed, err := markers.ParseAsTerrajetOption(&to, rl)
-		if err != nil {
-			return nil, err
-		}
-		if parsed {
-			continue
-		}
-		parsed, err = markers.ParseAsCrossplaneOption(&co, rl)
 		if err != nil {
 			return nil, err
 		}

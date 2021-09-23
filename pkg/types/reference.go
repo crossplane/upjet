@@ -6,11 +6,12 @@ import (
 	"go/types"
 	"strings"
 
+	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
+
 	"github.com/pkg/errors"
 	"golang.org/x/tools/go/packages"
 
 	"github.com/crossplane-contrib/terrajet/pkg/comments"
-	"github.com/crossplane-contrib/terrajet/pkg/markers"
 )
 
 const (
@@ -25,18 +26,18 @@ var typeXPRef types.Type
 var typeXPSelector types.Type
 var commentOptional *comments.Comment
 
-func (g *Builder) getReferenceFields(t *types.TypeName, f *types.Var, opts markers.CrossplaneOptions) ([]*types.Var, []string) {
-	if opts.ReferenceToType == "" {
+func (g *Builder) getReferenceFields(t *types.TypeName, f *types.Var, r resource.FieldReferenceConfiguration) ([]*types.Var, []string) {
+	if r.ReferenceToType == "" {
 		return nil, nil
 	}
 
 	isSlice := strings.HasPrefix(f.Type().String(), "[]")
 
-	rfn := opts.ReferenceFieldName
+	rfn := r.ReferenceFieldName
 	if rfn == "" {
 		rfn = defaultReferenceFieldName(f.Name(), isSlice)
 	}
-	sfn := opts.ReferenceSelectorFieldName
+	sfn := r.ReferenceSelectorFieldName
 	if sfn == "" {
 		sfn = defaultReferenceSelectorName(f.Name())
 	}
@@ -47,7 +48,6 @@ func (g *Builder) getReferenceFields(t *types.TypeName, f *types.Var, opts marke
 	selTag := fmt.Sprintf(`json:"%s,omitempty" tf:"-"`, sn.LowerCamel)
 
 	tr := typeXPRef
-
 	if isSlice {
 		tr = types.NewSlice(typeXPRef)
 	}
