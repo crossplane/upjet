@@ -108,11 +108,13 @@ func (t *CLI) Observe(ctx context.Context, tr resource.Terraformed) (Observation
 	}
 	// No tfcli operation was in progress, our blocking observation completed
 	// successfully, and we have an observation to consume.
-
-	// If resource does not exist, and it was actually deleted, we no longer
-	// need this client (hence underlying workspace) for this resource.
-	if !tfRes.Exists && xpmeta.WasDeleted(tr) {
-		return Observation{}, errors.Wrap(t.tfcli.Close(ctx), "failed to clean up tfcli client")
+	if !tfRes.Exists {
+		// If resource does not exist, and it was actually deleted, we no longer
+		// need this client (hence underlying workspace) for this resource.
+		if xpmeta.WasDeleted(tr) {
+			return Observation{}, errors.Wrap(t.tfcli.Close(ctx), "failed to clean up tfcli client")
+		}
+		return Observation{}, nil
 	}
 
 	// After a successful observation, we now have a state to consume.
