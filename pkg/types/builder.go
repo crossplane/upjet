@@ -49,12 +49,12 @@ type Builder struct {
 }
 
 // Build returns parameters and observation types built out of Terraform schema.
-func (g *Builder) Build(name string, reference map[string]resource.FieldReferenceConfiguration, schema *schema.Resource) ([]*types.Named, twtypes.Comments, error) {
+func (g *Builder) Build(name string, reference resource.ReferenceConfiguration, schema *schema.Resource) ([]*types.Named, twtypes.Comments, error) {
 	_, _, err := g.buildResource(schema, reference, name)
 	return g.genTypes, g.comments, errors.Wrapf(err, "cannot build the types")
 }
 
-func (g *Builder) buildResource(res *schema.Resource, reference map[string]resource.FieldReferenceConfiguration, names ...string) (*types.Named, *types.Named, error) { //nolint:gocyclo
+func (g *Builder) buildResource(res *schema.Resource, reference resource.ReferenceConfiguration, names ...string) (*types.Named, *types.Named, error) { //nolint:gocyclo
 	// NOTE(muvaf): There can be fields in the same CRD with same name but in
 	// different types. Since we generate the type using the field name, there
 	// can be collisions. In order to be able to generate unique names consistently,
@@ -150,7 +150,7 @@ func (g *Builder) buildResource(res *schema.Resource, reference map[string]resou
 	return paramType, obsType, nil
 }
 
-func (g *Builder) buildSchema(sch *schema.Schema, reference map[string]resource.FieldReferenceConfiguration, names []string) (types.Type, error) { // nolint:gocyclo
+func (g *Builder) buildSchema(sch *schema.Schema, reference resource.ReferenceConfiguration, names []string) (types.Type, error) { // nolint:gocyclo
 	switch sch.Type {
 	case schema.TypeBool:
 		if sch.Optional {

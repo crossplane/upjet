@@ -3,9 +3,8 @@ package comments
 import (
 	"strings"
 
-	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
-
 	"github.com/crossplane-contrib/terrajet/pkg/markers"
+	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
 )
 
 // Option is a comment option

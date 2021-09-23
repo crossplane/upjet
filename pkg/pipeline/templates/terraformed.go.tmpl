@@ -47,7 +47,7 @@ func (tr *{{ .CRD.Kind }}) GetParameters() (map[string]interface{}, error) {
 	}
 	base := map[string]interface{}{}
 	{{- if .CRD.ConfigureWithFn }}
-	{{ .CRD.ConfigureWithFn }}.Configure(base, meta.GetExternalName(tr))
+	{{ .CRD.ConfigureWithFn }}(base, meta.GetExternalName(tr))
 	{{- end }}
 	return base, json.TFParser.Unmarshal(p, &base)
 }

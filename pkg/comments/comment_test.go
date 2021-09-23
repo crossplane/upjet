@@ -4,13 +4,12 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
-
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
 	"github.com/crossplane-contrib/terrajet/pkg/markers"
+	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
 )
 
 func TestComment_Build(t *testing.T) {

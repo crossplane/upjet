@@ -16,6 +16,8 @@ limitations under the License.
 
 package resource
 
+import "github.com/imdario/mergo"
+
 // ConfigureWithNameFn functions configure the base resource fields by using
 // given name value.
 type ConfigureWithNameFn func(base map[string]interface{}, name string)
@@ -53,7 +55,7 @@ func NewConfiguration(version, kind, terraformResourceType string, opts ...Confi
 // to fill attributes with information given in external name.
 type ExternalNameConfiguration struct {
 	// Configure name attributes of the given configuration using external name.
-	Configure ConfigureWithNameFn
+	ConfigureFunction string
 
 	// OmittedFields are the ones you'd like to be removed from the schema since
 	// they are specified via external name. You can omit only the top level fields.
@@ -66,6 +68,20 @@ type ExternalNameConfiguration struct {
 	// more than the actual name of the resource, like subscription ID or region
 	// etc. which is unlikely to be included in metadata.name
 	DisableNameInitializer bool
+}
+
+// ReferenceConfiguration represents reference resolver configurations for the
+// fields of a given resource. Key should be the field path of the field to be
+// referenced.
+type ReferenceConfiguration map[string]FieldReferenceConfiguration
+
+// FieldReferenceConfiguration represents the Crossplane options used to generate
+// reference resolvers
+type FieldReferenceConfiguration struct {
+	ReferenceToType            string
+	ReferenceExtractor         string
+	ReferenceFieldName         string
+	ReferenceSelectorFieldName string
 }
 
 // Configuration is the set of information that you can override at different steps
@@ -84,30 +100,18 @@ type Configuration struct {
 	// ExternalName allows you to specify a custom ExternalNameConfiguration.
 	ExternalName ExternalNameConfiguration
 
-	Reference map[string]FieldReferenceConfiguration
+	Reference ReferenceConfiguration
 	// TerraformIDFieldName is the name of the ID field in Terraform state of
 	// the resource. Its default is "id" and in almost all cases, you don't need
 	// to overwrite it.
 	TerraformIDFieldName string
 }
 
-// FieldReferenceConfiguration represents the Crossplane options used to generate
-// reference resolvers
-type FieldReferenceConfiguration struct {
-	ReferenceToType            string
-	ReferenceExtractor         string
-	ReferenceFieldName         string
-	ReferenceSelectorFieldName string
-}
-
-func (c *Configuration) SetCustomConfiguration(cc CustomConfiguration) {
-	if ce := cc.ExternalName[c.TerraformResourceType]; ce != nil {
-		c.ExternalName = *ce
+// OverrideConfiguration merges existing configuration with the input
+// configuration by overriding the existing one.
+func (c *Configuration) OverrideConfiguration(o *Configuration) error {
+	if o == nil {
+		return nil
 	}
-	if cr := cc.Reference[c.TerraformResourceType]; cr != nil {
-		c.Reference = cr
-	}
-	if id := cc.TerraformIDFieldName[c.TerraformResourceType]; id != "" {
-		c.TerraformIDFieldName = id
-	}
+	return mergo.Merge(c, *o, mergo.WithOverride)
 }

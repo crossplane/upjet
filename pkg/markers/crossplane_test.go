@@ -3,9 +3,9 @@ package markers
 import (
 	"testing"
 
-	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
-
 	"github.com/google/go-cmp/cmp"
+
+	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
 )
 
 func TestCrossplaneOptions_String(t *testing.T) {

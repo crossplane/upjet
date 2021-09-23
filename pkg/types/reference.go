@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go/token"
 	"go/types"
+	"reflect"
 	"strings"
 
 	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
@@ -89,4 +90,11 @@ func init() {
 	}
 	req := false
 	commentOptional.KubebuilderOptions.Required = &req
+}
+
+// PathForType returns go package path for the input type. This is a helper
+// function to be used whenever this information is needed, like configuring to
+// reference to a type.
+func PathForType(i interface{}) string {
+	return reflect.TypeOf(i).PkgPath() + "." + reflect.TypeOf(i).Name()
 }

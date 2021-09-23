@@ -8,8 +8,6 @@ import (
 
 const (
 	markerPrefixCrossplane = "+crossplane:"
-
-	errFmtCannotParseAsCrossplane = "cannot parse as a crossplane marker: %s"
 )
 
 var (
