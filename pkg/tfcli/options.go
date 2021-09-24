@@ -35,7 +35,8 @@ const (
 	errValidationNoLogger    = "no logger has been configured"
 	errValidationNoHandle    = "no workspace handle has been configured"
 	fmtErrValidationResource = "invalid resource specification: both type and name are required: type=%q and name=%q"
-	fmtErrValidationProvider = "invalid provider specification: both source and version are required: source=%q and version=%q"
+	fmtErrValidationProvider = "invalid setup.requirement specification: both source and version are required: source=%q and version=%q"
+	fmtErrValidationVersion  = "invalid setup specification, Terraform version not provided"
 
 	fmtResourceAddress = "%s.%s"
 )
@@ -83,19 +84,11 @@ func WithResourceBody(body map[string]interface{}) ClientOption {
 	}
 }
 
-// WithProviderConfiguration sets the Terraform provider
-// configuration block to be used in the generated Terraform configuration
-func WithProviderConfiguration(conf []byte) ClientOption {
+// WithTerraformSetup sets the Terraform configuration which
+// contains provider requirement, configuration and Terraform version
+func WithTerraformSetup(setup TerraformSetup) ClientOption {
 	return func(c *Client) {
-		c.provider.Configuration = conf
-	}
-}
-
-// WithProviderRequirement sets the Terraform provider
-// requirement to be used in the generated Terraform configuration
-func WithProviderRequirement(req ProviderRequirement) ClientOption {
-	return func(c *Client) {
-		c.provider.Requirement = req
+		c.setup = setup
 	}
 }
 
@@ -127,7 +120,7 @@ func WithStateStoreFs(fs afero.Fs) ClientOption {
 // Terraform Refresh, Apply, Destroy command pipelines.
 // The workspace configured with WithHandle option is initialized
 // for the returned Client. All Terraform resource block generation options
-// (WithResource*), all Terraform provider block generation options
+// (WithResource*), all Terraform setup block generation options
 // (WithProvider*), the workspace handle option (WithHandle) and a
 // logger (WithLogger) must have been configured for the Client.
 // Returns an error if the supplied options cannot be validated, or
@@ -160,7 +153,7 @@ func (c Client) validate() error {
 	if err := c.resource.validate(); err != nil {
 		return err
 	}
-	if err := c.provider.validate(); err != nil {
+	if err := c.setup.validate(); err != nil {
 		return err
 	}
 	if c.logger == nil {
@@ -199,22 +192,27 @@ func (r Resource) GetAddress() string {
 	return fmt.Sprintf(fmtResourceAddress, r.LabelType, r.LabelName)
 }
 
-// ProviderRequirement holds values for the Terraform HCL provider requirements
+// ProviderRequirement holds values for the Terraform HCL setup requirements
 type ProviderRequirement struct {
 	Source  string
 	Version string
 }
 
-// ProviderConfiguration holds the provider configuration body
-type ProviderConfiguration []byte
+// ProviderConfiguration holds the setup configuration body
+type ProviderConfiguration map[string]interface{}
 
-// Provider holds values for the Terraform HCL provider block's source, version and configuration body
-type Provider struct {
+// TerraformSetup holds values for the Terraform version and setup
+// requirements and configuration body
+type TerraformSetup struct {
+	Version       string
 	Requirement   ProviderRequirement
 	Configuration ProviderConfiguration
 }
 
-func (p Provider) validate() error {
+func (p TerraformSetup) validate() error {
+	if p.Version == "" {
+		return errors.New(fmtErrValidationVersion)
+	}
 	if p.Requirement.Source == "" || p.Requirement.Version == "" {
 		return errors.Errorf(fmtErrValidationProvider, p.Requirement.Source, p.Requirement.Version)
 	}

@@ -145,6 +145,10 @@ func (c Client) generateTFConfiguration(preventDestroy bool) ([]byte, error) {
 	c.resource.Body["lifecycle"] = map[string]bool{
 		"prevent_destroy": preventDestroy,
 	}
+	config, err := json.JSParser.Marshal(c.setup.Configuration)
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot marshal provider config")
+	}
 	body, err := json.JSParser.Marshal(c.resource.Body)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot marshal resource body")
@@ -152,9 +156,9 @@ func (c Client) generateTFConfiguration(preventDestroy bool) ([]byte, error) {
 	var buff bytes.Buffer
 	vars := map[string]interface{}{
 		"Provider": map[string]interface{}{
-			"Source":        c.provider.Requirement.Source,
-			"Version":       c.provider.Requirement.Version,
-			"Configuration": c.provider.Configuration,
+			"Source":        c.setup.Requirement.Source,
+			"Version":       c.setup.Requirement.Version,
+			"Configuration": config,
 		},
 		"Resource": map[string]interface{}{
 			"LabelType": c.resource.LabelType,

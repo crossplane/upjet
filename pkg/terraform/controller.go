@@ -40,25 +40,25 @@ const (
 	errUnexpectedObject = "the managed resource is not an Terraformed resource"
 )
 
-// ProviderSetupFn is a function that returns provider specific configuration
-// like provider credentials used to connect to cloud APIs.
-type ProviderSetupFn func(ctx context.Context, client client.Client, mg xpresource.Managed) (tfcli.ProviderRequirement, tfcli.ProviderConfiguration, error)
+// SetupFn is a function that returns Terraform setup which contains
+// provider requirement, configuration and Terraform version.
+type SetupFn func(ctx context.Context, client client.Client, mg xpresource.Managed) (tfcli.TerraformSetup, error)
 
 // NewConnector returns a new Connector object.
-func NewConnector(kube client.Client, l logging.Logger, ps ProviderSetupFn) *Connector {
+func NewConnector(kube client.Client, l logging.Logger, sf SetupFn) *Connector {
 	return &Connector{
-		kube:          kube,
-		logger:        l,
-		providerSetup: ps,
+		kube:           kube,
+		logger:         l,
+		terraformSetup: sf,
 	}
 }
 
 // Connector initializes the external client with credentials and other configuration
 // parameters.
 type Connector struct {
-	kube          client.Client
-	providerSetup ProviderSetupFn
-	logger        logging.Logger
+	kube           client.Client
+	logger         logging.Logger
+	terraformSetup SetupFn
 }
 
 // Connect makes sure the underlying client is ready to issue requests to the
@@ -69,12 +69,12 @@ func (c *Connector) Connect(ctx context.Context, mg xpresource.Managed) (managed
 		return nil, errors.New(errUnexpectedObject)
 	}
 
-	pr, pc, err := c.providerSetup(ctx, c.kube, mg)
+	ps, err := c.terraformSetup(ctx, c.kube, mg)
 	if err != nil {
-		return nil, errors.Wrap(err, "cannot get provider config")
+		return nil, errors.Wrap(err, "cannot get provider setup")
 	}
 
-	tfCli, err := conversion.BuildClientForResource(ctx, tr, tfcli.WithLogger(c.logger), tfcli.WithProviderConfiguration(pc), tfcli.WithProviderRequirement(pr))
+	tfCli, err := conversion.BuildClientForResource(ctx, tr, tfcli.WithLogger(c.logger), tfcli.WithTerraformSetup(ps))
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot build tf client for resource")
 	}
