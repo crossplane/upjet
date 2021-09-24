@@ -97,10 +97,15 @@ func (g *Builder) buildResource(res *schema.Resource, reference resource.Referen
 		if comment.TerrajetOptions.FieldJSONTag != nil {
 			jsonTag = *comment.TerrajetOptions.FieldJSONTag
 		}
-
 		fieldType, err := g.buildSchema(sch, reference, append(names, fieldName.Camel))
 		if err != nil {
 			return nil, nil, errors.Wrapf(err, "cannot infer type from schema of field %s", fieldName.Snake)
+		}
+
+		fp := strings.Join(append(names[1:], fieldName.Camel), ".")
+		if reference[fp].ReferenceToType != "" {
+			comment.FieldReferenceConfiguration = reference[fp]
+			sch.Optional = true
 		}
 		field := types.NewField(token.NoPos, g.Package, fieldName.Camel, fieldType, false)
 
@@ -123,13 +128,11 @@ func (g *Builder) buildResource(res *schema.Resource, reference resource.Referen
 			paramFields = append(paramFields, field)
 		}
 
-		fp := strings.Join(append(names[1:], field.Name()), ".")
-		comment.FieldReferenceConfiguration = reference[fp]
-		g.comments.AddFieldComment(paramName, field.Name(), comment.Build())
-
 		refFields, refTags := g.getReferenceFields(paramName, field, reference[fp])
 		paramTags = append(paramTags, refTags...)
 		paramFields = append(paramFields, refFields...)
+
+		g.comments.AddFieldComment(paramName, fieldName.Camel, comment.Build())
 	}
 
 	// NOTE(muvaf): Not every struct has both computed and configurable fields,

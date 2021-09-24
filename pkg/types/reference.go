@@ -48,7 +48,8 @@ func (g *Builder) getReferenceFields(t *types.TypeName, f *types.Var, r resource
 	refTag := fmt.Sprintf(`json:"%s,omitempty" tf:"-"`, rn.LowerCamel)
 	selTag := fmt.Sprintf(`json:"%s,omitempty" tf:"-"`, sn.LowerCamel)
 
-	tr := typeXPRef
+	var tr types.Type
+	tr = types.NewPointer(typeXPRef)
 	if isSlice {
 		tr = types.NewSlice(typeXPRef)
 	}
