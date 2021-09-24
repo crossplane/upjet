@@ -69,7 +69,7 @@ const (
 // Client is an implementation of types.Client and represents a
 // Terraform client capable of running Refresh, Apply, Destroy pipelines.
 type Client struct {
-	provider Provider
+	setup    TerraformSetup
 	resource Resource
 	handle   string
 	tfState  []byte
