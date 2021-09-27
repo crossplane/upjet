@@ -25,7 +25,7 @@ var typeXPRef types.Type
 var typeXPSelector types.Type
 var commentOptional *comments.Comment
 
-func (g *Builder) getReferenceFields(t *types.TypeName, f *types.Var, r config.Reference) ([]*types.Var, []string) {
+func (g *Builder) getReferenceFields(t *types.TypeName, f *types.Var, r config.Reference) (fields []*types.Var, tags []string) {
 	_, isSlice := f.Type().(*types.Slice)
 
 	rfn := r.RefFieldName

@@ -29,21 +29,19 @@ import (
 )
 
 // NewControllerGenerator returns a new ControllerGenerator.
-func NewControllerGenerator(rootDir, modulePath, group, providerConfigBuilderPath string) *ControllerGenerator {
+func NewControllerGenerator(rootDir, modulePath, group string) *ControllerGenerator {
 	return &ControllerGenerator{
-		Group:                     group,
-		ControllerGroupDir:        filepath.Join(rootDir, "internal", "controller", strings.Split(group, ".")[0]),
-		ModulePath:                modulePath,
-		ProviderConfigBuilderPath: providerConfigBuilderPath,
+		Group:              group,
+		ControllerGroupDir: filepath.Join(rootDir, "internal", "controller", strings.Split(group, ".")[0]),
+		ModulePath:         modulePath,
 	}
 }
 
 // ControllerGenerator generates controller setup functions.
 type ControllerGenerator struct {
-	Group                     string
-	ControllerGroupDir        string
-	ModulePath                string
-	ProviderConfigBuilderPath string
+	Group              string
+	ControllerGroupDir string
+	ModulePath         string
 }
 
 // Generate writes controller setup functions.
@@ -59,9 +57,8 @@ func (cg *ControllerGenerator) Generate(c *config.Resource, typesPkgPath string)
 		"CRD": map[string]string{
 			"Kind": c.Kind,
 		},
-		"DisableNameInitializer":            c.ExternalName.DisableNameInitializer,
-		"TypePackageAlias":                  ctrlFile.Imports.UsePackage(typesPkgPath),
-		"ProviderConfigBuilderPackageAlias": ctrlFile.Imports.UsePackage(cg.ProviderConfigBuilderPath),
+		"DisableNameInitializer": c.ExternalName.DisableNameInitializer,
+		"TypePackageAlias":       ctrlFile.Imports.UsePackage(typesPkgPath),
 	}
 
 	filePath := filepath.Join(cg.ControllerGroupDir, strings.ToLower(c.Kind), "zz_controller.go")
