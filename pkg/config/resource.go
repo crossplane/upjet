@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package resource
+package config
 
 import "github.com/imdario/mergo"
 
@@ -26,19 +26,19 @@ type ConfigureWithNameFn func(base map[string]interface{}, name string)
 // name is calculated by provider and doesn't have any effect on spec fields.
 func NopConfigureWithName(_ map[string]interface{}, _ string) {}
 
-// ConfigurationOption allows setting optional fields of a Configuration object.
-type ConfigurationOption func(*Configuration)
+// ResourceOption allows setting optional fields of a Resource object.
+type ResourceOption func(*Resource)
 
 // WithTerraformIDFieldName allows you to set TerraformIDFieldName.
-func WithTerraformIDFieldName(n string) ConfigurationOption {
-	return func(c *Configuration) {
+func WithTerraformIDFieldName(n string) ResourceOption {
+	return func(c *Resource) {
 		c.TerraformIDFieldName = n
 	}
 }
 
-// NewConfiguration returns a new *Configuration.
-func NewConfiguration(version, kind, terraformResourceType string, opts ...ConfigurationOption) *Configuration {
-	c := &Configuration{
+// NewResource returns a new configuration of type *Resource.
+func NewResource(version, kind, terraformResourceType string, opts ...ResourceOption) *Resource {
+	c := &Resource{
 		Version:               version,
 		Kind:                  kind,
 		TerraformResourceType: terraformResourceType,
@@ -50,10 +50,10 @@ func NewConfiguration(version, kind, terraformResourceType string, opts ...Confi
 	return c
 }
 
-// ExternalNameConfiguration contains all information that is necessary for naming operations,
+// ExternalName contains all information that is necessary for naming operations,
 // such as removal of those fields from spec schema and calling Configure function
 // to fill attributes with information given in external name.
-type ExternalNameConfiguration struct {
+type ExternalName struct {
 	// Configure name attributes of the given configuration using external name.
 	ConfigureFunction string
 
@@ -72,31 +72,11 @@ type ExternalNameConfiguration struct {
 
 // References represents reference resolver configurations for the fields of a
 // given resource. Key should be the field path of the field to be referenced.
-type References map[string]ReferenceConfiguration
+type References map[string]Reference
 
-// ReferenceConfiguration represents the Crossplane options used to generate
-// reference resolvers
-type ReferenceConfiguration struct {
-	// Type is the type name of the CRD if it is in the same package or
-	// <package-path>.<type-name> if it is in a different package.
-	Type string
-	// Extractor is the function to be used to extract value from the
-	// referenced type. Defaults to getting external name.
-	// Optional
-	Extractor string
-	// RefFieldName is the field name for the Reference field. Defaults to
-	// <field-name>Ref or <field-name>Refs.
-	// Optional
-	RefFieldName string
-	// SelectorFieldName is the field name for the Selector field. Defaults to
-	// <field-name>Selector.
-	// Optional
-	SelectorFieldName string
-}
-
-// Configuration is the set of information that you can override at different steps
+// Resource is the set of information that you can override at different steps
 // of the code generation pipeline.
-type Configuration struct {
+type Resource struct {
 	// Version is the version CRD will have.
 	Version string
 
@@ -107,8 +87,8 @@ type Configuration struct {
 	// like aws_rds_cluster.
 	TerraformResourceType string
 
-	// ExternalName allows you to specify a custom ExternalNameConfiguration.
-	ExternalName ExternalNameConfiguration
+	// ExternalName allows you to specify a custom ExternalName.
+	ExternalName ExternalName
 
 	References References
 	// TerraformIDFieldName is the name of the ID field in Terraform state of
@@ -117,8 +97,8 @@ type Configuration struct {
 	TerraformIDFieldName string
 }
 
-// OverrideConfiguration merges existing configuration with the input
-// configuration by overriding the existing one.
-func (c *Configuration) OverrideConfiguration(o Configuration) error {
+// OverrideConfig merges existing resource configuration with the input
+// one by overriding the existing one.
+func (c *Resource) OverrideConfig(o Resource) error {
 	return mergo.Merge(c, o, mergo.WithOverride)
 }

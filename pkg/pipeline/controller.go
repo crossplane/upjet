@@ -24,8 +24,8 @@ import (
 	"github.com/muvaf/typewriter/pkg/wrapper"
 	"github.com/pkg/errors"
 
+	"github.com/crossplane-contrib/terrajet/pkg/config"
 	"github.com/crossplane-contrib/terrajet/pkg/pipeline/templates"
-	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
 )
 
 // NewControllerGenerator returns a new ControllerGenerator.
@@ -47,7 +47,7 @@ type ControllerGenerator struct {
 }
 
 // Generate writes controller setup functions.
-func (cg *ControllerGenerator) Generate(c *resource.Configuration, typesPkgPath string) (pkgPath string, err error) {
+func (cg *ControllerGenerator) Generate(c *config.Resource, typesPkgPath string) (pkgPath string, err error) {
 	controllerPkgPath := filepath.Join(cg.ModulePath, "internal", "controller", strings.ToLower(strings.Split(cg.Group, ".")[0]), strings.ToLower(c.Kind))
 	ctrlFile := wrapper.NewFile(controllerPkgPath, strings.ToLower(c.Kind), templates.ControllerTemplate,
 		wrapper.WithGenStatement(GenStatement),

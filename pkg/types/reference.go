@@ -10,7 +10,7 @@ import (
 	"golang.org/x/tools/go/packages"
 
 	"github.com/crossplane-contrib/terrajet/pkg/comments"
-	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
+	"github.com/crossplane-contrib/terrajet/pkg/config"
 )
 
 const (
@@ -25,7 +25,7 @@ var typeXPRef types.Type
 var typeXPSelector types.Type
 var commentOptional *comments.Comment
 
-func (g *Builder) getReferenceFields(t *types.TypeName, f *types.Var, r resource.ReferenceConfiguration) ([]*types.Var, []string) {
+func (g *Builder) getReferenceFields(t *types.TypeName, f *types.Var, r config.Reference) ([]*types.Var, []string) {
 	_, isSlice := f.Type().(*types.Slice)
 
 	rfn := r.RefFieldName

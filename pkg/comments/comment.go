@@ -3,17 +3,17 @@ package comments
 import (
 	"strings"
 
+	"github.com/crossplane-contrib/terrajet/pkg/config"
 	"github.com/crossplane-contrib/terrajet/pkg/markers"
-	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
 )
 
 // Option is a comment option
 type Option func(*Comment)
 
 // WithReferenceConfig returns a comment options with the given reference config
-func WithReferenceConfig(cfg resource.ReferenceConfiguration) Option {
+func WithReferenceConfig(cfg config.Reference) Option {
 	return func(c *Comment) {
-		c.ReferenceConfiguration = cfg
+		c.Reference = cfg
 	}
 }
 

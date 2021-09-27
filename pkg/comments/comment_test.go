@@ -8,8 +8,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
+	"github.com/crossplane-contrib/terrajet/pkg/config"
 	"github.com/crossplane-contrib/terrajet/pkg/markers"
-	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
 )
 
 func TestComment_Build(t *testing.T) {
@@ -104,7 +104,7 @@ yes, this is a test`,
 				text: `hello world!`,
 				opts: []Option{
 					WithTFTag("-"),
-					WithReferenceConfig(resource.ReferenceConfiguration{
+					WithReferenceConfig(config.Reference{
 						Type: reflect.TypeOf(Comment{}).String(),
 					}),
 				},
@@ -119,7 +119,7 @@ yes, this is a test`,
 						FieldTFTag: &tftag,
 					},
 					CrossplaneOptions: markers.CrossplaneOptions{
-						ReferenceConfiguration: resource.ReferenceConfiguration{
+						Reference: config.Reference{
 							Type: "comments.Comment",
 						},
 					},

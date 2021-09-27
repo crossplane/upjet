@@ -28,7 +28,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/crossplane-contrib/terrajet/pkg/comments"
-	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
+	"github.com/crossplane-contrib/terrajet/pkg/config"
 )
 
 // NewBuilder returns a new Builder.
@@ -48,12 +48,12 @@ type Builder struct {
 }
 
 // Build returns parameters and observation types built out of Terraform schema.
-func (g *Builder) Build(name string, schema *schema.Resource, refs resource.References) ([]*types.Named, twtypes.Comments, error) {
+func (g *Builder) Build(name string, schema *schema.Resource, refs config.References) ([]*types.Named, twtypes.Comments, error) {
 	_, _, err := g.buildResource(schema, refs, name)
 	return g.genTypes, g.comments, errors.Wrapf(err, "cannot build the types")
 }
 
-func (g *Builder) buildResource(res *schema.Resource, refs resource.References, names ...string) (*types.Named, *types.Named, error) { //nolint:gocyclo
+func (g *Builder) buildResource(res *schema.Resource, refs config.References, names ...string) (*types.Named, *types.Named, error) { //nolint:gocyclo
 	// NOTE(muvaf): There can be fields in the same CRD with same name but in
 	// different types. Since we generate the type using the field name, there
 	// can be collisions. In order to be able to generate unique names consistently,
@@ -106,7 +106,7 @@ func (g *Builder) buildResource(res *schema.Resource, refs resource.References, 
 		// We skip the first element since it is the main CRD type.
 		fp := strings.Join(append(names[1:], fieldName.Camel), ".")
 		if ref, ok := refs[fp]; ok {
-			comment.ReferenceConfiguration = ref
+			comment.Reference = ref
 			sch.Optional = true
 		}
 		field := types.NewField(token.NoPos, g.Package, fieldName.Camel, fieldType, false)
@@ -157,7 +157,7 @@ func (g *Builder) buildResource(res *schema.Resource, refs resource.References, 
 	return paramType, obsType, nil
 }
 
-func (g *Builder) buildSchema(sch *schema.Schema, refs resource.References, names []string) (types.Type, error) { // nolint:gocyclo
+func (g *Builder) buildSchema(sch *schema.Schema, refs config.References, names []string) (types.Type, error) { // nolint:gocyclo
 	switch sch.Type {
 	case schema.TypeBool:
 		if sch.Optional {
