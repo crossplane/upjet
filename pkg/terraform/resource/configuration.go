@@ -70,18 +70,28 @@ type ExternalNameConfiguration struct {
 	DisableNameInitializer bool
 }
 
-// ReferenceConfiguration represents reference resolver configurations for the
-// fields of a given resource. Key should be the field path of the field to be
-// referenced.
-type ReferenceConfiguration map[string]FieldReferenceConfiguration
+// References represents reference resolver configurations for the fields of a
+// given resource. Key should be the field path of the field to be referenced.
+type References map[string]ReferenceConfiguration
 
-// FieldReferenceConfiguration represents the Crossplane options used to generate
+// ReferenceConfiguration represents the Crossplane options used to generate
 // reference resolvers
-type FieldReferenceConfiguration struct {
-	ReferenceToType            string
-	ReferenceExtractor         string
-	ReferenceFieldName         string
-	ReferenceSelectorFieldName string
+type ReferenceConfiguration struct {
+	// Type is the type name of the CRD if it is in the same package or
+	// <package-path>.<type-name> if it is in a different package.
+	Type string
+	// Extractor is the function to be used to extract value from the
+	// referenced type. Defaults to getting external name.
+	// Optional
+	Extractor string
+	// RefFieldName is the field name for the Reference field. Defaults to
+	// <field-name>Ref or <field-name>Refs.
+	// Optional
+	RefFieldName string
+	// SelectorFieldName is the field name for the Selector field. Defaults to
+	// <field-name>Selector.
+	// Optional
+	SelectorFieldName string
 }
 
 // Configuration is the set of information that you can override at different steps
@@ -100,7 +110,7 @@ type Configuration struct {
 	// ExternalName allows you to specify a custom ExternalNameConfiguration.
 	ExternalName ExternalNameConfiguration
 
-	Reference ReferenceConfiguration
+	References References
 	// TerraformIDFieldName is the name of the ID field in Terraform state of
 	// the resource. Its default is "id" and in almost all cases, you don't need
 	// to overwrite it.

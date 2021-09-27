@@ -27,18 +27,18 @@ var typeXPRef types.Type
 var typeXPSelector types.Type
 var commentOptional *comments.Comment
 
-func (g *Builder) getReferenceFields(t *types.TypeName, f *types.Var, r resource.FieldReferenceConfiguration) ([]*types.Var, []string) {
-	if r.ReferenceToType == "" {
+func (g *Builder) getReferenceFields(t *types.TypeName, f *types.Var, r resource.ReferenceConfiguration) ([]*types.Var, []string) {
+	if r.Type == "" {
 		return nil, nil
 	}
 
 	isSlice := strings.HasPrefix(f.Type().String(), "[]")
 
-	rfn := r.ReferenceFieldName
+	rfn := r.RefFieldName
 	if rfn == "" {
 		rfn = defaultReferenceFieldName(f.Name(), isSlice)
 	}
-	sfn := r.ReferenceSelectorFieldName
+	sfn := r.SelectorFieldName
 	if sfn == "" {
 		sfn = defaultReferenceSelectorName(f.Name())
 	}

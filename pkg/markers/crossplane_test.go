@@ -57,11 +57,11 @@ func TestCrossplaneOptions_String(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			o := CrossplaneOptions{
-				FieldReferenceConfiguration: resource.FieldReferenceConfiguration{
-					ReferenceToType:            tc.referenceToType,
-					ReferenceExtractor:         tc.referenceExtractor,
-					ReferenceFieldName:         tc.referenceFieldName,
-					ReferenceSelectorFieldName: tc.referenceSelectorFieldName,
+				ReferenceConfiguration: resource.ReferenceConfiguration{
+					Type:              tc.referenceToType,
+					Extractor:         tc.referenceExtractor,
+					RefFieldName:      tc.referenceFieldName,
+					SelectorFieldName: tc.referenceSelectorFieldName,
 				},
 			}
 			got := o.String()

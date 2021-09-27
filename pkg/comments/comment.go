@@ -11,30 +11,9 @@ import (
 type Option func(*Comment)
 
 // WithReferenceConfig returns a comment options with the given reference config
-func WithReferenceConfig(cfg resource.FieldReferenceConfiguration) Option {
+func WithReferenceConfig(cfg resource.ReferenceConfiguration) Option {
 	return func(c *Comment) {
-		c.FieldReferenceConfiguration = cfg
-	}
-}
-
-// WithReferenceExtractor returns a comment option with reference extractor
-func WithReferenceExtractor(s string) Option {
-	return func(c *Comment) {
-		c.ReferenceExtractor = s
-	}
-}
-
-// WithReferenceFieldName returns a comment option with reference field name
-func WithReferenceFieldName(s string) Option {
-	return func(c *Comment) {
-		c.ReferenceFieldName = s
-	}
-}
-
-// WithReferenceSelectorFieldName returns a comment option with reference selector field name
-func WithReferenceSelectorFieldName(s string) Option {
-	return func(c *Comment) {
-		c.ReferenceSelectorFieldName = s
+		c.ReferenceConfiguration = cfg
 	}
 }
 

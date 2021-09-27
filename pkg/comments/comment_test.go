@@ -104,8 +104,8 @@ yes, this is a test`,
 				text: `hello world!`,
 				opts: []Option{
 					WithTFTag("-"),
-					WithReferenceConfig(resource.FieldReferenceConfiguration{
-						ReferenceToType: reflect.TypeOf(Comment{}).String(),
+					WithReferenceConfig(resource.ReferenceConfiguration{
+						Type: reflect.TypeOf(Comment{}).String(),
 					}),
 				},
 			},
@@ -119,8 +119,8 @@ yes, this is a test`,
 						FieldTFTag: &tftag,
 					},
 					CrossplaneOptions: markers.CrossplaneOptions{
-						FieldReferenceConfiguration: resource.FieldReferenceConfiguration{
-							ReferenceToType: "comments.Comment",
+						ReferenceConfiguration: resource.ReferenceConfiguration{
+							Type: "comments.Comment",
 						},
 					},
 				},

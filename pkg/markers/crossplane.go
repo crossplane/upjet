@@ -20,23 +20,23 @@ var (
 // CrossplaneOptions represents the Crossplane marker options that terrajet
 // would need to interact
 type CrossplaneOptions struct {
-	resource.FieldReferenceConfiguration
+	resource.ReferenceConfiguration
 }
 
 func (o CrossplaneOptions) String() string {
 	m := ""
 
-	if o.ReferenceToType != "" {
-		m += fmt.Sprintf("%s%s\n", markerPrefixRefType, o.ReferenceToType)
+	if o.Type != "" {
+		m += fmt.Sprintf("%s%s\n", markerPrefixRefType, o.Type)
 	}
-	if o.ReferenceExtractor != "" {
-		m += fmt.Sprintf("%s%s\n", markerPrefixRefExtractor, o.ReferenceExtractor)
+	if o.Extractor != "" {
+		m += fmt.Sprintf("%s%s\n", markerPrefixRefExtractor, o.Extractor)
 	}
-	if o.ReferenceFieldName != "" {
-		m += fmt.Sprintf("%s%s\n", markerPrefixRefFieldName, o.ReferenceFieldName)
+	if o.RefFieldName != "" {
+		m += fmt.Sprintf("%s%s\n", markerPrefixRefFieldName, o.RefFieldName)
 	}
-	if o.ReferenceSelectorFieldName != "" {
-		m += fmt.Sprintf("%s%s\n", markerPrefixRefSelectorName, o.ReferenceSelectorFieldName)
+	if o.SelectorFieldName != "" {
+		m += fmt.Sprintf("%s%s\n", markerPrefixRefSelectorName, o.SelectorFieldName)
 	}
 
 	return m
