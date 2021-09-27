@@ -119,9 +119,6 @@ type Configuration struct {
 
 // OverrideConfiguration merges existing configuration with the input
 // configuration by overriding the existing one.
-func (c *Configuration) OverrideConfiguration(o *Configuration) error {
-	if o == nil {
-		return nil
-	}
-	return mergo.Merge(c, *o, mergo.WithOverride)
+func (c *Configuration) OverrideConfiguration(o Configuration) error {
+	return mergo.Merge(c, o, mergo.WithOverride)
 }

@@ -2,24 +2,24 @@ package resource
 
 // ConfigStore stores a global configuration
 type ConfigStore struct {
-	config map[string]*Configuration
+	resource map[string]Configuration
 }
 
 // NewConfigStore builds and returns a ConfigStore
 func NewConfigStore() ConfigStore {
 	return ConfigStore{
-		config: map[string]*Configuration{},
+		resource: map[string]Configuration{},
 	}
 }
 
 // SetConfigForResource sets configuration for a give resource
-func (cs *ConfigStore) SetConfigForResource(resource string, cfg *Configuration) {
-	cs.config[resource] = cfg
+func (cs *ConfigStore) SetConfigForResource(resource string, cfg Configuration) {
+	cs.resource[resource] = cfg
 }
 
 // GetConfigForResource gets the configuration for a given resource
-func (cs *ConfigStore) GetConfigForResource(resource string) *Configuration {
-	return cs.config[resource]
+func (cs *ConfigStore) GetConfigForResource(resource string) Configuration {
+	return cs.resource[resource]
 }
 
 // ConfigStoreBuilder collects functions that add things to ConfigStore.

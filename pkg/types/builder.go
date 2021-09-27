@@ -23,13 +23,12 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
-
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	twtypes "github.com/muvaf/typewriter/pkg/types"
 	"github.com/pkg/errors"
 
 	"github.com/crossplane-contrib/terrajet/pkg/comments"
+	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
 )
 
 // NewBuilder returns a new Builder.
@@ -49,12 +48,12 @@ type Builder struct {
 }
 
 // Build returns parameters and observation types built out of Terraform schema.
-func (g *Builder) Build(name string, references resource.References, schema *schema.Resource) ([]*types.Named, twtypes.Comments, error) {
-	_, _, err := g.buildResource(schema, references, name)
+func (g *Builder) Build(name string, schema *schema.Resource, refs resource.References) ([]*types.Named, twtypes.Comments, error) {
+	_, _, err := g.buildResource(schema, refs, name)
 	return g.genTypes, g.comments, errors.Wrapf(err, "cannot build the types")
 }
 
-func (g *Builder) buildResource(res *schema.Resource, references resource.References, names ...string) (*types.Named, *types.Named, error) { //nolint:gocyclo
+func (g *Builder) buildResource(res *schema.Resource, refs resource.References, names ...string) (*types.Named, *types.Named, error) { //nolint:gocyclo
 	// NOTE(muvaf): There can be fields in the same CRD with same name but in
 	// different types. Since we generate the type using the field name, there
 	// can be collisions. In order to be able to generate unique names consistently,
@@ -97,14 +96,17 @@ func (g *Builder) buildResource(res *schema.Resource, references resource.Refere
 		if comment.TerrajetOptions.FieldJSONTag != nil {
 			jsonTag = *comment.TerrajetOptions.FieldJSONTag
 		}
-		fieldType, err := g.buildSchema(sch, references, append(names, fieldName.Camel))
+		fieldType, err := g.buildSchema(sch, refs, append(names, fieldName.Camel))
 		if err != nil {
 			return nil, nil, errors.Wrapf(err, "cannot infer type from schema of field %s", fieldName.Snake)
 		}
 
+		// Build the field path based on the fact that names is a slice of
+		// strings which contains the name of the parent fields sequentially.
+		// We skip the first element since it is the main CRD type.
 		fp := strings.Join(append(names[1:], fieldName.Camel), ".")
-		if references[fp].Type != "" {
-			comment.ReferenceConfiguration = references[fp]
+		if ref, ok := refs[fp]; ok {
+			comment.ReferenceConfiguration = ref
 			sch.Optional = true
 		}
 		field := types.NewField(token.NoPos, g.Package, fieldName.Camel, fieldType, false)
@@ -128,9 +130,11 @@ func (g *Builder) buildResource(res *schema.Resource, references resource.Refere
 			paramFields = append(paramFields, field)
 		}
 
-		refFields, refTags := g.getReferenceFields(paramName, field, references[fp])
-		paramTags = append(paramTags, refTags...)
-		paramFields = append(paramFields, refFields...)
+		if ref, ok := refs[fp]; ok {
+			refFields, refTags := g.getReferenceFields(paramName, field, ref)
+			paramTags = append(paramTags, refTags...)
+			paramFields = append(paramFields, refFields...)
+		}
 
 		g.comments.AddFieldComment(paramName, fieldName.Camel, comment.Build())
 	}
@@ -153,7 +157,7 @@ func (g *Builder) buildResource(res *schema.Resource, references resource.Refere
 	return paramType, obsType, nil
 }
 
-func (g *Builder) buildSchema(sch *schema.Schema, references resource.References, names []string) (types.Type, error) { // nolint:gocyclo
+func (g *Builder) buildSchema(sch *schema.Schema, refs resource.References, names []string) (types.Type, error) { // nolint:gocyclo
 	switch sch.Type {
 	case schema.TypeBool:
 		if sch.Optional {
@@ -193,14 +197,14 @@ func (g *Builder) buildSchema(sch *schema.Schema, references resource.References
 				return nil, errors.Errorf("element type of %s is basic but not one of known basic types", fieldPath(names...))
 			}
 		case *schema.Schema:
-			elemType, err = g.buildSchema(et, references, names)
+			elemType, err = g.buildSchema(et, refs, names)
 			if err != nil {
 				return nil, errors.Wrapf(err, "cannot infer type from schema of element type of %s", fieldPath(names...))
 			}
 		case *schema.Resource:
 			// TODO(muvaf): We skip the other type once we choose one of param
 			// or obs types. This might cause some fields to be completely omitted.
-			paramType, obsType, err := g.buildResource(et, references, names...)
+			paramType, obsType, err := g.buildResource(et, refs, names...)
 			if err != nil {
 				return nil, errors.Wrapf(err, "cannot infer type from resource schema of element type of %s", fieldPath(names...))
 			}
