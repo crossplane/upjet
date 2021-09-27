@@ -35,7 +35,7 @@ const (
 	// AnnotationKeyPrivateRawAttribute is the key that points to private attribute
 	// of the Terraform State. It's non-sensitive and used by provider to store
 	// arbitrary metadata, usually details about schema version.
-	AnnotationKeyPrivateRawAttribute = "terrajet.crossplane.io/private-raw"
+	AnnotationKeyPrivateRawAttribute = "terrajet.crossplane.io/provider-meta"
 )
 
 // Error strings.
@@ -161,6 +161,9 @@ type Resource struct {
 func (r *Resource) validate() error {
 	if r.LabelName == "" || r.LabelType == "" {
 		return errors.Errorf(fmtErrValidationResource, r.LabelType, r.LabelName)
+	}
+	if r.UID == "" {
+		return errors.New("invalid resource specification: uid is required")
 	}
 	return nil
 }

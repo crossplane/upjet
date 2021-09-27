@@ -38,6 +38,9 @@ const (
 )
 
 var (
+	// ansiEscaper is used to remove color characters that Terraform CLI uses
+	// in its output because they make reading the string challenging in the contexts
+	// where coloring is not available, such as custom resource or events.
 	ansiEscaper = regexp.MustCompile("[\u001B\u009B][[\\]()#;?]*(?:(?:(?:[a-zA-Z\\d]*(?:;[a-zA-Z\\d]*)*)?\u0007)|(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PRZcf-ntqry=><~]))")
 )
 

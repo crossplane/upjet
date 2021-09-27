@@ -53,7 +53,7 @@ type DestroyResult struct {
 // Client represents a Terraform client capable of running
 // Refresh, Apply, Destroy pipelines.
 type Client interface {
-	Refresh(ctx context.Context, id string) (RefreshResult, error)
+	Refresh(ctx context.Context) (RefreshResult, error)
 	Apply(ctx context.Context) (ApplyResult, error)
 	Destroy(ctx context.Context) (DestroyResult, error)
 	Close(ctx context.Context) error

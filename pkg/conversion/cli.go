@@ -78,7 +78,7 @@ func NewCLI(client model.Client) *CLI {
 // Observe is a Terraform CLI implementation for Observe function of Adapter interface.
 func (t *CLI) Observe(ctx context.Context, tr resource.Terraformed) (Observation, error) {
 
-	tfRes, err := t.tfcli.Refresh(ctx, xpmeta.GetExternalName(tr))
+	tfRes, err := t.tfcli.Refresh(ctx)
 
 	if tferrors.IsApplying(err) {
 		//  A previously started "Apply" operation is in progress or completed
