@@ -35,28 +35,22 @@ const (
 )
 
 // Refresh updates local state of the Cloud resource in a synchronous manner
-func (c *Client) Refresh(ctx context.Context, _ string) (model.RefreshResult, error) {
+func (c *Client) Refresh(ctx context.Context) (model.RefreshResult, error) {
 	if _, err := c.initConfiguration(model.OperationRefresh, false); err != nil {
 		return model.RefreshResult{}, err
 	}
-	// Prepare the workspace for a refresh operation because the state that comes
-	// with import may not include all information we have. So, we first write
-	// everything into state file and then run refresh to update the ones that
-	// can be updated with the current state of the world. Import cannot be ru
-	// with existing state file.
+	// Prepare the workspace for a refresh operation. The reason we run refresh
+	// in all cases including import is that the state that comes with "import"
+	// may not include all information we have. So, we first write everything
+	// into state file, which could include additional parameters that user has
+	// but not covered by import, and then run refresh. Otherwise, users would
+	// first give only external name, let import run, and then fill the gaps
+	// because we don't have a clear signal like checking tfstate existence to
+	// understand whether import or refresh needs to be run. It's safer to run
+	// the one that can work in all those cases.
 	if err := c.storeStateInWorkspace(); err != nil {
 		return model.RefreshResult{}, err
 	}
-	result, err := c.observe(ctx)
-	return result, multierr.Combine(err, c.removeStateStore())
-}
-
-// observe checks whether the specified resource is up-to-date
-// using a synchronous pipeline.
-// RefreshResult.State is non-nil and holds the fresh Terraform state iff
-// RefreshResult.Completed is true.
-func (c *Client) observe(ctx context.Context) (model.RefreshResult, error) {
-	// now try to run the refresh pipeline synchronously
 	if err := c.syncPipeline(ctx, true, "sh", "-c",
 		fmt.Sprintf("%s apply -refresh-only -auto-approve -input=false && %s plan -detailed-exitcode -refresh=false -input=false -json",
 			pathTerraform, pathTerraform)); err != nil {
@@ -88,7 +82,7 @@ func (c *Client) observe(ctx context.Context) (model.RefreshResult, error) {
 		Exists:   !needAdd,
 		UpToDate: !needChange,
 		State:    st,
-	}, nil
+	}, multierr.Combine(err, c.removeStateStore())
 }
 
 func parsePlan(log string) (needAdd bool, needChange bool, err error) {
