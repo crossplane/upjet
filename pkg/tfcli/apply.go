@@ -60,5 +60,5 @@ func (c *Client) Apply(_ context.Context) (model.ApplyResult, error) {
 	// if pipeline is not started yet, try to start it
 	return model.ApplyResult{}, c.asyncPipeline(pathTerraform, func(c *Client, stdout, _ string) error {
 		return c.storePipelineResult(stdout)
-	}, "apply", "-auto-approve", "-input=false")
+	}, "apply", "-auto-approve", "-input=false", "-no-color")
 }

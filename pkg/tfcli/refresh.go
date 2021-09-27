@@ -29,7 +29,7 @@ import (
 )
 
 const (
-	errFmtObserve   = "observe failed with the following error: %s"
+	errFmtObserve   = "observe failed with exit code %d and error: %s"
 	errFmtNoPlan    = "plan line not found in Terraform CLI output: %s"
 	errFmtParsePlan = "failed to parse Terraform plan output: %s"
 )
@@ -52,7 +52,7 @@ func (c *Client) Refresh(ctx context.Context) (model.RefreshResult, error) {
 		return model.RefreshResult{}, err
 	}
 	if err := c.syncPipeline(ctx, true, "sh", "-c",
-		fmt.Sprintf("%s apply -refresh-only -auto-approve -input=false && %s plan -detailed-exitcode -refresh=false -input=false -json",
+		fmt.Sprintf("%s apply -refresh-only -auto-approve -input=false -no-color && %s plan -detailed-exitcode -refresh=false -input=false -json",
 			pathTerraform, pathTerraform)); err != nil {
 		return model.RefreshResult{}, err
 	}
