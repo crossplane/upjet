@@ -60,5 +60,5 @@ func (c *Client) Destroy(_ context.Context) (model.DestroyResult, error) {
 	return model.DestroyResult{},
 		c.asyncPipeline(pathTerraform, func(c *Client, stdout, _ string) error {
 			return c.storePipelineResult(stdout)
-		}, "destroy", "-auto-approve", "-input=false")
+		}, "destroy", "-auto-approve", "-input=false", "-no-color")
 }

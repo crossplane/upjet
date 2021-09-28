@@ -31,25 +31,24 @@ import (
 
 const (
 	defaultAsyncTimeout = 2 * time.Minute
-	// error format strings
+	fmtResourceAddress  = "%s.%s"
+	// AnnotationKeyPrivateRawAttribute is the key that points to private attribute
+	// of the Terraform State. It's non-sensitive and used by provider to store
+	// arbitrary metadata, usually details about schema version.
+	AnnotationKeyPrivateRawAttribute = "terrajet.crossplane.io/provider-meta"
+)
+
+// Error strings.
+const (
 	errValidationNoLogger    = "no logger has been configured"
 	errValidationNoHandle    = "no workspace handle has been configured"
 	fmtErrValidationResource = "invalid resource specification: both type and name are required: type=%q and name=%q"
-	fmtErrValidationProvider = "invalid setup.requirement specification: both source and version are required: source=%q and version=%q"
+	fmtErrValidationProvider = "invalid provider specification: both source and version are required: source=%q and version=%q"
 	fmtErrValidationVersion  = "invalid setup specification, Terraform version not provided"
-
-	fmtResourceAddress = "%s.%s"
 )
 
 // A ClientOption configures a Client
 type ClientOption func(c *Client)
-
-// WithState sets the Terraform state cache of a Client
-func WithState(tfState []byte) ClientOption {
-	return func(c *Client) {
-		c.tfState = tfState
-	}
-}
 
 // WithLogger configures the logger to be used by a Client
 func WithLogger(logger logging.Logger) ClientOption {
@@ -58,29 +57,10 @@ func WithLogger(logger logging.Logger) ClientOption {
 	}
 }
 
-// WithResourceName sets the Terraform resource name to be used in the
-// generated Terraform configuration
-func WithResourceName(resourceName string) ClientOption {
+// WithResource sets all the information we need about the resource.
+func WithResource(r *Resource) ClientOption {
 	return func(c *Client) {
-		c.resource.LabelName = resourceName
-	}
-}
-
-// WithResourceType sets the Terraform resource type to be used in the
-// generated Terraform configuration
-func WithResourceType(resourceType string) ClientOption {
-	return func(c *Client) {
-		c.resource.LabelType = resourceType
-	}
-}
-
-// WithResourceBody sets the Terraform resource body parameter block to
-// be used in the generated  Terraform configuration. resourceBody
-// must be a whole JSON document containing the serialized resource
-// parameters.
-func WithResourceBody(body map[string]interface{}) ClientOption {
-	return func(c *Client) {
-		c.resource.Body = body
+		c.resource = r
 	}
 }
 
@@ -167,29 +147,47 @@ func (c Client) validate() error {
 
 // Resource holds values for the Terraform HCL resource block's two labels and body
 type Resource struct {
-	LabelType string
-	LabelName string
-	Body      map[string]interface{}
-	Lifecycle Lifecycle
+	LabelType    string
+	LabelName    string
+	ExternalName string
+	UID          string
+	Parameters   map[string]interface{}
+	Observation  map[string]interface{}
+
+	// This is a provider-specific metadata that varies between TF providers.
+	PrivateRaw string
 }
 
-// Lifecycle holds values for the Terraform HCL resource block's lifecycle options:
-// https://www.terraform.io/docs/language/meta-arguments/lifecycle.html
-type Lifecycle struct {
-	PreventDestroy bool
-}
-
-func (r Resource) validate() error {
+func (r *Resource) validate() error {
 	if r.LabelName == "" || r.LabelType == "" {
 		return errors.Errorf(fmtErrValidationResource, r.LabelType, r.LabelName)
+	}
+	if r.UID == "" {
+		return errors.New("invalid resource specification: uid is required")
 	}
 	return nil
 }
 
 // GetAddress returns the Terraform configuration resource address of
 // the receiver Resource
-func (r Resource) GetAddress() string {
+func (r *Resource) GetAddress() string {
 	return fmt.Sprintf(fmtResourceAddress, r.LabelType, r.LabelName)
+}
+
+// ProduceStateAttributes returns all information we have about the resource
+// that can be used as attributes in the state file.
+func (r *Resource) ProduceStateAttributes() map[string]interface{} {
+	base := make(map[string]interface{})
+	// NOTE(muvaf): Since we try to produce the current state, observation
+	// takes precedence over parameters.
+	for k, v := range r.Parameters {
+		base[k] = v
+	}
+	for k, v := range r.Observation {
+		base[k] = v
+	}
+	base["id"] = r.ExternalName
+	return base
 }
 
 // ProviderRequirement holds values for the Terraform HCL setup requirements

@@ -25,7 +25,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/crossplane-contrib/terrajet/pkg/json"
-	"github.com/crossplane-contrib/terrajet/pkg/meta"
 	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
 	"github.com/crossplane-contrib/terrajet/pkg/tfcli"
 	tferrors "github.com/crossplane-contrib/terrajet/pkg/tfcli/errors"
@@ -42,31 +41,26 @@ const (
 // (i.e. desired spec input) and terraform state (if available) for a given
 // client builder base.
 func BuildClientForResource(ctx context.Context, tr resource.Terraformed, opts ...tfcli.ClientOption) (model.Client, error) {
-	var stateRaw []byte
-	if meta.GetState(tr) != "" {
-		stEnc := meta.GetState(tr)
-		st, err := json.BuildStateV4(stEnc, nil)
-		if err != nil {
-			return nil, errors.Wrap(err, "cannot build state")
-		}
-
-		stateRaw, err = st.Serialize()
-		if err != nil {
-			return nil, errors.Wrap(err, "cannot serialize state")
-		}
-	}
-
 	params, err := tr.GetParameters()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get parameters")
 	}
-
+	obs, err := tr.GetObservation()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get observation")
+	}
+	r := &tfcli.Resource{
+		LabelType:    tr.GetTerraformResourceType(),
+		LabelName:    tr.GetName(),
+		UID:          string(tr.GetUID()),
+		ExternalName: xpmeta.GetExternalName(tr),
+		Parameters:   params,
+		Observation:  obs,
+		PrivateRaw:   tr.GetAnnotations()[tfcli.AnnotationKeyPrivateRawAttribute],
+	}
 	return tfcli.NewClient(ctx, append(opts,
-		tfcli.WithState(stateRaw),
-		tfcli.WithResourceBody(params),
-		tfcli.WithResourceName(tr.GetName()),
-		tfcli.WithHandle(string(tr.GetUID())),
-		tfcli.WithResourceType(tr.GetTerraformResourceType()))...)
+		tfcli.WithResource(r),
+		tfcli.WithHandle(string(tr.GetUID())))...)
 }
 
 // CLI is an Adapter implementation for Terraform CLI
@@ -84,7 +78,7 @@ func NewCLI(client model.Client) *CLI {
 // Observe is a Terraform CLI implementation for Observe function of Adapter interface.
 func (t *CLI) Observe(ctx context.Context, tr resource.Terraformed) (Observation, error) {
 
-	tfRes, err := t.tfcli.Refresh(ctx, xpmeta.GetExternalName(tr))
+	tfRes, err := t.tfcli.Refresh(ctx)
 
 	if tferrors.IsApplying(err) {
 		//  A previously started "Apply" operation is in progress or completed
@@ -114,11 +108,13 @@ func (t *CLI) Observe(ctx context.Context, tr resource.Terraformed) (Observation
 	}
 	// No tfcli operation was in progress, our blocking observation completed
 	// successfully, and we have an observation to consume.
-
-	// If resource does not exist, and it was actually deleted, we no longer
-	// need this client (hence underlying workspace) for this resource.
-	if !tfRes.Exists && xpmeta.WasDeleted(tr) {
-		return Observation{}, errors.Wrap(t.tfcli.Close(ctx), "failed to clean up tfcli client")
+	if !tfRes.Exists {
+		// If resource does not exist, and it was actually deleted, we no longer
+		// need this client (hence underlying workspace) for this resource.
+		if xpmeta.WasDeleted(tr) {
+			return Observation{}, errors.Wrap(t.tfcli.Close(ctx), "failed to clean up tfcli client")
+		}
+		return Observation{}, nil
 	}
 
 	// After a successful observation, we now have a state to consume.
@@ -187,52 +183,43 @@ func (t *CLI) Delete(ctx context.Context, _ resource.Terraformed) (bool, error) 
 }
 
 // consumeState parses input tfstate and sets related fields in the custom resource.
-func consumeState(state []byte, tr resource.Terraformed) (managed.ConnectionDetails, error) {
-	st, err := json.UnmarshalStateV4(state)
-	if err != nil {
-		return nil, errors.Wrap(err, "cannot build state")
+func consumeState(st *json.StateV4, tr resource.Terraformed) (managed.ConnectionDetails, error) {
+	attr := map[string]interface{}{}
+	if err := json.JSParser.Unmarshal(st.GetAttributes(), &attr); err != nil {
+		return nil, errors.Wrap(err, "cannot parse state attributes")
 	}
-
 	if xpmeta.GetExternalName(tr) == "" {
 		// Terraform stores id for the external resource as an attribute in the
 		// resource state. Key for the attribute holding external identifier is
 		// resource specific. We rely on GetTerraformResourceIdField() function
 		// to find out that key.
-		stAttr := map[string]interface{}{}
-		if err = json.JSParser.Unmarshal(st.GetAttributes(), &stAttr); err != nil {
-			return nil, errors.Wrap(err, "cannot parse state attributes")
-		}
 
-		id, exists := stAttr[tr.GetTerraformResourceIdField()]
+		id, exists := attr[tr.GetTerraformResourceIdField()]
 		if !exists {
-			return nil, errors.Wrapf(err, "no value for id field: %s", tr.GetTerraformResourceIdField())
+			return nil, errors.Errorf("no value for id field: %s", tr.GetTerraformResourceIdField())
 		}
 		extID, ok := id.(string)
 		if !ok {
-			return nil, errors.Wrap(err, "id field is not a string")
+			return nil, errors.Errorf("id field is not a string")
 		}
 		xpmeta.SetExternalName(tr, extID)
 	}
+	xpmeta.AddAnnotations(tr, map[string]string{
+		tfcli.AnnotationKeyPrivateRawAttribute: string(st.GetPrivateRaw()),
+	})
 
 	// TODO(hasan): Handle late initialization
 
-	if err = tr.SetObservation(st.GetAttributes()); err != nil {
+	if err := tr.SetObservation(attr); err != nil {
 		return nil, errors.Wrap(err, "cannot set observation")
 	}
 
 	conn := managed.ConnectionDetails{}
 	sensitive := st.GetSensitiveAttributes()
 	if jsoniter.Get(sensitive, '*').Size() > 0 {
-		if err = json.JSParser.Unmarshal(sensitive, &conn); err != nil {
+		if err := json.JSParser.Unmarshal(sensitive, &conn); err != nil {
 			return nil, errors.Wrap(err, "cannot parse connection details")
 		}
 	}
-
-	stEnc, err := st.GetEncodedState()
-	if err != nil {
-		return nil, errors.Wrap(err, "cannot encoded state")
-	}
-	meta.SetState(tr, stEnc)
-
 	return conn, nil
 }

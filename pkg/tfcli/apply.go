@@ -44,20 +44,13 @@ func (c *Client) Apply(_ context.Context) (model.ApplyResult, error) {
 	if err == nil {
 		switch *code {
 		case 0:
-			// then check the state and try to load it if available
-			if err := c.loadStateFromWorkspace(); err != nil {
+			st, err := c.loadStateFromWorkspace()
+			if err != nil {
 				return model.ApplyResult{}, err
 			}
-			// and it has been stored
-			return model.ApplyResult{
-				Completed: true,
-				State:     c.tfState,
-			}, nil
-
+			return model.ApplyResult{Completed: true, State: st}, nil
 		default:
-			return model.ApplyResult{
-				Completed: true,
-			}, errors.Errorf(fmtErrApply, tfLog)
+			return model.ApplyResult{Completed: true}, errors.Errorf(fmtErrApply, tfLog)
 		}
 	}
 	// then check pipeline state. If pipeline is already started we need to wait.
@@ -67,5 +60,5 @@ func (c *Client) Apply(_ context.Context) (model.ApplyResult, error) {
 	// if pipeline is not started yet, try to start it
 	return model.ApplyResult{}, c.asyncPipeline(pathTerraform, func(c *Client, stdout, _ string) error {
 		return c.storePipelineResult(stdout)
-	}, "apply", "-auto-approve", "-input=false")
+	}, "apply", "-auto-approve", "-input=false", "-no-color")
 }

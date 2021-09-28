@@ -31,7 +31,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/crossplane-contrib/terrajet/pkg/conversion"
-	"github.com/crossplane-contrib/terrajet/pkg/meta"
 	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
 	"github.com/crossplane-contrib/terrajet/pkg/tfcli"
 )
@@ -74,7 +73,9 @@ func (c *Connector) Connect(ctx context.Context, mg xpresource.Managed) (managed
 		return nil, errors.Wrap(err, "cannot get provider setup")
 	}
 
-	tfCli, err := conversion.BuildClientForResource(ctx, tr, tfcli.WithLogger(c.logger), tfcli.WithTerraformSetup(ps))
+	tfCli, err := conversion.BuildClientForResource(ctx, tr,
+		tfcli.WithLogger(c.logger),
+		tfcli.WithTerraformSetup(ps))
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot build tf client for resource")
 	}
@@ -101,7 +102,7 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 		return managed.ExternalObservation{}, errors.New(errUnexpectedObject)
 	}
 
-	if xpmeta.GetExternalName(tr) == "" && meta.GetState(tr) == "" {
+	if xpmeta.GetExternalName(tr) == "" {
 		return managed.ExternalObservation{
 			ResourceExists: false,
 		}, nil
@@ -175,7 +176,7 @@ func (e *external) Delete(ctx context.Context, mg xpresource.Managed) error {
 // the object.
 func (e *external) persistState(ctx context.Context, obj xpresource.Object) error {
 	externalName := xpmeta.GetExternalName(obj)
-	newState := meta.GetState(obj)
+	privateRaw := obj.GetAnnotations()[tfcli.AnnotationKeyPrivateRawAttribute]
 
 	err := retry.OnError(retry.DefaultRetry, xpresource.IsAPIError, func() error {
 		nn := types.NamespacedName{Name: obj.GetName()}
@@ -184,7 +185,7 @@ func (e *external) persistState(ctx context.Context, obj xpresource.Object) erro
 		}
 
 		xpmeta.SetExternalName(obj, externalName)
-		meta.SetState(obj, newState)
+		xpmeta.AddAnnotations(obj, map[string]string{tfcli.AnnotationKeyPrivateRawAttribute: privateRaw})
 		return e.kube.Update(ctx, obj)
 	})
 

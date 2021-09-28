@@ -33,6 +33,14 @@ const (
 	errNotOneInstance = "state file should contain exactly 1 instance"
 )
 
+// NewStateV4 returns a new base StateV4 object.
+func NewStateV4() *StateV4 {
+	return &StateV4{
+		Version: 4,
+		Serial:  1,
+	}
+}
+
 // State file schema from https://github.com/hashicorp/terraform/blob/d9dfd451ea572219871bb9c5503a471418258e40/internal/states/statefile/version4.go
 
 // StateV4 represents a version 4 terraform state
@@ -136,6 +144,12 @@ func (st *StateV4) GetAttributes() jsoniter.RawMessage {
 // GetSensitiveAttributes returns sensitive attributes of the Terraform managed resource (i.e. first instance of first resource)
 func (st *StateV4) GetSensitiveAttributes() jsoniter.RawMessage {
 	return st.Resources[0].Instances[0].AttributeSensitivePaths
+}
+
+// GetPrivateRaw returns private attribute of the Terraform managed resource
+// that is used as metadata by the Terraform provider
+func (st *StateV4) GetPrivateRaw() []byte {
+	return st.Resources[0].Instances[0].PrivateRaw
 }
 
 // GetEncodedState returns base64 encoded sanitized (i.e. sensitive attributes removed) state

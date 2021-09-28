@@ -33,6 +33,7 @@ import (
 	"github.com/spf13/afero"
 	"go.uber.org/multierr"
 
+	"github.com/crossplane-contrib/terrajet/pkg/json"
 	"github.com/crossplane-contrib/terrajet/pkg/process"
 	tferrors "github.com/crossplane-contrib/terrajet/pkg/tfcli/errors"
 	"github.com/crossplane-contrib/terrajet/pkg/tfcli/model"
@@ -54,21 +55,17 @@ const (
 	errReadFile         = "failed to read file"
 	fmtErrCheckTFState  = "failed to check Terraform state lock: %s"
 	fmtErrPath          = "failed to check path on filesystem: %s: Expected a dir: %v, found a dir: %v"
-	fmtErrLoadState     = "failed to load state from file: %s"
 	fmtErrStoreState    = "failed to store state into file: %s"
 	fmtErrAsyncRun      = "failed to run async Terraform pipeline %q with args: %v: in dir: %s"
 	fmtErrSyncRun       = "failed to run sync Terraform pipeline %q with args: %v: in dir: %s"
-
-	tfMsgNonExistentResource = "Cannot import non-existent remote object"
 )
 
 // Client is an implementation of types.Client and represents a
 // Terraform client capable of running Refresh, Apply, Destroy pipelines.
 type Client struct {
 	setup    TerraformSetup
-	resource Resource
+	resource *Resource
 	handle   string
-	tfState  []byte
 	logger   logging.Logger
 	wsPath   string
 	pInfo    *process.Info
@@ -112,11 +109,6 @@ func (c *Client) parsePipelineResult(opType model.OperationType) (*int, string, 
 
 	opInProgress := err != nil
 	if !opInProgress {
-		// then caller needs to start an async pipeline.
-		// try to save the given state
-		if err := c.storeStateInWorkspace(); err != nil {
-			return nil, "", err
-		}
 		return nil, "", tferrors.NewPipelineInProgressError(tferrors.PipelineNotStarted)
 	}
 
@@ -198,23 +190,46 @@ func (c *Client) syncPipeline(ctx context.Context, ignoreExitErr bool, command s
 }
 
 // load Terraform state into Client's cache
-func (c *Client) loadStateFromWorkspace() error {
-	pathState := filepath.Join(c.wsPath, fileState)
-	var err error
-	c.tfState, err = c.readFile(pathState)
+func (c *Client) loadStateFromWorkspace() (*json.StateV4, error) {
+	s, err := os.ReadFile(filepath.Join(c.wsPath, fileState))
 	if err != nil {
-		return errors.Wrapf(err, fmtErrLoadState, pathState)
+		return nil, err
 	}
-	return nil
+	st := &json.StateV4{}
+	return st, json.JSParser.Unmarshal(s, st)
 }
 
 func (c *Client) storeStateInWorkspace() error {
-	if c.tfState == nil {
-		return nil
+	attr, err := json.JSParser.Marshal(c.resource.ProduceStateAttributes())
+	if err != nil {
+		return errors.Wrap(err, "cannot marshal produced state attributes")
 	}
-
+	st := json.NewStateV4()
+	st.TerraformVersion = c.setup.Version
+	st.Lineage = c.resource.UID
+	st.Resources = []json.ResourceStateV4{
+		{
+			Mode: "managed",
+			Type: c.resource.LabelType,
+			Name: c.resource.LabelName,
+			// TODO(muvaf): we should get the full URL from Dockerfile since
+			// providers don't have to be hosted in registry.terraform.io
+			ProviderConfig: fmt.Sprintf(`provider["registry.terraform.io/%s"]`, c.setup.Requirement.Source),
+			Instances: []json.InstanceObjectStateV4{
+				{
+					SchemaVersion: 0,
+					PrivateRaw:    []byte(c.resource.PrivateRaw),
+					AttributesRaw: attr,
+				},
+			},
+		},
+	}
+	raw, err := json.JSParser.Marshal(st)
+	if err != nil {
+		return errors.Wrap(err, "cannot marshal state object")
+	}
 	pathState := filepath.Join(c.wsPath, fileState)
-	return errors.Wrapf(c.writeFile(pathState, c.tfState, 0600), fmtErrStoreState, pathState)
+	return errors.Wrapf(c.writeFile(pathState, raw, 0600), fmtErrStoreState, pathState)
 }
 
 func (c *Client) pathExists(path string, isDir bool) (bool, error) {
