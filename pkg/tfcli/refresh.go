@@ -17,94 +17,62 @@ limitations under the License.
 package tfcli
 
 import (
+	"bytes"
 	"context"
-	"fmt"
-	"strings"
+	"os"
+	"os/exec"
+	"path/filepath"
 
 	"github.com/pkg/errors"
-	"go.uber.org/multierr"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/crossplane-contrib/terrajet/pkg/json"
 	"github.com/crossplane-contrib/terrajet/pkg/tfcli/model"
 )
 
-const (
-	errFmtObserve   = "observe failed with exit code %d and error: %s"
-	errFmtNoPlan    = "plan line not found in Terraform CLI output: %s"
-	errFmtParsePlan = "failed to parse Terraform plan output: %s"
-)
+func (w *Workspace) Refresh(ctx context.Context) (model.RefreshResult, error) {
+	if w.LastOperation.StartTime != nil {
+		// The last operation is still ongoing.
+		if w.LastOperation.EndTime == nil {
+			return model.RefreshResult{
+				IsCreating:   w.LastOperation.Type == "apply",
+				IsDestroying: w.LastOperation.Type == "destroy",
+			}, nil
+		}
+		// We know that the operation finished, so we need to flush so that new
+		// operation can be started.
+		defer w.LastOperation.Flush()
 
-// Refresh updates local state of the Cloud resource in a synchronous manner
-func (c *Client) Refresh(ctx context.Context) (model.RefreshResult, error) {
-	if _, err := c.initConfiguration(model.OperationRefresh, false); err != nil {
-		return model.RefreshResult{}, err
-	}
-	// Prepare the workspace for a refresh operation. The reason we run refresh
-	// in all cases including import is that the state that comes with "import"
-	// may not include all information we have. So, we first write everything
-	// into state file, which could include additional parameters that user has
-	// but not covered by import, and then run refresh. Otherwise, users would
-	// first give only external name, let import run, and then fill the gaps
-	// because we don't have a clear signal like checking tfstate existence to
-	// understand whether import or refresh needs to be run. It's safer to run
-	// the one that can work in all those cases.
-	if err := c.storeStateInWorkspace(); err != nil {
-		return model.RefreshResult{}, err
-	}
-	if err := c.syncPipeline(ctx, true, "sh", "-c",
-		fmt.Sprintf("%s apply -refresh-only -auto-approve -input=false -no-color && %s plan -detailed-exitcode -refresh=false -input=false -json",
-			pathTerraform, pathTerraform)); err != nil {
-		return model.RefreshResult{}, err
-	}
-	code := c.pInfo.GetProcessState().ExitCode()
-	stdout, err := c.pInfo.StdoutAsString()
-	if err != nil {
-		return model.RefreshResult{}, err
-	}
-	stderr, err := c.pInfo.StderrAsString()
-	if err != nil {
-		return model.RefreshResult{}, err
-	}
-	// Code 2 means that we need to make a change and that's a valid case for
-	// us, so we don't treat it as an error case.
-	if code != 0 && code != 2 {
-		return model.RefreshResult{}, errors.Errorf(errFmtObserve, code, stderr)
-	}
-	needAdd, needChange, err := parsePlan(stdout)
-	if err != nil {
-		return model.RefreshResult{}, errors.Wrapf(err, errFmtParsePlan, stdout)
-	}
-	st, err := c.loadStateFromWorkspace()
-	if err != nil {
-		return model.RefreshResult{}, err
-	}
-	return model.RefreshResult{
-		Exists:   !needAdd,
-		UpToDate: !needChange,
-		State:    st,
-	}, multierr.Combine(err, c.removeStateStore())
-}
-
-func parsePlan(log string) (needAdd bool, needChange bool, err error) {
-	line := ""
-	for _, l := range strings.Split(log, "\n") {
-		if strings.Contains(l, `"type":"change_summary"`) {
-			line = l
-			break
+		// The last operation finished with error.
+		if w.LastOperation.err != nil {
+			return model.RefreshResult{
+				IsCreating:         w.LastOperation.Type == "apply",
+				IsDestroying:       w.LastOperation.Type == "destroy",
+				LastOperationError: errors.Wrapf(w.LastOperation.err, "%s operation failed", w.LastOperation.Type),
+			}, nil
+		}
+		// The deletion is completed so there is no resource to refresh.
+		if w.LastOperation.Type == "destroy" {
+			return model.RefreshResult{}, kerrors.NewNotFound(schema.GroupResource{}, "")
 		}
 	}
-	if line == "" {
-		return false, false, errors.Errorf(errFmtNoPlan, log)
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	cmd := exec.CommandContext(ctx, "terraform", "apply", "-refresh-only", "-auto-approve", "-input=false", "-no-color", "-detailed-exitcode", "-json")
+	cmd.Dir = w.dir
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	if err := cmd.Run(); err != nil {
+		return model.RefreshResult{}, errors.Wrapf(err, "cannot refresh: %s", stderr.String())
 	}
-	type plan struct {
-		Changes struct {
-			Add    float64 `json:"add,omitempty"`
-			Change float64 `json:"change,omitempty"`
-		} `json:"changes,omitempty"`
+	raw, err := os.ReadFile(filepath.Join(w.dir, "terraform.tfstate"))
+	if err != nil {
+		return model.RefreshResult{}, errors.Wrap(err, "cannot read terraform state file")
 	}
-	p := &plan{}
-	if err := json.JSParser.Unmarshal([]byte(line), p); err != nil {
-		return false, false, errors.Wrap(err, "cannot unmarshal change summary json")
+	s := &json.StateV4{}
+	if err := json.JSParser.Unmarshal(raw, s); err != nil {
+		return model.RefreshResult{}, errors.Wrap(err, "cannot unmarshal tfstate file")
 	}
-	return p.Changes.Add > 0, p.Changes.Change > 0, nil
+	return model.RefreshResult{State: s}, nil
 }

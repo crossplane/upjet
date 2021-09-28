@@ -17,48 +17,67 @@ limitations under the License.
 package tfcli
 
 import (
+	"bytes"
 	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
+
+	"github.com/crossplane-contrib/terrajet/pkg/tfcli/model"
 
 	"github.com/pkg/errors"
 
-	tferrors "github.com/crossplane-contrib/terrajet/pkg/tfcli/errors"
-	"github.com/crossplane-contrib/terrajet/pkg/tfcli/model"
+	"github.com/crossplane-contrib/terrajet/pkg/json"
 )
 
-const (
-	fmtErrApply = "failed to apply Terraform configuration: %s"
-)
-
-// Apply attempts to provision the resource.
-// ApplyResult.Completed is false if the operation has not yet been completed.
-// ApplyResult.State is non-nil and holds the fresh Terraform state iff
-// ApplyResult.Completed is true.
-func (c *Client) Apply(_ context.Context) (model.ApplyResult, error) {
-	code, tfLog, err := c.parsePipelineResult(model.OperationApply)
-	pipelineState, ok := tferrors.IsPipelineInProgress(err)
-	if !ok && err != nil {
-		return model.ApplyResult{}, err
+func (w *Workspace) ApplyAsync(_ context.Context) error {
+	if w.LastOperation.EndTime == nil {
+		return errors.Errorf("%s operation that started at %s is still running", w.LastOperation.Type, w.LastOperation.StartTime.String())
 	}
-	// if no pipeline state error and code is 0,
-	// then pipeline has completed successfully
-	if err == nil {
-		switch *code {
-		case 0:
-			st, err := c.loadStateFromWorkspace()
-			if err != nil {
-				return model.ApplyResult{}, err
-			}
-			return model.ApplyResult{Completed: true, State: st}, nil
-		default:
-			return model.ApplyResult{Completed: true}, errors.Errorf(fmtErrApply, tfLog)
+	w.LastOperation.MarkStart("apply")
+	ctx, cancel := context.WithDeadline(context.TODO(), w.LastOperation.StartTime.Add(defaultAsyncTimeout))
+	go func() {
+		stdout := &bytes.Buffer{}
+		stderr := &bytes.Buffer{}
+		cmd := exec.CommandContext(ctx, "terraform", "apply", "-auto-approve", "-input=false", "-no-color", "-detailed-exitcode", "-json")
+		cmd.Dir = w.dir
+		cmd.Stdout = stdout
+		cmd.Stderr = stderr
+		if err := cmd.Run(); err != nil {
+			w.LastOperation.err = errors.Wrapf(err, "cannot apply: %s", stderr.String())
 		}
+		w.LastOperation.MarkEnd()
+
+		// After the operation is completed, we need to get the results saved on
+		// the custom resource as soon as possible. We can wait for the next
+		// reconciliation, enqueue manually or update the CR independent of the
+		// reconciliation.
+		w.Enqueue()
+		cancel()
+	}()
+	return nil
+}
+
+func (w *Workspace) Apply(ctx context.Context) (model.ApplyResult, error) {
+	if w.LastOperation.EndTime == nil {
+		return model.ApplyResult{}, errors.Errorf("%s operation that started at %s is still running", w.LastOperation.Type, w.LastOperation.StartTime.String())
 	}
-	// then check pipeline state. If pipeline is already started we need to wait.
-	if pipelineState != tferrors.PipelineNotStarted {
-		return model.ApplyResult{}, nil
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	cmd := exec.CommandContext(ctx, "terraform", "apply", "-auto-approve", "-input=false", "-no-color", "-detailed-exitcode", "-json")
+	cmd.Dir = w.dir
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	if err := cmd.Run(); err != nil {
+		return model.ApplyResult{}, errors.Wrapf(err, "cannot apply: %s", stderr.String())
 	}
-	// if pipeline is not started yet, try to start it
-	return model.ApplyResult{}, c.asyncPipeline(pathTerraform, func(c *Client, stdout, _ string) error {
-		return c.storePipelineResult(stdout)
-	}, "apply", "-auto-approve", "-input=false", "-no-color")
+	raw, err := os.ReadFile(filepath.Join(w.dir, "terraform.tfstate"))
+	if err != nil {
+		return model.ApplyResult{}, errors.Wrap(err, "cannot read terraform state file")
+	}
+	s := &json.StateV4{}
+	if err := json.JSParser.Unmarshal(raw, s); err != nil {
+		return model.ApplyResult{}, errors.Wrap(err, "cannot unmarshal tfstate file")
+	}
+	return model.ApplyResult{State: s}, nil
 }

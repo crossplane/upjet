@@ -17,48 +17,43 @@ limitations under the License.
 package tfcli
 
 import (
+	"bytes"
 	"context"
+	"os/exec"
 
 	"github.com/pkg/errors"
-
-	tferrors "github.com/crossplane-contrib/terrajet/pkg/tfcli/errors"
-	"github.com/crossplane-contrib/terrajet/pkg/tfcli/model"
 )
 
-const (
-	fmtErrDestroy = "failed to destroy resource: %s"
-)
-
-// Destroy attempts to delete the resource.
-// DestroyResult.Completed is false if the operation has not yet been completed.
-func (c *Client) Destroy(_ context.Context) (model.DestroyResult, error) {
-	code, tfLog, err := c.parsePipelineResult(model.OperationDestroy)
-	pipelineState, ok := tferrors.IsPipelineInProgress(err)
-	if !ok && err != nil {
-		return model.DestroyResult{}, err
+func (w *Workspace) Destroy(_ context.Context) error {
+	switch {
+	// Destroy call is idempotent and can be called repeatedly.
+	case w.LastOperation.Type == "destroy":
+		return nil
+	// We cannot run destroy until current non-destroy operation is completed.
+	// TODO(muvaf): Gracefully terminate the ongoing apply operation?
+	case w.LastOperation.Type != "destroy" && w.LastOperation.EndTime == nil:
+		return errors.Errorf("%s operation that started at %s is still running", w.LastOperation.Type, w.LastOperation.StartTime.String())
 	}
-	// if no pipeline state error and code is 0,
-	// then pipeline has completed successfully
-	if err == nil {
-		switch *code {
-		case 0:
-			return model.DestroyResult{
-				Completed: true,
-			}, nil
-
-		default:
-			return model.DestroyResult{
-				Completed: true,
-			}, errors.Errorf(fmtErrDestroy, tfLog)
+	w.LastOperation.MarkStart("destroy")
+	ctx, cancel := context.WithDeadline(context.TODO(), w.LastOperation.StartTime.Add(defaultAsyncTimeout))
+	go func() {
+		stdout := &bytes.Buffer{}
+		stderr := &bytes.Buffer{}
+		cmd := exec.CommandContext(ctx, "terraform", "destroy", "-auto-approve", "-input=false", "-no-color", "-detailed-exitcode", "-json")
+		cmd.Dir = w.dir
+		cmd.Stdout = stdout
+		cmd.Stderr = stderr
+		if err := cmd.Run(); err != nil {
+			w.LastOperation.err = errors.Wrapf(err, "cannot destroy: %s", stderr.String())
 		}
-	}
-	// then check pipeline state. If pipeline is already started we need to wait.
-	if pipelineState != tferrors.PipelineNotStarted {
-		return model.DestroyResult{}, nil
-	}
-	// if pipeline is not started yet, try to start it
-	return model.DestroyResult{},
-		c.asyncPipeline(pathTerraform, func(c *Client, stdout, _ string) error {
-			return c.storePipelineResult(stdout)
-		}, "destroy", "-auto-approve", "-input=false", "-no-color")
+		w.LastOperation.MarkEnd()
+
+		// After the operation is completed, we need to get the results saved on
+		// the custom resource as soon as possible. We can wait for the next
+		// reconcilitaion, enqueue manually or update the CR independent of the
+		// reconciliation.
+		w.Enqueue()
+		cancel()
+	}()
+	return nil
 }

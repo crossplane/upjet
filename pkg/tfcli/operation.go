@@ -14,10 +14,34 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package templates
+package tfcli
 
-import _ "embed" // imports embed package for the go:embed below
+import "time"
 
-// TFConfigurationMain holds the main Terraform configuration template
-//go:embed main.tf.json.tpl
-var TFConfigurationMain string
+type Operation struct {
+	Type      string
+	StartTime *time.Time
+	EndTime   *time.Time
+
+	err error
+}
+
+func (o Operation) MarkStart(t string) {
+	o.Type = t
+	now := time.Now()
+	o.StartTime = &now
+	o.EndTime = nil
+	o.err = nil
+}
+
+func (o Operation) MarkEnd() {
+	now := time.Now()
+	o.EndTime = &now
+}
+
+func (o Operation) Flush() {
+	o.Type = ""
+	o.StartTime = nil
+	o.EndTime = nil
+	o.err = nil
+}

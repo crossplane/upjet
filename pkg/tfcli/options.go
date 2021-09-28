@@ -17,21 +17,18 @@ limitations under the License.
 package tfcli
 
 import (
-	"context"
 	"fmt"
 	"time"
 
+	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/pkg/errors"
-	"github.com/spf13/afero"
 
-	"github.com/crossplane/crossplane-runtime/pkg/logging"
-
-	"github.com/crossplane-contrib/terrajet/pkg/version"
+	"github.com/crossplane-contrib/terrajet/pkg/json"
+	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
 )
 
 const (
-	defaultAsyncTimeout = 2 * time.Minute
-	fmtResourceAddress  = "%s.%s"
+	defaultAsyncTimeout = 1 * time.Hour
 	// AnnotationKeyPrivateRawAttribute is the key that points to private attribute
 	// of the Terraform State. It's non-sensitive and used by provider to store
 	// arbitrary metadata, usually details about schema version.
@@ -40,154 +37,136 @@ const (
 
 // Error strings.
 const (
-	errValidationNoLogger    = "no logger has been configured"
-	errValidationNoHandle    = "no workspace handle has been configured"
-	fmtErrValidationResource = "invalid resource specification: both type and name are required: type=%q and name=%q"
 	fmtErrValidationProvider = "invalid provider specification: both source and version are required: source=%q and version=%q"
 	fmtErrValidationVersion  = "invalid setup specification, Terraform version not provided"
 )
 
-// A ClientOption configures a Client
-type ClientOption func(c *Client)
+type WorkspaceOption func(c *Workspace)
 
-// WithLogger configures the logger to be used by a Client
-func WithLogger(logger logging.Logger) ClientOption {
-	return func(c *Client) {
-		c.logger = logger.WithValues("tfcli-version", version.Version)
+func WithEnqueueFn(fn EnqueueFn) WorkspaceOption {
+	return func(w *Workspace) {
+		w.Enqueue = fn
 	}
 }
 
-// WithResource sets all the information we need about the resource.
-func WithResource(r *Resource) ClientOption {
-	return func(c *Client) {
-		c.resource = r
+func NewWorkspace(dir string, opts ...WorkspaceOption) (*Workspace, error) {
+	w := &Workspace{
+		dir:     dir,
+		Enqueue: NopEnqueueFn,
 	}
+	for _, f := range opts {
+		f(w)
+	}
+	return w, nil
 }
 
-// WithTerraformSetup sets the Terraform configuration which
-// contains provider requirement, configuration and Terraform version
-func WithTerraformSetup(setup TerraformSetup) ClientOption {
-	return func(c *Client) {
-		c.setup = setup
-	}
+type EnqueueFn func()
+
+func NopEnqueueFn() {}
+
+type Workspace struct {
+	LastOperation Operation
+	Enqueue       EnqueueFn
+
+	dir string
 }
 
-// WithHandle is a unique ID used by the Client to associate a
-// requested Terraform pipeline with a Terraform workspace
-func WithHandle(h string) ClientOption {
-	return func(c *Client) {
-		c.handle = h
+// NewFileProducer returns a new FileProducer.
+func NewFileProducer(tr resource.Terraformed) (*FileProducer, error) {
+	params, err := tr.GetParameters()
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot get parameters")
 	}
+	obs, err := tr.GetObservation()
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot get observation")
+	}
+	return &FileProducer{
+		Resource:    tr,
+		parameters:  params,
+		observation: obs,
+	}, nil
 }
 
-// WithAsyncTimeout configures the timeout used for async operations
-func WithAsyncTimeout(timeout time.Duration) ClientOption {
-	return func(c *Client) {
-		c.timeout = &timeout
-	}
+// FileProducer exist to serve as cache for the data that is costly to produce
+// every time like parameters and observation maps.
+type FileProducer struct {
+	Resource resource.Terraformed
+	Setup    TerraformSetup
+
+	parameters  map[string]interface{}
+	observation map[string]interface{}
 }
 
-// WithStateStoreFs configures the filesystem to be used by a
-// Client. Client uses this filesystem to store locks including
-// Terraform locks & Terraform command pipeline results
-func WithStateStoreFs(fs afero.Fs) ClientOption {
-	return func(c *Client) {
-		c.fs = fs
-	}
-}
-
-// NewClient returns an initialized Client that is used to run
-// Terraform Refresh, Apply, Destroy command pipelines.
-// The workspace configured with WithHandle option is initialized
-// for the returned Client. All Terraform resource block generation options
-// (WithResource*), all Terraform setup block generation options
-// (WithProvider*), the workspace handle option (WithHandle) and a
-// logger (WithLogger) must have been configured for the Client.
-// Returns an error if the supplied options cannot be validated, or
-// if the Terraform init operation run for workspace initialization
-// fails.
-func NewClient(ctx context.Context, opts ...ClientOption) (*Client, error) {
-	c := &Client{}
-	for _, o := range opts {
-		o(c)
-	}
-	// for state store filesystem, default to OS filesystem
-	if c.fs == nil {
-		c.fs = afero.NewOsFs()
-	}
-	// configure default async timeout
-	if c.timeout == nil {
-		d := defaultAsyncTimeout
-		c.timeout = &d
-	}
-	if err := c.validate(); err != nil {
-		return nil, err
-	}
-	if err := c.init(ctx); err != nil {
-		return nil, err
-	}
-	return c, nil
-}
-
-func (c Client) validate() error {
-	if err := c.resource.validate(); err != nil {
-		return err
-	}
-	if err := c.setup.validate(); err != nil {
-		return err
-	}
-	if c.logger == nil {
-		return errors.New(errValidationNoLogger)
-	}
-	if c.handle == "" {
-		return errors.New(errValidationNoHandle)
-	}
-	return nil
-}
-
-// Resource holds values for the Terraform HCL resource block's two labels and body
-type Resource struct {
-	LabelType    string
-	LabelName    string
-	ExternalName string
-	UID          string
-	Parameters   map[string]interface{}
-	Observation  map[string]interface{}
-
-	// This is a provider-specific metadata that varies between TF providers.
-	PrivateRaw string
-}
-
-func (r *Resource) validate() error {
-	if r.LabelName == "" || r.LabelType == "" {
-		return errors.Errorf(fmtErrValidationResource, r.LabelType, r.LabelName)
-	}
-	if r.UID == "" {
-		return errors.New("invalid resource specification: uid is required")
-	}
-	return nil
-}
-
-// GetAddress returns the Terraform configuration resource address of
-// the receiver Resource
-func (r *Resource) GetAddress() string {
-	return fmt.Sprintf(fmtResourceAddress, r.LabelType, r.LabelName)
-}
-
-// ProduceStateAttributes returns all information we have about the resource
-// that can be used as attributes in the state file.
-func (r *Resource) ProduceStateAttributes() map[string]interface{} {
+// TFState returns the Terraform state that should exist in the filesystem to
+// start any Terraform operation.
+func (fp *FileProducer) TFState() (*json.StateV4, error) {
 	base := make(map[string]interface{})
 	// NOTE(muvaf): Since we try to produce the current state, observation
 	// takes precedence over parameters.
-	for k, v := range r.Parameters {
+	for k, v := range fp.parameters {
 		base[k] = v
 	}
-	for k, v := range r.Observation {
+	for k, v := range fp.observation {
 		base[k] = v
 	}
-	base["id"] = r.ExternalName
-	return base
+	base["id"] = meta.GetExternalName(fp.Resource)
+	attr, err := json.JSParser.Marshal(base)
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot marshal produced state attributes")
+	}
+	var privateRaw []byte
+	if pr, ok := fp.Resource.GetAnnotations()[AnnotationKeyPrivateRawAttribute]; ok {
+		privateRaw = []byte(pr)
+	}
+	st := json.NewStateV4()
+	st.TerraformVersion = fp.Setup.Version
+	st.Lineage = string(fp.Resource.GetUID())
+	st.Resources = []json.ResourceStateV4{
+		{
+			Mode: "managed",
+			Type: fp.Resource.GetTerraformResourceType(),
+			Name: fp.Resource.GetName(),
+			// TODO(muvaf): we should get the full URL from Dockerfile since
+			// providers don't have to be hosted in registry.terraform.io
+			ProviderConfig: fmt.Sprintf(`provider["registry.terraform.io/%s"]`, fp.Setup.Requirement.Source),
+			Instances: []json.InstanceObjectStateV4{
+				{
+					SchemaVersion: 0,
+					PrivateRaw:    privateRaw,
+					AttributesRaw: attr,
+				},
+			},
+		},
+	}
+	return st, nil
+}
+
+// MainTF returns the content main configuration file that has the desired state
+// for Terraform as a map that can be written to disk as valid JSON input to
+// Terraform.
+func (fp *FileProducer) MainTF() map[string]interface{} {
+	// If the resource is in a deletion process, we need to remove the deletion
+	// protection.
+	fp.parameters["prevent_destroy"] = !meta.WasDeleted(fp.Resource)
+	return map[string]interface{}{
+		"terraform": map[string]interface{}{
+			"required_providers": map[string]interface{}{
+				"tf-provider": map[string]string{
+					"source":  fp.Setup.Requirement.Source,
+					"version": fp.Setup.Requirement.Version,
+				},
+			},
+		},
+		"provider": map[string]interface{}{
+			"tf-provider": fp.Setup.Configuration,
+		},
+		"resource": map[string]interface{}{
+			fp.Resource.GetTerraformResourceType(): map[string]interface{}{
+				fp.Resource.GetName(): fp.parameters,
+			},
+		},
+	}
 }
 
 // ProviderRequirement holds values for the Terraform HCL setup requirements
