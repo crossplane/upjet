@@ -74,6 +74,13 @@ type ExternalName struct {
 // given resource. Key should be the field path of the field to be referenced.
 type References map[string]Reference
 
+// Sensitive represents configurations to handle sensitive information
+type Sensitive struct {
+	// FieldPaths are the list of field paths to sensitive fields in terraform
+	// attributes.
+	FieldPaths []string
+}
+
 // Resource is the set of information that you can override at different steps
 // of the code generation pipeline.
 type Resource struct {
@@ -90,7 +97,12 @@ type Resource struct {
 	// ExternalName allows you to specify a custom ExternalName.
 	ExternalName ExternalName
 
+	// References keeps the configuration to build cross resource references
 	References References
+
+	// Sensitive keeps the configuration to handle sensitive information
+	Sensitive Sensitive
+
 	// TerraformIDFieldName is the name of the ID field in Terraform state of
 	// the resource. Its default is "id" and in almost all cases, you don't need
 	// to overwrite it.
