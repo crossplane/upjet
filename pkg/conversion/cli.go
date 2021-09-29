@@ -19,17 +19,15 @@ package conversion
 import (
 	"context"
 
+	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/pkg/errors"
 
-	xpmeta "github.com/crossplane/crossplane-runtime/pkg/meta"
-	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
-
+	"github.com/crossplane-contrib/terrajet/pkg/client"
+	tferrors "github.com/crossplane-contrib/terrajet/pkg/client/errors"
+	"github.com/crossplane-contrib/terrajet/pkg/client/model"
 	"github.com/crossplane-contrib/terrajet/pkg/json"
 	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
-	"github.com/crossplane-contrib/terrajet/pkg/tfcli"
-	tferrors "github.com/crossplane-contrib/terrajet/pkg/tfcli/errors"
-	"github.com/crossplane-contrib/terrajet/pkg/tfcli/model"
 )
 
 const (
@@ -42,7 +40,7 @@ const (
 // BuildClientForResource returns a tfcli client by setting attributes
 // (i.e. desired spec input) and terraform state (if available) for a given
 // client builder base.
-func BuildClientForResource(ctx context.Context, tr resource.Terraformed, opts ...tfcli.ClientOption) (model.Client, error) {
+func BuildClientForResource(ctx context.Context, tr resource.Terraformed, opts ...client.ClientOption) (model.Client, error) {
 	params, err := tr.GetParameters()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get parameters")
@@ -51,18 +49,18 @@ func BuildClientForResource(ctx context.Context, tr resource.Terraformed, opts .
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get observation")
 	}
-	r := &tfcli.Resource{
+	r := &client.Resource{
 		LabelType:    tr.GetTerraformResourceType(),
 		LabelName:    tr.GetName(),
 		UID:          string(tr.GetUID()),
 		ExternalName: xpmeta.GetExternalName(tr),
 		Parameters:   params,
 		Observation:  obs,
-		PrivateRaw:   tr.GetAnnotations()[tfcli.AnnotationKeyPrivateRawAttribute],
+		PrivateRaw:   tr.GetAnnotations()[client.AnnotationKeyPrivateRawAttribute],
 	}
-	return tfcli.NewClient(ctx, append(opts,
-		tfcli.WithResource(r),
-		tfcli.WithHandle(string(tr.GetUID())))...)
+	return client.NewClient(ctx, append(opts,
+		client.WithResource(r),
+		client.WithHandle(string(tr.GetUID())))...)
 }
 
 // CLI is an Adapter implementation for Terraform CLI
@@ -214,7 +212,7 @@ func consumeState(st *json.StateV4, tr resource.Terraformed) (managed.Connection
 		xpmeta.SetExternalName(tr, extID)
 	}
 	xpmeta.AddAnnotations(tr, map[string]string{
-		tfcli.AnnotationKeyPrivateRawAttribute: string(st.GetPrivateRaw()),
+		client.AnnotationKeyPrivateRawAttribute: string(st.GetPrivateRaw()),
 	})
 
 	if err := tr.SetObservation(attr); err != nil {

@@ -14,10 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package terraform
+package controller
 
 import (
 	"context"
+
+	"github.com/crossplane-contrib/terrajet/pkg/resource"
 
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/event"
@@ -30,9 +32,8 @@ import (
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	tjclient "github.com/crossplane-contrib/terrajet/pkg/client"
 	"github.com/crossplane-contrib/terrajet/pkg/conversion"
-	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
-	"github.com/crossplane-contrib/terrajet/pkg/tfcli"
 )
 
 const (
@@ -41,7 +42,7 @@ const (
 
 // SetupFn is a function that returns Terraform setup which contains
 // provider requirement, configuration and Terraform version.
-type SetupFn func(ctx context.Context, client client.Client, mg xpresource.Managed) (tfcli.TerraformSetup, error)
+type SetupFn func(ctx context.Context, client client.Client, mg xpresource.Managed) (tjclient.TerraformSetup, error)
 
 // NewConnector returns a new Connector object.
 func NewConnector(kube client.Client, l logging.Logger, sf SetupFn) *Connector {
@@ -68,14 +69,12 @@ func (c *Connector) Connect(ctx context.Context, mg xpresource.Managed) (managed
 		return nil, errors.New(errUnexpectedObject)
 	}
 
-	ps, err := c.terraformSetup(ctx, c.kube, mg)
+	_, err := c.terraformSetup(ctx, c.kube, mg)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot get provider setup")
 	}
 
-	tfCli, err := conversion.BuildClientForResource(ctx, tr,
-		tfcli.WithLogger(c.logger),
-		tfcli.WithTerraformSetup(ps))
+	tfCli, err := conversion.BuildClientForResource(ctx, tr)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot build tf client for resource")
 	}
@@ -176,7 +175,7 @@ func (e *external) Delete(ctx context.Context, mg xpresource.Managed) error {
 // the object.
 func (e *external) persistState(ctx context.Context, obj xpresource.Object) error {
 	externalName := xpmeta.GetExternalName(obj)
-	privateRaw := obj.GetAnnotations()[tfcli.AnnotationKeyPrivateRawAttribute]
+	privateRaw := obj.GetAnnotations()[tjclient.AnnotationKeyPrivateRawAttribute]
 
 	err := retry.OnError(retry.DefaultRetry, xpresource.IsAPIError, func() error {
 		nn := types.NamespacedName{Name: obj.GetName()}
@@ -185,7 +184,7 @@ func (e *external) persistState(ctx context.Context, obj xpresource.Object) erro
 		}
 
 		xpmeta.SetExternalName(obj, externalName)
-		xpmeta.AddAnnotations(obj, map[string]string{tfcli.AnnotationKeyPrivateRawAttribute: privateRaw})
+		xpmeta.AddAnnotations(obj, map[string]string{tjclient.AnnotationKeyPrivateRawAttribute: privateRaw})
 		return e.kube.Update(ctx, obj)
 	})
 

@@ -27,8 +27,8 @@ import (
 	twtypes "github.com/muvaf/typewriter/pkg/types"
 	"github.com/pkg/errors"
 
-	"github.com/crossplane-contrib/terrajet/pkg/comments"
 	"github.com/crossplane-contrib/terrajet/pkg/config"
+	"github.com/crossplane-contrib/terrajet/pkg/types/comments"
 )
 
 // NewBuilder returns a new Builder.

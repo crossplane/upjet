@@ -14,19 +14,46 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package tfcli
+package client
 
 import (
 	"os"
 	"path/filepath"
+	"sync"
 
-	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
+	"github.com/crossplane-contrib/terrajet/pkg/resource"
+	"github.com/crossplane-contrib/terrajet/pkg/resource/json"
+
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/pkg/errors"
-	"k8s.io/apimachinery/pkg/types"
-
-	"github.com/crossplane-contrib/terrajet/pkg/json"
 )
+
+// ProviderRequirement holds values for the Terraform HCL setup requirements
+type ProviderRequirement struct {
+	Source  string
+	Version string
+}
+
+// ProviderConfiguration holds the setup configuration body
+type ProviderConfiguration map[string]interface{}
+
+// TerraformSetup holds values for the Terraform version and setup
+// requirements and configuration body
+type TerraformSetup struct {
+	Version       string
+	Requirement   ProviderRequirement
+	Configuration ProviderConfiguration
+}
+
+func (p TerraformSetup) validate() error {
+	if p.Version == "" {
+		return errors.New(fmtErrValidationVersion)
+	}
+	if p.Requirement.Source == "" || p.Requirement.Version == "" {
+		return errors.Errorf(fmtErrValidationProvider, p.Requirement.Source, p.Requirement.Version)
+	}
+	return nil
+}
 
 func NewWorkspaceStore(setup TerraformSetup) *WorkspaceStore {
 	return &WorkspaceStore{setup: setup}
@@ -34,9 +61,10 @@ func NewWorkspaceStore(setup TerraformSetup) *WorkspaceStore {
 
 type WorkspaceStore struct {
 	// store holds information about ongoing operations of given resource.
-	// It is not necessary to make it safe for concurrency access as long as
-	// there is only one single go routine that writes to a given single entry.
-	store map[types.UID]*Workspace
+	// Since there can be multiple calls that add/remove values from the map at
+	// the same time, it has to be safe for concurrency since those operations
+	// cause rehashing in some cases.
+	store sync.Map
 
 	setup TerraformSetup
 }
@@ -76,23 +104,32 @@ func (ws *WorkspaceStore) Workspace(tr resource.Terraformed, enq EnqueueFn) (*Wo
 	if err := os.WriteFile(filepath.Join(dir, "main.tf.json"), rawHCL, os.ModePerm); err != nil {
 		return nil, errors.Wrap(err, "cannot write tfstate file")
 	}
-	if _, ok := ws.store[tr.GetUID()]; !ok {
-		ws.store[tr.GetUID()] = &Workspace{
-			Enqueue: enq,
-			dir:     dir,
+	o, _ := ws.store.LoadOrStore(tr.GetUID(), &Workspace{
+		LastOperation: &Operation{},
+		Enqueue:       enq,
+		dir:           dir,
+	})
+	w := o.(*Workspace)
+	// The operation has ended but there could be a lock file if Terraform crashed.
+	// So, we clean that up here. We could check the existence of the file first
+	// but just deleting in all cases get us to the same state with less logic and
+	// same number of fs calls.
+	if w.LastOperation.EndTime != nil {
+		if err := os.RemoveAll(filepath.Join(dir, ".terraform.tfstate.lock.info")); err != nil {
+			return nil, err
 		}
 	}
-	return ws.store[tr.GetUID()], nil
+	return w, nil
 }
 
 func (ws *WorkspaceStore) Remove(obj xpresource.Object) error {
-	w, ok := ws.store[obj.GetUID()]
+	w, ok := ws.store.Load(obj.GetUID())
 	if !ok {
 		return nil
 	}
-	if err := os.RemoveAll(w.dir); err != nil {
+	if err := os.RemoveAll(w.(*Workspace).dir); err != nil {
 		return errors.Wrap(err, "cannot remove workspace folder")
 	}
-	delete(ws.store, obj.GetUID())
+	ws.store.Delete(obj.GetUID())
 	return nil
 }

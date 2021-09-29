@@ -14,17 +14,17 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package tfcli
+package client
 
 import (
 	"fmt"
 	"time"
 
+	"github.com/crossplane-contrib/terrajet/pkg/resource"
+	json2 "github.com/crossplane-contrib/terrajet/pkg/resource/json"
+
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/pkg/errors"
-
-	"github.com/crossplane-contrib/terrajet/pkg/json"
-	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
 )
 
 const (
@@ -40,36 +40,6 @@ const (
 	fmtErrValidationProvider = "invalid provider specification: both source and version are required: source=%q and version=%q"
 	fmtErrValidationVersion  = "invalid setup specification, Terraform version not provided"
 )
-
-type WorkspaceOption func(c *Workspace)
-
-func WithEnqueueFn(fn EnqueueFn) WorkspaceOption {
-	return func(w *Workspace) {
-		w.Enqueue = fn
-	}
-}
-
-func NewWorkspace(dir string, opts ...WorkspaceOption) (*Workspace, error) {
-	w := &Workspace{
-		dir:     dir,
-		Enqueue: NopEnqueueFn,
-	}
-	for _, f := range opts {
-		f(w)
-	}
-	return w, nil
-}
-
-type EnqueueFn func()
-
-func NopEnqueueFn() {}
-
-type Workspace struct {
-	LastOperation Operation
-	Enqueue       EnqueueFn
-
-	dir string
-}
 
 // NewFileProducer returns a new FileProducer.
 func NewFileProducer(tr resource.Terraformed) (*FileProducer, error) {
@@ -100,7 +70,7 @@ type FileProducer struct {
 
 // TFState returns the Terraform state that should exist in the filesystem to
 // start any Terraform operation.
-func (fp *FileProducer) TFState() (*json.StateV4, error) {
+func (fp *FileProducer) TFState() (*json2.StateV4, error) {
 	base := make(map[string]interface{})
 	// NOTE(muvaf): Since we try to produce the current state, observation
 	// takes precedence over parameters.
@@ -111,7 +81,7 @@ func (fp *FileProducer) TFState() (*json.StateV4, error) {
 		base[k] = v
 	}
 	base["id"] = meta.GetExternalName(fp.Resource)
-	attr, err := json.JSParser.Marshal(base)
+	attr, err := json2.JSParser.Marshal(base)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot marshal produced state attributes")
 	}
@@ -119,10 +89,10 @@ func (fp *FileProducer) TFState() (*json.StateV4, error) {
 	if pr, ok := fp.Resource.GetAnnotations()[AnnotationKeyPrivateRawAttribute]; ok {
 		privateRaw = []byte(pr)
 	}
-	st := json.NewStateV4()
+	st := json2.NewStateV4()
 	st.TerraformVersion = fp.Setup.Version
 	st.Lineage = string(fp.Resource.GetUID())
-	st.Resources = []json.ResourceStateV4{
+	st.Resources = []json2.ResourceStateV4{
 		{
 			Mode: "managed",
 			Type: fp.Resource.GetTerraformResourceType(),
@@ -130,7 +100,7 @@ func (fp *FileProducer) TFState() (*json.StateV4, error) {
 			// TODO(muvaf): we should get the full URL from Dockerfile since
 			// providers don't have to be hosted in registry.terraform.io
 			ProviderConfig: fmt.Sprintf(`provider["registry.terraform.io/%s"]`, fp.Setup.Requirement.Source),
-			Instances: []json.InstanceObjectStateV4{
+			Instances: []json2.InstanceObjectStateV4{
 				{
 					SchemaVersion: 0,
 					PrivateRaw:    privateRaw,
@@ -167,31 +137,4 @@ func (fp *FileProducer) MainTF() map[string]interface{} {
 			},
 		},
 	}
-}
-
-// ProviderRequirement holds values for the Terraform HCL setup requirements
-type ProviderRequirement struct {
-	Source  string
-	Version string
-}
-
-// ProviderConfiguration holds the setup configuration body
-type ProviderConfiguration map[string]interface{}
-
-// TerraformSetup holds values for the Terraform version and setup
-// requirements and configuration body
-type TerraformSetup struct {
-	Version       string
-	Requirement   ProviderRequirement
-	Configuration ProviderConfiguration
-}
-
-func (p TerraformSetup) validate() error {
-	if p.Version == "" {
-		return errors.New(fmtErrValidationVersion)
-	}
-	if p.Requirement.Source == "" || p.Requirement.Version == "" {
-		return errors.Errorf(fmtErrValidationProvider, p.Requirement.Source, p.Requirement.Version)
-	}
-	return nil
 }

@@ -14,24 +14,44 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package model
+package client
 
 import (
-	"github.com/crossplane-contrib/terrajet/pkg/json"
+	"sync"
+	"time"
 )
 
-type RefreshResult struct {
-	IsCreating         bool
-	IsDestroying       bool
-	State              *json.StateV4
-	LastOperationError error
+type Operation struct {
+	Type      string
+	StartTime *time.Time
+	EndTime   *time.Time
+	Err       error
+
+	mu sync.Mutex
 }
 
-type PlanResult struct {
-	Exists   bool
-	UpToDate bool
+func (o *Operation) MarkStart(t string) {
+	o.mu.Lock()
+	now := time.Now()
+	o.Type = t
+	o.StartTime = &now
+	o.EndTime = nil
+	o.Err = nil
+	o.mu.Unlock()
 }
 
-type ApplyResult struct {
-	State *json.StateV4
+func (o *Operation) MarkEnd() {
+	o.mu.Lock()
+	now := time.Now()
+	o.EndTime = &now
+	o.mu.Unlock()
+}
+
+func (o *Operation) Flush() {
+	o.mu.Lock()
+	o.Type = ""
+	o.StartTime = nil
+	o.EndTime = nil
+	o.Err = nil
+	o.mu.Unlock()
 }
