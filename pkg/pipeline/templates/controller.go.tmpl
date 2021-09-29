@@ -8,24 +8,27 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	"github.com/crossplane-contrib/terrajet/pkg/terraform"
 	"github.com/crossplane/crossplane-runtime/pkg/event"
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 
+	"github.com/crossplane-contrib/terrajet/pkg/terraform"
+	tjcontroller "github.com/crossplane-contrib/terrajet/pkg/controller"
+
 	{{ .Imports }}
 )
 
 // Setup adds a controller that reconciles {{ .CRD.Kind }} managed resources.
-func Setup(mgr ctrl.Manager, l logging.Logger, rl workqueue.RateLimiter, ps terraform.SetupFn, concurrency int) error {
+func Setup(mgr ctrl.Manager, l logging.Logger, rl workqueue.RateLimiter, ps tjcontroller.SetupFn, ws *terraform.WorkspaceStore, concurrency int) error {
 	name := managed.ControllerName({{ .TypePackageAlias }}{{ .CRD.Kind }}GroupVersionKind.String())
 	r := managed.NewReconciler(mgr,
 		xpresource.ManagedKind({{ .TypePackageAlias }}{{ .CRD.Kind }}GroupVersionKind),
-		managed.WithExternalConnecter(terraform.NewConnector(mgr.GetClient(), l, ps)),
+		managed.WithExternalConnecter(tjcontroller.NewConnector(mgr.GetClient(), l, ws, ps)),
 		managed.WithLogger(l.WithValues("controller", name)),
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
+		managed.WithFinalizer(terraform.NewWorkspaceFinalizer(ws, xpresource.NewAPIFinalizer(mgr.GetClient(), "finalizer.managedresource.crossplane.io"))),
 		{{- if .DisableNameInitializer }}
 		managed.WithInitializers(),
 		{{- end}}

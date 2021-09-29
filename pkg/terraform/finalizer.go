@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package client
+package terraform
 
 import (
 	"context"
@@ -25,21 +25,21 @@ import (
 
 // TODO(muvaf): A FinalizerChain in crossplane-runtime?
 
-func NewWorkspaceFinalizer(ws *WorkspaceStore, af resource.APIFinalizer) *WorkspaceFinalizer {
+func NewWorkspaceFinalizer(ws *WorkspaceStore, af resource.Finalizer) *WorkspaceFinalizer {
 	return &WorkspaceFinalizer{
-		APIFinalizer: af,
-		Store:        ws,
+		Finalizer: af,
+		Store:     ws,
 	}
 }
 
 type WorkspaceFinalizer struct {
-	resource.APIFinalizer
+	resource.Finalizer
 	Store *WorkspaceStore
 }
 
 // AddFinalizer to the supplied Managed resource.
 func (wf *WorkspaceFinalizer) AddFinalizer(ctx context.Context, obj resource.Object) error {
-	return wf.APIFinalizer.AddFinalizer(ctx, obj)
+	return wf.Finalizer.AddFinalizer(ctx, obj)
 }
 
 // RemoveFinalizer from the supplied Managed resource.
@@ -47,5 +47,5 @@ func (wf *WorkspaceFinalizer) RemoveFinalizer(ctx context.Context, obj resource.
 	if err := wf.Store.Remove(obj); err != nil {
 		return errors.Wrap(err, "cannot remove workspace from the store")
 	}
-	return wf.APIFinalizer.RemoveFinalizer(ctx, obj)
+	return wf.Finalizer.RemoveFinalizer(ctx, obj)
 }

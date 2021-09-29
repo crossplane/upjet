@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package client
+package terraform
 
 import (
 	"os"
@@ -71,9 +71,9 @@ type WorkspaceStore struct {
 
 // TODO(muvaf): Take EnqueueFn as parameter tow WorkspaceStore?
 
-func (ws *WorkspaceStore) Workspace(tr resource.Terraformed, enq EnqueueFn) (*Workspace, error) {
+func (ws *WorkspaceStore) Workspace(tr resource.Terraformed, ts TerraformSetup, enq EnqueueFn) (*Workspace, error) {
 	dir := filepath.Join(os.TempDir(), string(tr.GetUID()))
-	fp, err := NewFileProducer(tr)
+	fp, err := NewFileProducer(tr, ts)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot create a new file producer")
 	}

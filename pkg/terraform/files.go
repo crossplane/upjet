@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package client
+package terraform
 
 import (
 	"fmt"
@@ -42,7 +42,7 @@ const (
 )
 
 // NewFileProducer returns a new FileProducer.
-func NewFileProducer(tr resource.Terraformed) (*FileProducer, error) {
+func NewFileProducer(tr resource.Terraformed, ts TerraformSetup) (*FileProducer, error) {
 	params, err := tr.GetParameters()
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot get parameters")
@@ -55,6 +55,7 @@ func NewFileProducer(tr resource.Terraformed) (*FileProducer, error) {
 		Resource:    tr,
 		parameters:  params,
 		observation: obs,
+		Setup:       ts,
 	}, nil
 }
 

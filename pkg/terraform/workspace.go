@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package client
+package terraform
 
 import (
 	"bytes"
@@ -24,12 +24,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	json2 "github.com/crossplane-contrib/terrajet/pkg/resource/json"
-
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	"github.com/pkg/errors"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	"github.com/crossplane-contrib/terrajet/pkg/resource/json"
 )
 
 type WorkspaceOption func(c *Workspace)
@@ -63,7 +63,7 @@ type Workspace struct {
 	logger logging.Logger
 }
 
-func (w *Workspace) ApplyAsync(_ context.Context) error {
+func (w *Workspace) ApplyAsync() error {
 	if w.LastOperation.EndTime == nil {
 		return errors.Errorf("%s operation that started at %s is still running", w.LastOperation.Type, w.LastOperation.StartTime.String())
 	}
@@ -94,7 +94,7 @@ func (w *Workspace) ApplyAsync(_ context.Context) error {
 }
 
 type ApplyResult struct {
-	State *json2.StateV4
+	State *json.StateV4
 }
 
 func (w *Workspace) Apply(ctx context.Context) (ApplyResult, error) {
@@ -116,14 +116,14 @@ func (w *Workspace) Apply(ctx context.Context) (ApplyResult, error) {
 	if err != nil {
 		return ApplyResult{}, errors.Wrap(err, "cannot read terraform state file")
 	}
-	s := &json2.StateV4{}
-	if err := json2.JSParser.Unmarshal(raw, s); err != nil {
+	s := &json.StateV4{}
+	if err := json.JSParser.Unmarshal(raw, s); err != nil {
 		return ApplyResult{}, errors.Wrap(err, "cannot unmarshal tfstate file")
 	}
 	return ApplyResult{State: s}, nil
 }
 
-func (w *Workspace) DestroyAsync(_ context.Context) error {
+func (w *Workspace) DestroyAsync() error {
 	switch {
 	// Destroy call is idempotent and can be called repeatedly.
 	case w.LastOperation.Type == "destroy":
@@ -180,7 +180,7 @@ func (w *Workspace) Destroy(ctx context.Context) error {
 type RefreshResult struct {
 	IsApplying         bool
 	IsDestroying       bool
-	State              *json2.StateV4
+	State              *json.StateV4
 	LastOperationError error
 }
 
@@ -228,8 +228,8 @@ func (w *Workspace) Refresh(ctx context.Context) (RefreshResult, error) {
 	if err != nil {
 		return RefreshResult{}, errors.Wrap(err, "cannot read terraform state file")
 	}
-	s := &json2.StateV4{}
-	if err := json2.JSParser.Unmarshal(raw, s); err != nil {
+	s := &json.StateV4{}
+	if err := json.JSParser.Unmarshal(raw, s); err != nil {
 		return RefreshResult{}, errors.Wrap(err, "cannot unmarshal tfstate file")
 	}
 	return RefreshResult{State: s}, nil
@@ -273,7 +273,7 @@ func (w *Workspace) Plan(ctx context.Context) (PlanResult, error) {
 		} `json:"changes,omitempty"`
 	}
 	p := &plan{}
-	if err := json2.JSParser.Unmarshal([]byte(line), p); err != nil {
+	if err := json.JSParser.Unmarshal([]byte(line), p); err != nil {
 		return PlanResult{}, errors.Wrap(err, "cannot unmarshal change summary json")
 	}
 	return PlanResult{
