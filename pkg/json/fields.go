@@ -25,7 +25,7 @@ func ValuesMatchingPaths(data []byte, fieldPaths []string) (map[string][]byte, e
 	for _, fp := range fieldPaths {
 		vs, err := valuesMatchingPath(data, fp)
 		if err != nil {
-			errors.Wrapf(err, "cannot get values matching path: \"%s\"", fp)
+			return nil, errors.Wrapf(err, "cannot get values matching path: \"%s\"", fp)
 		}
 		for k, v := range vs {
 			vals[k] = v

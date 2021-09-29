@@ -9,6 +9,7 @@ import (
 
 	"github.com/crossplane-contrib/terrajet/pkg/json"
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	{{ .Imports }}
 )
 
@@ -73,4 +74,16 @@ func (tr *{{ .CRD.Kind }}) LateInitialize(attrs []byte) (bool, error) {
     li := conversion.NewLateInitializer(conversion.WithZeroValueJSONOmitEmptyFilter(conversion.CNameWildcard),
         conversion.WithZeroElemPtrFilter(conversion.CNameWildcard))
 	return li.LateInitialize(&tr.Spec.ForProvider, params)
+}
+
+
+// GetConnectionDetails of this {{ .CRD.Kind }}
+func (tr *{{ .CRD.Kind }}) GetConnectionDetails(data []byte) (map[string][]byte, error) {
+  fps := []string{ {{range .SensitiveFields}}"{{.}}", {{end}} }
+  return json.ValuesMatchingPaths(data, fps)
+}
+
+// GetSensitiveParameters of this {{ .CRD.Kind }}
+func (tr *{{ .CRD.Kind }}) GetSensitiveParameters(kube client.Client) (map[string]interface{}, error) {
+  return nil, nil
 }

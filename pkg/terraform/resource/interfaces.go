@@ -18,6 +18,7 @@ package resource
 
 import (
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // Observable structs can get and set observations in the form of Terraform JSON.
@@ -31,6 +32,11 @@ type Observable interface {
 type Parameterizable interface {
 	GetParameters() (map[string]interface{}, error)
 	SetParameters(map[string]interface{}) error
+}
+
+type SensitiveDataProvider interface {
+	GetConnectionDetails(data []byte) (map[string][]byte, error)
+	GetSensitiveParameters(kube client.Client) (map[string]interface{}, error)
 }
 
 // MetadataProvider provides Terraform metadata for the Terraform managed resource
@@ -53,5 +59,7 @@ type Terraformed interface {
 	MetadataProvider
 	Observable
 	Parameterizable
+	LateInitializer
+	SensitiveDataProvider
 	LateInitializer
 }
