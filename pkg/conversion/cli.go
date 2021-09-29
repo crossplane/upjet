@@ -221,12 +221,9 @@ func consumeState(st *json.StateV4, tr resource.Terraformed) (managed.Connection
 		return nil, errors.Wrap(err, "cannot set observation")
 	}
 
-	conn := managed.ConnectionDetails{}
-	sensitive := st.GetSensitiveAttributes()
-	if jsoniter.Get(sensitive, '*').Size() > 0 {
-		if err := json.JSParser.Unmarshal(sensitive, &conn); err != nil {
-			return nil, errors.Wrap(err, "cannot parse connection details")
-		}
+	conn, err := tr.GetConnectionDetails(st.GetAttributes())
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot get connection details")
 	}
 	return conn, nil
 }
