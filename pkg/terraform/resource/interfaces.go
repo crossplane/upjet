@@ -43,7 +43,7 @@ type MetadataProvider interface {
 type LateInitializer interface {
 	// LateInitialize this Terraformed resource using its observed tfState.
 	// returns True if the there are any spec changes for the resource.
-	LateInitialize(map[string]interface{}) (bool, error)
+	LateInitialize(attrs []byte) (bool, error)
 }
 
 // Terraformed is a Kubernetes object representing a concrete terraform managed resource

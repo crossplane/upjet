@@ -33,7 +33,8 @@ import (
 )
 
 const (
-	errCannotConsumeState = "cannot consume state"
+	errCannotConsumeState   = "cannot consume state"
+	errCannotLateInitialize = "cannot late-initialize"
 
 	errFmtCannotDoWithTFCli = "cannot %s with tf cli"
 )
@@ -133,10 +134,17 @@ func (t *CLI) Observe(ctx context.Context, tr resource.Terraformed) (Observation
 		}
 	}
 
+	// Handle late initialization
+	changed, err := tr.LateInitialize(tfRes.State.Resources[0].Instances[0].AttributesRaw)
+	if err != nil {
+		return Observation{}, errors.Wrap(err, errCannotLateInitialize)
+	}
+
 	return Observation{
 		ConnectionDetails: conn,
 		UpToDate:          tfRes.UpToDate,
 		Exists:            tfRes.Exists,
+		LateInitialized:   changed,
 	}, nil
 }
 
@@ -208,8 +216,6 @@ func consumeState(st *json.StateV4, tr resource.Terraformed) (managed.Connection
 	xpmeta.AddAnnotations(tr, map[string]string{
 		tfcli.AnnotationKeyPrivateRawAttribute: string(st.GetPrivateRaw()),
 	})
-
-	// TODO(hasan): Handle late initialization
 
 	if err := tr.SetObservation(attr); err != nil {
 		return nil, errors.Wrap(err, "cannot set observation")
