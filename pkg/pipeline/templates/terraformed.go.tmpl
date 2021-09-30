@@ -79,8 +79,12 @@ func (tr *{{ .CRD.Kind }}) LateInitialize(attrs []byte) (bool, error) {
 
 // GetConnectionDetails of this {{ .CRD.Kind }}
 func (tr *{{ .CRD.Kind }}) GetConnectionDetails(data []byte) (map[string][]byte, error) {
+  {{- if .SensitiveFields }}
   fps := []string{ {{range .SensitiveFields}}"{{.}}", {{end}} }
   return json.ValuesMatchingPaths(data, fps)
+  {{- else }}
+  return nil, nil
+  {{- end }}
 }
 
 // GetSensitiveParameters of this {{ .CRD.Kind }}

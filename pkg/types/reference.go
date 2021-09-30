@@ -23,6 +23,7 @@ const (
 
 var typeReferenceField types.Type
 var typeSelectorField types.Type
+var typeXPSecretKeySelector types.Type
 var commentOptional *comments.Comment
 
 func (g *Builder) generateReferenceFields(t *types.TypeName, f *types.Var, r config.Reference) (fields []*types.Var, tags []string) {
@@ -70,6 +71,8 @@ func init() {
 	}
 	typeReferenceField = pkgs[0].Types.Scope().Lookup("Reference").Type()
 	typeSelectorField = pkgs[0].Types.Scope().Lookup("Selector").Type()
+	// todo(hasan): do we need a `LocalSecretKeySelector` instead?
+	typeXPSecretKeySelector = pkgs[0].Types.Scope().Lookup("SecretKeySelector").Type()
 
 	commentOptional, err = comments.New("")
 	if err != nil {

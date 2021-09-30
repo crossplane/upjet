@@ -98,39 +98,59 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 		}
 
 		tfPaths := append(tfPath, snakeFieldName)
+		if err != nil {
+			return nil, nil, errors.Wrapf(err, "cannot infer type from schema of field %s", fieldName.Snake)
+		}
+
 		fieldType, err := g.buildSchema(sch, cfg, tfPaths, append(names, fieldName.Camel))
 		if err != nil {
 			return nil, nil, errors.Wrapf(err, "cannot infer type from schema of field %s", fieldName.Snake)
 		}
 
 		tfFieldPath := fieldPath(tfPaths)
+		if ref, ok := cfg.References[tfFieldPath]; ok {
+			comment.Reference = ref
+			sch.Optional = true
+		}
 
 		sensitive := false
+		// todo(hasan): Validate custom fieldpaths provided by user and catch
+		//  possible errors. Currently they are ignored silently.
 		if contains(cfg.Sensitive.FieldPaths, tfFieldPath) {
 			sensitive = true
 		} else if sch.Sensitive {
 			cfg.Sensitive.FieldPaths = append(cfg.Sensitive.FieldPaths, tfFieldPath)
 			sensitive = true
 		}
+		fieldNameCamel := fieldName.Camel
+		if sensitive {
+			if isObservation(sch) {
+				// Drop an observation field from schema if it is sensitive.
+				// Data will be stored in connection details secret
+				continue
+			}
+			// todo(turkenh): do we need to support other field types as sensitive?
+			if fieldType.String() != "string" && fieldType.String() != "*string" {
+				return nil, nil, fmt.Errorf("got type \"%s\" for field \"%s\", only types \"string\" and \"*string\" supported as sensitive", fieldType.String(), fieldNameCamel)
+			}
+			// Replace a parameter field with secretKeyRef if it is sensitive.
+			// If it is an observation field, it will be dropped.
+			// Data will be loaded from the referenced secret key.
+			fieldNameCamel += "SecretRef"
+			// todo(hasan): do we need the pointer type if optional?
+			fieldType = typeXPSecretKeySelector
 
-		if ref, ok := cfg.References[tfFieldPath]; ok {
-			comment.Reference = ref
-			sch.Optional = true
+			jsonTag += "SecretRef"
+			tfTag = "-"
 		}
-
-		field := types.NewField(token.NoPos, g.Package, fieldName.Camel, fieldType, false)
+		field := types.NewField(token.NoPos, g.Package, fieldNameCamel, fieldType, false)
 
 		// NOTE(muvaf): If a field is not optional but computed, then it's
 		// definitely an observation field.
 		// If it's optional but also computed, then it means the field has a server
 		// side default but user can change it, so it needs to go to parameters.
 		switch {
-		case sch.Computed && !sch.Optional:
-			if sensitive {
-				// Drop an observation field from schema if it is sensitive.
-				// Data will be stored in connection details secret
-				continue
-			}
+		case isObservation(sch):
 			obsFields = append(obsFields, field)
 			obsTags = append(obsTags, fmt.Sprintf(`json:"%s,omitempty" tf:"%s"`, jsonTag, tfTag))
 		default:
@@ -149,7 +169,7 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 			paramFields = append(paramFields, refFields...)
 		}
 
-		g.comments.AddFieldComment(paramName, fieldName.Camel, comment.Build())
+		g.comments.AddFieldComment(paramName, fieldNameCamel, comment.Build())
 	}
 
 	// NOTE(muvaf): Not every struct has both computed and configurable fields,
@@ -228,7 +248,7 @@ func (g *Builder) buildSchema(sch *schema.Schema, cfg *config.Resource, tfPath [
 			// If it's optional but also computed, then it means the field has a server
 			// side default but user can change it, so it needs to go to parameters.
 			switch {
-			case sch.Computed && !sch.Optional:
+			case isObservation(sch):
 				if obsType == nil {
 					return nil, errors.Errorf("element type of %s is computed but the underlying schema does not return observation type", fieldPath(names))
 				}
@@ -271,6 +291,10 @@ func (g *Builder) generateTypeName(suffix string, names ...string) (string, erro
 		return n, nil
 	}
 	return "", errors.Errorf("could not generate a unique name for %s", n)
+}
+
+func isObservation(s *schema.Schema) bool {
+	return s.Computed && !s.Optional
 }
 
 func sortedKeys(m map[string]*schema.Schema) []string {
