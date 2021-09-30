@@ -72,7 +72,7 @@ func Test_parseAsTerrajetOption(t *testing.T) {
 			want: want{
 				opts:   &TerrajetOptions{},
 				parsed: false,
-				err:    errors.Errorf(errFmtCannotParse, "+terrajet:unknownmarker:key=value"),
+				err:    errors.Errorf(errFmtCannotParseAsTerrajet, "+terrajet:unknownmarker:key=value"),
 			},
 		},
 	}

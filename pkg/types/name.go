@@ -19,6 +19,7 @@ package types
 import (
 	"strings"
 
+	"github.com/fatih/camelcase"
 	"github.com/iancoleman/strcase"
 )
 
@@ -43,6 +44,17 @@ func NewNameFromSnake(s string) Name {
 		LowerCamel:         strings.Join(append([]string{strings.ToLower(camels[0])}, camels[1:]...), ""),
 		LowerCamelComputed: strings.Join(append([]string{strings.ToLower(computedCamels[0])}, computedCamels[1:]...), ""),
 	}
+}
+
+// NewNameFromCamel produces a Name, using given camel case string as source of
+// truth.
+func NewNameFromCamel(s string) Name {
+	originals := camelcase.Split(s)
+	snakes := make([]string, len(originals))
+	for i, org := range originals {
+		snakes[i] = strings.ToLower(org)
+	}
+	return NewNameFromSnake(strings.Join(snakes, "_"))
 }
 
 // Name holds different variants of a name.

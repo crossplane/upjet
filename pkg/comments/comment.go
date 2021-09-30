@@ -3,53 +3,59 @@ package comments
 import (
 	"strings"
 
+	"github.com/crossplane-contrib/terrajet/pkg/config"
 	"github.com/crossplane-contrib/terrajet/pkg/markers"
 )
 
 // Option is a comment option
 type Option func(*Comment)
 
-// WithReferenceTo returns a comment options with reference to input type
-func WithReferenceTo(t string) Option {
+// WithReferenceConfig returns a comment options with the given reference config
+func WithReferenceConfig(cfg config.Reference) Option {
 	return func(c *Comment) {
-		c.ReferenceToType = t
+		c.Reference = cfg
 	}
 }
 
 // WithTFTag returns a comment options with input tf tag
-func WithTFTag(t string) Option {
+func WithTFTag(s string) Option {
 	return func(c *Comment) {
-		c.FieldTFTag = &t
+		c.FieldTFTag = &s
 	}
 }
 
 // New returns a Comment by parsing Terrajet markers as Options
 func New(text string, opts ...Option) (*Comment, error) {
 	to := markers.TerrajetOptions{}
+	co := markers.CrossplaneOptions{}
 
-	var lines []string
-	for _, line := range strings.Split(strings.TrimSpace(text), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			lines = append(lines, line)
+	rawLines := strings.Split(strings.TrimSpace(text), "\n")
+	lines := make([]string, 0, len(rawLines))
+	for _, rl := range rawLines {
+		rl = strings.TrimSpace(rl)
+		if rl == "" {
+			lines = append(lines, rl)
 			continue
 		}
-		// Only add raw marker line if not processed as an option (i.e. if it is
-		// not a Terrejet marker.) Terrajet markers will still be printed as
+		// Only add raw marker line if not processed as an option (e.g. if it is
+		// not a known marker.) Known markers will still be printed as
 		// comments while building from options.
-		parsed, err := markers.ParseAsTerrajetOption(&to, line)
+		parsed, err := markers.ParseAsTerrajetOption(&to, rl)
 		if err != nil {
 			return nil, err
 		}
-		if !parsed {
-			lines = append(lines, line)
+		if parsed {
+			continue
 		}
+
+		lines = append(lines, rl)
 	}
 
 	c := &Comment{
 		Text: strings.Join(lines, "\n"),
 		Options: markers.Options{
-			TerrajetOptions: to,
+			TerrajetOptions:   to,
+			CrossplaneOptions: co,
 		},
 	}
 

@@ -26,8 +26,8 @@ import (
 	"github.com/muvaf/typewriter/pkg/wrapper"
 	"github.com/pkg/errors"
 
+	"github.com/crossplane-contrib/terrajet/pkg/config"
 	"github.com/crossplane-contrib/terrajet/pkg/pipeline/templates"
-	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
 )
 
 // NewTerraformedGenerator returns a new TerraformedGenerator.
@@ -47,16 +47,16 @@ type TerraformedGenerator struct {
 }
 
 // Generate writes generated Terraformed interface functions
-func (tg *TerraformedGenerator) Generate(c *resource.Configuration) error {
+func (tg *TerraformedGenerator) Generate(c *config.Resource) error {
 	trFile := wrapper.NewFile(tg.pkg.Path(), tg.pkg.Name(), templates.TerraformedTemplate,
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath("hack/boilerplate.go.txt"), // todo
 	)
 	vars := map[string]interface{}{
 		"CRD": map[string]string{
-			"APIVersion":      c.Version,
-			"Kind":            c.Kind,
-			"ConfigureWithFn": trFile.Imports.UseType(c.ExternalName.SelfVarPath),
+			"APIVersion":            c.Version,
+			"Kind":                  c.Kind,
+			"ConfigureExternalName": c.ExternalName.ConfigureFunctionPath,
 		},
 		"Terraform": map[string]string{
 			// TODO(hasan): This identifier is used to generate external name.

@@ -24,30 +24,28 @@ import (
 	"github.com/muvaf/typewriter/pkg/wrapper"
 	"github.com/pkg/errors"
 
+	"github.com/crossplane-contrib/terrajet/pkg/config"
 	"github.com/crossplane-contrib/terrajet/pkg/pipeline/templates"
-	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
 )
 
 // NewControllerGenerator returns a new ControllerGenerator.
-func NewControllerGenerator(rootDir, modulePath, group, providerConfigBuilderPath string) *ControllerGenerator {
+func NewControllerGenerator(rootDir, modulePath, group string) *ControllerGenerator {
 	return &ControllerGenerator{
-		Group:                     group,
-		ControllerGroupDir:        filepath.Join(rootDir, "internal", "controller", strings.Split(group, ".")[0]),
-		ModulePath:                modulePath,
-		ProviderConfigBuilderPath: providerConfigBuilderPath,
+		Group:              group,
+		ControllerGroupDir: filepath.Join(rootDir, "internal", "controller", strings.Split(group, ".")[0]),
+		ModulePath:         modulePath,
 	}
 }
 
 // ControllerGenerator generates controller setup functions.
 type ControllerGenerator struct {
-	Group                     string
-	ControllerGroupDir        string
-	ModulePath                string
-	ProviderConfigBuilderPath string
+	Group              string
+	ControllerGroupDir string
+	ModulePath         string
 }
 
 // Generate writes controller setup functions.
-func (cg *ControllerGenerator) Generate(c *resource.Configuration, typesPkgPath string) (pkgPath string, err error) {
+func (cg *ControllerGenerator) Generate(c *config.Resource, typesPkgPath string) (pkgPath string, err error) {
 	controllerPkgPath := filepath.Join(cg.ModulePath, "internal", "controller", strings.ToLower(strings.Split(cg.Group, ".")[0]), strings.ToLower(c.Kind))
 	ctrlFile := wrapper.NewFile(controllerPkgPath, strings.ToLower(c.Kind), templates.ControllerTemplate,
 		wrapper.WithGenStatement(GenStatement),
@@ -59,9 +57,8 @@ func (cg *ControllerGenerator) Generate(c *resource.Configuration, typesPkgPath 
 		"CRD": map[string]string{
 			"Kind": c.Kind,
 		},
-		"DisableNameInitializer":            c.ExternalName.DisableNameInitializer,
-		"TypePackageAlias":                  ctrlFile.Imports.UsePackage(typesPkgPath),
-		"ProviderConfigBuilderPackageAlias": ctrlFile.Imports.UsePackage(cg.ProviderConfigBuilderPath),
+		"DisableNameInitializer": c.ExternalName.DisableNameInitializer,
+		"TypePackageAlias":       ctrlFile.Imports.UsePackage(typesPkgPath),
 	}
 
 	filePath := filepath.Join(cg.ControllerGroupDir, strings.ToLower(c.Kind), "zz_controller.go")
