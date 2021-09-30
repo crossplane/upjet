@@ -17,9 +17,14 @@ limitations under the License.
 package terraform
 
 import (
+	"bytes"
+	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sync"
+
+	"github.com/crossplane/crossplane-runtime/pkg/logging"
 
 	"github.com/crossplane-contrib/terrajet/pkg/resource"
 	"github.com/crossplane-contrib/terrajet/pkg/resource/json"
@@ -55,8 +60,8 @@ func (p TerraformSetup) validate() error {
 	return nil
 }
 
-func NewWorkspaceStore(setup TerraformSetup) *WorkspaceStore {
-	return &WorkspaceStore{setup: setup}
+func NewWorkspaceStore() *WorkspaceStore {
+	return &WorkspaceStore{store: sync.Map{}}
 }
 
 type WorkspaceStore struct {
@@ -65,13 +70,11 @@ type WorkspaceStore struct {
 	// the same time, it has to be safe for concurrency since those operations
 	// cause rehashing in some cases.
 	store sync.Map
-
-	setup TerraformSetup
 }
 
 // TODO(muvaf): Take EnqueueFn as parameter tow WorkspaceStore?
 
-func (ws *WorkspaceStore) Workspace(tr resource.Terraformed, ts TerraformSetup, enq EnqueueFn) (*Workspace, error) {
+func (ws *WorkspaceStore) Workspace(ctx context.Context, tr resource.Terraformed, ts TerraformSetup, l logging.Logger, _ EnqueueFn) (*Workspace, error) {
 	dir := filepath.Join(os.TempDir(), string(tr.GetUID()))
 	fp, err := NewFileProducer(tr, ts)
 	if err != nil {
@@ -104,11 +107,8 @@ func (ws *WorkspaceStore) Workspace(tr resource.Terraformed, ts TerraformSetup, 
 	if err := os.WriteFile(filepath.Join(dir, "main.tf.json"), rawHCL, os.ModePerm); err != nil {
 		return nil, errors.Wrap(err, "cannot write tfstate file")
 	}
-	o, _ := ws.store.LoadOrStore(tr.GetUID(), &Workspace{
-		LastOperation: &Operation{},
-		Enqueue:       enq,
-		dir:           dir,
-	})
+	// TODO(muvaf): Set new logger every time?
+	o, _ := ws.store.LoadOrStore(tr.GetUID(), NewWorkspace(dir, WithLogger(l)))
 	w := o.(*Workspace)
 	// The operation has ended but there could be a lock file if Terraform crashed.
 	// So, we clean that up here. We could check the existence of the file first
@@ -119,7 +119,14 @@ func (ws *WorkspaceStore) Workspace(tr resource.Terraformed, ts TerraformSetup, 
 			return nil, err
 		}
 	}
-	return w, nil
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	cmd := exec.CommandContext(ctx, "terraform", "init", "-input=false")
+	cmd.Dir = w.dir
+	err = cmd.Run()
+	l.Debug("init completed", "stdout", stdout.String())
+	l.Debug("init completed", "stderr", stderr.String())
+	return w, errors.Wrapf(err, "cannot init workspace\nstderr: %s\nstdout: %s", stderr.String(), stdout.String())
 }
 
 func (ws *WorkspaceStore) Remove(obj xpresource.Object) error {

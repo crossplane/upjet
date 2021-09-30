@@ -40,15 +40,22 @@ func WithEnqueueFn(fn EnqueueFn) WorkspaceOption {
 	}
 }
 
-func NewWorkspace(dir string, opts ...WorkspaceOption) (*Workspace, error) {
+func WithLogger(l logging.Logger) WorkspaceOption {
+	return func(w *Workspace) {
+		w.logger = l
+	}
+}
+
+func NewWorkspace(dir string, opts ...WorkspaceOption) *Workspace {
 	w := &Workspace{
-		dir:     dir,
-		Enqueue: NopEnqueueFn,
+		LastOperation: &Operation{},
+		dir:           dir,
+		Enqueue:       NopEnqueueFn,
 	}
 	for _, f := range opts {
 		f(w)
 	}
-	return w, nil
+	return w
 }
 
 type EnqueueFn func()
@@ -64,7 +71,7 @@ type Workspace struct {
 }
 
 func (w *Workspace) ApplyAsync() error {
-	if w.LastOperation.EndTime == nil {
+	if w.LastOperation.StartTime != nil && w.LastOperation.EndTime == nil {
 		return errors.Errorf("%s operation that started at %s is still running", w.LastOperation.Type, w.LastOperation.StartTime.String())
 	}
 	w.LastOperation.MarkStart("apply")
@@ -72,12 +79,12 @@ func (w *Workspace) ApplyAsync() error {
 	go func() {
 		stdout := &bytes.Buffer{}
 		stderr := &bytes.Buffer{}
-		cmd := exec.CommandContext(ctx, "terraform", "apply", "-auto-approve", "-input=false", "-detailed-exitcode", "-json")
+		cmd := exec.CommandContext(ctx, "terraform", "apply", "-auto-approve", "-input=false", "-json")
 		cmd.Dir = w.dir
 		cmd.Stdout = stdout
 		cmd.Stderr = stderr
 		if err := cmd.Run(); err != nil {
-			w.LastOperation.Err = errors.Wrapf(err, "cannot apply: %s", stderr.String())
+			w.LastOperation.Err = errors.Wrapf(err, "cannot apply stderr: %s stdout: %s", stderr.String(), stdout.String())
 		}
 		w.LastOperation.MarkEnd()
 		w.logger.Debug("apply async completed", "stdout", stdout.String())
@@ -107,11 +114,12 @@ func (w *Workspace) Apply(ctx context.Context) (ApplyResult, error) {
 	cmd.Dir = w.dir
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
-	if err := cmd.Run(); err != nil {
-		return ApplyResult{}, errors.Wrapf(err, "cannot apply: %s", stderr.String())
-	}
+	err := cmd.Run()
 	w.logger.Debug("apply completed", "stdout", stdout.String())
 	w.logger.Debug("apply completed", "stderr", stderr.String())
+	if err != nil {
+		return ApplyResult{}, errors.Wrapf(err, "cannot apply stderr: %s stdout: %s", stderr.String(), stdout.String())
+	}
 	raw, err := os.ReadFile(filepath.Join(w.dir, "terraform.tfstate"))
 	if err != nil {
 		return ApplyResult{}, errors.Wrap(err, "cannot read terraform state file")
@@ -130,7 +138,7 @@ func (w *Workspace) DestroyAsync() error {
 		return nil
 	// We cannot run destroy until current non-destroy operation is completed.
 	// TODO(muvaf): Gracefully terminate the ongoing apply operation?
-	case w.LastOperation.Type != "destroy" && w.LastOperation.EndTime == nil:
+	case w.LastOperation.StartTime != nil && w.LastOperation.EndTime == nil:
 		return errors.Errorf("%s operation that started at %s is still running", w.LastOperation.Type, w.LastOperation.StartTime.String())
 	}
 	w.LastOperation.MarkStart("destroy")
@@ -143,7 +151,7 @@ func (w *Workspace) DestroyAsync() error {
 		cmd.Stdout = stdout
 		cmd.Stderr = stderr
 		if err := cmd.Run(); err != nil {
-			w.LastOperation.Err = errors.Wrapf(err, "cannot destroy: %s", stderr.String())
+			w.LastOperation.Err = errors.Wrapf(err, "cannot destroy stderr: %s stdout: %s", stderr.String(), stdout.String())
 		}
 		w.LastOperation.MarkEnd()
 		w.logger.Debug("destroy async completed", "stdout", stdout.String())
@@ -169,12 +177,10 @@ func (w *Workspace) Destroy(ctx context.Context) error {
 	cmd.Dir = w.dir
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
-	if err := cmd.Run(); err != nil {
-		w.LastOperation.Err = errors.Wrapf(err, "cannot destroy: %s", stderr.String())
-	}
+	err := cmd.Run()
 	w.logger.Debug("destroy completed", "stdout", stdout.String())
 	w.logger.Debug("destroy completed", "stderr", stderr.String())
-	return nil
+	return errors.Wrapf(err, "cannot destroy stderr: %s stdout: %s", stderr.String(), stdout.String())
 }
 
 type RefreshResult struct {
@@ -219,11 +225,12 @@ func (w *Workspace) Refresh(ctx context.Context) (RefreshResult, error) {
 	// In case the resource does not exist, this command doesn't return an error.
 	// It only removes the resource from tfstate file. We need to call Plan to
 	// get an idea about whether the resource exists from Terraform's perspective.
-	if err := cmd.Run(); err != nil {
-		return RefreshResult{}, errors.Wrapf(err, "cannot refresh: %s", stderr.String())
-	}
+	err := cmd.Run()
 	w.logger.Debug("refresh completed", "stdout", stdout.String())
 	w.logger.Debug("refresh completed", "stderr", stderr.String())
+	if err != nil {
+		return RefreshResult{}, errors.Wrapf(err, "cannot refresh stderr: %s stdout: %s", stderr.String(), stdout.String())
+	}
 	raw, err := os.ReadFile(filepath.Join(w.dir, "terraform.tfstate"))
 	if err != nil {
 		return RefreshResult{}, errors.Wrap(err, "cannot read terraform state file")
@@ -231,6 +238,9 @@ func (w *Workspace) Refresh(ctx context.Context) (RefreshResult, error) {
 	s := &json.StateV4{}
 	if err := json.JSParser.Unmarshal(raw, s); err != nil {
 		return RefreshResult{}, errors.Wrap(err, "cannot unmarshal tfstate file")
+	}
+	if len(s.Resources) == 0 {
+		return RefreshResult{}, kerrors.NewNotFound(schema.GroupResource{}, "")
 	}
 	return RefreshResult{State: s}, nil
 }
@@ -247,15 +257,16 @@ func (w *Workspace) Plan(ctx context.Context) (PlanResult, error) {
 	}
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
-	cmd := exec.CommandContext(ctx, "terraform", "plan", "-refresh=false", "-input=false", "-detailed-exitcode", "-json")
+	cmd := exec.CommandContext(ctx, "terraform", "plan", "-refresh=false", "-input=false", "-json")
 	cmd.Dir = w.dir
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
-	if err := cmd.Run(); err != nil {
-		return PlanResult{}, errors.Wrapf(err, "cannot plan: %s", stderr.String())
-	}
+	err := cmd.Run()
 	w.logger.Debug("plan completed", "stdout", stdout.String())
 	w.logger.Debug("plan completed", "stderr", stderr.String())
+	if err != nil {
+		return PlanResult{}, errors.Wrapf(err, "cannot plan stderr: %s stdout: %s", stderr.String(), stdout.String())
+	}
 	line := ""
 	for _, l := range strings.Split(stdout.String(), "\n") {
 		if strings.Contains(l, `"type":"change_summary"`) {

@@ -119,7 +119,9 @@ func (fp *FileProducer) TFState() (*json2.StateV4, error) {
 func (fp *FileProducer) MainTF() map[string]interface{} {
 	// If the resource is in a deletion process, we need to remove the deletion
 	// protection.
-	fp.parameters["prevent_destroy"] = !meta.WasDeleted(fp.Resource)
+	fp.parameters["lifecycle"] = map[string]bool{
+		"prevent_destroy": !meta.WasDeleted(fp.Resource),
+	}
 	return map[string]interface{}{
 		"terraform": map[string]interface{}{
 			"required_providers": map[string]interface{}{

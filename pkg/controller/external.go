@@ -74,7 +74,7 @@ func (c *Connector) Connect(ctx context.Context, mg xpresource.Managed) (managed
 		return nil, errors.Wrap(err, "cannot get provider setup")
 	}
 
-	tf, err := c.store.Workspace(tr, ts, tjclient.NopEnqueueFn)
+	tf, err := c.store.Workspace(ctx, tr, ts, c.logger, tjclient.NopEnqueueFn)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot build terraform workspace for resource")
 	}
@@ -99,12 +99,6 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 	tr, ok := mg.(resource.Terraformed)
 	if !ok {
 		return managed.ExternalObservation{}, errors.New(errUnexpectedObject)
-	}
-
-	if xpmeta.GetExternalName(tr) == "" {
-		return managed.ExternalObservation{
-			ResourceExists: false,
-		}, nil
 	}
 
 	res, err := e.tf.Refresh(ctx)
