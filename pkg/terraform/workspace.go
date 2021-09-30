@@ -17,7 +17,6 @@ limitations under the License.
 package terraform
 
 import (
-	"bytes"
 	"context"
 	"os"
 	"os/exec"
@@ -77,18 +76,14 @@ func (w *Workspace) ApplyAsync() error {
 	w.LastOperation.MarkStart("apply")
 	ctx, cancel := context.WithDeadline(context.TODO(), w.LastOperation.StartTime.Add(defaultAsyncTimeout))
 	go func() {
-		stdout := &bytes.Buffer{}
-		stderr := &bytes.Buffer{}
 		cmd := exec.CommandContext(ctx, "terraform", "apply", "-auto-approve", "-input=false", "-json")
 		cmd.Dir = w.dir
-		cmd.Stdout = stdout
-		cmd.Stderr = stderr
-		if err := cmd.Run(); err != nil {
-			w.LastOperation.Err = errors.Wrapf(err, "cannot apply stderr: %s stdout: %s", stderr.String(), stdout.String())
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			w.LastOperation.Err = errors.Wrapf(err, "cannot apply: %s", string(out))
 		}
 		w.LastOperation.MarkEnd()
-		w.logger.Debug("apply async completed", "stdout", stdout.String())
-		w.logger.Debug("apply async completed", "stderr", stderr.String())
+		w.logger.Debug("apply async completed", "out", string(out))
 
 		// After the operation is completed, we need to get the results saved on
 		// the custom resource as soon as possible. We can wait for the next
@@ -108,17 +103,12 @@ func (w *Workspace) Apply(ctx context.Context) (ApplyResult, error) {
 	if w.LastOperation.EndTime == nil {
 		return ApplyResult{}, errors.Errorf("%s operation that started at %s is still running", w.LastOperation.Type, w.LastOperation.StartTime.String())
 	}
-	stdout := &bytes.Buffer{}
-	stderr := &bytes.Buffer{}
 	cmd := exec.CommandContext(ctx, "terraform", "apply", "-auto-approve", "-input=false", "-detailed-exitcode", "-json")
 	cmd.Dir = w.dir
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
-	err := cmd.Run()
-	w.logger.Debug("apply completed", "stdout", stdout.String())
-	w.logger.Debug("apply completed", "stderr", stderr.String())
+	out, err := cmd.CombinedOutput()
+	w.logger.Debug("apply completed", "out", string(out))
 	if err != nil {
-		return ApplyResult{}, errors.Wrapf(err, "cannot apply stderr: %s stdout: %s", stderr.String(), stdout.String())
+		return ApplyResult{}, errors.Wrapf(err, "cannot apply: %s", string(out))
 	}
 	raw, err := os.ReadFile(filepath.Join(w.dir, "terraform.tfstate"))
 	if err != nil {
@@ -144,18 +134,14 @@ func (w *Workspace) DestroyAsync() error {
 	w.LastOperation.MarkStart("destroy")
 	ctx, cancel := context.WithDeadline(context.TODO(), w.LastOperation.StartTime.Add(defaultAsyncTimeout))
 	go func() {
-		stdout := &bytes.Buffer{}
-		stderr := &bytes.Buffer{}
 		cmd := exec.CommandContext(ctx, "terraform", "destroy", "-auto-approve", "-input=false", "-json")
 		cmd.Dir = w.dir
-		cmd.Stdout = stdout
-		cmd.Stderr = stderr
-		if err := cmd.Run(); err != nil {
-			w.LastOperation.Err = errors.Wrapf(err, "cannot destroy stderr: %s stdout: %s", stderr.String(), stdout.String())
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			w.LastOperation.Err = errors.Wrapf(err, "cannot destroy: %s", string(out))
 		}
 		w.LastOperation.MarkEnd()
-		w.logger.Debug("destroy async completed", "stdout", stdout.String())
-		w.logger.Debug("destroy async completed", "stderr", stderr.String())
+		w.logger.Debug("destroy async completed", "out", string(out))
 
 		// After the operation is completed, we need to get the results saved on
 		// the custom resource as soon as possible. We can wait for the next
@@ -171,16 +157,11 @@ func (w *Workspace) Destroy(ctx context.Context) error {
 	if w.LastOperation.EndTime == nil {
 		return errors.Errorf("%s operation that started at %s is still running", w.LastOperation.Type, w.LastOperation.StartTime.String())
 	}
-	stdout := &bytes.Buffer{}
-	stderr := &bytes.Buffer{}
 	cmd := exec.CommandContext(ctx, "terraform", "destroy", "-auto-approve", "-input=false", "-json")
 	cmd.Dir = w.dir
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
-	err := cmd.Run()
-	w.logger.Debug("destroy completed", "stdout", stdout.String())
-	w.logger.Debug("destroy completed", "stderr", stderr.String())
-	return errors.Wrapf(err, "cannot destroy stderr: %s stdout: %s", stderr.String(), stdout.String())
+	out, err := cmd.CombinedOutput()
+	w.logger.Debug("destroy completed", "out", string(out))
+	return errors.Wrapf(err, "cannot destroy: %s", string(out))
 }
 
 type RefreshResult struct {
@@ -216,20 +197,12 @@ func (w *Workspace) Refresh(ctx context.Context) (RefreshResult, error) {
 			return RefreshResult{}, kerrors.NewNotFound(schema.GroupResource{}, "")
 		}
 	}
-	stdout := &bytes.Buffer{}
-	stderr := &bytes.Buffer{}
 	cmd := exec.CommandContext(ctx, "terraform", "apply", "-refresh-only", "-auto-approve", "-input=false", "-json")
 	cmd.Dir = w.dir
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
-	// In case the resource does not exist, this command doesn't return an error.
-	// It only removes the resource from tfstate file. We need to call Plan to
-	// get an idea about whether the resource exists from Terraform's perspective.
-	err := cmd.Run()
-	w.logger.Debug("refresh completed", "stdout", stdout.String())
-	w.logger.Debug("refresh completed", "stderr", stderr.String())
+	out, err := cmd.CombinedOutput()
+	w.logger.Debug("refresh completed", "out", string(out))
 	if err != nil {
-		return RefreshResult{}, errors.Wrapf(err, "cannot refresh stderr: %s stdout: %s", stderr.String(), stdout.String())
+		return RefreshResult{}, errors.Wrapf(err, "cannot refresh: %s", string(out))
 	}
 	raw, err := os.ReadFile(filepath.Join(w.dir, "terraform.tfstate"))
 	if err != nil {
@@ -255,27 +228,22 @@ func (w *Workspace) Plan(ctx context.Context) (PlanResult, error) {
 	if w.LastOperation.StartTime != nil && w.LastOperation.EndTime == nil {
 		return PlanResult{}, errors.Errorf("%s operation that started at %s is still running", w.LastOperation.Type, w.LastOperation.StartTime.String())
 	}
-	stdout := &bytes.Buffer{}
-	stderr := &bytes.Buffer{}
 	cmd := exec.CommandContext(ctx, "terraform", "plan", "-refresh=false", "-input=false", "-json")
 	cmd.Dir = w.dir
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
-	err := cmd.Run()
-	w.logger.Debug("plan completed", "stdout", stdout.String())
-	w.logger.Debug("plan completed", "stderr", stderr.String())
+	out, err := cmd.CombinedOutput()
+	w.logger.Debug("plan completed", "out", string(out))
 	if err != nil {
-		return PlanResult{}, errors.Wrapf(err, "cannot plan stderr: %s stdout: %s", stderr.String(), stdout.String())
+		return PlanResult{}, errors.Wrapf(err, "cannot plan: %s", string(out))
 	}
 	line := ""
-	for _, l := range strings.Split(stdout.String(), "\n") {
+	for _, l := range strings.Split(string(out), "\n") {
 		if strings.Contains(l, `"type":"change_summary"`) {
 			line = l
 			break
 		}
 	}
 	if line == "" {
-		return PlanResult{}, errors.Errorf("cannot find the change summary line in plan log: %s", stdout.String())
+		return PlanResult{}, errors.Errorf("cannot find the change summary line in plan log: %s", string(out))
 	}
 	type plan struct {
 		Changes struct {

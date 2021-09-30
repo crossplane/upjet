@@ -17,7 +17,6 @@ limitations under the License.
 package terraform
 
 import (
-	"bytes"
 	"context"
 	"os"
 	"os/exec"
@@ -119,14 +118,11 @@ func (ws *WorkspaceStore) Workspace(ctx context.Context, tr resource.Terraformed
 			return nil, err
 		}
 	}
-	stdout := &bytes.Buffer{}
-	stderr := &bytes.Buffer{}
 	cmd := exec.CommandContext(ctx, "terraform", "init", "-input=false")
 	cmd.Dir = w.dir
-	err = cmd.Run()
-	l.Debug("init completed", "stdout", stdout.String())
-	l.Debug("init completed", "stderr", stderr.String())
-	return w, errors.Wrapf(err, "cannot init workspace\nstderr: %s\nstdout: %s", stderr.String(), stdout.String())
+	out, err := cmd.CombinedOutput()
+	l.Debug("init completed", "out", string(out))
+	return w, errors.Wrapf(err, "cannot init workspace: %s", string(out))
 }
 
 func (ws *WorkspaceStore) Remove(obj xpresource.Object) error {
