@@ -23,6 +23,8 @@ import (
 	"path/filepath"
 	"sync"
 
+	"k8s.io/apimachinery/pkg/types"
+
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 
 	"github.com/crossplane-contrib/terrajet/pkg/resource"
@@ -60,7 +62,7 @@ func (p TerraformSetup) validate() error {
 }
 
 func NewWorkspaceStore() *WorkspaceStore {
-	return &WorkspaceStore{store: sync.Map{}}
+	return &WorkspaceStore{store: map[types.UID]*Workspace{}, mu: sync.Mutex{}}
 }
 
 type WorkspaceStore struct {
@@ -68,7 +70,8 @@ type WorkspaceStore struct {
 	// Since there can be multiple calls that add/remove values from the map at
 	// the same time, it has to be safe for concurrency since those operations
 	// cause rehashing in some cases.
-	store sync.Map
+	store map[types.UID]*Workspace
+	mu    sync.Mutex
 }
 
 // TODO(muvaf): Take EnqueueFn as parameter tow WorkspaceStore?
@@ -107,8 +110,13 @@ func (ws *WorkspaceStore) Workspace(ctx context.Context, tr resource.Terraformed
 		return nil, errors.Wrap(err, "cannot write tfstate file")
 	}
 	// TODO(muvaf): Set new logger every time?
-	o, _ := ws.store.LoadOrStore(tr.GetUID(), NewWorkspace(dir, WithLogger(l)))
-	w := o.(*Workspace)
+	ws.mu.Lock()
+	w, ok := ws.store[tr.GetUID()]
+	if !ok {
+		ws.store[tr.GetUID()] = NewWorkspace(dir, WithLogger(l))
+		w = ws.store[tr.GetUID()]
+	}
+	ws.mu.Unlock()
 	// The operation has ended but there could be a lock file if Terraform crashed.
 	// So, we clean that up here. We could check the existence of the file first
 	// but just deleting in all cases get us to the same state with less logic and
@@ -126,13 +134,15 @@ func (ws *WorkspaceStore) Workspace(ctx context.Context, tr resource.Terraformed
 }
 
 func (ws *WorkspaceStore) Remove(obj xpresource.Object) error {
-	w, ok := ws.store.Load(obj.GetUID())
+	ws.mu.Lock()
+	defer ws.mu.Unlock()
+	w, ok := ws.store[obj.GetUID()]
 	if !ok {
 		return nil
 	}
-	if err := os.RemoveAll(w.(*Workspace).dir); err != nil {
+	if err := os.RemoveAll(w.dir); err != nil {
 		return errors.Wrap(err, "cannot remove workspace folder")
 	}
-	ws.store.Delete(obj.GetUID())
+	delete(ws.store, obj.GetUID())
 	return nil
 }
