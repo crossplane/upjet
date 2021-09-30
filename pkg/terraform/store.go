@@ -23,16 +23,19 @@ import (
 	"path/filepath"
 	"sync"
 
-	"k8s.io/apimachinery/pkg/types"
-
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
+	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
+	"github.com/pkg/errors"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/crossplane-contrib/terrajet/pkg/resource"
 	"github.com/crossplane-contrib/terrajet/pkg/resource/json"
-
-	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
-	"github.com/pkg/errors"
 )
+
+// SetupFn is a function that returns Terraform setup which contains
+// provider requirement, configuration and Terraform version.
+type SetupFn func(ctx context.Context, client client.Client, mg xpresource.Managed) (Setup, error)
 
 // ProviderRequirement holds values for the Terraform HCL setup requirements
 type ProviderRequirement struct {
@@ -43,15 +46,15 @@ type ProviderRequirement struct {
 // ProviderConfiguration holds the setup configuration body
 type ProviderConfiguration map[string]interface{}
 
-// TerraformSetup holds values for the Terraform version and setup
+// Setup holds values for the Terraform version and setup
 // requirements and configuration body
-type TerraformSetup struct {
+type Setup struct {
 	Version       string
 	Requirement   ProviderRequirement
 	Configuration ProviderConfiguration
 }
 
-func (p TerraformSetup) validate() error {
+func (p Setup) validate() error {
 	if p.Version == "" {
 		return errors.New(fmtErrValidationVersion)
 	}
@@ -76,7 +79,7 @@ type WorkspaceStore struct {
 
 // TODO(muvaf): Take EnqueueFn as parameter tow WorkspaceStore?
 
-func (ws *WorkspaceStore) Workspace(ctx context.Context, tr resource.Terraformed, ts TerraformSetup, l logging.Logger, _ EnqueueFn) (*Workspace, error) {
+func (ws *WorkspaceStore) Workspace(ctx context.Context, tr resource.Terraformed, ts Setup, l logging.Logger, _ EnqueueFn) (*Workspace, error) {
 	dir := filepath.Join(os.TempDir(), string(tr.GetUID()))
 	fp, err := NewFileProducer(tr, ts)
 	if err != nil {

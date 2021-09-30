@@ -21,8 +21,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/crossplane-contrib/terrajet/pkg/resource"
-
 	"github.com/muvaf/typewriter/pkg/wrapper"
 	"github.com/pkg/errors"
 
@@ -61,6 +59,7 @@ func (cg *ControllerGenerator) Generate(c *config.Resource, typesPkgPath string)
 		},
 		"DisableNameInitializer": c.ExternalName.DisableNameInitializer,
 		"TypePackageAlias":       ctrlFile.Imports.UsePackage(typesPkgPath),
+		"UseAsync":               c.UseAsync,
 	}
 
 	filePath := filepath.Join(cg.ControllerGroupDir, strings.ToLower(c.Kind), "zz_controller.go")

@@ -42,7 +42,7 @@ const (
 )
 
 // NewFileProducer returns a new FileProducer.
-func NewFileProducer(tr resource.Terraformed, ts TerraformSetup) (*FileProducer, error) {
+func NewFileProducer(tr resource.Terraformed, ts Setup) (*FileProducer, error) {
 	params, err := tr.GetParameters()
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot get parameters")
@@ -63,7 +63,7 @@ func NewFileProducer(tr resource.Terraformed, ts TerraformSetup) (*FileProducer,
 // every time like parameters and observation maps.
 type FileProducer struct {
 	Resource resource.Terraformed
-	Setup    TerraformSetup
+	Setup    Setup
 
 	parameters  map[string]interface{}
 	observation map[string]interface{}

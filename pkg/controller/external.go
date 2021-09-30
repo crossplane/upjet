@@ -38,18 +38,32 @@ const (
 	errUnexpectedObject = "the managed resource is not an Terraformed resource"
 )
 
-// SetupFn is a function that returns Terraform setup which contains
-// provider requirement, configuration and Terraform version.
-type SetupFn func(ctx context.Context, client client.Client, mg xpresource.Managed) (tjclient.TerraformSetup, error)
+type Option func(*Connector)
+
+func WithLogger(l logging.Logger) Option {
+	return func(c *Connector) {
+		c.logger = l
+	}
+}
+
+func UseAsync() Option {
+	return func(c *Connector) {
+		c.async = true
+	}
+}
 
 // NewConnector returns a new Connector object.
-func NewConnector(kube client.Client, l logging.Logger, ws *tjclient.WorkspaceStore, sf SetupFn) *Connector {
-	return &Connector{
+func NewConnector(kube client.Client, ws *tjclient.WorkspaceStore, sf tjclient.SetupFn, opts ...Option) *Connector {
+	c := &Connector{
 		kube:           kube,
-		logger:         l,
+		logger:         logging.NewNopLogger(),
 		terraformSetup: sf,
 		store:          ws,
 	}
+	for _, f := range opts {
+		f(c)
+	}
+	return c
 }
 
 // Connector initializes the external client with credentials and other configuration
@@ -58,7 +72,8 @@ type Connector struct {
 	kube           client.Client
 	logger         logging.Logger
 	store          *tjclient.WorkspaceStore
-	terraformSetup SetupFn
+	terraformSetup tjclient.SetupFn
+	async          bool
 }
 
 // Connect makes sure the underlying client is ready to issue requests to the
@@ -80,16 +95,17 @@ func (c *Connector) Connect(ctx context.Context, mg xpresource.Managed) (managed
 	}
 
 	return &external{
-		kube:   c.kube,
-		tf:     tf,
-		log:    c.logger,
-		record: event.NewNopRecorder(),
+		kube:  c.kube,
+		tf:    tf,
+		log:   c.logger,
+		async: c.async,
 	}, nil
 }
 
 type external struct {
-	kube client.Client
-	tf   Client
+	kube  client.Client
+	tf    Client
+	async bool
 
 	log    logging.Logger
 	record event.Recorder
@@ -110,14 +126,6 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 			ResourceExists:   true,
 			ResourceUpToDate: true,
 		}, nil
-	}
-
-	plan, err := e.tf.Plan(ctx)
-	if err != nil {
-		return managed.ExternalObservation{}, errors.Wrap(err, "cannot check resource status")
-	}
-	if !plan.Exists {
-		return managed.ExternalObservation{}, nil
 	}
 	// After a successful observation, we now have a state to consume.
 	// We will consume the state by:
@@ -148,6 +156,11 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 	// step completed (i.e. resource exists).
 	tr.SetConditions(xpv1.Available())
 
+	plan, err := e.tf.Plan(ctx)
+	if err != nil {
+		return managed.ExternalObservation{}, errors.Wrap(err, "cannot check resource status")
+	}
+
 	// TODO(muvaf): Handle connection details.
 	return managed.ExternalObservation{
 		ResourceExists:          true,
@@ -156,16 +169,38 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 	}, nil
 }
 
-func (e *external) Create(_ context.Context, _ xpresource.Managed) (managed.ExternalCreation, error) {
-	return managed.ExternalCreation{}, errors.Wrap(e.tf.ApplyAsync(), "cannot start async apply")
+func (e *external) Create(ctx context.Context, mg xpresource.Managed) (managed.ExternalCreation, error) {
+	res, err := e.Update(ctx, mg)
+	return managed.ExternalCreation{ConnectionDetails: res.ConnectionDetails}, err
 }
 
-func (e *external) Update(_ context.Context, _ xpresource.Managed) (managed.ExternalUpdate, error) {
-	return managed.ExternalUpdate{}, errors.Wrap(e.tf.ApplyAsync(), "cannot start async apply")
+func (e *external) Update(ctx context.Context, mg xpresource.Managed) (managed.ExternalUpdate, error) {
+	if e.async {
+		return managed.ExternalUpdate{}, errors.Wrap(e.tf.ApplyAsync(), "cannot start async apply")
+	}
+	tr, ok := mg.(resource.Terraformed)
+	if !ok {
+		return managed.ExternalUpdate{}, errors.New(errUnexpectedObject)
+	}
+	res, err := e.tf.Apply(ctx)
+	if err != nil {
+		return managed.ExternalUpdate{}, errors.Wrap(err, "cannot create")
+	}
+	attr := map[string]interface{}{}
+	if err := json.JSParser.Unmarshal(res.State.GetAttributes(), &attr); err != nil {
+		return managed.ExternalUpdate{}, errors.Wrap(err, "cannot unmarshal state attributes")
+	}
+	// NOTE(muvaf): Status is lost after the result of creation. That's why we
+	// do not set observation.
+	_, err = lateInitializeAnnotations(tr, attr, string(res.State.GetPrivateRaw()))
+	return managed.ExternalUpdate{}, errors.Wrap(err, "cannot late initialize annotations")
 }
 
-func (e *external) Delete(_ context.Context, _ xpresource.Managed) error {
-	return errors.Wrap(e.tf.DestroyAsync(), "cannot start async destroy")
+func (e *external) Delete(ctx context.Context, _ xpresource.Managed) error {
+	if e.async {
+		return errors.Wrap(e.tf.DestroyAsync(), "cannot start async destroy")
+	}
+	return errors.Wrap(e.tf.Destroy(ctx), "cannot destroy")
 }
 
 func lateInitializeAnnotations(tr resource.Terraformed, attr map[string]interface{}, privateRaw string) (bool, error) {

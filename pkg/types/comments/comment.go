@@ -3,8 +3,9 @@ package comments
 import (
 	"strings"
 
+	markers2 "github.com/crossplane-contrib/terrajet/pkg/types/markers"
+
 	"github.com/crossplane-contrib/terrajet/pkg/config"
-	"github.com/crossplane-contrib/terrajet/pkg/markers"
 )
 
 // Option is a comment option
@@ -26,8 +27,8 @@ func WithTFTag(s string) Option {
 
 // New returns a Comment by parsing Terrajet markers as Options
 func New(text string, opts ...Option) (*Comment, error) {
-	to := markers.TerrajetOptions{}
-	co := markers.CrossplaneOptions{}
+	to := markers2.TerrajetOptions{}
+	co := markers2.CrossplaneOptions{}
 
 	rawLines := strings.Split(strings.TrimSpace(text), "\n")
 	lines := make([]string, 0, len(rawLines))
@@ -40,7 +41,7 @@ func New(text string, opts ...Option) (*Comment, error) {
 		// Only add raw marker line if not processed as an option (e.g. if it is
 		// not a known marker.) Known markers will still be printed as
 		// comments while building from options.
-		parsed, err := markers.ParseAsTerrajetOption(&to, rl)
+		parsed, err := markers2.ParseAsTerrajetOption(&to, rl)
 		if err != nil {
 			return nil, err
 		}
@@ -53,7 +54,7 @@ func New(text string, opts ...Option) (*Comment, error) {
 
 	c := &Comment{
 		Text: strings.Join(lines, "\n"),
-		Options: markers.Options{
+		Options: markers2.Options{
 			TerrajetOptions:   to,
 			CrossplaneOptions: co,
 		},
@@ -69,7 +70,7 @@ func New(text string, opts ...Option) (*Comment, error) {
 // Comment represents a comment with text and supported marker options.
 type Comment struct {
 	Text string
-	markers.Options
+	markers2.Options
 }
 
 // String returns a string representation of this Comment (no "// " prefix)

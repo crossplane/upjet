@@ -95,6 +95,11 @@ type Resource struct {
 	// the resource. Its default is "id" and in almost all cases, you don't need
 	// to overwrite it.
 	TerraformIDFieldName string
+
+	// UseAsync should be enabled for resource whose creation and/or deletion
+	// takes more than 1 minute to complete such as Kubernetes clusters or
+	// databases.
+	UseAsync bool
 }
 
 // OverrideConfig merges existing resource configuration with the input
