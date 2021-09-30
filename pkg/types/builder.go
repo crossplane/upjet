@@ -62,13 +62,13 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 
 	paramTypeName, err := g.generateTypeName("Parameters", names...)
 	if err != nil {
-		return nil, nil, errors.Wrapf(err, "cannot generate parameters type name of %s", fieldPath(names...))
+		return nil, nil, errors.Wrapf(err, "cannot generate parameters type name of %s", fieldPath(names))
 	}
 	paramName := types.NewTypeName(token.NoPos, g.Package, paramTypeName, nil)
 
 	obsTypeName, err := g.generateTypeName("Observation", names...)
 	if err != nil {
-		return nil, nil, errors.Wrapf(err, "cannot generate observation type name of %s", fieldPath(names...))
+		return nil, nil, errors.Wrapf(err, "cannot generate observation type name of %s", fieldPath(names))
 	}
 	obsName := types.NewTypeName(token.NoPos, g.Package, obsTypeName, nil)
 
@@ -96,21 +96,23 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 		if comment.TerrajetOptions.FieldJSONTag != nil {
 			jsonTag = *comment.TerrajetOptions.FieldJSONTag
 		}
-		fieldType, err := g.buildSchema(sch, cfg, append(tfPath, snakeFieldName), append(names, fieldName.Camel))
+
+		tfPaths := append(tfPath, snakeFieldName)
+		fieldType, err := g.buildSchema(sch, cfg, tfPaths, append(names, fieldName.Camel))
 		if err != nil {
 			return nil, nil, errors.Wrapf(err, "cannot infer type from schema of field %s", fieldName.Snake)
 		}
+
+		tfFieldPath := fieldPath(tfPaths)
 		if sch.Sensitive {
-			cfg.Sensitive.FieldPaths = append(cfg.Sensitive.FieldPaths, strings.Join(append(tfPath, snakeFieldName), "."))
+			cfg.Sensitive.FieldPaths = append(cfg.Sensitive.FieldPaths, tfFieldPath)
 		}
-		// Build the field path based on the fact that names is a slice of
-		// strings which contains the name of the parent fields sequentially.
-		// We skip the first element since it is the main CRD type.
-		fp := strings.Join(append(names[1:], fieldName.Camel), ".")
-		if ref, ok := cfg.References[fp]; ok {
+
+		if ref, ok := cfg.References[tfFieldPath]; ok {
 			comment.Reference = ref
 			sch.Optional = true
 		}
+
 		field := types.NewField(token.NoPos, g.Package, fieldName.Camel, fieldType, false)
 
 		// NOTE(muvaf): If a field is not optional but computed, then it's
@@ -131,7 +133,7 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 			comment.Required = &req
 			paramFields = append(paramFields, field)
 		}
-		if ref, ok := cfg.References[fp]; ok {
+		if ref, ok := cfg.References[tfFieldPath]; ok {
 			refFields, refTags := g.generateReferenceFields(paramName, field, ref)
 			paramTags = append(paramTags, refTags...)
 			paramFields = append(paramFields, refFields...)
@@ -196,19 +198,19 @@ func (g *Builder) buildSchema(sch *schema.Schema, cfg *config.Resource, tfPath [
 			case schema.TypeString:
 				elemType = types.Universe.Lookup("string").Type()
 			case schema.TypeMap, schema.TypeList, schema.TypeSet, schema.TypeInvalid:
-				return nil, errors.Errorf("element type of %s is basic but not one of known basic types", fieldPath(names...))
+				return nil, errors.Errorf("element type of %s is basic but not one of known basic types", fieldPath(names))
 			}
 		case *schema.Schema:
 			elemType, err = g.buildSchema(et, cfg, tfPath, names)
 			if err != nil {
-				return nil, errors.Wrapf(err, "cannot infer type from schema of element type of %s", fieldPath(names...))
+				return nil, errors.Wrapf(err, "cannot infer type from schema of element type of %s", fieldPath(names))
 			}
 		case *schema.Resource:
 			// TODO(muvaf): We skip the other type once we choose one of param
 			// or obs types. This might cause some fields to be completely omitted.
 			paramType, obsType, err := g.buildResource(et, cfg, tfPath, names...)
 			if err != nil {
-				return nil, errors.Wrapf(err, "cannot infer type from resource schema of element type of %s", fieldPath(names...))
+				return nil, errors.Wrapf(err, "cannot infer type from resource schema of element type of %s", fieldPath(names))
 			}
 
 			// NOTE(muvaf): If a field is not optional but computed, then it's
@@ -218,17 +220,17 @@ func (g *Builder) buildSchema(sch *schema.Schema, cfg *config.Resource, tfPath [
 			switch {
 			case sch.Computed && !sch.Optional:
 				if obsType == nil {
-					return nil, errors.Errorf("element type of %s is computed but the underlying schema does not return observation type", fieldPath(names...))
+					return nil, errors.Errorf("element type of %s is computed but the underlying schema does not return observation type", fieldPath(names))
 				}
 				elemType = obsType
 			default:
 				if paramType == nil {
-					return nil, errors.Errorf("element type of %s is configurable but the underlying schema does not return a parameter type", fieldPath(names...))
+					return nil, errors.Errorf("element type of %s is configurable but the underlying schema does not return a parameter type", fieldPath(names))
 				}
 				elemType = paramType
 			}
 		default:
-			return nil, errors.Errorf("element type of %s should be either schema.Resource or schema.Schema", fieldPath(names...))
+			return nil, errors.Errorf("element type of %s should be either schema.Resource or schema.Schema", fieldPath(names))
 		}
 
 		// NOTE(muvaf): Maps and slices are already pointers, so we don't need to
@@ -275,10 +277,6 @@ func sortedKeys(m map[string]*schema.Schema) []string {
 	return keys
 }
 
-func fieldPath(names ...string) string {
-	path := ""
-	for _, n := range names {
-		path += "." + n
-	}
-	return path
+func fieldPath(segments []string) string {
+	return strings.Join(segments, ".")
 }
