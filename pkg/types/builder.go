@@ -104,8 +104,13 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 		}
 
 		tfFieldPath := fieldPath(tfPaths)
-		if sch.Sensitive {
+
+		sensitive := false
+		if contains(cfg.Sensitive.FieldPaths, tfFieldPath) {
+			sensitive = true
+		} else if sch.Sensitive {
 			cfg.Sensitive.FieldPaths = append(cfg.Sensitive.FieldPaths, tfFieldPath)
+			sensitive = true
 		}
 
 		if ref, ok := cfg.References[tfFieldPath]; ok {
@@ -121,6 +126,11 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 		// side default but user can change it, so it needs to go to parameters.
 		switch {
 		case sch.Computed && !sch.Optional:
+			if sensitive {
+				// Drop an observation field from schema if it is sensitive.
+				// Data will be stored in connection details secret
+				continue
+			}
 			obsFields = append(obsFields, field)
 			obsTags = append(obsTags, fmt.Sprintf(`json:"%s,omitempty" tf:"%s"`, jsonTag, tfTag))
 		default:
@@ -279,4 +289,13 @@ func sortedKeys(m map[string]*schema.Schema) []string {
 
 func fieldPath(segments []string) string {
 	return strings.Join(segments, ".")
+}
+
+func contains(ss []string, s string) bool {
+	for _, v := range ss {
+		if s == v {
+			return true
+		}
+	}
+	return false
 }
