@@ -5,9 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/pkg/errors"
-
 	jsoniter "github.com/json-iterator/go"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -20,6 +19,11 @@ const (
 	errFmtCannotExpandForObject   = "cannot expand wildcard for object with paths %v"
 )
 
+// ValuesMatchingPaths returns values matching provided field paths in the input
+// data. Field paths are dot separated strings where numbers representing
+// indexes in arrays, strings representing key for maps and "*" will act as a
+// wildcard mapping to each element of array or each key of map.
+// See the unit tests for examples.
 func ValuesMatchingPaths(data []byte, fieldPaths []string) (map[string][]byte, error) {
 	vals := make(map[string][]byte)
 	for _, fp := range fieldPaths {
@@ -35,16 +39,14 @@ func ValuesMatchingPaths(data []byte, fieldPaths []string) (map[string][]byte, e
 }
 
 func valuesMatchingPath(data []byte, fieldPath string) (map[string][]byte, error) {
-	api := jsoniter.ConfigDefault
-
-	keys, err := keysForFieldPath(api, data, fieldPath)
+	keys, err := keysForFieldPath(data, fieldPath)
 	if err != nil {
 		return nil, errors.Wrap(err, errCannotExpandWildcards)
 	}
 
 	res := make(map[string][]byte, len(keys))
 	for _, k := range keys {
-		v, err := value(api.Get(data, k...))
+		v, err := value(jsoniter.Get(data, k...))
 		if err != nil {
 			return nil, errors.Wrapf(err, errFmtCannotGetValueForPath, k)
 		}
@@ -68,8 +70,8 @@ func valuesMatchingPath(data []byte, fieldPath string) (map[string][]byte, error
 	return res, nil
 }
 
-func keysForFieldPath(api jsoniter.API, data []byte, fieldPath string) ([][]interface{}, error) {
-	d := api.Get(data)
+func keysForFieldPath(data []byte, fieldPath string) ([][]interface{}, error) {
+	d := jsoniter.Get(data)
 	fps := strings.Split(fieldPath, ".")
 
 	fpi := make([]interface{}, len(fps))
@@ -81,10 +83,10 @@ func keysForFieldPath(api jsoniter.API, data []byte, fieldPath string) ([][]inte
 		}
 		fpi[i] = f
 	}
-	return expandWildcard(d, fpi)
+	return expandWildcards(d, fpi)
 }
 
-func expandWildcard(a jsoniter.Any, paths []interface{}) ([][]interface{}, error) {
+func expandWildcards(a jsoniter.Any, paths []interface{}) ([][]interface{}, error) { // nolint:gocyclo
 	var res [][]interface{}
 
 	for i, v := range paths {
@@ -96,7 +98,7 @@ func expandWildcard(a jsoniter.Any, paths []interface{}) ([][]interface{}, error
 					np := make([]interface{}, len(paths))
 					copy(np, paths)
 					np = append(append(np[:i], j), np[i+1:]...)
-					r, err := expandWildcard(a, np)
+					r, err := expandWildcards(a, np)
 					if err != nil {
 						return nil, errors.Wrapf(err, errFmtCannotExpandForArray, np)
 					}
@@ -107,7 +109,7 @@ func expandWildcard(a jsoniter.Any, paths []interface{}) ([][]interface{}, error
 					np := make([]interface{}, len(paths))
 					copy(np, paths)
 					np = append(append(np[:i], k), np[i+1:]...)
-					r, err := expandWildcard(a, np)
+					r, err := expandWildcards(a, np)
 					if err != nil {
 						return nil, errors.Wrapf(err, errFmtCannotExpandForObject, np)
 					}

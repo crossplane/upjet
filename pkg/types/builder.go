@@ -138,7 +138,7 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 			// Data will be loaded from the referenced secret key.
 			fieldNameCamel += "SecretRef"
 			// todo(hasan): do we need the pointer type if optional?
-			fieldType = typeXPSecretKeySelector
+			fieldType = typeSecretKeySelector
 
 			jsonTag += "SecretRef"
 			tfTag = "-"
