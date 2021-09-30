@@ -21,11 +21,11 @@ const (
 	loadMode = packages.NeedName | packages.NeedImports | packages.NeedTypes
 )
 
-var typeXPRef types.Type
-var typeXPSelector types.Type
+var typeReferenceField types.Type
+var typeSelectorField types.Type
 var commentOptional *comments.Comment
 
-func (g *Builder) getReferenceFields(t *types.TypeName, f *types.Var, r config.Reference) (fields []*types.Var, tags []string) {
+func (g *Builder) generateReferenceFields(t *types.TypeName, f *types.Var, r config.Reference) (fields []*types.Var, tags []string) {
 	_, isSlice := f.Type().(*types.Slice)
 
 	rfn := r.RefFieldName
@@ -47,12 +47,12 @@ func (g *Builder) getReferenceFields(t *types.TypeName, f *types.Var, r config.R
 	selTag := fmt.Sprintf(`json:"%s,omitempty" tf:"-"`, sn.LowerCamel)
 
 	var tr types.Type
-	tr = types.NewPointer(typeXPRef)
+	tr = types.NewPointer(typeReferenceField)
 	if isSlice {
-		tr = types.NewSlice(typeXPRef)
+		tr = types.NewSlice(typeReferenceField)
 	}
 	ref := types.NewField(token.NoPos, g.Package, rfn, tr, false)
-	sel := types.NewField(token.NoPos, g.Package, sfn, types.NewPointer(typeXPSelector), false)
+	sel := types.NewField(token.NoPos, g.Package, sfn, types.NewPointer(typeSelectorField), false)
 
 	g.comments.AddFieldComment(t, rfn, commentOptional.Build())
 	g.comments.AddFieldComment(t, sfn, commentOptional.Build())
@@ -68,8 +68,8 @@ func init() {
 	if len(pkgs) != 1 && pkgs[0].Name != "v1" {
 		panic(errors.Errorf("unexpected package name %s", pkgs[0].Name))
 	}
-	typeXPRef = pkgs[0].Types.Scope().Lookup("Reference").Type()
-	typeXPSelector = pkgs[0].Types.Scope().Lookup("Selector").Type()
+	typeReferenceField = pkgs[0].Types.Scope().Lookup("Reference").Type()
+	typeSelectorField = pkgs[0].Types.Scope().Lookup("Selector").Type()
 
 	commentOptional, err = comments.New("")
 	if err != nil {

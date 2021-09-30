@@ -11,7 +11,7 @@ import (
 	"github.com/crossplane-contrib/terrajet/pkg/config"
 )
 
-func TestBuilder_getReferenceFields(t *testing.T) {
+func TestBuilder_generateReferenceFields(t *testing.T) {
 	tp := types.NewPackage("github.com/crossplane-contrib/terrajet/pkg/types", "tjtypes")
 
 	type args struct {
@@ -37,8 +37,8 @@ func TestBuilder_getReferenceFields(t *testing.T) {
 				},
 			}, want: want{
 				outFields: []*types.Var{
-					types.NewField(token.NoPos, tp, "TestFieldRef", types.NewPointer(typeXPRef), false),
-					types.NewField(token.NoPos, tp, "TestFieldSelector", types.NewPointer(typeXPSelector), false),
+					types.NewField(token.NoPos, tp, "TestFieldRef", types.NewPointer(typeReferenceField), false),
+					types.NewField(token.NoPos, tp, "TestFieldSelector", types.NewPointer(typeSelectorField), false),
 				},
 				outTags: []string{
 					`json:"testFieldRef,omitempty" tf:"-"`,
@@ -59,8 +59,8 @@ func TestBuilder_getReferenceFields(t *testing.T) {
 				},
 			}, want: want{
 				outFields: []*types.Var{
-					types.NewField(token.NoPos, tp, "TestFieldRefs", types.NewSlice(typeXPRef), false),
-					types.NewField(token.NoPos, tp, "TestFieldSelector", types.NewPointer(typeXPSelector), false),
+					types.NewField(token.NoPos, tp, "TestFieldRefs", types.NewSlice(typeReferenceField), false),
+					types.NewField(token.NoPos, tp, "TestFieldSelector", types.NewPointer(typeSelectorField), false),
 				},
 				outTags: []string{
 					`json:"testFieldRefs,omitempty" tf:"-"`,
@@ -82,8 +82,8 @@ func TestBuilder_getReferenceFields(t *testing.T) {
 				},
 			}, want: want{
 				outFields: []*types.Var{
-					types.NewField(token.NoPos, tp, "CustomRef", types.NewPointer(typeXPRef), false),
-					types.NewField(token.NoPos, tp, "TestFieldSelector", types.NewPointer(typeXPSelector), false),
+					types.NewField(token.NoPos, tp, "CustomRef", types.NewPointer(typeReferenceField), false),
+					types.NewField(token.NoPos, tp, "TestFieldSelector", types.NewPointer(typeSelectorField), false),
 				},
 				outTags: []string{
 					`json:"customRef,omitempty" tf:"-"`,
@@ -105,8 +105,8 @@ func TestBuilder_getReferenceFields(t *testing.T) {
 				},
 			}, want: want{
 				outFields: []*types.Var{
-					types.NewField(token.NoPos, tp, "TestFieldRef", types.NewPointer(typeXPRef), false),
-					types.NewField(token.NoPos, tp, "CustomSelector", types.NewPointer(typeXPSelector), false),
+					types.NewField(token.NoPos, tp, "TestFieldRef", types.NewPointer(typeReferenceField), false),
+					types.NewField(token.NoPos, tp, "CustomSelector", types.NewPointer(typeSelectorField), false),
 				},
 				outTags: []string{
 					`json:"testFieldRef,omitempty" tf:"-"`,
@@ -124,17 +124,17 @@ func TestBuilder_getReferenceFields(t *testing.T) {
 			g := &Builder{
 				comments: twtypes.Comments{},
 			}
-			gotFields, gotTags := g.getReferenceFields(tc.args.t, tc.args.f, tc.args.r)
+			gotFields, gotTags := g.generateReferenceFields(tc.args.t, tc.args.f, tc.args.r)
 			if diff := cmp.Diff(tc.want.outFields, gotFields, cmp.Comparer(func(a, b *types.Var) bool {
 				return a.String() == b.String()
 			})); diff != "" {
-				t.Errorf("getReferenceFields() fields = %v, want %v", gotFields, tc.want.outFields)
+				t.Errorf("generateReferenceFields() fields = %v, want %v", gotFields, tc.want.outFields)
 			}
 			if diff := cmp.Diff(tc.want.outTags, gotTags); diff != "" {
-				t.Errorf("getReferenceFields() tags = %v, want %v", gotTags, tc.want.outTags)
+				t.Errorf("generateReferenceFields() tags = %v, want %v", gotTags, tc.want.outTags)
 			}
 			if diff := cmp.Diff(tc.want.outComments, g.comments); diff != "" {
-				t.Errorf("getReferenceFields() comments = %v, want %v", g.comments, tc.want.outComments)
+				t.Errorf("generateReferenceFields() comments = %v, want %v", g.comments, tc.want.outComments)
 			}
 		})
 	}

@@ -131,7 +131,7 @@ func (g *Builder) buildResource(res *schema.Resource, refs config.References, na
 		}
 
 		if ref, ok := refs[fp]; ok {
-			refFields, refTags := g.getReferenceFields(paramName, field, ref)
+			refFields, refTags := g.generateReferenceFields(paramName, field, ref)
 			paramTags = append(paramTags, refTags...)
 			paramFields = append(paramFields, refFields...)
 		}

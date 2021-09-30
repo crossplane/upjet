@@ -54,9 +54,9 @@ func (tg *TerraformedGenerator) Generate(c *config.Resource) error {
 	)
 	vars := map[string]interface{}{
 		"CRD": map[string]string{
-			"APIVersion":      c.Version,
-			"Kind":            c.Kind,
-			"ConfigureWithFn": c.ExternalName.ConfigureFunction,
+			"APIVersion":            c.Version,
+			"Kind":                  c.Kind,
+			"ConfigureExternalName": c.ExternalName.ConfigureFunctionPath,
 		},
 		"Terraform": map[string]string{
 			// TODO(hasan): This identifier is used to generate external name.

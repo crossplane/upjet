@@ -55,7 +55,7 @@ func NewResource(version, kind, terraformResourceType string, opts ...ResourceOp
 // to fill attributes with information given in external name.
 type ExternalName struct {
 	// Configure name attributes of the given configuration using external name.
-	ConfigureFunction string
+	ConfigureFunctionPath string
 
 	// OmittedFields are the ones you'd like to be removed from the schema since
 	// they are specified via external name. You can omit only the top level fields.
