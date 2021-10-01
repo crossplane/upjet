@@ -49,11 +49,14 @@ type Builder struct {
 
 // Build returns parameters and observation types built out of Terraform schema.
 func (g *Builder) Build(name string, schema *schema.Resource, cfg *config.Resource) ([]*types.Named, twtypes.Comments, error) {
-	_, _, err := g.buildResource(schema, cfg, nil, name)
+	_, _, err := g.buildResource(schema, cfg, nil, nil, name)
+	if len(cfg.Sensitive.CustomFieldPaths) > 0 {
+		return nil, nil, errors.Errorf("following sensitive custom field paths not supported: %s", cfg.Sensitive.CustomFieldPaths)
+	}
 	return g.genTypes, g.comments, errors.Wrapf(err, "cannot build the types")
 }
 
-func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPath []string, names ...string) (*types.Named, *types.Named, error) { //nolint:gocyclo
+func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPath []string, xpPath []string, names ...string) (*types.Named, *types.Named, error) { //nolint:gocyclo
 	// NOTE(muvaf): There can be fields in the same CRD with same name but in
 	// different types. Since we generate the type using the field name, there
 	// can be collisions. In order to be able to generate unique names consistently,
@@ -97,38 +100,35 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 			jsonTag = *comment.TerrajetOptions.FieldJSONTag
 		}
 
-		tfPaths := append(tfPath, snakeFieldName)
-		if err != nil {
-			return nil, nil, errors.Wrapf(err, "cannot infer type from schema of field %s", fieldName.Snake)
-		}
+		tfPaths := append(tfPath, fieldName.Snake)
+		xpPaths := append(xpPath, fieldName.LowerCamel)
 
-		fieldType, err := g.buildSchema(sch, cfg, tfPaths, append(names, fieldName.Camel))
+		fieldType, err := g.buildSchema(sch, cfg, tfPaths, xpPaths, append(names, fieldName.Camel))
 		if err != nil {
 			return nil, nil, errors.Wrapf(err, "cannot infer type from schema of field %s", fieldName.Snake)
 		}
 
 		tfFieldPath := fieldPath(tfPaths)
+		xpFieldPath := fieldPath(xpPaths)
 		if ref, ok := cfg.References[tfFieldPath]; ok {
 			comment.Reference = ref
 			sch.Optional = true
 		}
 
-		sensitive := false
-		// todo(hasan): Validate custom fieldpaths provided by user and catch
-		//  possible errors. Currently they are ignored silently.
-		if contains(cfg.Sensitive.FieldPaths, tfFieldPath) {
-			sensitive = true
-		} else if sch.Sensitive {
-			cfg.Sensitive.FieldPaths = append(cfg.Sensitive.FieldPaths, tfFieldPath)
-			sensitive = true
-		}
 		fieldNameCamel := fieldName.Camel
-		if sensitive {
+		if e, ix := containsAt(cfg.Sensitive.CustomFieldPaths, tfFieldPath); e || sch.Sensitive {
+			if e {
+				cfg.Sensitive.CustomFieldPaths = remove(cfg.Sensitive.CustomFieldPaths, ix)
+			}
+
 			if isObservation(sch) {
+				cfg.Sensitive.AddFieldPath(tfFieldPath, xpFieldPath)
 				// Drop an observation field from schema if it is sensitive.
 				// Data will be stored in connection details secret
 				continue
 			}
+			sfx := "SecretRef"
+			cfg.Sensitive.AddFieldPath(tfFieldPath, xpFieldPath+sfx)
 			// todo(turkenh): do we need to support other field types as sensitive?
 			if fieldType.String() != "string" && fieldType.String() != "*string" {
 				return nil, nil, fmt.Errorf("got type \"%s\" for field \"%s\", only types \"string\" and \"*string\" supported as sensitive", fieldType.String(), fieldNameCamel)
@@ -136,11 +136,11 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 			// Replace a parameter field with secretKeyRef if it is sensitive.
 			// If it is an observation field, it will be dropped.
 			// Data will be loaded from the referenced secret key.
-			fieldNameCamel += "SecretRef"
+			fieldNameCamel += sfx
 			// todo(hasan): do we need the pointer type if optional?
 			fieldType = typeSecretKeySelector
 
-			jsonTag += "SecretRef"
+			jsonTag += sfx
 			tfTag = "-"
 		}
 		field := types.NewField(token.NoPos, g.Package, fieldNameCamel, fieldType, false)
@@ -190,7 +190,7 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 	return paramType, obsType, nil
 }
 
-func (g *Builder) buildSchema(sch *schema.Schema, cfg *config.Resource, tfPath []string, names []string) (types.Type, error) { // nolint:gocyclo
+func (g *Builder) buildSchema(sch *schema.Schema, cfg *config.Resource, tfPath []string, xpPath []string, names []string) (types.Type, error) { // nolint:gocyclo
 	switch sch.Type {
 	case schema.TypeBool:
 		if sch.Optional {
@@ -214,6 +214,7 @@ func (g *Builder) buildSchema(sch *schema.Schema, cfg *config.Resource, tfPath [
 		return types.Universe.Lookup("string").Type(), nil
 	case schema.TypeMap, schema.TypeList, schema.TypeSet:
 		tfPath = append(tfPath, "*")
+		xpPath = append(xpPath, "*")
 		var elemType types.Type
 		var err error
 		switch et := sch.Elem.(type) {
@@ -231,14 +232,14 @@ func (g *Builder) buildSchema(sch *schema.Schema, cfg *config.Resource, tfPath [
 				return nil, errors.Errorf("element type of %s is basic but not one of known basic types", fieldPath(names))
 			}
 		case *schema.Schema:
-			elemType, err = g.buildSchema(et, cfg, tfPath, names)
+			elemType, err = g.buildSchema(et, cfg, tfPath, xpPath, names)
 			if err != nil {
 				return nil, errors.Wrapf(err, "cannot infer type from schema of element type of %s", fieldPath(names))
 			}
 		case *schema.Resource:
 			// TODO(muvaf): We skip the other type once we choose one of param
 			// or obs types. This might cause some fields to be completely omitted.
-			paramType, obsType, err := g.buildResource(et, cfg, tfPath, names...)
+			paramType, obsType, err := g.buildResource(et, cfg, tfPath, xpPath, names...)
 			if err != nil {
 				return nil, errors.Wrapf(err, "cannot infer type from resource schema of element type of %s", fieldPath(names))
 			}
@@ -315,11 +316,16 @@ func fieldPath(segments []string) string {
 	return strings.Join(segments, ".")
 }
 
-func contains(ss []string, s string) bool {
-	for _, v := range ss {
+func containsAt(ss []string, s string) (bool, int) {
+	for i, v := range ss {
 		if s == v {
-			return true
+			return true, i
 		}
 	}
-	return false
+	return false, -1
+}
+
+func remove(ss []string, i int) []string {
+	ss[i] = ss[len(ss)-1]
+	return ss[:len(ss)-1]
 }

@@ -73,7 +73,7 @@ func (c *Connector) Connect(ctx context.Context, mg xpresource.Managed) (managed
 		return nil, errors.Wrap(err, "cannot get provider setup")
 	}
 
-	tfCli, err := conversion.BuildClientForResource(ctx, tr,
+	tfCli, err := conversion.BuildClientForResource(ctx, c.kube, tr,
 		tfcli.WithLogger(c.logger),
 		tfcli.WithTerraformSetup(ps))
 	if err != nil {

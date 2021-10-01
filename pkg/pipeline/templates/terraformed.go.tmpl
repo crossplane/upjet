@@ -8,6 +8,7 @@ import (
     "github.com/pkg/errors"
 
 	"github.com/crossplane-contrib/terrajet/pkg/json"
+	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	{{ .Imports }}
@@ -43,7 +44,7 @@ func (tr *{{ .CRD.Kind }}) SetObservation(obs map[string]interface{}) error {
 }
 
 // GetParameters of this {{ .CRD.Kind }}
-func (tr *{{ .CRD.Kind }}) GetParameters() (map[string]interface{}, error) {
+func (tr *{{ .CRD.Kind }}) GetParameters(ctx context.Context, c resource.SecretClient) (map[string]interface{}, error) {
 	p, err := json.TFParser.Marshal(tr.Spec.ForProvider)
 	if err != nil {
 		return nil, err
@@ -52,7 +53,14 @@ func (tr *{{ .CRD.Kind }}) GetParameters() (map[string]interface{}, error) {
 	{{- if .CRD.ConfigureExternalName }}
 	{{ .CRD.ConfigureExternalName }}(base, meta.GetExternalName(tr))
 	{{- end }}
-	return base, json.TFParser.Unmarshal(p, &base)
+	if err := json.TFParser.Unmarshal(p, &base); err != nil {
+		return nil, err
+	}
+	{{- if .SensitiveFields }}
+	return base, resource.GetSensitiveParameters(ctx, c, tr, base, map[string]string{ {{range $k, $v := .SensitiveFields}}"{{ $k }}": "{{ $v}}", {{end}} })
+	{{- else }}
+	return base, nil
+	{{- end }}
 }
 
 // SetParameters for this {{ .CRD.Kind }}
@@ -80,14 +88,15 @@ func (tr *{{ .CRD.Kind }}) LateInitialize(attrs []byte) (bool, error) {
 // GetConnectionDetails of this {{ .CRD.Kind }}
 func (tr *{{ .CRD.Kind }}) GetConnectionDetails(data []byte) (map[string][]byte, error) {
   {{- if .SensitiveFields }}
-  fps := []string{ {{range .SensitiveFields}}"{{.}}", {{end}} }
-  return json.ValuesMatchingPaths(data, fps)
+  return json.ValuesMatchingPaths(data, []string{ {{range $k := .SensitiveFields}}"{{$k}}", {{end}} })
   {{- else }}
   return nil, nil
   {{- end }}
 }
 
-// GetSensitiveParameters of this {{ .CRD.Kind }}
-func (tr *{{ .CRD.Kind }}) GetSensitiveParameters(kube client.Client) (map[string]interface{}, error) {
+// GetSensitiveObservation of this {{ .CRD.Kind }}. This method will collect
+// sensitive information as terraform state attributes from connection details
+// secret.
+func (tr *{{ .CRD.Kind }}) GetSensitiveObservation(client resource.SecretClient) (map[string]interface{}, error) {
   return nil, nil
 }

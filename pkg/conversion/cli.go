@@ -24,6 +24,7 @@ import (
 
 	xpmeta "github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/crossplane-contrib/terrajet/pkg/json"
 	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
@@ -42,8 +43,8 @@ const (
 // BuildClientForResource returns a tfcli client by setting attributes
 // (i.e. desired spec input) and terraform state (if available) for a given
 // client builder base.
-func BuildClientForResource(ctx context.Context, tr resource.Terraformed, opts ...tfcli.ClientOption) (model.Client, error) {
-	params, err := tr.GetParameters()
+func BuildClientForResource(ctx context.Context, kube client.Client, tr resource.Terraformed, opts ...tfcli.ClientOption) (model.Client, error) {
+	params, err := tr.GetParameters(ctx, NewAPISecretClient(kube))
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get parameters")
 	}

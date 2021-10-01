@@ -76,9 +76,24 @@ type References map[string]Reference
 
 // Sensitive represents configurations to handle sensitive information
 type Sensitive struct {
-	// FieldPaths are the list of field paths to sensitive fields in terraform
-	// attributes.
-	FieldPaths []string
+	// CustomFieldPaths are the list of custom field paths to sensitive fields
+	// in terraform attributes.
+	CustomFieldPaths []string
+
+	fieldPaths map[string]string
+}
+
+// GetFieldPaths returns the fieldPaths map for Sensitive
+func (s *Sensitive) GetFieldPaths() map[string]string {
+	return s.fieldPaths
+}
+
+// AddFieldPath adds the given tf path and xp path to the fieldPaths map.
+func (s *Sensitive) AddFieldPath(tf, xp string) {
+	if s.fieldPaths == nil {
+		s.fieldPaths = make(map[string]string)
+	}
+	s.fieldPaths[tf] = xp
 }
 
 // Resource is the set of information that you can override at different steps

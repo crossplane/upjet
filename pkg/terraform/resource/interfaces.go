@@ -17,9 +17,16 @@ limitations under the License.
 package resource
 
 import (
+	"context"
+
+	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+type SecretClient interface {
+	GetSecretData(ctx context.Context, s v1.SecretReference) (map[string][]byte, error)
+	GetSecretValue(ctx context.Context, sel v1.SecretKeySelector) ([]byte, error)
+}
 
 // Observable structs can get and set observations in the form of Terraform JSON.
 type Observable interface {
@@ -30,7 +37,7 @@ type Observable interface {
 // Parameterizable structs can get and set parameters of the managed resource
 // using map form of Terraform JSON.
 type Parameterizable interface {
-	GetParameters() (map[string]interface{}, error)
+	GetParameters(ctx context.Context, c SecretClient) (map[string]interface{}, error)
 	SetParameters(map[string]interface{}) error
 }
 
@@ -38,7 +45,7 @@ type Parameterizable interface {
 // fields and return sensitive attributes from kubernetes secrets.
 type SensitiveDataProvider interface {
 	GetConnectionDetails(data []byte) (map[string][]byte, error)
-	GetSensitiveAttributes(kube client.Client) (map[string]interface{}, error)
+	GetSensitiveObservation(c SecretClient) (map[string]interface{}, error)
 }
 
 // MetadataProvider provides Terraform metadata for the Terraform managed resource
