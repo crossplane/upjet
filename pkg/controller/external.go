@@ -127,13 +127,9 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 			ResourceUpToDate: true,
 		}, nil
 	}
-	// After a successful observation, we now have a state to consume.
-	// We will consume the state by:
-	// - returning "sensitive attributes" as connection details
-	// - setting external name annotation, if not set already, from <id> attribute
-	// - late initializing "spec.forProvider" with "attributes"
-	// - setting observation at "status.atProvider" with "attributes"
-	// - storing base64encoded "tfstate" as an annotation
+	if res.LastOperationError != nil {
+		return managed.ExternalObservation{}, errors.Wrap(res.LastOperationError, "operation failed")
+	}
 
 	// No tfcli operation was in progress, our blocking observation completed
 	// successfully, and we have an observation to consume.
@@ -145,7 +141,7 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot set observation")
 	}
 
-	// TODO(hasan): Handle late initialization
+	// TODO(hasan): Handle late initialization of parameters.
 	lateInited, err := lateInitializeAnnotations(tr, attr, string(res.State.GetPrivateRaw()))
 	if err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot late initialize annotations")
@@ -170,8 +166,27 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 }
 
 func (e *external) Create(ctx context.Context, mg xpresource.Managed) (managed.ExternalCreation, error) {
-	res, err := e.Update(ctx, mg)
-	return managed.ExternalCreation{ConnectionDetails: res.ConnectionDetails}, err
+	if e.async {
+		return managed.ExternalCreation{}, errors.Wrap(e.tf.ApplyAsync(), "cannot start async apply")
+	}
+	tr, ok := mg.(resource.Terraformed)
+	if !ok {
+		return managed.ExternalCreation{}, errors.New(errUnexpectedObject)
+	}
+	res, err := e.tf.Apply(ctx)
+	if err != nil {
+		return managed.ExternalCreation{}, errors.Wrap(err, "cannot create")
+	}
+	attr := map[string]interface{}{}
+	if err := json.JSParser.Unmarshal(res.State.GetAttributes(), &attr); err != nil {
+		return managed.ExternalCreation{}, errors.Wrap(err, "cannot unmarshal state attributes")
+	}
+	// TODO(muvaf): Connection details are available usually only in the first
+	// call. Make sure to return them.
+
+	// NOTE(muvaf): Status is lost after the result of creation.
+	_, err = lateInitializeAnnotations(tr, attr, string(res.State.GetPrivateRaw()))
+	return managed.ExternalCreation{}, err
 }
 
 func (e *external) Update(ctx context.Context, mg xpresource.Managed) (managed.ExternalUpdate, error) {
@@ -190,10 +205,7 @@ func (e *external) Update(ctx context.Context, mg xpresource.Managed) (managed.E
 	if err := json.JSParser.Unmarshal(res.State.GetAttributes(), &attr); err != nil {
 		return managed.ExternalUpdate{}, errors.Wrap(err, "cannot unmarshal state attributes")
 	}
-	// NOTE(muvaf): Status is lost after the result of creation. That's why we
-	// do not set observation.
-	_, err = lateInitializeAnnotations(tr, attr, string(res.State.GetPrivateRaw()))
-	return managed.ExternalUpdate{}, errors.Wrap(err, "cannot late initialize annotations")
+	return managed.ExternalUpdate{}, errors.Wrap(tr.SetObservation(attr), "cannot set observation")
 }
 
 func (e *external) Delete(ctx context.Context, _ xpresource.Managed) error {

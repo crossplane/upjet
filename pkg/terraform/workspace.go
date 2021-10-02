@@ -22,6 +22,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	"github.com/pkg/errors"
@@ -64,26 +65,27 @@ func NopEnqueueFn() {}
 type Workspace struct {
 	LastOperation *Operation
 	Enqueue       EnqueueFn
+	AsyncTimeout  time.Duration
 
 	dir    string
 	logger logging.Logger
 }
 
 func (w *Workspace) ApplyAsync() error {
-	if w.LastOperation.StartTime != nil && w.LastOperation.EndTime == nil {
-		return errors.Errorf("%s operation that started at %s is still running", w.LastOperation.Type, w.LastOperation.StartTime.String())
+	if w.LastOperation.IsInProgress() {
+		return errors.Errorf("%s operation that started at %s is still running", w.LastOperation.Type, w.LastOperation.StartTime().String())
 	}
 	w.LastOperation.MarkStart("apply")
-	ctx, cancel := context.WithDeadline(context.TODO(), w.LastOperation.StartTime.Add(defaultAsyncTimeout))
+	ctx, cancel := context.WithDeadline(context.TODO(), w.LastOperation.StartTime().Add(defaultAsyncTimeout))
 	go func() {
-		cmd := exec.CommandContext(ctx, "terraform", "apply", "-auto-approve", "-input=false", "-json")
+		cmd := exec.CommandContext(ctx, "terraform", "apply", "-auto-approve", "-input=false", "-lock=false", "-json")
 		cmd.Dir = w.dir
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			w.LastOperation.Err = errors.Wrapf(err, "cannot apply: %s", string(out))
 		}
 		w.LastOperation.MarkEnd()
-		w.logger.Debug("apply async completed", "out", string(out))
+		w.logger.Debug("apply async ended", "out", string(out))
 
 		// After the operation is completed, we need to get the results saved on
 		// the custom resource as soon as possible. We can wait for the next
@@ -100,13 +102,13 @@ type ApplyResult struct {
 }
 
 func (w *Workspace) Apply(ctx context.Context) (ApplyResult, error) {
-	if w.LastOperation.EndTime == nil {
-		return ApplyResult{}, errors.Errorf("%s operation that started at %s is still running", w.LastOperation.Type, w.LastOperation.StartTime.String())
+	if w.LastOperation.IsInProgress() {
+		return ApplyResult{}, errors.Errorf("%s operation that started at %s is still running", w.LastOperation.Type, w.LastOperation.StartTime().String())
 	}
-	cmd := exec.CommandContext(ctx, "terraform", "apply", "-auto-approve", "-input=false", "-detailed-exitcode", "-json")
+	cmd := exec.CommandContext(ctx, "terraform", "apply", "-auto-approve", "-input=false", "-lock=false", "-detailed-exitcode", "-json")
 	cmd.Dir = w.dir
 	out, err := cmd.CombinedOutput()
-	w.logger.Debug("apply completed", "out", string(out))
+	w.logger.Debug("apply ended", "out", string(out))
 	if err != nil {
 		return ApplyResult{}, errors.Wrapf(err, "cannot apply: %s", string(out))
 	}
@@ -128,20 +130,20 @@ func (w *Workspace) DestroyAsync() error {
 		return nil
 	// We cannot run destroy until current non-destroy operation is completed.
 	// TODO(muvaf): Gracefully terminate the ongoing apply operation?
-	case w.LastOperation.StartTime != nil && w.LastOperation.EndTime == nil:
-		return errors.Errorf("%s operation that started at %s is still running", w.LastOperation.Type, w.LastOperation.StartTime.String())
+	case w.LastOperation.IsInProgress():
+		return errors.Errorf("%s operation that started at %s is still running", w.LastOperation.Type, w.LastOperation.StartTime().String())
 	}
 	w.LastOperation.MarkStart("destroy")
-	ctx, cancel := context.WithDeadline(context.TODO(), w.LastOperation.StartTime.Add(defaultAsyncTimeout))
+	ctx, cancel := context.WithDeadline(context.TODO(), w.LastOperation.StartTime().Add(defaultAsyncTimeout))
 	go func() {
-		cmd := exec.CommandContext(ctx, "terraform", "destroy", "-auto-approve", "-input=false", "-json")
+		cmd := exec.CommandContext(ctx, "terraform", "destroy", "-auto-approve", "-input=false", "-lock=false", "-json")
 		cmd.Dir = w.dir
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			w.LastOperation.Err = errors.Wrapf(err, "cannot destroy: %s", string(out))
 		}
 		w.LastOperation.MarkEnd()
-		w.logger.Debug("destroy async completed", "out", string(out))
+		w.logger.Debug("destroy async ended", "out", string(out))
 
 		// After the operation is completed, we need to get the results saved on
 		// the custom resource as soon as possible. We can wait for the next
@@ -154,13 +156,13 @@ func (w *Workspace) DestroyAsync() error {
 }
 
 func (w *Workspace) Destroy(ctx context.Context) error {
-	if w.LastOperation.EndTime == nil {
-		return errors.Errorf("%s operation that started at %s is still running", w.LastOperation.Type, w.LastOperation.StartTime.String())
+	if w.LastOperation.IsInProgress() {
+		return errors.Errorf("%s operation that started at %s is still running", w.LastOperation.Type, w.LastOperation.StartTime().String())
 	}
-	cmd := exec.CommandContext(ctx, "terraform", "destroy", "-auto-approve", "-input=false", "-json")
+	cmd := exec.CommandContext(ctx, "terraform", "destroy", "-auto-approve", "-input=false", "-lock=false", "-json")
 	cmd.Dir = w.dir
 	out, err := cmd.CombinedOutput()
-	w.logger.Debug("destroy completed", "out", string(out))
+	w.logger.Debug("destroy ended", "out", string(out))
 	return errors.Wrapf(err, "cannot destroy: %s", string(out))
 }
 
@@ -172,18 +174,14 @@ type RefreshResult struct {
 }
 
 func (w *Workspace) Refresh(ctx context.Context) (RefreshResult, error) {
-	if w.LastOperation.StartTime != nil {
-		// The last operation is still ongoing.
-		if w.LastOperation.EndTime == nil {
-			return RefreshResult{
-				IsApplying:   w.LastOperation.Type == "apply",
-				IsDestroying: w.LastOperation.Type == "destroy",
-			}, nil
-		}
-		// We know that the operation finished, so we need to flush so that new
-		// operation can be started.
+	switch {
+	case w.LastOperation.IsInProgress():
+		return RefreshResult{
+			IsApplying:   w.LastOperation.Type == "apply",
+			IsDestroying: w.LastOperation.Type == "destroy",
+		}, nil
+	case w.LastOperation.IsEnded():
 		defer w.LastOperation.Flush()
-
 		// The last operation finished with error.
 		if w.LastOperation.Err != nil {
 			return RefreshResult{
@@ -197,10 +195,10 @@ func (w *Workspace) Refresh(ctx context.Context) (RefreshResult, error) {
 			return RefreshResult{}, kerrors.NewNotFound(schema.GroupResource{}, "")
 		}
 	}
-	cmd := exec.CommandContext(ctx, "terraform", "apply", "-refresh-only", "-auto-approve", "-input=false", "-json")
+	cmd := exec.CommandContext(ctx, "terraform", "apply", "-refresh-only", "-auto-approve", "-input=false", "-lock=false", "-json")
 	cmd.Dir = w.dir
 	out, err := cmd.CombinedOutput()
-	w.logger.Debug("refresh completed", "out", string(out))
+	w.logger.Debug("refresh ended", "out", string(out))
 	if err != nil {
 		return RefreshResult{}, errors.Wrapf(err, "cannot refresh: %s", string(out))
 	}
@@ -212,7 +210,7 @@ func (w *Workspace) Refresh(ctx context.Context) (RefreshResult, error) {
 	if err := json.JSParser.Unmarshal(raw, s); err != nil {
 		return RefreshResult{}, errors.Wrap(err, "cannot unmarshal tfstate file")
 	}
-	if len(s.Resources) == 0 {
+	if len(s.Resources) == 0 || len(s.Resources[0].Instances) == 0 {
 		return RefreshResult{}, kerrors.NewNotFound(schema.GroupResource{}, "")
 	}
 	return RefreshResult{State: s}, nil
@@ -225,13 +223,13 @@ type PlanResult struct {
 
 func (w *Workspace) Plan(ctx context.Context) (PlanResult, error) {
 	// The last operation is still ongoing.
-	if w.LastOperation.StartTime != nil && w.LastOperation.EndTime == nil {
-		return PlanResult{}, errors.Errorf("%s operation that started at %s is still running", w.LastOperation.Type, w.LastOperation.StartTime.String())
+	if w.LastOperation.IsInProgress() {
+		return PlanResult{}, errors.Errorf("%s operation that started at %s is still running", w.LastOperation.Type, w.LastOperation.StartTime().String())
 	}
-	cmd := exec.CommandContext(ctx, "terraform", "plan", "-refresh=false", "-input=false", "-json")
+	cmd := exec.CommandContext(ctx, "terraform", "plan", "-refresh=false", "-input=false", "-lock=false", "-json")
 	cmd.Dir = w.dir
 	out, err := cmd.CombinedOutput()
-	w.logger.Debug("plan completed", "out", string(out))
+	w.logger.Debug("plan ended", "out", string(out))
 	if err != nil {
 		return PlanResult{}, errors.Wrapf(err, "cannot plan: %s", string(out))
 	}
