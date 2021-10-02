@@ -26,8 +26,6 @@ import (
 
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	"github.com/pkg/errors"
-	kerrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/crossplane-contrib/terrajet/pkg/resource/json"
 )
@@ -192,7 +190,7 @@ func (w *Workspace) Refresh(ctx context.Context) (RefreshResult, error) {
 		}
 		// The deletion is completed so there is no resource to refresh.
 		if w.LastOperation.Type == "destroy" {
-			return RefreshResult{}, kerrors.NewNotFound(schema.GroupResource{}, "")
+			return RefreshResult{}, NewNotFound()
 		}
 	}
 	cmd := exec.CommandContext(ctx, "terraform", "apply", "-refresh-only", "-auto-approve", "-input=false", "-lock=false", "-json")
@@ -211,7 +209,7 @@ func (w *Workspace) Refresh(ctx context.Context) (RefreshResult, error) {
 		return RefreshResult{}, errors.Wrap(err, "cannot unmarshal tfstate file")
 	}
 	if len(s.Resources) == 0 || len(s.Resources[0].Instances) == 0 {
-		return RefreshResult{}, kerrors.NewNotFound(schema.GroupResource{}, "")
+		return RefreshResult{}, NewNotFound()
 	}
 	return RefreshResult{State: s}, nil
 }

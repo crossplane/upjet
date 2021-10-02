@@ -14,23 +14,21 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controller
+package terraform
 
-import (
-	"context"
+type errNotFound struct{}
 
-	"github.com/crossplane-contrib/terrajet/pkg/terraform"
-)
+func (*errNotFound) Error() string {
+	return "terraform resource not found"
+}
 
-// TODO(muvaf): It's a bit weird that the functions return the struct of a
-// specific implementation of this interface. Maybe a different package for the
-// returned result types?
+// NewNotFound creates a new NotFound error.
+func NewNotFound() error {
+	return &errNotFound{}
+}
 
-type Client interface {
-	ApplyAsync() error
-	Apply(ctx context.Context) (terraform.ApplyResult, error)
-	DestroyAsync() error
-	Destroy(ctx context.Context) error
-	Refresh(ctx context.Context) (terraform.RefreshResult, error)
-	Plan(ctx context.Context) (terraform.PlanResult, error)
+// IsNotFound can check whether the error is of type NotFound.
+func IsNotFound(err error) bool {
+	_, ok := err.(*errNotFound)
+	return ok
 }

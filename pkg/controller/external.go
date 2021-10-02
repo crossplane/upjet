@@ -19,8 +19,6 @@ package controller
 import (
 	"context"
 
-	"github.com/crossplane-contrib/terrajet/pkg/resource/json"
-
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/event"
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
@@ -31,7 +29,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/crossplane-contrib/terrajet/pkg/resource"
-	tjclient "github.com/crossplane-contrib/terrajet/pkg/terraform"
+	"github.com/crossplane-contrib/terrajet/pkg/resource/json"
+	"github.com/crossplane-contrib/terrajet/pkg/terraform"
 )
 
 const (
@@ -53,7 +52,7 @@ func UseAsync() Option {
 }
 
 // NewConnector returns a new Connector object.
-func NewConnector(kube client.Client, ws *tjclient.WorkspaceStore, sf tjclient.SetupFn, opts ...Option) *Connector {
+func NewConnector(kube client.Client, ws *terraform.WorkspaceStore, sf terraform.SetupFn, opts ...Option) *Connector {
 	c := &Connector{
 		kube:           kube,
 		logger:         logging.NewNopLogger(),
@@ -71,8 +70,8 @@ func NewConnector(kube client.Client, ws *tjclient.WorkspaceStore, sf tjclient.S
 type Connector struct {
 	kube           client.Client
 	logger         logging.Logger
-	store          *tjclient.WorkspaceStore
-	terraformSetup tjclient.SetupFn
+	store          *terraform.WorkspaceStore
+	terraformSetup terraform.SetupFn
 	async          bool
 }
 
@@ -89,7 +88,7 @@ func (c *Connector) Connect(ctx context.Context, mg xpresource.Managed) (managed
 		return nil, errors.Wrap(err, "cannot get provider setup")
 	}
 
-	tf, err := c.store.Workspace(ctx, tr, ts, c.logger, tjclient.NopEnqueueFn)
+	tf, err := c.store.Workspace(ctx, tr, ts, c.logger, terraform.NopEnqueueFn)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot build terraform workspace for resource")
 	}
@@ -119,7 +118,7 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 
 	res, err := e.tf.Refresh(ctx)
 	if err != nil {
-		return managed.ExternalObservation{}, errors.Wrap(xpresource.IgnoreNotFound(err), "cannot check if resource exists")
+		return managed.ExternalObservation{}, errors.Wrap(xpresource.Ignore(terraform.IsNotFound, err), "cannot check if resource exists")
 	}
 	if res.IsDestroying || res.IsApplying {
 		return managed.ExternalObservation{
@@ -184,7 +183,7 @@ func (e *external) Create(ctx context.Context, mg xpresource.Managed) (managed.E
 	// TODO(muvaf): Connection details are available usually only in the first
 	// call. Make sure to return them.
 
-	// NOTE(muvaf): Status is lost after the result of creation.
+	// NOTE(muvaf): Only spec and metadata changes are saved after Create call.
 	_, err = lateInitializeAnnotations(tr, attr, string(res.State.GetPrivateRaw()))
 	return managed.ExternalCreation{}, err
 }
@@ -234,9 +233,9 @@ func lateInitializeAnnotations(tr resource.Terraformed, attr map[string]interfac
 		xpmeta.SetExternalName(tr, extID)
 		lateInited = true
 	}
-	if _, ok := tr.GetAnnotations()[tjclient.AnnotationKeyPrivateRawAttribute]; !ok {
+	if _, ok := tr.GetAnnotations()[terraform.AnnotationKeyPrivateRawAttribute]; !ok {
 		xpmeta.AddAnnotations(tr, map[string]string{
-			tjclient.AnnotationKeyPrivateRawAttribute: privateRaw,
+			terraform.AnnotationKeyPrivateRawAttribute: privateRaw,
 		})
 		lateInited = true
 	}
