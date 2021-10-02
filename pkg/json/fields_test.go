@@ -13,12 +13,11 @@ var testData = []byte(`
 {
   "top_level_secret": "sensitive-data-top-level-secret",
   "top_config_secretmap": {
-	"inner_config_secretmap_first": "sensitive-data-inner-first",
+	"inner_config_secretmap.first": "sensitive-data-inner-first",
 	"inner_config_secretmap_second": "sensitive-data-inner-second",
 	"inner_config_secretmap_third": "sensitive-data-inner-third"
   },
   "top_object_with_number": { "key1": 1, "key2": 2, "key3": 3},
-  "top_object_with_bool": { "key1": true, "key2": false, "key3": true},
   "top_config_array": [
     {
       "inner_some_field": "non-sensitive-data-1",
@@ -49,10 +48,10 @@ var testData = []byte(`
 }
 `)
 
-func TestValuesMatchingPath(t *testing.T) {
+func TestValuesMatchingPaths(t *testing.T) {
 	type args struct {
-		fieldPath string
-		data      []byte
+		paths []string
+		data  []byte
 	}
 	type want struct {
 		out map[string][]byte
@@ -64,8 +63,8 @@ func TestValuesMatchingPath(t *testing.T) {
 	}{
 		"Single": {
 			args: args{
-				fieldPath: "top_level_secret",
-				data:      testData,
+				paths: []string{"top_level_secret"},
+				data:  testData,
 			},
 			want: want{
 				out: map[string][]byte{
@@ -75,45 +74,36 @@ func TestValuesMatchingPath(t *testing.T) {
 		},
 		"SingleNonExisting": {
 			args: args{
-				fieldPath: "missing_field",
-				data:      testData,
+				paths: []string{"missing_field"},
+				data:  testData,
 			},
 			want: want{
-				out: map[string][]byte{},
+				err: errors.Wrapf(errors.Wrapf(
+					errors.Errorf("%s: no such field", "missing_field"),
+					errFmtCannotGetStringsForParts, []string{"missing_field"}),
+					errFmtCannotGetStringsForFieldPath, "missing_field"),
 			},
 		},
 		"SingleGettingNumber": {
 			args: args{
-				fieldPath: "top_object_with_number.key1",
-				data:      testData,
+				paths: []string{"top_object_with_number[key1]"},
+				data:  testData,
 			},
 			want: want{
-				out: map[string][]byte{
-					"top_object_with_number.key1": []byte("1"),
-				},
-			},
-		},
-		"WildcardGettingBool": {
-			args: args{
-				fieldPath: "top_object_with_bool.*",
-				data:      testData,
-			},
-			want: want{
-				out: map[string][]byte{
-					"top_object_with_bool.key1": []byte("true"),
-					"top_object_with_bool.key2": []byte("false"),
-					"top_object_with_bool.key3": []byte("true"),
-				},
+				err: errors.Wrapf(errors.Wrapf(
+					errors.Errorf("%s: not a string", "top_object_with_number.key1"),
+					errFmtCannotGetStringsForParts, []interface{}{"top_object_with_number", "key1"}),
+					errFmtCannotGetStringsForFieldPath, "top_object_with_number[key1]"),
 			},
 		},
 		"WildcardMultipleFromMap": {
 			args: args{
-				fieldPath: "top_config_secretmap.*",
-				data:      testData,
+				paths: []string{"top_config_secretmap[*]"},
+				data:  testData,
 			},
 			want: want{
 				out: map[string][]byte{
-					"top_config_secretmap.inner_config_secretmap_first":  []byte("sensitive-data-inner-first"),
+					"top_config_secretmap[inner_config_secretmap.first]": []byte("sensitive-data-inner-first"),
 					"top_config_secretmap.inner_config_secretmap_second": []byte("sensitive-data-inner-second"),
 					"top_config_secretmap.inner_config_secretmap_third":  []byte("sensitive-data-inner-third"),
 				},
@@ -121,104 +111,111 @@ func TestValuesMatchingPath(t *testing.T) {
 		},
 		"WildcardMultipleFromArray": {
 			args: args{
-				fieldPath: "top_config_array.*.inner_some_field",
-				data:      testData,
+				paths: []string{"top_config_array[*].inner_some_field"},
+				data:  testData,
 			},
 			want: want{
 				out: map[string][]byte{
-					"top_config_array.0.inner_some_field": []byte("non-sensitive-data-1"),
-					"top_config_array.1.inner_some_field": []byte("non-sensitive-data-2"),
-					"top_config_array.2.inner_some_field": []byte("non-sensitive-data-3"),
+					"top_config_array[0].inner_some_field": []byte("non-sensitive-data-1"),
+					"top_config_array[1].inner_some_field": []byte("non-sensitive-data-2"),
+					"top_config_array[2].inner_some_field": []byte("non-sensitive-data-3"),
 				},
 			},
 		},
 		"WildcardMultipleFromArrayMultipleLevel": {
 			args: args{
-				fieldPath: "top_config_array.*.inner_config_array.*.bottom_level_secret",
-				data:      testData,
+				paths: []string{"top_config_array[*].inner_config_array[*].bottom_level_secret"},
+				data:  testData,
 			},
 			want: want{
 				out: map[string][]byte{
-					"top_config_array.0.inner_config_array.0.bottom_level_secret": []byte("sensitive-data-bottom-level-1"),
-					"top_config_array.2.inner_config_array.0.bottom_level_secret": []byte("sensitive-data-bottom-level-3a"),
-					"top_config_array.2.inner_config_array.1.bottom_level_secret": []byte("sensitive-data-bottom-level-3b"),
+					"top_config_array[0].inner_config_array[0].bottom_level_secret": []byte("sensitive-data-bottom-level-1"),
+					"top_config_array[2].inner_config_array[0].bottom_level_secret": []byte("sensitive-data-bottom-level-3a"),
+					"top_config_array[2].inner_config_array[1].bottom_level_secret": []byte("sensitive-data-bottom-level-3b"),
 				},
 			},
 		},
 		"WildcardMixedWithNumbers": {
 			args: args{
-				fieldPath: "top_config_array.2.inner_config_array.*.bottom_level_secret",
-				data:      testData,
+				paths: []string{"top_config_array[2].inner_config_array[*].bottom_level_secret"},
+				data:  testData,
 			},
 			want: want{
 				out: map[string][]byte{
-					"top_config_array.2.inner_config_array.0.bottom_level_secret": []byte("sensitive-data-bottom-level-3a"),
-					"top_config_array.2.inner_config_array.1.bottom_level_secret": []byte("sensitive-data-bottom-level-3b"),
+					"top_config_array[2].inner_config_array[0].bottom_level_secret": []byte("sensitive-data-bottom-level-3a"),
+					"top_config_array[2].inner_config_array[1].bottom_level_secret": []byte("sensitive-data-bottom-level-3b"),
 				},
 			},
 		},
-		"EndsWithWildcard": {
+		"MultipleFieldPaths": {
 			args: args{
-				fieldPath: "top_config_secretmap.*",
-				data:      testData,
+				paths: []string{"top_level_secret", "top_config_secretmap.*", "top_config_array[2].inner_config_array[*].bottom_level_secret"},
+				data:  testData,
 			},
 			want: want{
 				out: map[string][]byte{
-					"top_config_secretmap.inner_config_secretmap_first":  []byte("sensitive-data-inner-first"),
-					"top_config_secretmap.inner_config_secretmap_second": []byte("sensitive-data-inner-second"),
-					"top_config_secretmap.inner_config_secretmap_third":  []byte("sensitive-data-inner-third"),
+					"top_level_secret": []byte("sensitive-data-top-level-secret"),
+					"top_config_secretmap[inner_config_secretmap.first]":            []byte("sensitive-data-inner-first"),
+					"top_config_secretmap.inner_config_secretmap_second":            []byte("sensitive-data-inner-second"),
+					"top_config_secretmap.inner_config_secretmap_third":             []byte("sensitive-data-inner-third"),
+					"top_config_array[2].inner_config_array[0].bottom_level_secret": []byte("sensitive-data-bottom-level-3a"),
+					"top_config_array[2].inner_config_array[1].bottom_level_secret": []byte("sensitive-data-bottom-level-3b"),
 				},
 			},
 		},
 		"NotAValue": {
 			args: args{
-				fieldPath: "top_config_secretmap",
-				data:      testData,
+				paths: []string{"top_config_secretmap"},
+				data:  testData,
 			},
 			want: want{
-				err: errors.Wrapf(errors.Errorf(errFmtUnexpectedTypeForValue, jsoniter.ObjectValue), errFmtCannotGetValueForPath, []interface{}{"top_config_secretmap"}),
+				err: errors.Wrapf(errors.Wrapf(
+					errors.Errorf("%s: not a string", "top_config_secretmap"),
+					errFmtCannotGetStringsForParts, []interface{}{"top_config_secretmap"}),
+					errFmtCannotGetStringsForFieldPath, "top_config_secretmap"),
 			},
 		},
 		"UnexpectedWildcard": {
 			args: args{
-				fieldPath: "top_level_secret.*",
-				data:      testData,
+				paths: []string{"top_level_secret.*"},
+				data:  testData,
 			},
 			want: want{
-				err: errors.Wrap(errors.Errorf(errFmtUnexpectedWildcardUsage, jsoniter.StringValue), errCannotExpandWildcards),
-			},
-		},
-		"UnexpectedWildcardInArrayMultipleLevel": {
-			args: args{
-				fieldPath: "top_config_array.*.inner_some_field.*",
-				data:      testData,
-			},
-			want: want{
-				err: errors.Wrap(errors.Wrapf(errors.Errorf(errFmtUnexpectedWildcardUsage, jsoniter.StringValue), errFmtCannotExpandForArray, []interface{}{"top_config_array", 0, "inner_some_field", "*"}), errCannotExpandWildcards),
+				err: errors.Wrapf(errors.Wrap(
+					errors.Errorf(errFmtUnexpectedWildcardUsage, jsoniter.StringValue),
+					errCannotExpandWildcards),
+					errFmtCannotGetStringsForFieldPath, "top_level_secret.*"),
 			},
 		},
 		"UnexpectedWildcardInObjectMultipleLevel": {
 			args: args{
-				fieldPath: "top_config_array.*.inner_some_field.*",
-				data:      testData,
+				paths: []string{"top_config_array.*.inner_some_field.*"},
+				data:  testData,
 			},
 			want: want{
-				err: errors.Wrap(errors.Wrapf(errors.Errorf(errFmtUnexpectedWildcardUsage, jsoniter.StringValue), errFmtCannotExpandForArray, []interface{}{"top_config_array", 0, "inner_some_field", "*"}), errCannotExpandWildcards),
+				err: errors.Wrapf(errors.Wrap(errors.Wrapf(
+					errors.Errorf(errFmtUnexpectedWildcardUsage, jsoniter.StringValue),
+					errFmtCannotExpandForArray, []interface{}{"top_config_array", 0, "inner_some_field", '*'}),
+					errCannotExpandWildcards),
+					errFmtCannotGetStringsForFieldPath, "top_config_array.*.inner_some_field.*"),
 			},
 		},
 		"NoData": {
 			args: args{
-				fieldPath: "top_level_secret",
-				data:      nil,
+				paths: []string{"top_level_secret"},
+				data:  nil,
 			},
 			want: want{
-				out: map[string][]byte{},
+				err: errors.Wrapf(errors.Wrapf(
+					errors.Errorf("%s: no such field", "top_level_secret"),
+					errFmtCannotGetStringsForParts, []string{"top_level_secret"}),
+					errFmtCannotGetStringsForFieldPath, "top_level_secret"),
 			},
 		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			got, gotErr := valuesMatchingPath(tc.data, tc.fieldPath)
+			got, gotErr := StringsMatchingFieldPaths(tc.data, tc.paths)
 			if diff := cmp.Diff(tc.want.err, gotErr, test.EquateErrors()); diff != "" {
 				t.Fatalf("GetFields(...): -want error, +got error: %s", diff)
 			}

@@ -312,8 +312,16 @@ func sortedKeys(m map[string]*schema.Schema) []string {
 	return keys
 }
 
-func fieldPath(segments []string) string {
-	return strings.Join(segments, ".")
+func fieldPath(parts []string) string {
+	fp := ""
+	for _, p := range parts {
+		if p == "*" {
+			fp += fmt.Sprintf("[%s]", p)
+			continue
+		}
+		fp += fmt.Sprintf(".%s", p)
+	}
+	return strings.TrimPrefix(fp, ".")
 }
 
 func containsAt(ss []string, s string) (bool, int) {
