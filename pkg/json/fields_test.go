@@ -5,7 +5,6 @@ import (
 
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	"github.com/google/go-cmp/cmp"
-	jsoniter "github.com/json-iterator/go"
 	"github.com/pkg/errors"
 )
 
@@ -78,10 +77,7 @@ func TestValuesMatchingPaths(t *testing.T) {
 				data:  testData,
 			},
 			want: want{
-				err: errors.Wrapf(errors.Wrapf(
-					errors.Errorf("%s: no such field", "missing_field"),
-					errFmtCannotGetStringsForParts, []string{"missing_field"}),
-					errFmtCannotGetStringsForFieldPath, "missing_field"),
+				out: map[string][]byte{},
 			},
 		},
 		"SingleGettingNumber": {
@@ -92,7 +88,7 @@ func TestValuesMatchingPaths(t *testing.T) {
 			want: want{
 				err: errors.Wrapf(errors.Wrapf(
 					errors.Errorf("%s: not a string", "top_object_with_number.key1"),
-					errFmtCannotGetStringsForParts, []interface{}{"top_object_with_number", "key1"}),
+					errFmtCannotGetStringsForParts, "top_object_with_number.key1"),
 					errFmtCannotGetStringsForFieldPath, "top_object_with_number[key1]"),
 			},
 		},
@@ -171,7 +167,7 @@ func TestValuesMatchingPaths(t *testing.T) {
 			want: want{
 				err: errors.Wrapf(errors.Wrapf(
 					errors.Errorf("%s: not a string", "top_config_secretmap"),
-					errFmtCannotGetStringsForParts, []interface{}{"top_config_secretmap"}),
+					errFmtCannotGetStringsForParts, "top_config_secretmap"),
 					errFmtCannotGetStringsForFieldPath, "top_config_secretmap"),
 			},
 		},
@@ -182,7 +178,7 @@ func TestValuesMatchingPaths(t *testing.T) {
 			},
 			want: want{
 				err: errors.Wrapf(errors.Wrap(
-					errors.Errorf(errFmtUnexpectedWildcardUsage, jsoniter.StringValue),
+					errors.Errorf("%s: unexpected wildcard usage", "top_level_secret"),
 					errCannotExpandWildcards),
 					errFmtCannotGetStringsForFieldPath, "top_level_secret.*"),
 			},
@@ -194,8 +190,8 @@ func TestValuesMatchingPaths(t *testing.T) {
 			},
 			want: want{
 				err: errors.Wrapf(errors.Wrap(errors.Wrapf(
-					errors.Errorf(errFmtUnexpectedWildcardUsage, jsoniter.StringValue),
-					errFmtCannotExpandForArray, []interface{}{"top_config_array", 0, "inner_some_field", '*'}),
+					errors.Errorf("%s: unexpected wildcard usage", "top_config_array[0].inner_some_field"),
+					"%s: cannot expand wildcards", "top_config_array[0].inner_some_field.*"),
 					errCannotExpandWildcards),
 					errFmtCannotGetStringsForFieldPath, "top_config_array.*.inner_some_field.*"),
 			},
@@ -206,10 +202,7 @@ func TestValuesMatchingPaths(t *testing.T) {
 				data:  nil,
 			},
 			want: want{
-				err: errors.Wrapf(errors.Wrapf(
-					errors.Errorf("%s: no such field", "top_level_secret"),
-					errFmtCannotGetStringsForParts, []string{"top_level_secret"}),
-					errFmtCannotGetStringsForFieldPath, "top_level_secret"),
+				out: map[string][]byte{},
 			},
 		},
 	}

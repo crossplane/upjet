@@ -2,6 +2,8 @@ module github.com/crossplane-contrib/terrajet
 
 go 1.16
 
+replace github.com/crossplane/crossplane-runtime => /Users/hasanturken/Workspace/crossplane/crossplane-runtime
+
 require (
 	github.com/crossplane/crossplane-runtime v0.15.0
 	github.com/fatih/camelcase v1.0.0
@@ -14,9 +16,9 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/afero v1.6.0
 	go.uber.org/multierr v1.7.0
-	golang.org/x/tools v0.1.0
-	k8s.io/api v0.21.2
-	k8s.io/apimachinery v0.21.2
-	k8s.io/client-go v0.21.2
-	sigs.k8s.io/controller-runtime v0.9.2
+	golang.org/x/tools v0.1.5
+	k8s.io/api v0.21.3
+	k8s.io/apimachinery v0.21.3
+	k8s.io/client-go v0.21.3
+	sigs.k8s.io/controller-runtime v0.9.6
 )
