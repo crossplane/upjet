@@ -105,11 +105,11 @@ func (ws *WorkspaceStore) Workspace(ctx context.Context, tr resource.Terraformed
 			return nil, errors.Wrap(err, "cannot write tfstate file")
 		}
 	}
-	rawHCL, err := json.JSParser.Marshal(fp.MainTF())
+	rawMainTF, err := json.JSParser.Marshal(fp.MainTF())
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot marshal main hcl object")
 	}
-	if err := os.WriteFile(filepath.Join(dir, "main.tf.json"), rawHCL, os.ModePerm); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "main.tf.json"), rawMainTF, os.ModePerm); err != nil {
 		return nil, errors.Wrap(err, "cannot write tfstate file")
 	}
 	// TODO(muvaf): Set new logger every time?
@@ -120,19 +120,18 @@ func (ws *WorkspaceStore) Workspace(ctx context.Context, tr resource.Terraformed
 		w = ws.store[tr.GetUID()]
 	}
 	ws.mu.Unlock()
-	// The operation has ended but there could be a lock file if Terraform crashed.
-	// So, we clean that up here. We could check the existence of the file first
-	// but just deleting in all cases get us to the same state with less logic and
-	// same number of fs calls.
-	if w.LastOperation.EndTime != nil {
-		if err := os.RemoveAll(filepath.Join(dir, ".terraform.tfstate.lock.info")); err != nil {
-			return nil, err
-		}
+	_, err = os.Stat(filepath.Join(dir, ".terraform.lock.hcl"))
+	if xpresource.Ignore(os.IsNotExist, err) != nil {
+		return nil, errors.Wrap(err, "cannot stat init lock file")
+	}
+	// We need to initialize only if the workspace hasn't been initialized yet.
+	if !os.IsNotExist(err) {
+		return w, nil
 	}
 	cmd := exec.CommandContext(ctx, "terraform", "init", "-input=false")
 	cmd.Dir = w.dir
 	out, err := cmd.CombinedOutput()
-	l.Debug("init completed", "out", string(out))
+	l.Debug("init ended", "out", string(out))
 	return w, errors.Wrapf(err, "cannot init workspace: %s", string(out))
 }
 

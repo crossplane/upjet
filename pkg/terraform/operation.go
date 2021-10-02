@@ -22,36 +22,61 @@ import (
 )
 
 type Operation struct {
-	Type      string
-	StartTime *time.Time
-	EndTime   *time.Time
-	Err       error
+	Type string
+	Err  error
 
-	mu sync.Mutex
+	startTime *time.Time
+	endTime   *time.Time
+	mu        sync.RWMutex
 }
 
 func (o *Operation) MarkStart(t string) {
 	o.mu.Lock()
+	defer o.mu.Unlock()
 	now := time.Now()
 	o.Type = t
-	o.StartTime = &now
-	o.EndTime = nil
+	o.startTime = &now
+	o.endTime = nil
 	o.Err = nil
-	o.mu.Unlock()
+
 }
 
 func (o *Operation) MarkEnd() {
 	o.mu.Lock()
+	defer o.mu.Unlock()
 	now := time.Now()
-	o.EndTime = &now
-	o.mu.Unlock()
+	o.endTime = &now
 }
 
 func (o *Operation) Flush() {
 	o.mu.Lock()
+	defer o.mu.Unlock()
 	o.Type = ""
-	o.StartTime = nil
-	o.EndTime = nil
+	o.startTime = nil
+	o.endTime = nil
 	o.Err = nil
-	o.mu.Unlock()
+}
+
+func (o *Operation) IsEnded() bool {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+	return o.endTime != nil
+}
+
+func (o *Operation) IsInProgress() bool {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+	return o.startTime != nil && o.endTime == nil
+}
+
+func (o *Operation) StartTime() *time.Time {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+	return o.startTime
+}
+
+func (o *Operation) EndTime() *time.Time {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+	return o.endTime
 }
