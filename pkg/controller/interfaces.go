@@ -26,8 +26,9 @@ import (
 // specific implementation of this interface. Maybe a different package for the
 // returned result types?
 
+// Client is the set of methods that are needed for the controller to work.
 type Client interface {
-	ApplyAsync() error
+	ApplyAsync(callback terraform.CallbackFn) error
 	Apply(ctx context.Context) (terraform.ApplyResult, error)
 	DestroyAsync() error
 	Destroy(ctx context.Context) error

@@ -30,25 +30,26 @@ import (
 	"github.com/crossplane-contrib/terrajet/pkg/resource/json"
 )
 
-type WorkspaceOption func(c *Workspace)
+const (
+	defaultAsyncTimeout = 1 * time.Hour
+)
 
-func WithEnqueueFn(fn EnqueueFn) WorkspaceOption {
-	return func(w *Workspace) {
-		w.Enqueue = fn
-	}
-}
+// WorkspaceOption allows you to configure Workspace objects.
+type WorkspaceOption func(*Workspace)
 
+// WithLogger sets the logger of Workspace.
 func WithLogger(l logging.Logger) WorkspaceOption {
 	return func(w *Workspace) {
 		w.logger = l
 	}
 }
 
+// NewWorkspace returns a new Workspace object that operates in the given
+// directory.
 func NewWorkspace(dir string, opts ...WorkspaceOption) *Workspace {
 	w := &Workspace{
 		LastOperation: &Operation{},
 		dir:           dir,
-		Enqueue:       NopEnqueueFn,
 	}
 	for _, f := range opts {
 		f(w)
@@ -56,26 +57,33 @@ func NewWorkspace(dir string, opts ...WorkspaceOption) *Workspace {
 	return w
 }
 
-type EnqueueFn func()
+// CallbackFn is the type of accepted function that can be called after an async
+// operation is completed.
+type CallbackFn func(context.Context, *json.StateV4) error
 
-func NopEnqueueFn() {}
+// NopCallbackFn does nothing.
+func NopCallbackFn(_ context.Context, _ *json.StateV4) error { return nil }
 
+// Workspace runs Terraform operations in its directory and holds the information
+// about their statuses.
 type Workspace struct {
+	// LastOperation contains information about the last operation performed.
 	LastOperation *Operation
-	Enqueue       EnqueueFn
-	AsyncTimeout  time.Duration
 
 	dir    string
 	logger logging.Logger
 }
 
-func (w *Workspace) ApplyAsync() error {
+// ApplyAsync makes a terraform apply call without blocking and calls the given
+// function once that apply call finishes.
+func (w *Workspace) ApplyAsync(callback CallbackFn) error {
 	if w.LastOperation.IsInProgress() {
 		return errors.Errorf("%s operation that started at %s is still running", w.LastOperation.Type, w.LastOperation.StartTime().String())
 	}
 	w.LastOperation.MarkStart("apply")
 	ctx, cancel := context.WithDeadline(context.TODO(), w.LastOperation.StartTime().Add(defaultAsyncTimeout))
 	go func() {
+		defer cancel()
 		cmd := exec.CommandContext(ctx, "terraform", "apply", "-auto-approve", "-input=false", "-lock=false", "-json")
 		cmd.Dir = w.dir
 		out, err := cmd.CombinedOutput()
@@ -89,16 +97,30 @@ func (w *Workspace) ApplyAsync() error {
 		// the custom resource as soon as possible. We can wait for the next
 		// reconciliation, enqueue manually or update the CR independent of the
 		// reconciliation.
-		w.Enqueue()
-		cancel()
+		raw, err := os.ReadFile(filepath.Join(w.dir, "terraform.tfstate"))
+		if err != nil {
+			w.LastOperation.Err = errors.Wrap(err, "cannot read tfstate file")
+			return
+		}
+		s := &json.StateV4{}
+		if err := json.JSParser.Unmarshal(raw, s); err != nil {
+			w.LastOperation.Err = errors.Wrap(err, "cannot unmarshal tfstate file")
+			return
+		}
+		if err := callback(ctx, s); err != nil {
+			w.LastOperation.Err = errors.Wrap(err, "callback failed")
+			return
+		}
 	}()
 	return nil
 }
 
+// ApplyResult contains the state after the apply operation.
 type ApplyResult struct {
 	State *json.StateV4
 }
 
+// Apply makes a blocking terraform apply call.
 func (w *Workspace) Apply(ctx context.Context) (ApplyResult, error) {
 	if w.LastOperation.IsInProgress() {
 		return ApplyResult{}, errors.Errorf("%s operation that started at %s is still running", w.LastOperation.Type, w.LastOperation.StartTime().String())
@@ -121,6 +143,10 @@ func (w *Workspace) Apply(ctx context.Context) (ApplyResult, error) {
 	return ApplyResult{State: s}, nil
 }
 
+// DestroyAsync makes a non-blocking terraform destroy call. It doesn't accept
+// a callback because destroy operations are not time sensitive as ApplyAsync
+// where you might need to store the server-side computed information as soon
+// as possible.
 func (w *Workspace) DestroyAsync() error {
 	switch {
 	// Destroy call is idempotent and can be called repeatedly.
@@ -134,6 +160,7 @@ func (w *Workspace) DestroyAsync() error {
 	w.LastOperation.MarkStart("destroy")
 	ctx, cancel := context.WithDeadline(context.TODO(), w.LastOperation.StartTime().Add(defaultAsyncTimeout))
 	go func() {
+		defer cancel()
 		cmd := exec.CommandContext(ctx, "terraform", "destroy", "-auto-approve", "-input=false", "-lock=false", "-json")
 		cmd.Dir = w.dir
 		out, err := cmd.CombinedOutput()
@@ -142,17 +169,11 @@ func (w *Workspace) DestroyAsync() error {
 		}
 		w.LastOperation.MarkEnd()
 		w.logger.Debug("destroy async ended", "out", string(out))
-
-		// After the operation is completed, we need to get the results saved on
-		// the custom resource as soon as possible. We can wait for the next
-		// reconcilitaion, enqueue manually or update the CR independent of the
-		// reconciliation.
-		w.Enqueue()
-		cancel()
 	}()
 	return nil
 }
 
+// Destroy makes a blocking terraform destroy call.
 func (w *Workspace) Destroy(ctx context.Context) error {
 	if w.LastOperation.IsInProgress() {
 		return errors.Errorf("%s operation that started at %s is still running", w.LastOperation.Type, w.LastOperation.StartTime().String())
@@ -164,6 +185,7 @@ func (w *Workspace) Destroy(ctx context.Context) error {
 	return errors.Wrapf(err, "cannot destroy: %s", string(out))
 }
 
+// RefreshResult contains information about the current state of the resource.
 type RefreshResult struct {
 	IsApplying         bool
 	IsDestroying       bool
@@ -171,6 +193,8 @@ type RefreshResult struct {
 	LastOperationError error
 }
 
+// Refresh makes a blocking terraform apply -refresh-only call where only the state file
+// is changed with the current state of the resource.
 func (w *Workspace) Refresh(ctx context.Context) (RefreshResult, error) {
 	switch {
 	case w.LastOperation.IsInProgress():
@@ -214,11 +238,14 @@ func (w *Workspace) Refresh(ctx context.Context) (RefreshResult, error) {
 	return RefreshResult{State: s}, nil
 }
 
+// PlanResult returns a summary of comparison between desired and current state
+// of the resource.
 type PlanResult struct {
 	Exists   bool
 	UpToDate bool
 }
 
+// Plan makes a blocking terraform plan call.
 func (w *Workspace) Plan(ctx context.Context) (PlanResult, error) {
 	// The last operation is still ongoing.
 	if w.LastOperation.IsInProgress() {

@@ -20,7 +20,6 @@ import (
 	"context"
 
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
-	"github.com/crossplane/crossplane-runtime/pkg/event"
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	xpmeta "github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
@@ -34,17 +33,21 @@ import (
 )
 
 const (
-	errUnexpectedObject = "the managed resource is not an Terraformed resource"
+	errUnexpectedObject = "the managed resource is not a Terraformed resource"
 )
 
+// Option allows you to configure Connector.
 type Option func(*Connector)
 
+// WithLogger allows you to set logger of the Connector.
 func WithLogger(l logging.Logger) Option {
 	return func(c *Connector) {
 		c.logger = l
 	}
 }
 
+// UseAsync configures the controller to use async variant of the functions
+// of the Terraform client.
 func UseAsync() Option {
 	return func(c *Connector) {
 		c.async = true
@@ -88,7 +91,7 @@ func (c *Connector) Connect(ctx context.Context, mg xpresource.Managed) (managed
 		return nil, errors.Wrap(err, "cannot get provider setup")
 	}
 
-	tf, err := c.store.Workspace(ctx, tr, ts, c.logger, terraform.NopEnqueueFn)
+	tf, err := c.store.Workspace(ctx, tr, ts, c.logger)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot build terraform workspace for resource")
 	}
@@ -102,12 +105,11 @@ func (c *Connector) Connect(ctx context.Context, mg xpresource.Managed) (managed
 }
 
 type external struct {
-	kube  client.Client
-	tf    Client
-	async bool
+	kube client.Client
+	tf   Client
 
-	log    logging.Logger
-	record event.Recorder
+	async bool
+	log   logging.Logger
 }
 
 func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.ExternalObservation, error) {
@@ -130,8 +132,8 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 		return managed.ExternalObservation{}, errors.Wrap(res.LastOperationError, "operation failed")
 	}
 
-	// No tfcli operation was in progress, our blocking observation completed
-	// successfully, and we have an observation to consume.
+	// No operation was in progress, our observation completed successfully, and
+	// we have an observation to consume.
 	attr := map[string]interface{}{}
 	if err := json.JSParser.Unmarshal(res.State.GetAttributes(), &attr); err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot unmarshal state attributes")
@@ -165,12 +167,12 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 }
 
 func (e *external) Create(ctx context.Context, mg xpresource.Managed) (managed.ExternalCreation, error) {
-	if e.async {
-		return managed.ExternalCreation{}, errors.Wrap(e.tf.ApplyAsync(), "cannot start async apply")
-	}
 	tr, ok := mg.(resource.Terraformed)
 	if !ok {
 		return managed.ExternalCreation{}, errors.New(errUnexpectedObject)
+	}
+	if e.async {
+		return managed.ExternalCreation{}, errors.Wrap(e.tf.ApplyAsync(CriticalAnnotationsCallback(e.kube, tr)), "cannot start async apply")
 	}
 	res, err := e.tf.Apply(ctx)
 	if err != nil {
@@ -180,17 +182,16 @@ func (e *external) Create(ctx context.Context, mg xpresource.Managed) (managed.E
 	if err := json.JSParser.Unmarshal(res.State.GetAttributes(), &attr); err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, "cannot unmarshal state attributes")
 	}
-	// TODO(muvaf): Connection details are available usually only in the first
-	// call. Make sure to return them.
+	// TODO(muvaf): Handle connection details.
 
 	// NOTE(muvaf): Only spec and metadata changes are saved after Create call.
 	_, err = lateInitializeAnnotations(tr, attr, string(res.State.GetPrivateRaw()))
-	return managed.ExternalCreation{}, err
+	return managed.ExternalCreation{}, errors.Wrap(err, "cannot late initialize annotations")
 }
 
 func (e *external) Update(ctx context.Context, mg xpresource.Managed) (managed.ExternalUpdate, error) {
 	if e.async {
-		return managed.ExternalUpdate{}, errors.Wrap(e.tf.ApplyAsync(), "cannot start async apply")
+		return managed.ExternalUpdate{}, errors.Wrap(e.tf.ApplyAsync(terraform.NopCallbackFn), "cannot start async apply")
 	}
 	tr, ok := mg.(resource.Terraformed)
 	if !ok {
@@ -215,29 +216,49 @@ func (e *external) Delete(ctx context.Context, _ xpresource.Managed) error {
 }
 
 func lateInitializeAnnotations(tr resource.Terraformed, attr map[string]interface{}, privateRaw string) (bool, error) {
-	lateInited := false
-	if xpmeta.GetExternalName(tr) == "" {
-		// Terraform stores id for the external resource as an attribute in the
-		// resource state. Key for the attribute holding external identifier is
-		// resource specific. We rely on GetTerraformResourceIdField() function
-		// to find out that key.
-
-		id, exists := attr[tr.GetTerraformResourceIdField()]
-		if !exists {
-			return false, errors.Errorf("no value for id field: %s", tr.GetTerraformResourceIdField())
-		}
-		extID, ok := id.(string)
-		if !ok {
-			return false, errors.Errorf("id field is not a string")
-		}
-		xpmeta.SetExternalName(tr, extID)
-		lateInited = true
-	}
+	changed := false
 	if _, ok := tr.GetAnnotations()[terraform.AnnotationKeyPrivateRawAttribute]; !ok {
 		xpmeta.AddAnnotations(tr, map[string]string{
 			terraform.AnnotationKeyPrivateRawAttribute: privateRaw,
 		})
-		lateInited = true
+		changed = true
 	}
-	return lateInited, nil
+	if xpmeta.GetExternalName(tr) != "" {
+		return changed, nil
+	}
+
+	// Terraform stores id for the external resource as an attribute in the
+	// resource state. Key for the attribute holding external identifier is
+	// resource specific. We rely on GetTerraformResourceIdField() function
+	// to find out that key.
+	id, exists := attr[tr.GetTerraformResourceIdField()]
+	if !exists {
+		return false, errors.Errorf("no value for id field: %s", tr.GetTerraformResourceIdField())
+	}
+	extID, ok := id.(string)
+	if !ok {
+		return false, errors.Errorf("id field is not a string")
+	}
+	xpmeta.SetExternalName(tr, extID)
+	return true, nil
+}
+
+// CriticalAnnotationsCallback returns a callback function that would store the
+// time-sensitive annotations.
+func CriticalAnnotationsCallback(kube client.Client, tr resource.Terraformed) terraform.CallbackFn {
+	return func(ctx context.Context, s *json.StateV4) error {
+		attr := map[string]interface{}{}
+		if err := json.JSParser.Unmarshal(s.GetAttributes(), &attr); err != nil {
+			return errors.Wrap(err, "cannot unmarshal state attributes")
+		}
+		_, err := lateInitializeAnnotations(tr, attr, string(s.GetPrivateRaw()))
+		if err != nil {
+			return errors.Wrap(err, "cannot late initialize annotations")
+		}
+		// TODO(muvaf): We issue the update call even if the annotations didn't
+		// change so that the resource gets enqueued. We need to test this
+		// assumption.
+		c := managed.NewRetryingCriticalAnnotationUpdater(kube)
+		return errors.Wrap(c.UpdateCriticalAnnotations(ctx, tr), "cannot update critical annotations")
+	}
 }

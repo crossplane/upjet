@@ -25,6 +25,7 @@ import (
 
 // TODO(muvaf): A FinalizerChain in crossplane-runtime?
 
+// NewWorkspaceFinalizer returns a new WorkspaceFinalizer.
 func NewWorkspaceFinalizer(ws *WorkspaceStore, af resource.Finalizer) *WorkspaceFinalizer {
 	return &WorkspaceFinalizer{
 		Finalizer: af,
@@ -32,6 +33,8 @@ func NewWorkspaceFinalizer(ws *WorkspaceStore, af resource.Finalizer) *Workspace
 	}
 }
 
+// WorkspaceFinalizer removes the workspace from the workspace store and only
+// then calls RemoveFinalizer of the underlying Finalizer.
 type WorkspaceFinalizer struct {
 	resource.Finalizer
 	Store *WorkspaceStore
@@ -42,7 +45,8 @@ func (wf *WorkspaceFinalizer) AddFinalizer(ctx context.Context, obj resource.Obj
 	return wf.Finalizer.AddFinalizer(ctx, obj)
 }
 
-// RemoveFinalizer from the supplied Managed resource.
+// RemoveFinalizer removes the workspace from workspace store before removing
+// the finalizer.
 func (wf *WorkspaceFinalizer) RemoveFinalizer(ctx context.Context, obj resource.Object) error {
 	if err := wf.Store.Remove(obj); err != nil {
 		return errors.Wrap(err, "cannot remove workspace from the store")

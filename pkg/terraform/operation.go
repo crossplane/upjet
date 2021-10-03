@@ -21,6 +21,7 @@ import (
 	"time"
 )
 
+// Operation is the representation of a single Terraform CLI operation.
 type Operation struct {
 	Type string
 	Err  error
@@ -30,6 +31,7 @@ type Operation struct {
 	mu        sync.RWMutex
 }
 
+// MarkStart marks the operation as started.
 func (o *Operation) MarkStart(t string) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
@@ -41,6 +43,7 @@ func (o *Operation) MarkStart(t string) {
 
 }
 
+// MarkEnd marks the operation as ended.
 func (o *Operation) MarkEnd() {
 	o.mu.Lock()
 	defer o.mu.Unlock()
@@ -48,6 +51,7 @@ func (o *Operation) MarkEnd() {
 	o.endTime = &now
 }
 
+// Flush cleans the operation information.
 func (o *Operation) Flush() {
 	o.mu.Lock()
 	defer o.mu.Unlock()
@@ -57,24 +61,28 @@ func (o *Operation) Flush() {
 	o.Err = nil
 }
 
+// IsEnded returns whether the operation has ended, regardless of its result.
 func (o *Operation) IsEnded() bool {
 	o.mu.RLock()
 	defer o.mu.RUnlock()
 	return o.endTime != nil
 }
 
+// IsInProgress returns whether there is an ongoing operation.
 func (o *Operation) IsInProgress() bool {
 	o.mu.RLock()
 	defer o.mu.RUnlock()
 	return o.startTime != nil && o.endTime == nil
 }
 
+// StartTime returns the start time of the current operation.
 func (o *Operation) StartTime() *time.Time {
 	o.mu.RLock()
 	defer o.mu.RUnlock()
 	return o.startTime
 }
 
+// EndTime returns the end time of the current operation.
 func (o *Operation) EndTime() *time.Time {
 	o.mu.RLock()
 	defer o.mu.RUnlock()

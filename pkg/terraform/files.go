@@ -18,31 +18,25 @@ package terraform
 
 import (
 	"fmt"
-	"time"
+	"os"
+	"path/filepath"
 
 	"github.com/crossplane-contrib/terrajet/pkg/resource"
-	json2 "github.com/crossplane-contrib/terrajet/pkg/resource/json"
+	"github.com/crossplane-contrib/terrajet/pkg/resource/json"
 
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/pkg/errors"
 )
 
 const (
-	defaultAsyncTimeout = 1 * time.Hour
 	// AnnotationKeyPrivateRawAttribute is the key that points to private attribute
 	// of the Terraform State. It's non-sensitive and used by provider to store
 	// arbitrary metadata, usually details about schema version.
 	AnnotationKeyPrivateRawAttribute = "terrajet.crossplane.io/provider-meta"
 )
 
-// Error strings.
-const (
-	fmtErrValidationProvider = "invalid provider specification: both source and version are required: source=%q and version=%q"
-	fmtErrValidationVersion  = "invalid setup specification, Terraform version not provided"
-)
-
 // NewFileProducer returns a new FileProducer.
-func NewFileProducer(tr resource.Terraformed, ts Setup) (*FileProducer, error) {
+func NewFileProducer(dir string, tr resource.Terraformed, ts Setup) (*FileProducer, error) {
 	params, err := tr.GetParameters()
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot get parameters")
@@ -53,9 +47,10 @@ func NewFileProducer(tr resource.Terraformed, ts Setup) (*FileProducer, error) {
 	}
 	return &FileProducer{
 		Resource:    tr,
+		Setup:       ts,
+		Dir:         dir,
 		parameters:  params,
 		observation: obs,
-		Setup:       ts,
 	}, nil
 }
 
@@ -64,14 +59,15 @@ func NewFileProducer(tr resource.Terraformed, ts Setup) (*FileProducer, error) {
 type FileProducer struct {
 	Resource resource.Terraformed
 	Setup    Setup
+	Dir      string
 
 	parameters  map[string]interface{}
 	observation map[string]interface{}
 }
 
-// TFState returns the Terraform state that should exist in the filesystem to
+// WriteTFState writes the Terraform state that should exist in the filesystem to
 // start any Terraform operation.
-func (fp *FileProducer) TFState() (*json2.StateV4, error) {
+func (fp *FileProducer) WriteTFState() error {
 	base := make(map[string]interface{})
 	// NOTE(muvaf): Since we try to produce the current state, observation
 	// takes precedence over parameters.
@@ -82,18 +78,18 @@ func (fp *FileProducer) TFState() (*json2.StateV4, error) {
 		base[k] = v
 	}
 	base["id"] = meta.GetExternalName(fp.Resource)
-	attr, err := json2.JSParser.Marshal(base)
+	attr, err := json.JSParser.Marshal(base)
 	if err != nil {
-		return nil, errors.Wrap(err, "cannot marshal produced state attributes")
+		return errors.Wrap(err, "cannot marshal produced state attributes")
 	}
 	var privateRaw []byte
 	if pr, ok := fp.Resource.GetAnnotations()[AnnotationKeyPrivateRawAttribute]; ok {
 		privateRaw = []byte(pr)
 	}
-	st := json2.NewStateV4()
-	st.TerraformVersion = fp.Setup.Version
-	st.Lineage = string(fp.Resource.GetUID())
-	st.Resources = []json2.ResourceStateV4{
+	s := json.NewStateV4()
+	s.TerraformVersion = fp.Setup.Version
+	s.Lineage = string(fp.Resource.GetUID())
+	s.Resources = []json.ResourceStateV4{
 		{
 			Mode: "managed",
 			Type: fp.Resource.GetTerraformResourceType(),
@@ -101,7 +97,7 @@ func (fp *FileProducer) TFState() (*json2.StateV4, error) {
 			// TODO(muvaf): we should get the full URL from Dockerfile since
 			// providers don't have to be hosted in registry.terraform.io
 			ProviderConfig: fmt.Sprintf(`provider["registry.terraform.io/%s"]`, fp.Setup.Requirement.Source),
-			Instances: []json2.InstanceObjectStateV4{
+			Instances: []json.InstanceObjectStateV4{
 				{
 					SchemaVersion: 0,
 					PrivateRaw:    privateRaw,
@@ -110,19 +106,23 @@ func (fp *FileProducer) TFState() (*json2.StateV4, error) {
 			},
 		},
 	}
-	return st, nil
+
+	rawState, err := json.JSParser.Marshal(s)
+	if err != nil {
+		return errors.Wrap(err, "cannot marshal state object")
+	}
+	return errors.Wrap(os.WriteFile(filepath.Join(fp.Dir, "terraform.tfstate"), rawState, os.ModePerm), "cannot write tfstate file")
 }
 
-// MainTF returns the content main configuration file that has the desired state
-// for Terraform as a map that can be written to disk as valid JSON input to
-// Terraform.
-func (fp *FileProducer) MainTF() map[string]interface{} {
+// WriteMainTF writes the content main configuration file that has the desired
+// state configuration for Terraform.
+func (fp *FileProducer) WriteMainTF() error {
 	// If the resource is in a deletion process, we need to remove the deletion
 	// protection.
 	fp.parameters["lifecycle"] = map[string]bool{
 		"prevent_destroy": !meta.WasDeleted(fp.Resource),
 	}
-	return map[string]interface{}{
+	m := map[string]interface{}{
 		"terraform": map[string]interface{}{
 			"required_providers": map[string]interface{}{
 				"tf-provider": map[string]string{
@@ -140,4 +140,9 @@ func (fp *FileProducer) MainTF() map[string]interface{} {
 			},
 		},
 	}
+	rawMainTF, err := json.JSParser.Marshal(m)
+	if err != nil {
+		return errors.Wrap(err, "cannot marshal main hcl object")
+	}
+	return errors.Wrap(os.WriteFile(filepath.Join(fp.Dir, "main.tf.json"), rawMainTF, os.ModePerm), "cannot write tfstate file")
 }
