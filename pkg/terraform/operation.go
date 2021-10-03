@@ -68,8 +68,8 @@ func (o *Operation) IsEnded() bool {
 	return o.endTime != nil
 }
 
-// IsInProgress returns whether there is an ongoing operation.
-func (o *Operation) IsInProgress() bool {
+// IsRunning returns whether there is an ongoing operation.
+func (o *Operation) IsRunning() bool {
 	o.mu.RLock()
 	defer o.mu.RUnlock()
 	return o.startTime != nil && o.endTime == nil

@@ -21,6 +21,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/spf13/afero"
+
 	"github.com/crossplane-contrib/terrajet/pkg/resource"
 	"github.com/crossplane-contrib/terrajet/pkg/resource/json"
 
@@ -35,8 +37,18 @@ const (
 	AnnotationKeyPrivateRawAttribute = "terrajet.crossplane.io/provider-meta"
 )
 
+// FileProducerOption allows you to configure FileProducer
+type FileProducerOption func(*FileProducer)
+
+// WithFileSystem configures the filesystem to use. Used mostly for testing.
+func WithFileSystem(fs afero.Fs) FileProducerOption {
+	return func(fp *FileProducer) {
+		fp.fs = afero.Afero{Fs: fs}
+	}
+}
+
 // NewFileProducer returns a new FileProducer.
-func NewFileProducer(dir string, tr resource.Terraformed, ts Setup) (*FileProducer, error) {
+func NewFileProducer(dir string, tr resource.Terraformed, ts Setup, opts ...FileProducerOption) (*FileProducer, error) {
 	params, err := tr.GetParameters()
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot get parameters")
@@ -45,13 +57,18 @@ func NewFileProducer(dir string, tr resource.Terraformed, ts Setup) (*FileProduc
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot get observation")
 	}
-	return &FileProducer{
+	fp := &FileProducer{
 		Resource:    tr,
 		Setup:       ts,
 		Dir:         dir,
 		parameters:  params,
 		observation: obs,
-	}, nil
+		fs:          afero.Afero{Fs: afero.NewOsFs()},
+	}
+	for _, f := range opts {
+		f(fp)
+	}
+	return fp, nil
 }
 
 // FileProducer exist to serve as cache for the data that is costly to produce
@@ -63,6 +80,7 @@ type FileProducer struct {
 
 	parameters  map[string]interface{}
 	observation map[string]interface{}
+	fs          afero.Afero
 }
 
 // WriteTFState writes the Terraform state that should exist in the filesystem to
@@ -111,7 +129,7 @@ func (fp *FileProducer) WriteTFState() error {
 	if err != nil {
 		return errors.Wrap(err, "cannot marshal state object")
 	}
-	return errors.Wrap(os.WriteFile(filepath.Join(fp.Dir, "terraform.tfstate"), rawState, os.ModePerm), "cannot write tfstate file")
+	return errors.Wrap(fp.fs.WriteFile(filepath.Join(fp.Dir, "terraform.tfstate"), rawState, os.ModePerm), "cannot write tfstate file")
 }
 
 // WriteMainTF writes the content main configuration file that has the desired
@@ -144,5 +162,5 @@ func (fp *FileProducer) WriteMainTF() error {
 	if err != nil {
 		return errors.Wrap(err, "cannot marshal main hcl object")
 	}
-	return errors.Wrap(os.WriteFile(filepath.Join(fp.Dir, "main.tf.json"), rawMainTF, os.ModePerm), "cannot write tfstate file")
+	return errors.Wrap(fp.fs.WriteFile(filepath.Join(fp.Dir, "main.tf.json"), rawMainTF, os.ModePerm), "cannot write tfstate file")
 }

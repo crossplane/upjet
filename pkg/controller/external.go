@@ -20,7 +20,6 @@ import (
 	"context"
 
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
-	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	xpmeta "github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
@@ -33,18 +32,21 @@ import (
 )
 
 const (
-	errUnexpectedObject = "the managed resource is not a Terraformed resource"
+	errUnexpectedObject    = "the managed resource is not a Terraformed resource"
+	errGetTerraformSetup   = "cannot get terraform setup"
+	errGetWorkspace        = "cannot get a terraform workspace for resource"
+	errRefresh             = "cannot run refresh"
+	errRefreshAttributes   = "refresh returned empty attributes"
+	errPlan                = "cannot run plan"
+	errLastOperationFailed = "the last operation failed"
+	errStartAsyncApply     = "cannot start async apply"
+	errStartAsyncDestroy   = "cannot start async destroy"
+	errApply               = "cannot apply"
+	errDestroy             = "cannot destroy"
 )
 
 // Option allows you to configure Connector.
 type Option func(*Connector)
-
-// WithLogger allows you to set logger of the Connector.
-func WithLogger(l logging.Logger) Option {
-	return func(c *Connector) {
-		c.logger = l
-	}
-}
 
 // UseAsync configures the controller to use async variant of the functions
 // of the Terraform client.
@@ -55,12 +57,11 @@ func UseAsync() Option {
 }
 
 // NewConnector returns a new Connector object.
-func NewConnector(kube client.Client, ws *terraform.WorkspaceStore, sf terraform.SetupFn, opts ...Option) *Connector {
+func NewConnector(kube client.Client, ws Store, sf terraform.SetupFn, opts ...Option) *Connector {
 	c := &Connector{
-		kube:           kube,
-		logger:         logging.NewNopLogger(),
-		terraformSetup: sf,
-		store:          ws,
+		kube:              kube,
+		getTerraformSetup: sf,
+		store:             ws,
 	}
 	for _, f := range opts {
 		f(c)
@@ -71,11 +72,10 @@ func NewConnector(kube client.Client, ws *terraform.WorkspaceStore, sf terraform
 // Connector initializes the external client with credentials and other configuration
 // parameters.
 type Connector struct {
-	kube           client.Client
-	logger         logging.Logger
-	store          *terraform.WorkspaceStore
-	terraformSetup terraform.SetupFn
-	async          bool
+	kube              client.Client
+	store             Store
+	getTerraformSetup terraform.SetupFn
+	async             bool
 }
 
 // Connect makes sure the underlying client is ready to issue requests to the
@@ -86,30 +86,28 @@ func (c *Connector) Connect(ctx context.Context, mg xpresource.Managed) (managed
 		return nil, errors.New(errUnexpectedObject)
 	}
 
-	ts, err := c.terraformSetup(ctx, c.kube, mg)
+	ts, err := c.getTerraformSetup(ctx, c.kube, mg)
 	if err != nil {
-		return nil, errors.Wrap(err, "cannot get provider setup")
+		return nil, errors.Wrap(err, errGetTerraformSetup)
 	}
 
-	tf, err := c.store.Workspace(ctx, tr, ts, c.logger)
+	tf, err := c.store.Workspace(ctx, tr, ts)
 	if err != nil {
-		return nil, errors.Wrap(err, "cannot build terraform workspace for resource")
+		return nil, errors.Wrap(err, errGetWorkspace)
 	}
 
 	return &external{
-		kube:  c.kube,
-		tf:    tf,
-		log:   c.logger,
-		async: c.async,
+		kube:      c.kube,
+		workspace: tf,
+		async:     c.async,
 	}, nil
 }
 
 type external struct {
-	kube client.Client
-	tf   Client
+	kube      client.Client
+	workspace Workspace
 
 	async bool
-	log   logging.Logger
 }
 
 func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.ExternalObservation, error) {
@@ -118,9 +116,9 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 		return managed.ExternalObservation{}, errors.New(errUnexpectedObject)
 	}
 
-	res, err := e.tf.Refresh(ctx)
+	res, err := e.workspace.Refresh(ctx)
 	if err != nil {
-		return managed.ExternalObservation{}, errors.Wrap(xpresource.Ignore(terraform.IsNotFound, err), "cannot check if resource exists")
+		return managed.ExternalObservation{}, errors.Wrap(xpresource.Ignore(terraform.IsNotFound, err), errRefresh)
 	}
 	if res.IsDestroying || res.IsApplying {
 		return managed.ExternalObservation{
@@ -129,7 +127,10 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 		}, nil
 	}
 	if res.LastOperationError != nil {
-		return managed.ExternalObservation{}, errors.Wrap(res.LastOperationError, "operation failed")
+		return managed.ExternalObservation{}, errors.Wrap(res.LastOperationError, errLastOperationFailed)
+	}
+	if res.State.GetAttributes() == nil {
+		return managed.ExternalObservation{}, errors.New(errRefreshAttributes)
 	}
 
 	// No operation was in progress, our observation completed successfully, and
@@ -153,9 +154,9 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 	// step completed (i.e. resource exists).
 	tr.SetConditions(xpv1.Available())
 
-	plan, err := e.tf.Plan(ctx)
+	plan, err := e.workspace.Plan(ctx)
 	if err != nil {
-		return managed.ExternalObservation{}, errors.Wrap(err, "cannot check resource status")
+		return managed.ExternalObservation{}, errors.Wrap(err, errPlan)
 	}
 
 	// TODO(muvaf): Handle connection details.
@@ -172,11 +173,11 @@ func (e *external) Create(ctx context.Context, mg xpresource.Managed) (managed.E
 		return managed.ExternalCreation{}, errors.New(errUnexpectedObject)
 	}
 	if e.async {
-		return managed.ExternalCreation{}, errors.Wrap(e.tf.ApplyAsync(CriticalAnnotationsCallback(e.kube, tr)), "cannot start async apply")
+		return managed.ExternalCreation{}, errors.Wrap(e.workspace.ApplyAsync(CriticalAnnotationsCallback(e.kube, tr)), errStartAsyncApply)
 	}
-	res, err := e.tf.Apply(ctx)
+	res, err := e.workspace.Apply(ctx)
 	if err != nil {
-		return managed.ExternalCreation{}, errors.Wrap(err, "cannot create")
+		return managed.ExternalCreation{}, errors.Wrap(err, errApply)
 	}
 	attr := map[string]interface{}{}
 	if err := json.JSParser.Unmarshal(res.State.GetAttributes(), &attr); err != nil {
@@ -191,15 +192,15 @@ func (e *external) Create(ctx context.Context, mg xpresource.Managed) (managed.E
 
 func (e *external) Update(ctx context.Context, mg xpresource.Managed) (managed.ExternalUpdate, error) {
 	if e.async {
-		return managed.ExternalUpdate{}, errors.Wrap(e.tf.ApplyAsync(terraform.NopCallbackFn), "cannot start async apply")
+		return managed.ExternalUpdate{}, errors.Wrap(e.workspace.ApplyAsync(terraform.NopCallbackFn), errStartAsyncApply)
 	}
 	tr, ok := mg.(resource.Terraformed)
 	if !ok {
 		return managed.ExternalUpdate{}, errors.New(errUnexpectedObject)
 	}
-	res, err := e.tf.Apply(ctx)
+	res, err := e.workspace.Apply(ctx)
 	if err != nil {
-		return managed.ExternalUpdate{}, errors.Wrap(err, "cannot create")
+		return managed.ExternalUpdate{}, errors.Wrap(err, errApply)
 	}
 	attr := map[string]interface{}{}
 	if err := json.JSParser.Unmarshal(res.State.GetAttributes(), &attr); err != nil {
@@ -210,21 +211,21 @@ func (e *external) Update(ctx context.Context, mg xpresource.Managed) (managed.E
 
 func (e *external) Delete(ctx context.Context, _ xpresource.Managed) error {
 	if e.async {
-		return errors.Wrap(e.tf.DestroyAsync(), "cannot start async destroy")
+		return errors.Wrap(e.workspace.DestroyAsync(), errStartAsyncDestroy)
 	}
-	return errors.Wrap(e.tf.Destroy(ctx), "cannot destroy")
+	return errors.Wrap(e.workspace.Destroy(ctx), errDestroy)
 }
 
 func lateInitializeAnnotations(tr resource.Terraformed, attr map[string]interface{}, privateRaw string) (bool, error) {
-	changed := false
-	if _, ok := tr.GetAnnotations()[terraform.AnnotationKeyPrivateRawAttribute]; !ok {
-		xpmeta.AddAnnotations(tr, map[string]string{
-			terraform.AnnotationKeyPrivateRawAttribute: privateRaw,
-		})
-		changed = true
+	if tr.GetAnnotations()[terraform.AnnotationKeyPrivateRawAttribute] == privateRaw &&
+		xpmeta.GetExternalName(tr) != "" {
+		return false, nil
 	}
+	xpmeta.AddAnnotations(tr, map[string]string{
+		terraform.AnnotationKeyPrivateRawAttribute: privateRaw,
+	})
 	if xpmeta.GetExternalName(tr) != "" {
-		return changed, nil
+		return false, nil
 	}
 
 	// Terraform stores id for the external resource as an attribute in the

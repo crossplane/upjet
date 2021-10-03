@@ -14,16 +14,37 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package json
+package terraform
 
-import jsoniter "github.com/json-iterator/go"
+import (
+	"os"
+	"testing"
+)
 
-// TFParser is a json parser to marshal/unmarshal using "tf" tag.
-var TFParser = jsoniter.Config{TagKey: "tf"}.Froze()
-
-// JSParser is a json parser to marshal/unmarshal using "json" tag.
-var JSParser = jsoniter.Config{
-	TagKey: "json",
-	// We need to sort the map keys to get consistent output in tests.
-	SortMapKeys: true,
-}.Froze()
+func TestIsNotFound(t *testing.T) {
+	cases := map[string]struct {
+		in     error
+		result bool
+	}{
+		"TruePositive": {
+			in:     &errNotFound{},
+			result: true,
+		},
+		"TrueNegative": {
+			in:     os.ErrNotExist,
+			result: false,
+		},
+		"TruePositiveNewFn": {
+			in:     NewNotFound(),
+			result: true,
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			result := IsNotFound(tc.in)
+			if result != tc.result {
+				t.Errorf("%s test failed", name)
+			}
+		})
+	}
+}

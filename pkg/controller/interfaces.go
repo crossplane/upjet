@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 
+	"github.com/crossplane-contrib/terrajet/pkg/resource"
 	"github.com/crossplane-contrib/terrajet/pkg/terraform"
 )
 
@@ -26,12 +27,17 @@ import (
 // specific implementation of this interface. Maybe a different package for the
 // returned result types?
 
-// Client is the set of methods that are needed for the controller to work.
-type Client interface {
+// Workspace is the set of methods that are needed for the controller to work.
+type Workspace interface {
 	ApplyAsync(callback terraform.CallbackFn) error
 	Apply(ctx context.Context) (terraform.ApplyResult, error)
 	DestroyAsync() error
 	Destroy(ctx context.Context) error
 	Refresh(ctx context.Context) (terraform.RefreshResult, error)
 	Plan(ctx context.Context) (terraform.PlanResult, error)
+}
+
+// Store is where we can get access to the Terraform workspace of given resource.
+type Store interface {
+	Workspace(ctx context.Context, tr resource.Terraformed, ts terraform.Setup) (*terraform.Workspace, error)
 }

@@ -77,7 +77,7 @@ type Workspace struct {
 // ApplyAsync makes a terraform apply call without blocking and calls the given
 // function once that apply call finishes.
 func (w *Workspace) ApplyAsync(callback CallbackFn) error {
-	if w.LastOperation.IsInProgress() {
+	if w.LastOperation.IsRunning() {
 		return errors.Errorf("%s operation that started at %s is still running", w.LastOperation.Type, w.LastOperation.StartTime().String())
 	}
 	w.LastOperation.MarkStart("apply")
@@ -122,7 +122,7 @@ type ApplyResult struct {
 
 // Apply makes a blocking terraform apply call.
 func (w *Workspace) Apply(ctx context.Context) (ApplyResult, error) {
-	if w.LastOperation.IsInProgress() {
+	if w.LastOperation.IsRunning() {
 		return ApplyResult{}, errors.Errorf("%s operation that started at %s is still running", w.LastOperation.Type, w.LastOperation.StartTime().String())
 	}
 	cmd := exec.CommandContext(ctx, "terraform", "apply", "-auto-approve", "-input=false", "-lock=false", "-detailed-exitcode", "-json")
@@ -154,7 +154,7 @@ func (w *Workspace) DestroyAsync() error {
 		return nil
 	// We cannot run destroy until current non-destroy operation is completed.
 	// TODO(muvaf): Gracefully terminate the ongoing apply operation?
-	case w.LastOperation.IsInProgress():
+	case w.LastOperation.IsRunning():
 		return errors.Errorf("%s operation that started at %s is still running", w.LastOperation.Type, w.LastOperation.StartTime().String())
 	}
 	w.LastOperation.MarkStart("destroy")
@@ -175,7 +175,7 @@ func (w *Workspace) DestroyAsync() error {
 
 // Destroy makes a blocking terraform destroy call.
 func (w *Workspace) Destroy(ctx context.Context) error {
-	if w.LastOperation.IsInProgress() {
+	if w.LastOperation.IsRunning() {
 		return errors.Errorf("%s operation that started at %s is still running", w.LastOperation.Type, w.LastOperation.StartTime().String())
 	}
 	cmd := exec.CommandContext(ctx, "terraform", "destroy", "-auto-approve", "-input=false", "-lock=false", "-json")
@@ -197,7 +197,7 @@ type RefreshResult struct {
 // is changed with the current state of the resource.
 func (w *Workspace) Refresh(ctx context.Context) (RefreshResult, error) {
 	switch {
-	case w.LastOperation.IsInProgress():
+	case w.LastOperation.IsRunning():
 		return RefreshResult{
 			IsApplying:   w.LastOperation.Type == "apply",
 			IsDestroying: w.LastOperation.Type == "destroy",
@@ -248,7 +248,7 @@ type PlanResult struct {
 // Plan makes a blocking terraform plan call.
 func (w *Workspace) Plan(ctx context.Context) (PlanResult, error) {
 	// The last operation is still ongoing.
-	if w.LastOperation.IsInProgress() {
+	if w.LastOperation.IsRunning() {
 		return PlanResult{}, errors.Errorf("%s operation that started at %s is still running", w.LastOperation.Type, w.LastOperation.StartTime().String())
 	}
 	cmd := exec.CommandContext(ctx, "terraform", "plan", "-refresh=false", "-input=false", "-lock=false", "-json")

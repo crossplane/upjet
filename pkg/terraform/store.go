@@ -26,6 +26,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/pkg/errors"
+	"github.com/spf13/afero"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -53,9 +54,28 @@ type Setup struct {
 	Configuration ProviderConfiguration
 }
 
+// WorkspaceStoreOption lets you configure the workspace store.
+type WorkspaceStoreOption func(*WorkspaceStore)
+
+// WithFs lets you set the fs of WorkspaceStore. Used mostly for testing.
+func WithFs(fs afero.Fs) WorkspaceStoreOption {
+	return func(ws *WorkspaceStore) {
+		ws.fs = afero.Afero{Fs: fs}
+	}
+}
+
 // NewWorkspaceStore returns a new WorkspaceStore.
-func NewWorkspaceStore() *WorkspaceStore {
-	return &WorkspaceStore{store: map[types.UID]*Workspace{}, mu: sync.Mutex{}}
+func NewWorkspaceStore(l logging.Logger, opts ...WorkspaceStoreOption) *WorkspaceStore {
+	ws := &WorkspaceStore{
+		store:  map[types.UID]*Workspace{},
+		logger: l,
+		mu:     sync.Mutex{},
+		fs:     afero.Afero{Fs: afero.NewOsFs()},
+	}
+	for _, f := range opts {
+		f(ws)
+	}
+	return ws
 }
 
 // WorkspaceStore allows you to manage multiple Terraform workspaces.
@@ -64,25 +84,28 @@ type WorkspaceStore struct {
 	// Since there can be multiple calls that add/remove values from the map at
 	// the same time, it has to be safe for concurrency since those operations
 	// cause rehashing in some cases.
-	store map[types.UID]*Workspace
-	mu    sync.Mutex
+	store  map[types.UID]*Workspace
+	logger logging.Logger
+
+	mu sync.Mutex
+	fs afero.Afero
 }
 
 // Workspace makes sure the Terraform workspace for the given resource is ready
 // to be used and returns the Workspace object configured to work in that
 // workspace folder in the filesystem.
-func (ws *WorkspaceStore) Workspace(ctx context.Context, tr resource.Terraformed, ts Setup, l logging.Logger) (*Workspace, error) {
-	dir := filepath.Join(os.TempDir(), string(tr.GetUID()))
-	if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+func (ws *WorkspaceStore) Workspace(ctx context.Context, tr resource.Terraformed, ts Setup) (*Workspace, error) {
+	dir := filepath.Join(ws.fs.GetTempDir(""), string(tr.GetUID()))
+	if err := ws.fs.MkdirAll(dir, os.ModePerm); err != nil {
 		return nil, errors.Wrap(err, "cannot create directory for workspace")
 	}
 	fp, err := NewFileProducer(dir, tr, ts)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot create a new file producer")
 	}
-	_, err = os.Stat(filepath.Join(fp.Dir, "terraform.tfstate"))
+	_, err = ws.fs.Stat(filepath.Join(fp.Dir, "terraform.tfstate"))
 	if xpresource.Ignore(os.IsNotExist, err) != nil {
-		return nil, errors.Wrap(err, "cannot state terraform.tfstate file")
+		return nil, errors.Wrap(err, "cannot stat terraform.tfstate file")
 	}
 	if os.IsNotExist(err) {
 		if err := fp.WriteTFState(); err != nil {
@@ -92,8 +115,7 @@ func (ws *WorkspaceStore) Workspace(ctx context.Context, tr resource.Terraformed
 	if err := fp.WriteMainTF(); err != nil {
 		return nil, errors.Wrap(err, "cannot write main tf file")
 	}
-
-	// TODO(muvaf): Set new logger every time?
+	l := ws.logger.WithValues("workspace", dir)
 	ws.mu.Lock()
 	w, ok := ws.store[tr.GetUID()]
 	if !ok {
@@ -101,7 +123,7 @@ func (ws *WorkspaceStore) Workspace(ctx context.Context, tr resource.Terraformed
 		w = ws.store[tr.GetUID()]
 	}
 	ws.mu.Unlock()
-	_, err = os.Stat(filepath.Join(dir, ".terraform.lock.hcl"))
+	_, err = ws.fs.Stat(filepath.Join(dir, ".terraform.lock.hcl"))
 	if xpresource.Ignore(os.IsNotExist, err) != nil {
 		return nil, errors.Wrap(err, "cannot stat init lock file")
 	}
@@ -125,7 +147,7 @@ func (ws *WorkspaceStore) Remove(obj xpresource.Object) error {
 	if !ok {
 		return nil
 	}
-	if err := os.RemoveAll(w.dir); err != nil {
+	if err := ws.fs.RemoveAll(w.dir); err != nil {
 		return errors.Wrap(err, "cannot remove workspace folder")
 	}
 	delete(ws.store, obj.GetUID())
