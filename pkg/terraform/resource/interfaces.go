@@ -41,13 +41,6 @@ type Parameterizable interface {
 	SetParameters(map[string]interface{}) error
 }
 
-// SensitiveDataProvider structs can return connection details for sensitive
-// fields and return sensitive attributes from kubernetes secrets.
-type SensitiveDataProvider interface {
-	GetConnectionDetails(data []byte) (map[string][]byte, error)
-	GetSensitiveObservation(c SecretClient) (map[string]interface{}, error)
-}
-
 // MetadataProvider provides Terraform metadata for the Terraform managed resource
 type MetadataProvider interface {
 	GetTerraformResourceType() string
@@ -68,7 +61,6 @@ type Terraformed interface {
 	MetadataProvider
 	Observable
 	Parameterizable
-	LateInitializer
 	SensitiveDataProvider
 	LateInitializer
 }

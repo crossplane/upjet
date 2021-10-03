@@ -222,7 +222,7 @@ func consumeState(st *json.StateV4, tr resource.Terraformed) (managed.Connection
 		return nil, errors.Wrap(err, "cannot set observation")
 	}
 
-	conn, err := tr.GetConnectionDetails(st.GetAttributes())
+	conn, err := tr.GetConnectionDetails(attr)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot get connection details")
 	}

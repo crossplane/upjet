@@ -86,9 +86,9 @@ func (tr *{{ .CRD.Kind }}) LateInitialize(attrs []byte) (bool, error) {
 
 
 // GetConnectionDetails of this {{ .CRD.Kind }}
-func (tr *{{ .CRD.Kind }}) GetConnectionDetails(data []byte) (map[string][]byte, error) {
+func (tr *{{ .CRD.Kind }}) GetConnectionDetails(obs map[string]interface{}) (map[string][]byte, error) {
   {{- if .SensitiveFields }}
-  return json.StringsMatchingFieldPaths(data, []string{ {{range $k := .SensitiveFields}}"{{$k}}", {{end}} })
+  return resource.GetConnectionDetails(data, map[string]string{ {{range $k, $v := .SensitiveFields}}"{{ $k }}": "{{ $v}}", {{end}} })
   {{- else }}
   return nil, nil
   {{- end }}

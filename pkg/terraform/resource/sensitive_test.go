@@ -1,7 +1,9 @@
-package json
+package resource
 
 import (
 	"testing"
+
+	"github.com/crossplane-contrib/terrajet/pkg/json"
 
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	"github.com/google/go-cmp/cmp"
@@ -47,10 +49,14 @@ var testData = []byte(`
 }
 `)
 
-func TestValuesMatchingPaths(t *testing.T) {
+func TestGetConnectionDetails(t *testing.T) {
+	testInput := map[string]interface{}{}
+	if err := json.JSParser.Unmarshal(testData, &testInput); err != nil {
+		t.Fatalf("cannot unmarshall test data: %v", err)
+	}
 	type args struct {
-		paths []string
-		data  []byte
+		paths map[string]string
+		data  map[string]interface{}
 	}
 	type want struct {
 		out map[string][]byte
@@ -62,8 +68,8 @@ func TestValuesMatchingPaths(t *testing.T) {
 	}{
 		"Single": {
 			args: args{
-				paths: []string{"top_level_secret"},
-				data:  testData,
+				paths: map[string]string{"top_level_secret": ""},
+				data:  testInput,
 			},
 			want: want{
 				out: map[string][]byte{
@@ -73,8 +79,8 @@ func TestValuesMatchingPaths(t *testing.T) {
 		},
 		"SingleNonExisting": {
 			args: args{
-				paths: []string{"missing_field"},
-				data:  testData,
+				paths: map[string]string{"missing_field": ""},
+				data:  testInput,
 			},
 			want: want{
 				out: map[string][]byte{},
@@ -82,20 +88,20 @@ func TestValuesMatchingPaths(t *testing.T) {
 		},
 		"SingleGettingNumber": {
 			args: args{
-				paths: []string{"top_object_with_number[key1]"},
-				data:  testData,
+				paths: map[string]string{"top_object_with_number[key1]": ""},
+				data:  testInput,
 			},
 			want: want{
 				err: errors.Wrapf(errors.Wrapf(
 					errors.Errorf("%s: not a string", "top_object_with_number.key1"),
-					errFmtCannotGetStringsForParts, "top_object_with_number.key1"),
+					errFmtCannotGetStringForFieldPath, "top_object_with_number.key1"),
 					errFmtCannotGetStringsForFieldPath, "top_object_with_number[key1]"),
 			},
 		},
 		"WildcardMultipleFromMap": {
 			args: args{
-				paths: []string{"top_config_secretmap[*]"},
-				data:  testData,
+				paths: map[string]string{"top_config_secretmap[*]": ""},
+				data:  testInput,
 			},
 			want: want{
 				out: map[string][]byte{
@@ -107,8 +113,8 @@ func TestValuesMatchingPaths(t *testing.T) {
 		},
 		"WildcardMultipleFromArray": {
 			args: args{
-				paths: []string{"top_config_array[*].inner_some_field"},
-				data:  testData,
+				paths: map[string]string{"top_config_array[*].inner_some_field": ""},
+				data:  testInput,
 			},
 			want: want{
 				out: map[string][]byte{
@@ -120,8 +126,8 @@ func TestValuesMatchingPaths(t *testing.T) {
 		},
 		"WildcardMultipleFromArrayMultipleLevel": {
 			args: args{
-				paths: []string{"top_config_array[*].inner_config_array[*].bottom_level_secret"},
-				data:  testData,
+				paths: map[string]string{"top_config_array[*].inner_config_array[*].bottom_level_secret": ""},
+				data:  testInput,
 			},
 			want: want{
 				out: map[string][]byte{
@@ -133,8 +139,8 @@ func TestValuesMatchingPaths(t *testing.T) {
 		},
 		"WildcardMixedWithNumbers": {
 			args: args{
-				paths: []string{"top_config_array[2].inner_config_array[*].bottom_level_secret"},
-				data:  testData,
+				paths: map[string]string{"top_config_array[2].inner_config_array[*].bottom_level_secret": ""},
+				data:  testInput,
 			},
 			want: want{
 				out: map[string][]byte{
@@ -145,8 +151,8 @@ func TestValuesMatchingPaths(t *testing.T) {
 		},
 		"MultipleFieldPaths": {
 			args: args{
-				paths: []string{"top_level_secret", "top_config_secretmap.*", "top_config_array[2].inner_config_array[*].bottom_level_secret"},
-				data:  testData,
+				paths: map[string]string{"top_level_secret": "", "top_config_secretmap.*": "", "top_config_array[2].inner_config_array[*].bottom_level_secret": ""},
+				data:  testInput,
 			},
 			want: want{
 				out: map[string][]byte{
@@ -161,44 +167,32 @@ func TestValuesMatchingPaths(t *testing.T) {
 		},
 		"NotAValue": {
 			args: args{
-				paths: []string{"top_config_secretmap"},
-				data:  testData,
+				paths: map[string]string{"top_config_secretmap": ""},
+				data:  testInput,
 			},
 			want: want{
 				err: errors.Wrapf(errors.Wrapf(
 					errors.Errorf("%s: not a string", "top_config_secretmap"),
-					errFmtCannotGetStringsForParts, "top_config_secretmap"),
+					errFmtCannotGetStringForFieldPath, "top_config_secretmap"),
 					errFmtCannotGetStringsForFieldPath, "top_config_secretmap"),
 			},
 		},
 		"UnexpectedWildcard": {
 			args: args{
-				paths: []string{"top_level_secret.*"},
-				data:  testData,
+				paths: map[string]string{"top_level_secret.*": ""},
+				data:  testInput,
 			},
 			want: want{
-				err: errors.Wrapf(errors.Wrap(
-					errors.Errorf("%s: unexpected wildcard usage", "top_level_secret"),
+				err: errors.Wrapf(errors.Wrap(errors.Wrapf(
+					errors.Errorf("%q: unexpected wildcard usage", "top_level_secret"),
+					"cannot expand wildcards for segments: %q", "top_level_secret.*"),
 					errCannotExpandWildcards),
 					errFmtCannotGetStringsForFieldPath, "top_level_secret.*"),
 			},
 		},
-		"UnexpectedWildcardInObjectMultipleLevel": {
-			args: args{
-				paths: []string{"top_config_array.*.inner_some_field.*"},
-				data:  testData,
-			},
-			want: want{
-				err: errors.Wrapf(errors.Wrap(errors.Wrapf(
-					errors.Errorf("%s: unexpected wildcard usage", "top_config_array[0].inner_some_field"),
-					"%s: cannot expand wildcards", "top_config_array[0].inner_some_field.*"),
-					errCannotExpandWildcards),
-					errFmtCannotGetStringsForFieldPath, "top_config_array.*.inner_some_field.*"),
-			},
-		},
 		"NoData": {
 			args: args{
-				paths: []string{"top_level_secret"},
+				paths: map[string]string{"top_level_secret": ""},
 				data:  nil,
 			},
 			want: want{
@@ -208,7 +202,7 @@ func TestValuesMatchingPaths(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			got, gotErr := StringsMatchingFieldPaths(tc.data, tc.paths)
+			got, gotErr := GetConnectionDetails(tc.data, tc.paths)
 			if diff := cmp.Diff(tc.want.err, gotErr, test.EquateErrors()); diff != "" {
 				t.Fatalf("GetFields(...): -want error, +got error: %s", diff)
 			}
