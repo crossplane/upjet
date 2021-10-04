@@ -23,6 +23,8 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 )
 
+// SecretClient is the client to get sensitive data from kubernetes secrets
+//go:generate go run github.com/golang/mock/mockgen -copyright_file ../../../hack/boilerplate.txt -destination ./mocks/resource.go -package mocks github.com/crossplane-contrib/terrajet/pkg/terraform/resource SecretClient
 type SecretClient interface {
 	GetSecretData(ctx context.Context, s v1.SecretReference) (map[string][]byte, error)
 	GetSecretValue(ctx context.Context, sel v1.SecretKeySelector) ([]byte, error)

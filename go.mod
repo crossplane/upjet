@@ -7,6 +7,7 @@ replace github.com/crossplane/crossplane-runtime => /Users/hasanturken/Workspace
 require (
 	github.com/crossplane/crossplane-runtime v0.15.0
 	github.com/fatih/camelcase v1.0.0
+	github.com/golang/mock v1.6.0
 	github.com/google/go-cmp v0.5.6
 	github.com/hashicorp/terraform-plugin-sdk/v2 v2.7.0
 	github.com/iancoleman/strcase v0.2.0
