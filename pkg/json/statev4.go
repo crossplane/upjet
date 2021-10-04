@@ -80,7 +80,7 @@ type InstanceObjectStateV4 struct {
 	SchemaVersion           uint64              `json:"schema_version"`
 	AttributesRaw           jsoniter.RawMessage `json:"attributes,omitempty"`
 	AttributesFlat          map[string]string   `json:"attributes_flat,omitempty"`
-	AttributeSensitivePaths jsoniter.RawMessage `json:"sensitive_attributes,omitempty,"`
+	AttributeSensitivePaths jsoniter.RawMessage `json:"sensitive_attributes,omitempty"`
 
 	PrivateRaw []byte `json:"private,omitempty"`
 
