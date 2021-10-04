@@ -2,10 +2,8 @@ module github.com/crossplane-contrib/terrajet
 
 go 1.16
 
-replace github.com/crossplane/crossplane-runtime => /Users/hasanturken/Workspace/crossplane/crossplane-runtime
-
 require (
-	github.com/crossplane/crossplane-runtime v0.15.0
+	github.com/crossplane/crossplane-runtime v0.15.1-0.20211004150827-579c1833b513
 	github.com/fatih/camelcase v1.0.0
 	github.com/golang/mock v1.6.0
 	github.com/google/go-cmp v0.5.6
