@@ -157,6 +157,10 @@ func (c Client) generateTFConfiguration(preventDestroy bool) ([]byte, error) {
 	vars := map[string]interface{}{
 		"Provider": map[string]interface{}{
 			"Configuration": config,
+			"Requirement": map[string]interface{}{
+				"Source":  c.setup.Requirement.Source,
+				"Version": c.setup.Requirement.Version,
+			},
 		},
 		"Resource": map[string]interface{}{
 			"LabelType": c.resource.LabelType,
