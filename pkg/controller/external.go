@@ -32,17 +32,16 @@ import (
 )
 
 const (
-	errUnexpectedObject    = "the managed resource is not a Terraformed resource"
-	errGetTerraformSetup   = "cannot get terraform setup"
-	errGetWorkspace        = "cannot get a terraform workspace for resource"
-	errRefresh             = "cannot run refresh"
-	errRefreshAttributes   = "refresh returned empty attributes"
-	errPlan                = "cannot run plan"
-	errLastOperationFailed = "the last operation failed"
-	errStartAsyncApply     = "cannot start async apply"
-	errStartAsyncDestroy   = "cannot start async destroy"
-	errApply               = "cannot apply"
-	errDestroy             = "cannot destroy"
+	errUnexpectedObject  = "the managed resource is not a Terraformed resource"
+	errGetTerraformSetup = "cannot get terraform setup"
+	errGetWorkspace      = "cannot get a terraform workspace for resource"
+	errRefresh           = "cannot run refresh"
+	errPlan              = "cannot run plan"
+	errStartAsyncApply   = "cannot start async apply"
+	errStartAsyncDestroy = "cannot start async destroy"
+	errApply             = "cannot apply"
+	errDestroy           = "cannot destroy"
+	errStatusUpdate      = "cannot update status of custom resource"
 )
 
 // Option allows you to configure Connector.
@@ -122,19 +121,24 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 
 	res, err := e.workspace.Refresh(ctx)
 	if err != nil {
-		return managed.ExternalObservation{}, errors.Wrap(xpresource.Ignore(terraform.IsNotFound, err), errRefresh)
+		return managed.ExternalObservation{}, errors.Wrap(err, errRefresh)
 	}
-	if res.IsDestroying || res.IsApplying {
+	if e.async {
+		tr.SetConditions(resource.LastOperationCondition(res.LastOperationError))
+		if err := e.kube.Status().Update(ctx, tr); err != nil {
+			return managed.ExternalObservation{}, errors.Wrap(err, errStatusUpdate)
+		}
+	}
+	switch {
+	case res.IsApplying, res.IsDestroying:
 		return managed.ExternalObservation{
 			ResourceExists:   true,
 			ResourceUpToDate: true,
 		}, nil
-	}
-	if res.LastOperationError != nil {
-		return managed.ExternalObservation{}, errors.Wrap(res.LastOperationError, errLastOperationFailed)
-	}
-	if res.State.GetAttributes() == nil {
-		return managed.ExternalObservation{}, errors.New(errRefreshAttributes)
+	case !res.Exists:
+		return managed.ExternalObservation{
+			ResourceExists: false,
+		}, nil
 	}
 
 	// No operation was in progress, our observation completed successfully, and
@@ -232,7 +236,7 @@ func lateInitializeAnnotations(tr resource.Terraformed, attr map[string]interfac
 		terraform.AnnotationKeyPrivateRawAttribute: privateRaw,
 	})
 	if xpmeta.GetExternalName(tr) != "" {
-		return false, nil
+		return true, nil
 	}
 
 	// Terraform stores id for the external resource as an attribute in the
@@ -245,7 +249,7 @@ func lateInitializeAnnotations(tr resource.Terraformed, attr map[string]interfac
 	}
 	extID, ok := id.(string)
 	if !ok {
-		return false, errors.Errorf("id field is not a string")
+		return false, errors.Errorf("value of id field is not a string: %v", id)
 	}
 	xpmeta.SetExternalName(tr, extID)
 	return true, nil
@@ -259,8 +263,7 @@ func CriticalAnnotationsCallback(kube client.Client, tr resource.Terraformed) te
 		if err := json.JSParser.Unmarshal(s.GetAttributes(), &attr); err != nil {
 			return errors.Wrap(err, "cannot unmarshal state attributes")
 		}
-		_, err := lateInitializeAnnotations(tr, attr, string(s.GetPrivateRaw()))
-		if err != nil {
+		if _, err := lateInitializeAnnotations(tr, attr, string(s.GetPrivateRaw())); err != nil {
 			return errors.Wrap(err, "cannot late initialize annotations")
 		}
 		// TODO(muvaf): We issue the update call even if the annotations didn't

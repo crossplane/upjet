@@ -66,14 +66,14 @@ func TestOperation(t *testing.T) {
 			args: args{
 				calls: func(o *Operation) {
 					o.MarkStart("type")
-					o.Err = errBoom
+					o.SetErr(errBoom)
 					o.MarkEnd()
 					o.Flush()
 				},
 			},
 			want: want{
 				checks: func(o *Operation) bool {
-					return o.Type == "" && o.StartTime() == nil && o.EndTime() == nil && o.Err == nil
+					return o.Type == "" && o.StartTime() == nil && o.EndTime() == nil
 				},
 				result: true,
 			},

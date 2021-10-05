@@ -18,24 +18,19 @@ package controller
 
 import (
 	"context"
-
-	"github.com/crossplane-contrib/terrajet/pkg/resource/json"
-
-	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
-
-	"github.com/crossplane-contrib/terrajet/pkg/resource"
-
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
 	"testing"
 
+	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	xpfake "github.com/crossplane/crossplane-runtime/pkg/resource/fake"
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/crossplane-contrib/terrajet/pkg/resource"
 	"github.com/crossplane-contrib/terrajet/pkg/resource/fake"
+	"github.com/crossplane-contrib/terrajet/pkg/resource/json"
 	"github.com/crossplane-contrib/terrajet/pkg/terraform"
 )
 
@@ -173,8 +168,10 @@ func TestConnect(t *testing.T) {
 
 func TestObserve(t *testing.T) {
 	type args struct {
-		w   Workspace
-		obj xpresource.Managed
+		w     Workspace
+		kube  client.Client
+		async bool
+		obj   xpresource.Managed
 	}
 	type want struct {
 		obs managed.ExternalObservation
@@ -213,7 +210,7 @@ func TestObserve(t *testing.T) {
 				obj: &fake.Terraformed{},
 				w: WorkspaceFns{
 					RefreshFn: func(_ context.Context) (terraform.RefreshResult, error) {
-						return terraform.RefreshResult{}, terraform.NewNotFound()
+						return terraform.RefreshResult{Exists: false}, nil
 					},
 				},
 			},
@@ -238,35 +235,56 @@ func TestObserve(t *testing.T) {
 			},
 		},
 		"LastOperationFailed": {
-			reason: "It should report if the last operation failed",
+			reason: "It should report the last operation error without failing",
 			args: args{
-				obj: &fake.Terraformed{},
+				async: true,
+				obj: &fake.Terraformed{
+					MetadataProvider: fake.MetadataProvider{
+						IDField: "id",
+					},
+				},
+				kube: &test.MockClient{
+					MockStatusUpdate: test.NewMockStatusUpdateFn(nil),
+				},
 				w: WorkspaceFns{
 					RefreshFn: func(_ context.Context) (terraform.RefreshResult, error) {
 						return terraform.RefreshResult{
+							State:              exampleState,
+							LastOperationError: errBoom,
+						}, nil
+					},
+					PlanFn: func(_ context.Context) (terraform.PlanResult, error) {
+						return terraform.PlanResult{UpToDate: true}, nil
+					},
+				},
+			},
+			want: want{
+				obs: managed.ExternalObservation{
+					ResourceExists:          true,
+					ResourceUpToDate:        true,
+					ResourceLateInitialized: true,
+				},
+			},
+		},
+		"StatusUpdateFailed": {
+			reason: "It should fail if status cannot be updated",
+			args: args{
+				async: true,
+				obj:   &fake.Terraformed{},
+				kube: &test.MockClient{
+					MockStatusUpdate: test.NewMockStatusUpdateFn(errBoom),
+				},
+				w: WorkspaceFns{
+					RefreshFn: func(_ context.Context) (terraform.RefreshResult, error) {
+						return terraform.RefreshResult{
+							State:              exampleState,
 							LastOperationError: errBoom,
 						}, nil
 					},
 				},
 			},
 			want: want{
-				err: errors.Wrap(errBoom, errLastOperationFailed),
-			},
-		},
-		"EmptyAttributes": {
-			reason: "We should report if refresh returns an empty state in a non-error case",
-			args: args{
-				obj: &fake.Terraformed{},
-				w: WorkspaceFns{
-					RefreshFn: func(_ context.Context) (terraform.RefreshResult, error) {
-						return terraform.RefreshResult{
-							State: json.NewStateV4(),
-						}, nil
-					},
-				},
-			},
-			want: want{
-				err: errors.New(errRefreshAttributes),
+				err: errors.Wrap(errBoom, errStatusUpdate),
 			},
 		},
 		"PlanFailed": {
@@ -280,7 +298,8 @@ func TestObserve(t *testing.T) {
 				w: WorkspaceFns{
 					RefreshFn: func(_ context.Context) (terraform.RefreshResult, error) {
 						return terraform.RefreshResult{
-							State: exampleState,
+							Exists: true,
+							State:  exampleState,
 						}, nil
 					},
 					PlanFn: func(_ context.Context) (terraform.PlanResult, error) {
@@ -321,7 +340,7 @@ func TestObserve(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			e := &external{workspace: tc.w}
+			e := &external{workspace: tc.w, kube: tc.kube, async: tc.async}
 			_, err := e.Observe(context.TODO(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nObserve(...): -want error, +got error:\n%s", tc.reason, diff)

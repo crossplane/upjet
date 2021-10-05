@@ -4,13 +4,12 @@ import (
 	"reflect"
 	"testing"
 
-	markers2 "github.com/crossplane-contrib/terrajet/pkg/types/markers"
-
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
 	"github.com/crossplane-contrib/terrajet/pkg/config"
+	"github.com/crossplane-contrib/terrajet/pkg/types/markers"
 )
 
 func TestComment_Build(t *testing.T) {
@@ -21,7 +20,7 @@ func TestComment_Build(t *testing.T) {
 	}
 	type want struct {
 		out   string
-		mopts markers2.Options
+		mopts markers.Options
 		err   error
 	}
 
@@ -35,7 +34,7 @@ func TestComment_Build(t *testing.T) {
 			},
 			want: want{
 				out:   "// hello world!\n",
-				mopts: markers2.Options{},
+				mopts: markers.Options{},
 			},
 		},
 		"MultilineTextNoMarker": {
@@ -49,7 +48,7 @@ yes, this is a test`,
 // this is a test
 // yes, this is a test
 `,
-				mopts: markers2.Options{},
+				mopts: markers.Options{},
 			},
 		},
 		"TextWithTerrajetMarker": {
@@ -62,8 +61,8 @@ yes, this is a test`,
 				out: `// hello world!
 // +terrajet:crd:field:TFTag=-
 `,
-				mopts: markers2.Options{
-					TerrajetOptions: markers2.TerrajetOptions{
+				mopts: markers.Options{
+					TerrajetOptions: markers.TerrajetOptions{
 						FieldTFTag: &tftag,
 					},
 				},
@@ -79,7 +78,7 @@ yes, this is a test`,
 				out: `// hello world!
 // +kubebuilder:validation:Required
 `,
-				mopts: markers2.Options{},
+				mopts: markers.Options{},
 			},
 		},
 		"CommentWithTerrajetOptions": {
@@ -93,8 +92,8 @@ yes, this is a test`,
 				out: `// hello world!
 // +terrajet:crd:field:TFTag=-
 `,
-				mopts: markers2.Options{
-					TerrajetOptions: markers2.TerrajetOptions{
+				mopts: markers.Options{
+					TerrajetOptions: markers.TerrajetOptions{
 						FieldTFTag: &tftag,
 					},
 				},
@@ -115,11 +114,11 @@ yes, this is a test`,
 // +terrajet:crd:field:TFTag=-
 // +crossplane:generate:reference:type=comments.Comment
 `,
-				mopts: markers2.Options{
-					TerrajetOptions: markers2.TerrajetOptions{
+				mopts: markers.Options{
+					TerrajetOptions: markers.TerrajetOptions{
 						FieldTFTag: &tftag,
 					},
-					CrossplaneOptions: markers2.CrossplaneOptions{
+					CrossplaneOptions: markers.CrossplaneOptions{
 						Reference: config.Reference{
 							Type: "comments.Comment",
 						},

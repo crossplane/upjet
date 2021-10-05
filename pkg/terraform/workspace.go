@@ -28,6 +28,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/crossplane-contrib/terrajet/pkg/resource/json"
+	tferrors "github.com/crossplane-contrib/terrajet/pkg/terraform/errors"
 )
 
 const (
@@ -87,11 +88,15 @@ func (w *Workspace) ApplyAsync(callback CallbackFn) error {
 		cmd := exec.CommandContext(ctx, "terraform", "apply", "-auto-approve", "-input=false", "-lock=false", "-json")
 		cmd.Dir = w.dir
 		out, err := cmd.CombinedOutput()
-		if err != nil {
-			w.LastOperation.Err = errors.Wrapf(err, "cannot apply: %s", string(out))
-		}
 		w.LastOperation.MarkEnd()
 		w.logger.Debug("apply async ended", "out", string(out))
+		if err != nil {
+			// Only the last line contains the error.
+			l := strings.Split(string(out), "\n")
+			w.LastOperation.SetErr(tferrors.NewApplyFailed(l[len(l)-2]))
+			return
+		}
+		w.LastOperation.SetErr(nil)
 
 		// After the operation is completed, we need to get the results saved on
 		// the custom resource as soon as possible. We can wait for the next
@@ -99,16 +104,16 @@ func (w *Workspace) ApplyAsync(callback CallbackFn) error {
 		// reconciliation.
 		raw, err := os.ReadFile(filepath.Join(w.dir, "terraform.tfstate"))
 		if err != nil {
-			w.LastOperation.Err = errors.Wrap(err, "cannot read tfstate file")
+			w.LastOperation.SetErr(errors.Wrap(err, "cannot read tfstate file"))
 			return
 		}
 		s := &json.StateV4{}
 		if err := json.JSParser.Unmarshal(raw, s); err != nil {
-			w.LastOperation.Err = errors.Wrap(err, "cannot unmarshal tfstate file")
+			w.LastOperation.SetErr(errors.Wrap(err, "cannot unmarshal tfstate file"))
 			return
 		}
 		if err := callback(ctx, s); err != nil {
-			w.LastOperation.Err = errors.Wrap(err, "callback failed")
+			w.LastOperation.SetErr(errors.Wrap(err, "callback failed"))
 			return
 		}
 	}()
@@ -125,7 +130,7 @@ func (w *Workspace) Apply(ctx context.Context) (ApplyResult, error) {
 	if w.LastOperation.IsRunning() {
 		return ApplyResult{}, errors.Errorf("%s operation that started at %s is still running", w.LastOperation.Type, w.LastOperation.StartTime().String())
 	}
-	cmd := exec.CommandContext(ctx, "terraform", "apply", "-auto-approve", "-input=false", "-lock=false", "-detailed-exitcode", "-json")
+	cmd := exec.CommandContext(ctx, "terraform", "apply", "-auto-approve", "-input=false", "-lock=false", "-json")
 	cmd.Dir = w.dir
 	out, err := cmd.CombinedOutput()
 	w.logger.Debug("apply ended", "out", string(out))
@@ -164,11 +169,15 @@ func (w *Workspace) DestroyAsync() error {
 		cmd := exec.CommandContext(ctx, "terraform", "destroy", "-auto-approve", "-input=false", "-lock=false", "-json")
 		cmd.Dir = w.dir
 		out, err := cmd.CombinedOutput()
-		if err != nil {
-			w.LastOperation.Err = errors.Wrapf(err, "cannot destroy: %s", string(out))
-		}
 		w.LastOperation.MarkEnd()
 		w.logger.Debug("destroy async ended", "out", string(out))
+		if err != nil {
+			// Only the last line contains the error.
+			l := strings.Split(string(out), "\n")
+			w.LastOperation.SetErr(tferrors.NewDestroyFailed(l[len(l)-2]))
+			return
+		}
+		w.LastOperation.SetErr(nil)
 	}()
 	return nil
 }
@@ -187,6 +196,7 @@ func (w *Workspace) Destroy(ctx context.Context) error {
 
 // RefreshResult contains information about the current state of the resource.
 type RefreshResult struct {
+	Exists             bool
 	IsApplying         bool
 	IsDestroying       bool
 	State              *json.StateV4
@@ -199,22 +209,15 @@ func (w *Workspace) Refresh(ctx context.Context) (RefreshResult, error) {
 	switch {
 	case w.LastOperation.IsRunning():
 		return RefreshResult{
-			IsApplying:   w.LastOperation.Type == "apply",
-			IsDestroying: w.LastOperation.Type == "destroy",
+			IsApplying:         w.LastOperation.Type == "apply",
+			IsDestroying:       w.LastOperation.Type == "destroy",
+			LastOperationError: w.LastOperation.Err(),
 		}, nil
 	case w.LastOperation.IsEnded():
 		defer w.LastOperation.Flush()
-		// The last operation finished with error.
-		if w.LastOperation.Err != nil {
-			return RefreshResult{
-				IsApplying:         w.LastOperation.Type == "apply",
-				IsDestroying:       w.LastOperation.Type == "destroy",
-				LastOperationError: errors.Wrapf(w.LastOperation.Err, "%s operation failed", w.LastOperation.Type),
-			}, nil
-		}
 		// The deletion is completed so there is no resource to refresh.
-		if w.LastOperation.Type == "destroy" {
-			return RefreshResult{}, NewNotFound()
+		if w.LastOperation.Type == "destroy" && w.LastOperation.Err() == nil {
+			return RefreshResult{Exists: false}, nil
 		}
 	}
 	cmd := exec.CommandContext(ctx, "terraform", "apply", "-refresh-only", "-auto-approve", "-input=false", "-lock=false", "-json")
@@ -232,10 +235,11 @@ func (w *Workspace) Refresh(ctx context.Context) (RefreshResult, error) {
 	if err := json.JSParser.Unmarshal(raw, s); err != nil {
 		return RefreshResult{}, errors.Wrap(err, "cannot unmarshal tfstate file")
 	}
-	if len(s.Resources) == 0 || len(s.Resources[0].Instances) == 0 {
-		return RefreshResult{}, NewNotFound()
-	}
-	return RefreshResult{State: s}, nil
+	return RefreshResult{
+		Exists:             s.GetAttributes() != nil,
+		State:              s,
+		LastOperationError: w.LastOperation.Err(),
+	}, nil
 }
 
 // PlanResult returns a summary of comparison between desired and current state
