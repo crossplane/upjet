@@ -21,20 +21,15 @@ import (
 	"testing"
 
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
-
-	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource/mocks"
-
+	"github.com/crossplane/crossplane-runtime/pkg/test"
 	"github.com/golang/mock/gomock"
-
+	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-
 	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/crossplane-contrib/terrajet/pkg/json"
-
-	"github.com/crossplane/crossplane-runtime/pkg/test"
-	"github.com/google/go-cmp/cmp"
-	"github.com/pkg/errors"
+	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource/mocks"
 )
 
 var testData = []byte(`

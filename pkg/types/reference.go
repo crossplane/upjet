@@ -71,7 +71,6 @@ func init() {
 	}
 	typeReferenceField = pkgs[0].Types.Scope().Lookup("Reference").Type()
 	typeSelectorField = pkgs[0].Types.Scope().Lookup("Selector").Type()
-	// todo(hasan): do we need a `LocalSecretKeySelector` instead?
 	typeSecretKeySelector = pkgs[0].Types.Scope().Lookup("SecretKeySelector").Type()
 
 	commentOptional, err = comments.New("")

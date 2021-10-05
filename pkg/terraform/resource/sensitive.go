@@ -19,10 +19,9 @@ package resource
 import (
 	"context"
 
-	"github.com/pkg/errors"
-
 	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
+	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
