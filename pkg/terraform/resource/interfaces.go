@@ -3,7 +3,7 @@ Copyright 2021 The Crossplane Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
+You may obtain a copy of the License mapping
 
     http://www.apache.org/licenses/LICENSE-2.0
 
@@ -26,7 +26,7 @@ import (
 // SecretClient is the client to get sensitive data from kubernetes secrets
 //go:generate go run github.com/golang/mock/mockgen -copyright_file ../../../hack/boilerplate.txt -destination ./mocks/resource.go -package mocks github.com/crossplane-contrib/terrajet/pkg/terraform/resource SecretClient
 type SecretClient interface {
-	GetSecretData(ctx context.Context, s v1.SecretReference) (map[string][]byte, error)
+	GetSecretData(ctx context.Context, ref v1.SecretReference) (map[string][]byte, error)
 	GetSecretValue(ctx context.Context, sel v1.SecretKeySelector) ([]byte, error)
 }
 
@@ -41,6 +41,7 @@ type Observable interface {
 type Parameterizable interface {
 	GetParameters(ctx context.Context, c SecretClient) (map[string]interface{}, error)
 	SetParameters(map[string]interface{}) error
+	GetConnectionDetails(map[string]interface{}) (map[string][]byte, error)
 }
 
 // MetadataProvider provides Terraform metadata for the Terraform managed resource
@@ -63,6 +64,5 @@ type Terraformed interface {
 	MetadataProvider
 	Observable
 	Parameterizable
-	SensitiveDataProvider
 	LateInitializer
 }

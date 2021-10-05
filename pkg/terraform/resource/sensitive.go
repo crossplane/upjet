@@ -1,3 +1,19 @@
+/*
+Copyright 2021 The Crossplane Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License mapping
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package resource
 
 import (
@@ -54,46 +70,132 @@ func stringsMatchingFieldPath(from map[string]interface{}, path string) (map[str
 
 // GetSensitiveParameters will collect sensitive information as terraform state
 // attributes by following secret references in the spec.
-func GetSensitiveParameters(ctx context.Context, client SecretClient, from runtime.Object, into map[string]interface{}, at map[string]string) error {
+func GetSensitiveParameters(ctx context.Context, client SecretClient, from runtime.Object, into map[string]interface{}, mapping map[string]string) error {
 	pv, err := fieldpath.PaveObject(from)
 	if err != nil {
 		return err
 	}
-	//paveXP, err := pv.GetValue("spec.forProvider")
-	if err != nil {
+	xpParams := map[string]interface{}{}
+	if err = pv.GetValueInto("spec.forProvider", &xpParams); err != nil {
 		return err
 	}
+	paveXP := fieldpath.Pave(xpParams)
 	paveTF := fieldpath.Pave(into)
 
-	/*	for tf, xp := range at {
-
-		}*/
-
-	for k, v := range at {
-		sel := v1.SecretKeySelector{}
-		sel.Name, err = pv.GetString("spec.forProvider." + v + ".name")
+	var sensitive []byte
+	for tf, xp := range mapping {
+		expXPs, err := paveXP.ExpandWildcards(xp)
 		if err != nil {
-			return err
+			return errors.Wrapf(err, "cannot expand wildcard for xp resource")
 		}
-		sel.Key, err = pv.GetString("spec.forProvider." + v + ".key")
-		if err != nil {
-			return err
+		for _, expXP := range expXPs {
+			sel := v1.SecretKeySelector{}
+			if err = paveXP.GetValueInto(expXP, &sel); err != nil {
+				return errors.Wrapf(err, "cannot get SecretKeySelector from xp resource for fieldpath %q", expXP)
+			}
+			sensitive, err = client.GetSecretValue(ctx, sel)
+			if err != nil {
+				return err
+			}
+			expTF, err := expandedTFPath(expXP, mapping)
+			if err != nil {
+				return err
+			}
+			if err = paveTF.SetString(expTF, string(sensitive)); err != nil {
+				return errors.Wrapf(err, "cannot set string as terraform attribute for fieldpath %q", tf)
+			}
 		}
-		val, err := client.GetSecretValue(ctx, sel)
-		if err != nil {
-			return err
-		}
-		paveTF.SetString(k, string(val))
 	}
+
 	return nil
 }
 
 // GetSensitiveObservation will return sensitive information as terraform state
 // attributes by reading them from connection details.
-func GetSensitiveObservation(from runtime.Object, into map[string]interface{}, at map[string]string) error {
-	_, err := fieldpath.PaveObject(from)
+func GetSensitiveObservation(from runtime.Object, into map[string]interface{}, mapping map[string]string) error {
+	pv, err := fieldpath.PaveObject(from)
 	if err != nil {
 		return err
 	}
+	xpParams := map[string]interface{}{}
+	if err = pv.GetValueInto("status.atProvider", &xpParams); err != nil {
+		return err
+	}
+	paveXP := fieldpath.Pave(xpParams)
+	paveTF := fieldpath.Pave(into)
+
+	var sensitive string
+	for tf, xp := range mapping {
+		expXPs, err := paveXP.ExpandWildcards(xp)
+		if err != nil {
+			return errors.Wrapf(err, "cannot expand wildcard for xp resource")
+		}
+		for _, expXP := range expXPs {
+			if sensitive, err = paveXP.GetString(expXP); err != nil {
+				return errors.Wrapf(err, "cannot get string from xp resource for fieldpath %q", expXP)
+			}
+			expTF, err := expandedTFPath(expXP, mapping)
+			if err != nil {
+				return err
+			}
+			if err = paveTF.SetString(expTF, sensitive); err != nil {
+				return errors.Wrapf(err, "cannot set string as terraform attribute for fieldpath %q", tf)
+			}
+		}
+	}
 	return nil
+}
+
+func expandedTFPath(expandedXP string, mapping map[string]string) (string, error) {
+	sExp, err := fieldpath.Parse(expandedXP)
+	if err != nil {
+		return "", err
+	}
+	tfWildcard := ""
+	for tf, xp := range mapping {
+		sxp, err := fieldpath.Parse(xp)
+		if err != nil {
+			return "", err
+		}
+		if segmentsMatches(sExp, sxp) {
+			tfWildcard = tf
+			break
+		}
+	}
+	if tfWildcard == "" {
+		return "", errors.Errorf("cannot find corresponding fieldpath mapping for %q", expandedXP)
+	}
+	sTF, err := fieldpath.Parse(tfWildcard)
+	if err != nil {
+		return "", err
+	}
+	for i, s := range sTF {
+		if s.Field == "*" {
+			sTF[i] = sExp[i]
+		}
+	}
+
+	return sTF.String(), nil
+}
+
+func segmentsMatches(a fieldpath.Segments, b fieldpath.Segments) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i, s := range a {
+		sb := b[i]
+		if s.Field == "*" || sb.Field == "*" {
+			continue
+		}
+		if s.Type != sb.Type {
+			return false
+		}
+		if s.Field != sb.Field {
+			return false
+		}
+		if s.Index != sb.Index {
+			return false
+		}
+	}
+	return true
 }

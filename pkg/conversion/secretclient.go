@@ -10,47 +10,27 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-type APISecretClientOption func(*APISecretClient)
-
-func WithDefaultNamespace(n string) APISecretClientOption {
-	return func(a *APISecretClient) {
-		a.defaultNamespace = n
-	}
-}
-
+// APISecretClient is a client for getting k8s secrets
 type APISecretClient struct {
-	kube             client.Client
-	defaultNamespace string
+	kube client.Client
 }
 
-func NewAPISecretClient(k client.Client, opts ...APISecretClientOption) *APISecretClient {
-	a := &APISecretClient{
-		kube:             k,
-		defaultNamespace: "crossplane-system",
-	}
-
-	for _, o := range opts {
-		o(a)
-	}
-
-	return a
+// NewAPISecretClient builds and returns a new APISecretClient
+func NewAPISecretClient(k client.Client) *APISecretClient {
+	return &APISecretClient{kube: k}
 }
 
-func (a *APISecretClient) GetSecretData(ctx context.Context, s xpv1.SecretReference) (map[string][]byte, error) {
-	if s.Namespace == "" {
-		s.Namespace = a.defaultNamespace
-	}
+// GetSecretData gets and returns data for the referenced secret
+func (a *APISecretClient) GetSecretData(ctx context.Context, ref xpv1.SecretReference) (map[string][]byte, error) {
 	secret := &v1.Secret{}
-	if err := a.kube.Get(ctx, types.NamespacedName{Namespace: s.Namespace, Name: s.Name}, secret); err != nil {
+	if err := a.kube.Get(ctx, types.NamespacedName{Namespace: ref.Namespace, Name: ref.Name}, secret); err != nil {
 		return nil, err
 	}
 	return secret.Data, nil
 }
 
+// GetSecretValue gets and returns value for key of the referenced secret
 func (a *APISecretClient) GetSecretValue(ctx context.Context, sel xpv1.SecretKeySelector) ([]byte, error) {
-	if sel.Namespace == "" {
-		sel.Namespace = a.defaultNamespace
-	}
 	d, err := a.GetSecretData(ctx, sel.SecretReference)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot get secret data")

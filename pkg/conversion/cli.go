@@ -19,11 +19,9 @@ package conversion
 import (
 	"context"
 
-	jsoniter "github.com/json-iterator/go"
-	"github.com/pkg/errors"
-
 	xpmeta "github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
+	"github.com/pkg/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/crossplane-contrib/terrajet/pkg/json"

@@ -1,7 +1,34 @@
+/*
+Copyright 2021 The Crossplane Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License mapping
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package resource
 
 import (
+	"context"
 	"testing"
+
+	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+
+	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource/mocks"
+
+	"github.com/golang/mock/gomock"
+
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+
+	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/crossplane-contrib/terrajet/pkg/json"
 
@@ -185,7 +212,7 @@ func TestGetConnectionDetails(t *testing.T) {
 			want: want{
 				err: errors.Wrapf(errors.Wrap(errors.Wrapf(
 					errors.Errorf("%q: unexpected wildcard usage", "top_level_secret"),
-					"cannot expand wildcards for segments: %q", "top_level_secret.*"),
+					"cannot expand wildcards for segments: %q", "top_level_secret[*]"),
 					errCannotExpandWildcards),
 					errFmtCannotGetStringsForFieldPath, "top_level_secret.*"),
 			},
@@ -208,6 +235,227 @@ func TestGetConnectionDetails(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.want.out, got); diff != "" {
 				t.Errorf("GetFields(...) out = %v, want %v", got, tc.want.out)
+			}
+		})
+	}
+}
+
+func TestGetSensitiveParameters(t *testing.T) {
+	type args struct {
+		clientFn func(client *mocks.MockSecretClient)
+		from     runtime.Object
+		into     map[string]interface{}
+		mapping  map[string]string
+	}
+	type want struct {
+		out map[string]interface{}
+		err error
+	}
+	cases := map[string]struct {
+		args
+		want
+	}{
+		"SingleNoWildcard": {
+			args: args{
+				clientFn: func(client *mocks.MockSecretClient) {
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
+						SecretReference: xpv1.SecretReference{
+							Name: "admin-password",
+						},
+						Key: "pass",
+					})).Return([]byte("foo"), nil)
+				},
+				from: &unstructured.Unstructured{
+					Object: map[string]interface{}{
+						"spec": map[string]interface{}{
+							"forProvider": map[string]interface{}{
+								"adminPasswordSecretRef": map[string]interface{}{
+									"name": "admin-password",
+									"key":  "pass",
+								},
+							},
+						},
+					},
+				},
+				into: map[string]interface{}{
+					"some_other_key": "some_other_value",
+				},
+				mapping: map[string]string{
+					"admin_password": "adminPasswordSecretRef",
+				},
+			},
+			want: want{
+				out: map[string]interface{}{
+					"some_other_key": "some_other_value",
+					"admin_password": "foo",
+				},
+			},
+		},
+	}
+	for name, tc := range cases {
+		ctrl := gomock.NewController(t)
+		m := mocks.NewMockSecretClient(ctrl)
+
+		tc.args.clientFn(m)
+		t.Run(name, func(t *testing.T) {
+			gotErr := GetSensitiveParameters(context.Background(), m, tc.args.from, tc.args.into, tc.args.mapping)
+			if diff := cmp.Diff(tc.want.err, gotErr, test.EquateErrors()); diff != "" {
+				t.Fatalf("GetSensitiveParameters(...): -want error, +got error: %s", diff)
+			}
+			if diff := cmp.Diff(tc.want.out, tc.args.into); diff != "" {
+				t.Errorf("GetSensitiveParameters(...) out = %v, want %v", tc.args.into, tc.want.out)
+			}
+		})
+	}
+}
+
+func TestGetSensitiveObservation(t *testing.T) {
+	type args struct {
+		from    runtime.Object
+		into    map[string]interface{}
+		mapping map[string]string
+	}
+	type want struct {
+		out map[string]interface{}
+		err error
+	}
+	cases := map[string]struct {
+		args
+		want
+	}{
+		"SingleNoWildcard": {
+			args: args{
+				from: &unstructured.Unstructured{
+					Object: map[string]interface{}{
+						"status": map[string]interface{}{
+							"atProvider": map[string]interface{}{
+								"adminPassword": "foo",
+							},
+						},
+					},
+				},
+				into: map[string]interface{}{
+					"some_other_key": "some_other_value",
+				},
+				mapping: map[string]string{
+					"admin_password": "adminPassword",
+				},
+			},
+			want: want{
+				out: map[string]interface{}{
+					"some_other_key": "some_other_value",
+					"admin_password": "foo",
+				},
+			},
+		},
+		"MultipleNoWildcard": {
+			args: args{
+				from: &unstructured.Unstructured{
+					Object: map[string]interface{}{
+						"status": map[string]interface{}{
+							"atProvider": map[string]interface{}{
+								"adminPassword":   "foo",
+								"adminPrivateKey": "bar",
+							},
+						},
+					},
+				},
+				into: map[string]interface{}{
+					"some_other_key": "some_other_value",
+				},
+				mapping: map[string]string{
+					"admin_password":    "adminPassword",
+					"admin_private_key": "adminPrivateKey",
+				},
+			},
+			want: want{
+				out: map[string]interface{}{
+					"some_other_key":    "some_other_value",
+					"admin_password":    "foo",
+					"admin_private_key": "bar",
+				},
+			},
+		},
+		"MultipleWithWildcard": {
+			args: args{
+				from: &unstructured.Unstructured{
+					Object: map[string]interface{}{
+						"status": map[string]interface{}{
+							"atProvider": map[string]interface{}{
+								"databaseUsers": []interface{}{
+									map[string]interface{}{
+										"name":        "admin",
+										"password":    "foo",
+										"displayName": "Administrator",
+									},
+									map[string]interface{}{
+										"name":        "system",
+										"password":    "bar",
+										"displayName": "System",
+									},
+									map[string]interface{}{
+										"name":        "maintenance",
+										"password":    "baz",
+										"displayName": "Maintenance",
+									},
+								},
+							},
+						},
+					},
+				},
+				into: map[string]interface{}{
+					"some_other_key": "some_other_value",
+					"database_users": []interface{}{
+						map[string]interface{}{
+							"name":         "admin",
+							"display_name": "Administrator",
+						},
+						map[string]interface{}{
+							"name":         "system",
+							"display_name": "System",
+						},
+						map[string]interface{}{
+							"name":         "maintenance",
+							"display_name": "Maintenance",
+						},
+					},
+				},
+				mapping: map[string]string{
+					"database_users[*].password": "databaseUsers[*].password",
+				},
+			},
+			want: want{
+				out: map[string]interface{}{
+					"some_other_key": "some_other_value",
+					"database_users": []interface{}{
+						map[string]interface{}{
+							"name":         "admin",
+							"password":     "foo",
+							"display_name": "Administrator",
+						},
+						map[string]interface{}{
+							"name":         "system",
+							"password":     "bar",
+							"display_name": "System",
+						},
+						map[string]interface{}{
+							"name":         "maintenance",
+							"password":     "baz",
+							"display_name": "Maintenance",
+						},
+					},
+				},
+			},
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			gotErr := GetSensitiveObservation(tc.args.from, tc.args.into, tc.args.mapping)
+			if diff := cmp.Diff(tc.want.err, gotErr, test.EquateErrors()); diff != "" {
+				t.Fatalf("GetSensitiveObservation(...): -want error, +got error: %s", diff)
+			}
+			if diff := cmp.Diff(tc.want.out, tc.args.into); diff != "" {
+				t.Errorf("GetSensitiveObservation(...) out = %v, want %v", tc.args.into, tc.want.out)
 			}
 		})
 	}
