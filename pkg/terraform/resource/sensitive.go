@@ -19,10 +19,11 @@ package resource
 import (
 	"context"
 
+	"k8s.io/apimachinery/pkg/runtime"
+
 	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 	"github.com/pkg/errors"
-	"k8s.io/apimachinery/pkg/runtime"
 )
 
 const (
@@ -94,7 +95,7 @@ func GetSensitiveParameters(ctx context.Context, client SecretClient, from runti
 			}
 			sensitive, err = client.GetSecretValue(ctx, sel)
 			if err != nil {
-				return err
+				return errors.Wrapf(err, "cannot get secret value for %v", sel)
 			}
 			expTF, err := expandedTFPath(expXP, mapping)
 			if err != nil {
@@ -111,35 +112,16 @@ func GetSensitiveParameters(ctx context.Context, client SecretClient, from runti
 
 // GetSensitiveObservation will return sensitive information as terraform state
 // attributes by reading them from connection details.
-func GetSensitiveObservation(from runtime.Object, into map[string]interface{}, mapping map[string]string) error {
-	pv, err := fieldpath.PaveObject(from)
+func GetSensitiveObservation(ctx context.Context, client SecretClient, from *v1.SecretReference, into map[string]interface{}) error {
+	conn, err := client.GetSecretData(ctx, from)
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "cannot get connection secret")
 	}
-	xpParams := map[string]interface{}{}
-	if err = pv.GetValueInto("status.atProvider", &xpParams); err != nil {
-		return err
-	}
-	paveXP := fieldpath.Pave(xpParams)
 	paveTF := fieldpath.Pave(into)
 
-	var sensitive string
-	for tf, xp := range mapping {
-		expXPs, err := paveXP.ExpandWildcards(xp)
-		if err != nil {
-			return errors.Wrapf(err, "cannot expand wildcard for xp resource")
-		}
-		for _, expXP := range expXPs {
-			if sensitive, err = paveXP.GetString(expXP); err != nil {
-				return errors.Wrapf(err, "cannot get string from xp resource for fieldpath %q", expXP)
-			}
-			expTF, err := expandedTFPath(expXP, mapping)
-			if err != nil {
-				return err
-			}
-			if err = paveTF.SetString(expTF, sensitive); err != nil {
-				return errors.Wrapf(err, "cannot set string as terraform attribute for fieldpath %q", tf)
-			}
+	for k, v := range conn {
+		if err = paveTF.SetString(k, string(v)); err != nil {
+			return errors.Wrapf(err, "cannot set sensitive string in tf attributes for key %q", k)
 		}
 	}
 	return nil
@@ -156,7 +138,7 @@ func expandedTFPath(expandedXP string, mapping map[string]string) (string, error
 		if err != nil {
 			return "", err
 		}
-		if segmentsMatches(sExp, sxp) {
+		if expandedFor(sExp, sxp) {
 			tfWildcard = tf
 			break
 		}
@@ -177,22 +159,22 @@ func expandedTFPath(expandedXP string, mapping map[string]string) (string, error
 	return sTF.String(), nil
 }
 
-func segmentsMatches(a fieldpath.Segments, b fieldpath.Segments) bool {
-	if len(a) != len(b) {
+func expandedFor(expanded fieldpath.Segments, withWildcard fieldpath.Segments) bool {
+	if len(withWildcard) != len(expanded) {
 		return false
 	}
-	for i, s := range a {
-		sb := b[i]
-		if s.Field == "*" || sb.Field == "*" {
+	for i, w := range withWildcard {
+		exp := expanded[i]
+		if w.Field == "*" {
 			continue
 		}
-		if s.Type != sb.Type {
+		if w.Type != exp.Type {
 			return false
 		}
-		if s.Field != sb.Field {
+		if w.Field != exp.Field {
 			return false
 		}
-		if s.Index != sb.Index {
+		if w.Index != exp.Index {
 			return false
 		}
 	}

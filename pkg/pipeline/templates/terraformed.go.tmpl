@@ -5,12 +5,13 @@
 package {{ .CRD.APIVersion }}
 
 import (
-    "github.com/pkg/errors"
+	"context"
+
+	"github.com/pkg/errors"
 
 	"github.com/crossplane-contrib/terrajet/pkg/json"
 	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	{{ .Imports }}
 )
 
@@ -25,7 +26,7 @@ func (tr *{{ .CRD.Kind }}) GetTerraformResourceIdField() string {
 }
 
 // GetObservation of this {{ .CRD.Kind }}
-func (tr *{{ .CRD.Kind }}) GetObservation() (map[string]interface{}, error) {
+func (tr *{{ .CRD.Kind }}) GetObservation(ctx context.Context, c resource.SecretClient) (map[string]interface{}, error) {
 	o, err := json.TFParser.Marshal(tr.Status.AtProvider)
 	if err != nil {
 		return nil, err
@@ -35,7 +36,7 @@ func (tr *{{ .CRD.Kind }}) GetObservation() (map[string]interface{}, error) {
 	  return nil, err
 	}
   {{- if .SensitiveFields }}
-  return base, resource.GetSensitiveObservation(tr, base, map[string]string{ {{range $k, $v := .SensitiveFields}}"{{ $k }}": "{{ $v}}", {{end}} })
+  return base, resource.GetSensitiveObservation(ctx, c, tr.GetWriteConnectionSecretToReference(), base)
   {{- else }}
   return base, nil
   {{- end }}
@@ -95,7 +96,7 @@ func (tr *{{ .CRD.Kind }}) LateInitialize(attrs []byte) (bool, error) {
 // GetConnectionDetails of this {{ .CRD.Kind }}
 func (tr *{{ .CRD.Kind }}) GetConnectionDetails(obs map[string]interface{}) (map[string][]byte, error) {
   {{- if .SensitiveFields }}
-  return resource.GetConnectionDetails(data, map[string]string{ {{range $k, $v := .SensitiveFields}}"{{ $k }}": "{{ $v}}", {{end}} })
+  return resource.GetConnectionDetails(obs, map[string]string{ {{range $k, $v := .SensitiveFields}}"{{ $k }}": "{{ $v}}", {{end}} })
   {{- else }}
   return nil, nil
   {{- end }}

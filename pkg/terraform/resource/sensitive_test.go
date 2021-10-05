@@ -255,7 +255,8 @@ func TestGetSensitiveParameters(t *testing.T) {
 				clientFn: func(client *mocks.MockSecretClient) {
 					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
 						SecretReference: xpv1.SecretReference{
-							Name: "admin-password",
+							Name:      "admin-password",
+							Namespace: "crossplane-system",
 						},
 						Key: "pass",
 					})).Return([]byte("foo"), nil)
@@ -265,8 +266,9 @@ func TestGetSensitiveParameters(t *testing.T) {
 						"spec": map[string]interface{}{
 							"forProvider": map[string]interface{}{
 								"adminPasswordSecretRef": map[string]interface{}{
-									"name": "admin-password",
-									"key":  "pass",
+									"name":      "admin-password",
+									"namespace": "crossplane-system",
+									"key":       "pass",
 								},
 							},
 						},
@@ -286,45 +288,38 @@ func TestGetSensitiveParameters(t *testing.T) {
 				},
 			},
 		},
-	}
-	for name, tc := range cases {
-		ctrl := gomock.NewController(t)
-		m := mocks.NewMockSecretClient(ctrl)
-
-		tc.args.clientFn(m)
-		t.Run(name, func(t *testing.T) {
-			gotErr := GetSensitiveParameters(context.Background(), m, tc.args.from, tc.args.into, tc.args.mapping)
-			if diff := cmp.Diff(tc.want.err, gotErr, test.EquateErrors()); diff != "" {
-				t.Fatalf("GetSensitiveParameters(...): -want error, +got error: %s", diff)
-			}
-			if diff := cmp.Diff(tc.want.out, tc.args.into); diff != "" {
-				t.Errorf("GetSensitiveParameters(...) out = %v, want %v", tc.args.into, tc.want.out)
-			}
-		})
-	}
-}
-
-func TestGetSensitiveObservation(t *testing.T) {
-	type args struct {
-		from    runtime.Object
-		into    map[string]interface{}
-		mapping map[string]string
-	}
-	type want struct {
-		out map[string]interface{}
-		err error
-	}
-	cases := map[string]struct {
-		args
-		want
-	}{
-		"SingleNoWildcard": {
+		"MultipleNoWildcard": {
 			args: args{
+				clientFn: func(client *mocks.MockSecretClient) {
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
+						SecretReference: xpv1.SecretReference{
+							Name:      "admin-password",
+							Namespace: "crossplane-system",
+						},
+						Key: "pass",
+					})).Return([]byte("foo"), nil)
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
+						SecretReference: xpv1.SecretReference{
+							Name:      "admin-key",
+							Namespace: "crossplane-system",
+						},
+						Key: "key",
+					})).Return([]byte("bar"), nil)
+				},
 				from: &unstructured.Unstructured{
 					Object: map[string]interface{}{
-						"status": map[string]interface{}{
-							"atProvider": map[string]interface{}{
-								"adminPassword": "foo",
+						"spec": map[string]interface{}{
+							"forProvider": map[string]interface{}{
+								"adminPasswordSecretRef": map[string]interface{}{
+									"name":      "admin-password",
+									"namespace": "crossplane-system",
+									"key":       "pass",
+								},
+								"adminKeySecretRef": map[string]interface{}{
+									"name":      "admin-key",
+									"namespace": "crossplane-system",
+									"key":       "key",
+								},
 							},
 						},
 					},
@@ -333,64 +328,73 @@ func TestGetSensitiveObservation(t *testing.T) {
 					"some_other_key": "some_other_value",
 				},
 				mapping: map[string]string{
-					"admin_password": "adminPassword",
+					"admin_password": "adminPasswordSecretRef",
+					"admin_key":      "adminKeySecretRef",
 				},
 			},
 			want: want{
 				out: map[string]interface{}{
 					"some_other_key": "some_other_value",
 					"admin_password": "foo",
-				},
-			},
-		},
-		"MultipleNoWildcard": {
-			args: args{
-				from: &unstructured.Unstructured{
-					Object: map[string]interface{}{
-						"status": map[string]interface{}{
-							"atProvider": map[string]interface{}{
-								"adminPassword":   "foo",
-								"adminPrivateKey": "bar",
-							},
-						},
-					},
-				},
-				into: map[string]interface{}{
-					"some_other_key": "some_other_value",
-				},
-				mapping: map[string]string{
-					"admin_password":    "adminPassword",
-					"admin_private_key": "adminPrivateKey",
-				},
-			},
-			want: want{
-				out: map[string]interface{}{
-					"some_other_key":    "some_other_value",
-					"admin_password":    "foo",
-					"admin_private_key": "bar",
+					"admin_key":      "bar",
 				},
 			},
 		},
 		"MultipleWithWildcard": {
 			args: args{
+				clientFn: func(client *mocks.MockSecretClient) {
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
+						SecretReference: xpv1.SecretReference{
+							Name:      "admin-password",
+							Namespace: "crossplane-system",
+						},
+						Key: "pass",
+					})).Return([]byte("foo"), nil)
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
+						SecretReference: xpv1.SecretReference{
+							Name:      "system-password",
+							Namespace: "crossplane-system",
+						},
+						Key: "pass",
+					})).Return([]byte("bar"), nil)
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
+						SecretReference: xpv1.SecretReference{
+							Name:      "maintenance-password",
+							Namespace: "crossplane-system",
+						},
+						Key: "pass",
+					})).Return([]byte("baz"), nil)
+				},
 				from: &unstructured.Unstructured{
 					Object: map[string]interface{}{
-						"status": map[string]interface{}{
-							"atProvider": map[string]interface{}{
+						"spec": map[string]interface{}{
+							"forProvider": map[string]interface{}{
 								"databaseUsers": []interface{}{
 									map[string]interface{}{
-										"name":        "admin",
-										"password":    "foo",
+										"name": "admin",
+										"passwordSecretRef": map[string]interface{}{
+											"name":      "admin-password",
+											"namespace": "crossplane-system",
+											"key":       "pass",
+										},
 										"displayName": "Administrator",
 									},
 									map[string]interface{}{
-										"name":        "system",
-										"password":    "bar",
+										"name": "system",
+										"passwordSecretRef": map[string]interface{}{
+											"name":      "system-password",
+											"namespace": "crossplane-system",
+											"key":       "pass",
+										},
 										"displayName": "System",
 									},
 									map[string]interface{}{
-										"name":        "maintenance",
-										"password":    "baz",
+										"name": "maintenance",
+										"passwordSecretRef": map[string]interface{}{
+											"name":      "maintenance-password",
+											"namespace": "crossplane-system",
+											"key":       "pass",
+										},
 										"displayName": "Maintenance",
 									},
 								},
@@ -416,7 +420,134 @@ func TestGetSensitiveObservation(t *testing.T) {
 					},
 				},
 				mapping: map[string]string{
-					"database_users[*].password": "databaseUsers[*].password",
+					"database_users[*].password": "databaseUsers[*].passwordSecretRef",
+				},
+			},
+			want: want{
+				out: map[string]interface{}{
+					"some_other_key": "some_other_value",
+					"database_users": []interface{}{
+						map[string]interface{}{
+							"name":         "admin",
+							"password":     "foo",
+							"display_name": "Administrator",
+						},
+						map[string]interface{}{
+							"name":         "system",
+							"password":     "bar",
+							"display_name": "System",
+						},
+						map[string]interface{}{
+							"name":         "maintenance",
+							"password":     "baz",
+							"display_name": "Maintenance",
+						},
+					},
+				},
+			},
+		},
+	}
+	for name, tc := range cases {
+		ctrl := gomock.NewController(t)
+		m := mocks.NewMockSecretClient(ctrl)
+
+		tc.args.clientFn(m)
+		t.Run(name, func(t *testing.T) {
+			gotErr := GetSensitiveParameters(context.Background(), m, tc.args.from, tc.args.into, tc.args.mapping)
+			if diff := cmp.Diff(tc.want.err, gotErr, test.EquateErrors()); diff != "" {
+				t.Fatalf("GetSensitiveParameters(...): -want error, +got error: %s", diff)
+			}
+			if diff := cmp.Diff(tc.want.out, tc.args.into); diff != "" {
+				t.Errorf("GetSensitiveParameters(...) out = %v, want %v", tc.args.into, tc.want.out)
+			}
+		})
+	}
+}
+
+func TestGetSensitiveObservation(t *testing.T) {
+	connSecretRef := &xpv1.SecretReference{
+		Name:      "connection-details",
+		Namespace: "crossplane-system",
+	}
+	type args struct {
+		clientFn func(client *mocks.MockSecretClient)
+		into     map[string]interface{}
+	}
+	type want struct {
+		out map[string]interface{}
+		err error
+	}
+	cases := map[string]struct {
+		args
+		want
+	}{
+		"SingleNoWildcard": {
+			args: args{
+				clientFn: func(client *mocks.MockSecretClient) {
+					client.EXPECT().GetSecretData(gomock.Any(), connSecretRef).
+						Return(map[string][]byte{
+							"admin_password": []byte("foo"),
+						}, nil)
+				},
+				into: map[string]interface{}{
+					"some_other_key": "some_other_value",
+				},
+			},
+			want: want{
+				out: map[string]interface{}{
+					"some_other_key": "some_other_value",
+					"admin_password": "foo",
+				},
+			},
+		},
+		"MultipleNoWildcard": {
+			args: args{
+				clientFn: func(client *mocks.MockSecretClient) {
+					client.EXPECT().
+						GetSecretData(gomock.Any(), connSecretRef).
+						Return(map[string][]byte{
+							"admin_password":    []byte("foo"),
+							"admin_private_key": []byte("bar"),
+						}, nil)
+				},
+				into: map[string]interface{}{
+					"some_other_key": "some_other_value",
+				},
+			},
+			want: want{
+				out: map[string]interface{}{
+					"some_other_key":    "some_other_value",
+					"admin_password":    "foo",
+					"admin_private_key": "bar",
+				},
+			},
+		},
+		"MultipleWithWildcard": {
+			args: args{
+				clientFn: func(client *mocks.MockSecretClient) {
+					client.EXPECT().GetSecretData(gomock.Any(), connSecretRef).
+						Return(map[string][]byte{
+							"database_users[0].password": []byte("foo"),
+							"database_users[1].password": []byte("bar"),
+							"database_users[2].password": []byte("baz"),
+						}, nil)
+				},
+				into: map[string]interface{}{
+					"some_other_key": "some_other_value",
+					"database_users": []interface{}{
+						map[string]interface{}{
+							"name":         "admin",
+							"display_name": "Administrator",
+						},
+						map[string]interface{}{
+							"name":         "system",
+							"display_name": "System",
+						},
+						map[string]interface{}{
+							"name":         "maintenance",
+							"display_name": "Maintenance",
+						},
+					},
 				},
 			},
 			want: want{
@@ -445,7 +576,11 @@ func TestGetSensitiveObservation(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			gotErr := GetSensitiveObservation(tc.args.from, tc.args.into, tc.args.mapping)
+			ctrl := gomock.NewController(t)
+			m := mocks.NewMockSecretClient(ctrl)
+
+			tc.args.clientFn(m)
+			gotErr := GetSensitiveObservation(context.Background(), m, connSecretRef, tc.args.into)
 			if diff := cmp.Diff(tc.want.err, gotErr, test.EquateErrors()); diff != "" {
 				t.Fatalf("GetSensitiveObservation(...): -want error, +got error: %s", diff)
 			}

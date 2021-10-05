@@ -50,7 +50,7 @@ func (m *MockSecretClient) EXPECT() *MockSecretClientMockRecorder {
 }
 
 // GetSecretData mocks base method.
-func (m *MockSecretClient) GetSecretData(arg0 context.Context, arg1 v1.SecretReference) (map[string][]byte, error) {
+func (m *MockSecretClient) GetSecretData(arg0 context.Context, arg1 *v1.SecretReference) (map[string][]byte, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetSecretData", arg0, arg1)
 	ret0, _ := ret[0].(map[string][]byte)

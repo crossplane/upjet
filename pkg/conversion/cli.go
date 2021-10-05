@@ -42,13 +42,14 @@ const (
 // (i.e. desired spec input) and terraform state (if available) for a given
 // client builder base.
 func BuildClientForResource(ctx context.Context, kube client.Client, tr resource.Terraformed, opts ...tfcli.ClientOption) (model.Client, error) {
-	params, err := tr.GetParameters(ctx, NewAPISecretClient(kube))
+	sc := &APISecretClient{kube: kube}
+	params, err := tr.GetParameters(ctx, sc)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to get parameters")
+		return nil, errors.Wrap(err, "cannot get parameters")
 	}
-	obs, err := tr.GetObservation()
+	obs, err := tr.GetObservation(ctx, sc)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to get observation")
+		return nil, errors.Wrap(err, "cannot get observation")
 	}
 	r := &tfcli.Resource{
 		LabelType:    tr.GetTerraformResourceType(),

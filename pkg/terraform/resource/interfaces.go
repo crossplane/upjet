@@ -26,13 +26,13 @@ import (
 // SecretClient is the client to get sensitive data from kubernetes secrets
 //go:generate go run github.com/golang/mock/mockgen -copyright_file ../../../hack/boilerplate.txt -destination ./mocks/resource.go -package mocks github.com/crossplane-contrib/terrajet/pkg/terraform/resource SecretClient
 type SecretClient interface {
-	GetSecretData(ctx context.Context, ref v1.SecretReference) (map[string][]byte, error)
+	GetSecretData(ctx context.Context, ref *v1.SecretReference) (map[string][]byte, error)
 	GetSecretValue(ctx context.Context, sel v1.SecretKeySelector) ([]byte, error)
 }
 
 // Observable structs can get and set observations in the form of Terraform JSON.
 type Observable interface {
-	GetObservation() (map[string]interface{}, error)
+	GetObservation(ctx context.Context, c SecretClient) (map[string]interface{}, error)
 	SetObservation(map[string]interface{}) error
 }
 

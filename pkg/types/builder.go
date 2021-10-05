@@ -21,8 +21,8 @@ import (
 	"go/token"
 	"go/types"
 	"sort"
-	"strings"
 
+	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	twtypes "github.com/muvaf/typewriter/pkg/types"
 	"github.com/pkg/errors"
@@ -313,15 +313,11 @@ func sortedKeys(m map[string]*schema.Schema) []string {
 }
 
 func fieldPath(parts []string) string {
-	fp := ""
-	for _, p := range parts {
-		if p == "*" {
-			fp += fmt.Sprintf("[%s]", p)
-			continue
-		}
-		fp += fmt.Sprintf(".%s", p)
+	seg := make(fieldpath.Segments, len(parts))
+	for i, p := range parts {
+		seg[i] = fieldpath.Field(p)
 	}
-	return strings.TrimPrefix(fp, ".")
+	return seg.String()
 }
 
 func containsAt(ss []string, s string) (bool, int) {
