@@ -173,9 +173,8 @@ func TestConnect(t *testing.T) {
 
 func TestObserve(t *testing.T) {
 	type args struct {
-		kube client.Client
-		w    Workspace
-		obj  xpresource.Managed
+		w   Workspace
+		obj xpresource.Managed
 	}
 	type want struct {
 		obs managed.ExternalObservation
@@ -275,7 +274,7 @@ func TestObserve(t *testing.T) {
 			args: args{
 				obj: &fake.Terraformed{
 					MetadataProvider: fake.MetadataProvider{
-						IdField: "id",
+						IDField: "id",
 					},
 				},
 				w: WorkspaceFns{
@@ -297,7 +296,7 @@ func TestObserve(t *testing.T) {
 			args: args{
 				obj: &fake.Terraformed{
 					MetadataProvider: fake.MetadataProvider{
-						IdField: "id",
+						IDField: "id",
 					},
 				},
 				w: WorkspaceFns{
@@ -322,7 +321,7 @@ func TestObserve(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			e := &external{kube: tc.kube, workspace: tc.w}
+			e := &external{workspace: tc.w}
 			_, err := e.Observe(context.TODO(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nObserve(...): -want error, +got error:\n%s", tc.reason, diff)
@@ -333,13 +332,11 @@ func TestObserve(t *testing.T) {
 
 func TestCreate(t *testing.T) {
 	type args struct {
-		kube  client.Client
 		w     Workspace
 		async bool
 		obj   xpresource.Managed
 	}
 	type want struct {
-		obs managed.ExternalObservation
 		err error
 	}
 	cases := map[string]struct {
@@ -387,7 +384,7 @@ func TestCreate(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			e := &external{kube: tc.kube, workspace: tc.w, async: tc.async}
+			e := &external{workspace: tc.w, async: tc.async}
 			_, err := e.Create(context.TODO(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nCreate(...): -want error, +got error:\n%s", tc.reason, diff)
@@ -398,13 +395,11 @@ func TestCreate(t *testing.T) {
 
 func TestUpdate(t *testing.T) {
 	type args struct {
-		kube  client.Client
 		w     Workspace
 		async bool
 		obj   xpresource.Managed
 	}
 	type want struct {
-		obs managed.ExternalObservation
 		err error
 	}
 	cases := map[string]struct {
@@ -452,7 +447,7 @@ func TestUpdate(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			e := &external{kube: tc.kube, workspace: tc.w, async: tc.async}
+			e := &external{workspace: tc.w, async: tc.async}
 			_, err := e.Update(context.TODO(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nCreate(...): -want error, +got error:\n%s", tc.reason, diff)
@@ -463,13 +458,11 @@ func TestUpdate(t *testing.T) {
 
 func TestDelete(t *testing.T) {
 	type args struct {
-		kube  client.Client
 		w     Workspace
 		async bool
 		obj   xpresource.Managed
 	}
 	type want struct {
-		obs managed.ExternalObservation
 		err error
 	}
 	cases := map[string]struct {
@@ -509,7 +502,7 @@ func TestDelete(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			e := &external{kube: tc.kube, workspace: tc.w, async: tc.async}
+			e := &external{workspace: tc.w, async: tc.async}
 			err := e.Delete(context.TODO(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nCreate(...): -want error, +got error:\n%s", tc.reason, diff)

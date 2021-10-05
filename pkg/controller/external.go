@@ -110,7 +110,11 @@ type external struct {
 	async bool
 }
 
-func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.ExternalObservation, error) {
+func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.ExternalObservation, error) { // nolint:gocyclo
+	// We skip the gocyclo check because most of the operations are straight-forward
+	// and serial.
+	// TODO(muvaf): Look for ways to reduce the cyclomatic complexity without
+	// increasing the difficulty of understanding the flow.
 	tr, ok := mg.(resource.Terraformed)
 	if !ok {
 		return managed.ExternalObservation{}, errors.New(errUnexpectedObject)
@@ -143,10 +147,13 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot set observation")
 	}
 
-	// TODO(hasan): Handle late initialization of parameters.
-	lateInited, err := lateInitializeAnnotations(tr, attr, string(res.State.GetPrivateRaw()))
+	lateInitedAnn, err := lateInitializeAnnotations(tr, attr, string(res.State.GetPrivateRaw()))
 	if err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot late initialize annotations")
+	}
+	lateInitedParams, err := tr.LateInitialize(res.State.GetAttributes())
+	if err != nil {
+		return managed.ExternalObservation{}, errors.Wrap(err, "cannot late initialize parameters")
 	}
 
 	// During creation (i.e. apply), Terraform already waits until resource is
@@ -163,7 +170,7 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 	return managed.ExternalObservation{
 		ResourceExists:          true,
 		ResourceUpToDate:        plan.UpToDate,
-		ResourceLateInitialized: lateInited,
+		ResourceLateInitialized: lateInitedAnn || lateInitedParams,
 	}, nil
 }
 
@@ -230,11 +237,11 @@ func lateInitializeAnnotations(tr resource.Terraformed, attr map[string]interfac
 
 	// Terraform stores id for the external resource as an attribute in the
 	// resource state. Key for the attribute holding external identifier is
-	// resource specific. We rely on GetTerraformResourceIdField() function
+	// resource specific. We rely on GetTerraformResourceIDField() function
 	// to find out that key.
-	id, exists := attr[tr.GetTerraformResourceIdField()]
+	id, exists := attr[tr.GetTerraformResourceIDField()]
 	if !exists {
-		return false, errors.Errorf("no value for id field: %s", tr.GetTerraformResourceIdField())
+		return false, errors.Errorf("no value for id field: %s", tr.GetTerraformResourceIDField())
 	}
 	extID, ok := id.(string)
 	if !ok {

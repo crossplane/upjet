@@ -84,9 +84,9 @@ func TestWriteTFState(t *testing.T) {
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nWriteTFState(...): -want error, +got error:\n%s", tc.reason, diff)
 			}
-			s, _ := afero.Afero{Fs: fs}.ReadFile(filepath.Join(dir, "terraform.maintf"))
+			s, _ := afero.Afero{Fs: fs}.ReadFile(filepath.Join(dir, "terraform.tfstate"))
 			if diff := cmp.Diff(tc.want.tfstate, string(s)); diff != "" {
-				t.Errorf("\n%s\nWriteTFState(...): -want error, +got error:\n%s", tc.reason, diff)
+				t.Errorf("\n%s\nWriteTFState(...): -want tfstate, +got tfstate:\n%s", tc.reason, diff)
 			}
 		})
 	}

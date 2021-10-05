@@ -49,7 +49,7 @@ func (sf *StoreFns) Remove(obj xpresource.Object) error {
 func TestAddFinalizer(t *testing.T) {
 	type args struct {
 		finalizer xpresource.Finalizer
-		store     Store
+		store     StoreCleaner
 		obj       xpresource.Object
 	}
 	type want struct {
@@ -96,7 +96,7 @@ func TestAddFinalizer(t *testing.T) {
 func TestRemoveFinalizer(t *testing.T) {
 	type args struct {
 		finalizer xpresource.Finalizer
-		store     Store
+		store     StoreCleaner
 		obj       xpresource.Object
 	}
 	type want struct {

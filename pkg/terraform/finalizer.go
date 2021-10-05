@@ -19,26 +19,23 @@ package terraform
 import (
 	"context"
 
-	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/pkg/errors"
-
-	"github.com/crossplane-contrib/terrajet/pkg/resource"
 )
 
 const (
 	errRemoveWorkspace = "cannot remove workspace from the store"
 )
 
-type Store interface {
-	Workspace(ctx context.Context, tr resource.Terraformed, ts Setup, l logging.Logger) (*Workspace, error)
+// StoreCleaner is the interface that the workspace finalizer needs to work with.
+type StoreCleaner interface {
 	Remove(obj xpresource.Object) error
 }
 
 // TODO(muvaf): A FinalizerChain in crossplane-runtime?
 
 // NewWorkspaceFinalizer returns a new WorkspaceFinalizer.
-func NewWorkspaceFinalizer(ws Store, af xpresource.Finalizer) *WorkspaceFinalizer {
+func NewWorkspaceFinalizer(ws StoreCleaner, af xpresource.Finalizer) *WorkspaceFinalizer {
 	return &WorkspaceFinalizer{
 		Finalizer: af,
 		Store:     ws,
@@ -49,7 +46,7 @@ func NewWorkspaceFinalizer(ws Store, af xpresource.Finalizer) *WorkspaceFinalize
 // then calls RemoveFinalizer of the underlying Finalizer.
 type WorkspaceFinalizer struct {
 	xpresource.Finalizer
-	Store Store
+	Store StoreCleaner
 }
 
 // AddFinalizer to the supplied Managed resource.
