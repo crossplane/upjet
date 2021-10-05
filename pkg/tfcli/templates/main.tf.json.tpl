@@ -2,8 +2,8 @@
     "terraform": {
         "required_providers": {
             "tf-provider": {
-                "source":  "{{ .Provider.Source }}",
-                "version": "{{ .Provider.Version }}"
+                "source":  "{{ .Provider.Requirement.Source }}",
+                "version": "{{ .Provider.Requirement.Version }}"
             }
         }
     },
