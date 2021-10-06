@@ -72,7 +72,7 @@ func TestLateInitialize(t *testing.T) {
 	}
 
 	type nestedStruct9 struct {
-		F1 map[string][]string
+		F1 map[string][]string `json:"f_1,omitempty"`
 	}
 
 	type nestedStruct10 struct {
@@ -511,6 +511,17 @@ func TestLateInitialize(t *testing.T) {
 			},
 			wantModified: false,
 			wantCRObject: &nestedStruct6{},
+		},
+		"TestSkipOmitemptyTaggedMapElem": {
+			args: args{
+				desiredObject: &nestedStruct9{},
+				observedObject: &nestedStruct9{
+					F1: map[string][]string{},
+				},
+				opts: []GenericLateInitializerOption{WithZeroValueJSONOmitEmptyFilter("F1")},
+			},
+			wantModified: false,
+			wantCRObject: &nestedStruct9{},
 		},
 	}
 
