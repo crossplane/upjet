@@ -9,7 +9,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/crossplane-contrib/terrajet/pkg/config"
-	"github.com/crossplane-contrib/terrajet/pkg/markers"
+	"github.com/crossplane-contrib/terrajet/pkg/types/markers"
 )
 
 func TestComment_Build(t *testing.T) {

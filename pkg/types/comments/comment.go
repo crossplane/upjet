@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	"github.com/crossplane-contrib/terrajet/pkg/config"
-	"github.com/crossplane-contrib/terrajet/pkg/markers"
+	"github.com/crossplane-contrib/terrajet/pkg/types/markers"
 )
 
 // Option is a comment option

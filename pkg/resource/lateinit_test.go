@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package conversion
+package resource
 
 import (
 	"testing"
@@ -26,7 +26,7 @@ func TestLateInitialize(t *testing.T) {
 	type args struct {
 		desiredObject  interface{}
 		observedObject interface{}
-		opts           []LateInitializeOption
+		opts           []GenericLateInitializerOption
 	}
 
 	testKeyDesiredField := "test-key-desiredField"
@@ -485,7 +485,7 @@ func TestLateInitialize(t *testing.T) {
 				observedObject: &nestedStruct4{
 					F1: &testStringEmpty,
 				},
-				opts: []LateInitializeOption{WithZeroElemPtrFilter("F1")},
+				opts: []GenericLateInitializerOption{WithZeroElemPtrFilter("F1")},
 			},
 			wantModified: false,
 			wantCRObject: &nestedStruct4{},
@@ -496,7 +496,7 @@ func TestLateInitialize(t *testing.T) {
 				observedObject: &nestedStruct4{
 					F1: &testStringEmpty,
 				},
-				opts: []LateInitializeOption{WithZeroValueJSONOmitEmptyFilter(CNameWildcard)},
+				opts: []GenericLateInitializerOption{WithZeroValueJSONOmitEmptyFilter(CNameWildcard)},
 			},
 			wantModified: false,
 			wantCRObject: &nestedStruct4{},
@@ -507,7 +507,7 @@ func TestLateInitialize(t *testing.T) {
 				observedObject: &nestedStruct6{
 					F1: []string{},
 				},
-				opts: []LateInitializeOption{WithZeroValueJSONOmitEmptyFilter("F1")},
+				opts: []GenericLateInitializerOption{WithZeroValueJSONOmitEmptyFilter("F1")},
 			},
 			wantModified: false,
 			wantCRObject: &nestedStruct6{},
@@ -516,7 +516,7 @@ func TestLateInitialize(t *testing.T) {
 
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			li := NewLateInitializer(tt.args.opts...)
+			li := NewGenericLateInitializer(tt.args.opts...)
 			got, err := li.LateInitialize(tt.args.desiredObject, tt.args.observedObject)
 
 			if (err != nil) != tt.wantErr {

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package conversion
+package resource
 
 import (
 	"fmt"
@@ -39,19 +39,19 @@ const (
 	fmtCanonical = "%s.%s"
 )
 
-// LateInitializer performs late-initialization of a Terraformed resource.
-type LateInitializer struct {
+// GenericLateInitializer performs late-initialization of a Terraformed resource.
+type GenericLateInitializer struct {
 	valueFilters []ValueFilter
 }
 
-// LateInitializeOption are options that control the late-initialization
+// GenericLateInitializerOption are options that control the late-initialization
 // behavior of a Terraformed resource.
-type LateInitializeOption func(l *LateInitializer)
+type GenericLateInitializerOption func(l *GenericLateInitializer)
 
-// NewLateInitializer constructs a new LateInitializer
+// NewGenericLateInitializer constructs a new GenericLateInitializer
 // with the supplied options
-func NewLateInitializer(opts ...LateInitializeOption) *LateInitializer {
-	l := &LateInitializer{}
+func NewGenericLateInitializer(opts ...GenericLateInitializerOption) *GenericLateInitializer {
+	l := &GenericLateInitializer{}
 	for _, o := range opts {
 		o(l)
 	}
@@ -62,10 +62,10 @@ func NewLateInitializer(opts ...LateInitializeOption) *LateInitializer {
 // Fields with matching values will not be processed during late-initialization
 type ValueFilter func(string, reflect.StructField, reflect.Value) bool
 
-// WithZeroValueJSONOmitEmptyFilter returns a LateInitializeOption that causes to
+// WithZeroValueJSONOmitEmptyFilter returns a GenericLateInitializerOption that causes to
 // skip initialization of a zero-valued field that has omitempty JSON tag
-func WithZeroValueJSONOmitEmptyFilter(cName string) LateInitializeOption {
-	return func(l *LateInitializer) {
+func WithZeroValueJSONOmitEmptyFilter(cName string) GenericLateInitializerOption {
+	return func(l *GenericLateInitializer) {
 		l.valueFilters = append(l.valueFilters, zeroValueJSONOmitEmptyFilter(cName))
 	}
 }
@@ -99,10 +99,10 @@ func zeroValueJSONOmitEmptyFilter(cName string) ValueFilter {
 	}
 }
 
-// WithZeroElemPtrFilter returns a LateInitializeOption that causes to
+// WithZeroElemPtrFilter returns a GenericLateInitializerOption that causes to
 // skip initialization of a pointer field with a zero-valued element
-func WithZeroElemPtrFilter(cName string) LateInitializeOption {
-	return func(l *LateInitializer) {
+func WithZeroElemPtrFilter(cName string) GenericLateInitializerOption {
+	return func(l *GenericLateInitializer) {
 		l.valueFilters = append(l.valueFilters, zeroElemPtrFilter(cName))
 	}
 }
@@ -140,7 +140,7 @@ func isZeroValueOmitted(tag string) bool {
 // Otherwise, an error will be returned. Returns `true` if at least one field has been stored
 // from source `responseObject` into a corresponding field of target `crObject`.
 // nolint:gocyclo
-func (li *LateInitializer) LateInitialize(desiredObject, observedObject interface{}) (changed bool, err error) {
+func (li *GenericLateInitializer) LateInitialize(desiredObject, observedObject interface{}) (changed bool, err error) {
 	if desiredObject == nil || reflect.ValueOf(desiredObject).IsNil() ||
 		observedObject == nil || reflect.ValueOf(observedObject).IsNil() {
 		return false, nil
@@ -166,7 +166,7 @@ func (li *LateInitializer) LateInitialize(desiredObject, observedObject interfac
 }
 
 // nolint:gocyclo
-func (li *LateInitializer) handleStruct(parentName string, desiredObject interface{}, observedObject interface{}) (bool, error) {
+func (li *GenericLateInitializer) handleStruct(parentName string, desiredObject interface{}, observedObject interface{}) (bool, error) {
 	typeOfDesiredObject, typeOfObservedObject := reflect.TypeOf(desiredObject), reflect.TypeOf(observedObject)
 	valueOfDesiredObject, valueOfObservedObject := reflect.ValueOf(desiredObject), reflect.ValueOf(observedObject).Elem()
 	typeOfDesiredObject, typeOfObservedObject = typeOfDesiredObject.Elem(), typeOfObservedObject.Elem()
@@ -220,7 +220,7 @@ func (li *LateInitializer) handleStruct(parentName string, desiredObject interfa
 	return fieldAssigned, nil
 }
 
-func (li *LateInitializer) handlePtr(cName string, desiredFieldValue, observedFieldValue reflect.Value) (bool, error) {
+func (li *GenericLateInitializer) handlePtr(cName string, desiredFieldValue, observedFieldValue reflect.Value) (bool, error) {
 	if observedFieldValue.IsNil() || !desiredFieldValue.IsNil() {
 		return false, nil
 	}
@@ -252,7 +252,7 @@ func (li *LateInitializer) handlePtr(cName string, desiredFieldValue, observedFi
 	return desiredKeepField, nil
 }
 
-func (li *LateInitializer) handleSlice(cName string, desiredFieldValue, observedFieldValue reflect.Value) (bool, error) {
+func (li *GenericLateInitializer) handleSlice(cName string, desiredFieldValue, observedFieldValue reflect.Value) (bool, error) {
 	if observedFieldValue.IsNil() || !desiredFieldValue.IsNil() {
 		return false, nil
 	}
@@ -293,7 +293,7 @@ func (li *LateInitializer) handleSlice(cName string, desiredFieldValue, observed
 	return true, nil
 }
 
-func (li *LateInitializer) handleMap(cName string, desiredFieldValue, observedFieldValue reflect.Value) (bool, error) {
+func (li *GenericLateInitializer) handleMap(cName string, desiredFieldValue, observedFieldValue reflect.Value) (bool, error) {
 	if observedFieldValue.IsNil() || !desiredFieldValue.IsNil() {
 		return false, nil
 	}

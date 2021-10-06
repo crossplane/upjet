@@ -17,20 +17,7 @@ limitations under the License.
 package json
 
 import (
-	"encoding/base64"
-
 	jsoniter "github.com/json-iterator/go"
-	"github.com/pkg/errors"
-)
-
-const (
-	errCannotParseState       = "cannot parse state"
-	errCannotDecodeMetadata   = "cannot decode state metadata"
-	errInvalidState           = "invalid state file"
-	errFmtIncompatibleVersion = "state version not supported, expecting 4 found %d"
-
-	errNotOneResource = "state file should contain exactly 1 resource"
-	errNotOneInstance = "state file should contain exactly 1 instance"
 )
 
 // NewStateV4 returns a new base StateV4 object.
@@ -89,86 +76,27 @@ type InstanceObjectStateV4 struct {
 	CreateBeforeDestroy bool `json:"create_before_destroy,omitempty"`
 }
 
-// UnmarshalStateV4 parses a given Terraform state as StateV4 object
-func UnmarshalStateV4(data []byte) (*StateV4, error) {
-	st := &StateV4{}
-	if err := JSParser.Unmarshal(data, st); err != nil {
-		return nil, errors.Wrap(err, errCannotParseState)
-	}
-
-	return st, errors.Wrap(st.Validate(), errInvalidState)
-}
-
-// BuildStateV4 builds a StateV4 object from the given base64 encoded state and sensitive attributes
-func BuildStateV4(encodedState string, attributesSensitive jsoniter.RawMessage) (*StateV4, error) {
-	m, err := base64.StdEncoding.DecodeString(encodedState)
-	if err != nil {
-		return nil, errors.Wrap(err, errCannotDecodeMetadata)
-	}
-
-	st, err := UnmarshalStateV4(m)
-	if err != nil {
-		return nil, errors.Wrap(err, errCannotParseState)
-	}
-
-	st.Resources[0].Instances[0].AttributeSensitivePaths = attributesSensitive
-
-	return st, nil
-}
-
-// Validate checks if the StateV4 is a valid Terraform managed resource state
-func (st *StateV4) Validate() error {
-	// We only recognize and support state file version 4 right now
-	if st.Version != 4 {
-		return errors.Errorf(errFmtIncompatibleVersion, st.Version)
-	}
-	// Terraform state files may contain more than 1 resources. And each resource
-	// could have more than 1 instances which is controlled by the count argument:
-	// https://www.terraform.io/docs/language/meta-arguments/count.html#basic-syntax
-	// In our case, we expect our state file will always contain exactly 1 instance of 1 resource.
-	if len(st.Resources) != 1 {
-		return errors.New(errNotOneResource)
-	}
-	if len(st.Resources[0].Instances) != 1 {
-		return errors.New(errNotOneInstance)
-	}
-
-	return nil
-}
-
 // GetAttributes returns attributes of the Terraform managed resource (i.e. first instance of first resource)
 func (st *StateV4) GetAttributes() jsoniter.RawMessage {
+	if st == nil || len(st.Resources) == 0 || len(st.Resources[0].Instances) == 0 {
+		return nil
+	}
 	return st.Resources[0].Instances[0].AttributesRaw
 }
 
 // GetSensitiveAttributes returns sensitive attributes of the Terraform managed resource (i.e. first instance of first resource)
 func (st *StateV4) GetSensitiveAttributes() jsoniter.RawMessage {
+	if st == nil || len(st.Resources) == 0 || len(st.Resources[0].Instances) == 0 {
+		return nil
+	}
 	return st.Resources[0].Instances[0].AttributeSensitivePaths
 }
 
 // GetPrivateRaw returns private attribute of the Terraform managed resource
 // that is used as metadata by the Terraform provider
 func (st *StateV4) GetPrivateRaw() []byte {
-	return st.Resources[0].Instances[0].PrivateRaw
-}
-
-// GetEncodedState returns base64 encoded sanitized (i.e. sensitive attributes removed) state
-func (st *StateV4) GetEncodedState() (string, error) {
-	sensitive := st.Resources[0].Instances[0].AttributeSensitivePaths
-	defer func() {
-		st.Resources[0].Instances[0].AttributeSensitivePaths = sensitive
-	}()
-
-	st.Resources[0].Instances[0].AttributeSensitivePaths = nil
-	b, err := JSParser.Marshal(st)
-	if err != nil {
-		return "", err
+	if st == nil || len(st.Resources) == 0 || len(st.Resources[0].Instances) == 0 {
+		return nil
 	}
-
-	return base64.StdEncoding.EncodeToString(b), nil
-}
-
-// Serialize serializes StateV4 object to byte array
-func (st *StateV4) Serialize() ([]byte, error) {
-	return JSParser.Marshal(st)
+	return st.Resources[0].Instances[0].PrivateRaw
 }

@@ -33,20 +33,23 @@ type Parameterizable interface {
 	SetParameters(map[string]interface{}) error
 }
 
-// MetadataProvider provides Terraform metadata for the Terraform managed resource
+// MetadataProvider provides Terraform metadata for the Terraform managed
+// resource.
 type MetadataProvider interface {
 	GetTerraformResourceType() string
-	GetTerraformResourceIdField() string
+	GetTerraformResourceIDField() string
 }
 
-// LateInitializer late-initializes the managed resource from observed Terraform state
+// LateInitializer late-initializes the managed resource from observed Terraform
+// state.
 type LateInitializer interface {
 	// LateInitialize this Terraformed resource using its observed tfState.
 	// returns True if the there are any spec changes for the resource.
 	LateInitialize(attrs []byte) (bool, error)
 }
 
-// Terraformed is a Kubernetes object representing a concrete terraform managed resource
+// Terraformed is a Kubernetes object representing a concrete terraform managed
+// resource.
 type Terraformed interface {
 	resource.Managed
 
