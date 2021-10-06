@@ -48,8 +48,8 @@ type Builder struct {
 }
 
 // Build returns parameters and observation types built out of Terraform schema.
-func (g *Builder) Build(name string, schema *schema.Resource, cfg *config.Resource) ([]*types.Named, twtypes.Comments, error) {
-	_, _, err := g.buildResource(schema, cfg, nil, nil, name)
+func (g *Builder) Build(cfg *config.Resource, schema *schema.Resource) ([]*types.Named, twtypes.Comments, error) {
+	_, _, err := g.buildResource(schema, cfg, nil, nil, cfg.Kind)
 	if len(cfg.Sensitive.CustomFieldPaths) > 0 {
 		return nil, nil, errors.Errorf("following sensitive custom field paths not supported: %s", cfg.Sensitive.CustomFieldPaths)
 	}
@@ -116,9 +116,9 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 		}
 
 		fieldNameCamel := fieldName.Camel
-		if e, ix := containsAt(cfg.Sensitive.CustomFieldPaths, tfFieldPath); e || sch.Sensitive {
-			if e {
-				cfg.Sensitive.CustomFieldPaths = remove(cfg.Sensitive.CustomFieldPaths, ix)
+		if index := containsAt(cfg.Sensitive.CustomFieldPaths, tfFieldPath); index != -1 || sch.Sensitive {
+			if index != -1 {
+				cfg.Sensitive.CustomFieldPaths = remove(cfg.Sensitive.CustomFieldPaths, index)
 			}
 
 			if isObservation(sch) {
@@ -131,7 +131,7 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 			cfg.Sensitive.AddFieldPath(tfFieldPath, xpFieldPath+sfx)
 			// todo(turkenh): do we need to support other field types as sensitive?
 			if fieldType.String() != "string" && fieldType.String() != "*string" {
-				return nil, nil, fmt.Errorf("got type \"%s\" for field \"%s\", only types \"string\" and \"*string\" supported as sensitive", fieldType.String(), fieldNameCamel)
+				return nil, nil, fmt.Errorf(`got type %q for field %q, only types "string" and "*string" supported as sensitive`, fieldType.String(), fieldNameCamel)
 			}
 			// Replace a parameter field with secretKeyRef if it is sensitive.
 			// If it is an observation field, it will be dropped.
@@ -320,13 +320,13 @@ func fieldPath(parts []string) string {
 	return seg.String()
 }
 
-func containsAt(ss []string, s string) (bool, int) {
+func containsAt(ss []string, s string) int {
 	for i, v := range ss {
 		if s == v {
-			return true, i
+			return i
 		}
 	}
-	return false, -1
+	return -1
 }
 
 func remove(ss []string, i int) []string {

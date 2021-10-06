@@ -30,8 +30,7 @@ import (
 const (
 	errCannotExpandWildcards = "cannot expand wildcards"
 
-	errFmtCannotGetStringForFieldPath  = "cannot not get a string for fieldpath %q"
-	errFmtCannotGetStringsForFieldPath = "cannot get strings matching field fieldpath: %q"
+	errFmtCannotGetStringForFieldPath = "cannot not get a string for fieldpath %q"
 )
 
 // SecretClient is the client to get sensitive data from kubernetes secrets
@@ -50,34 +49,22 @@ func GetConnectionDetails(from map[string]interface{}, mapping map[string]string
 	}
 	vals := make(map[string][]byte)
 	for tf := range mapping {
-		vs, err := stringsMatchingFieldPath(from, tf)
+		paved := fieldpath.Pave(from)
+		segments, err := paved.ExpandWildcards(tf)
 		if err != nil {
-			return nil, errors.Wrapf(err, errFmtCannotGetStringsForFieldPath, tf)
+			return nil, errors.Wrap(err, errCannotExpandWildcards)
 		}
-		for k, v := range vs {
-			vals[k] = v
+
+		for _, s := range segments {
+			v, err := paved.GetString(s)
+			if err != nil {
+				return nil, errors.Wrapf(err, errFmtCannotGetStringForFieldPath, s)
+			}
+			vals[s] = []byte(v)
 		}
 	}
 
 	return vals, nil
-}
-
-func stringsMatchingFieldPath(from map[string]interface{}, path string) (map[string][]byte, error) {
-	paved := fieldpath.Pave(from)
-	segments, err := paved.ExpandWildcards(path)
-	if err != nil {
-		return nil, errors.Wrap(err, errCannotExpandWildcards)
-	}
-
-	res := make(map[string][]byte, len(segments))
-	for _, s := range segments {
-		v, err := paved.GetString(s)
-		if err != nil {
-			return nil, errors.Wrapf(err, errFmtCannotGetStringForFieldPath, s)
-		}
-		res[s] = []byte(v)
-	}
-	return res, nil
 }
 
 // GetSensitiveParameters will collect sensitive information as terraform state
@@ -99,30 +86,30 @@ func GetSensitiveParameters(ctx context.Context, client SecretClient, from runti
 	if err = pv.GetValueInto("spec.forProvider", &xpParams); err != nil {
 		return err
 	}
-	paveXP := fieldpath.Pave(xpParams)
-	paveTF := fieldpath.Pave(into)
+	pavedJSON := fieldpath.Pave(xpParams)
+	pavedTF := fieldpath.Pave(into)
 
 	var sensitive []byte
-	for tf, xp := range mapping {
-		expXPs, err := paveXP.ExpandWildcards(xp)
+	for tfPath, jsonPath := range mapping {
+		jsonPathSet, err := pavedJSON.ExpandWildcards(jsonPath)
 		if err != nil {
 			return errors.Wrapf(err, "cannot expand wildcard for xp resource")
 		}
-		for _, expXP := range expXPs {
-			sel := v1.SecretKeySelector{}
-			if err = paveXP.GetValueInto(expXP, &sel); err != nil {
-				return errors.Wrapf(err, "cannot get SecretKeySelector from xp resource for fieldpath %q", expXP)
+		for _, expandedJSONPath := range jsonPathSet {
+			sel := &v1.SecretKeySelector{}
+			if err = pavedJSON.GetValueInto(expandedJSONPath, sel); err != nil {
+				return errors.Wrapf(err, "cannot get SecretKeySelector from xp resource for fieldpath %q", expandedJSONPath)
 			}
-			sensitive, err = client.GetSecretValue(ctx, sel)
+			sensitive, err = client.GetSecretValue(ctx, *sel)
 			if err != nil {
 				return errors.Wrapf(err, "cannot get secret value for %v", sel)
 			}
-			expTF, err := expandedTFPath(expXP, mapping)
+			expTF, err := expandedTFPath(expandedJSONPath, mapping)
 			if err != nil {
 				return err
 			}
-			if err = paveTF.SetString(expTF, string(sensitive)); err != nil {
-				return errors.Wrapf(err, "cannot set string as terraform attribute for fieldpath %q", tf)
+			if err = pavedTF.SetString(expTF, string(sensitive)); err != nil {
+				return errors.Wrapf(err, "cannot set string as terraform attribute for fieldpath %q", tfPath)
 			}
 		}
 	}

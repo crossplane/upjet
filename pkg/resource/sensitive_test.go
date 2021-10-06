@@ -114,10 +114,9 @@ func TestGetConnectionDetails(t *testing.T) {
 				data:  testInput,
 			},
 			want: want{
-				err: errors.Wrapf(errors.Wrapf(
+				err: errors.Wrapf(
 					errors.Errorf("%s: not a string", "top_object_with_number.key1"),
 					errFmtCannotGetStringForFieldPath, "top_object_with_number.key1"),
-					errFmtCannotGetStringsForFieldPath, "top_object_with_number[key1]"),
 			},
 		},
 		"WildcardMultipleFromMap": {
@@ -193,10 +192,9 @@ func TestGetConnectionDetails(t *testing.T) {
 				data:  testInput,
 			},
 			want: want{
-				err: errors.Wrapf(errors.Wrapf(
+				err: errors.Wrapf(
 					errors.Errorf("%s: not a string", "top_config_secretmap"),
 					errFmtCannotGetStringForFieldPath, "top_config_secretmap"),
-					errFmtCannotGetStringsForFieldPath, "top_config_secretmap"),
 			},
 		},
 		"UnexpectedWildcard": {
@@ -205,11 +203,10 @@ func TestGetConnectionDetails(t *testing.T) {
 				data:  testInput,
 			},
 			want: want{
-				err: errors.Wrapf(errors.Wrap(errors.Wrapf(
+				err: errors.Wrapf(errors.Wrapf(
 					errors.Errorf("%q: unexpected wildcard usage", "top_level_secret"),
 					"cannot expand wildcards for segments: %q", "top_level_secret[*]"),
 					errCannotExpandWildcards),
-					errFmtCannotGetStringsForFieldPath, "top_level_secret.*"),
 			},
 		},
 		"NoData": {
