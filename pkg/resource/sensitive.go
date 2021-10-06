@@ -19,6 +19,7 @@ package resource
 import (
 	"context"
 
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 
 	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
@@ -113,12 +114,20 @@ func GetSensitiveParameters(ctx context.Context, client SecretClient, from runti
 // GetSensitiveObservation will return sensitive information as terraform state
 // attributes by reading them from connection details.
 func GetSensitiveObservation(ctx context.Context, client SecretClient, from *v1.SecretReference, into map[string]interface{}) error {
+	if from == nil {
+		// No secret reference set
+		return nil
+	}
 	conn, err := client.GetSecretData(ctx, from)
+	if kerrors.IsNotFound(err) {
+		// Secret not available/created yet
+		return nil
+	}
 	if err != nil {
 		return errors.Wrapf(err, "cannot get connection secret")
 	}
-	paveTF := fieldpath.Pave(into)
 
+	paveTF := fieldpath.Pave(into)
 	for k, v := range conn {
 		if err = paveTF.SetString(k, string(v)); err != nil {
 			return errors.Wrapf(err, "cannot set sensitive string in tf attributes for key %q", k)
