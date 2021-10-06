@@ -14,10 +14,9 @@ require (
 	github.com/muvaf/typewriter v0.0.0-20210910160850-80e49fe1eb32
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/afero v1.6.0
-	go.uber.org/multierr v1.7.0
+	go.uber.org/multierr v1.7.0 // indirect
 	golang.org/x/tools v0.1.5
 	k8s.io/api v0.21.3
 	k8s.io/apimachinery v0.21.3
-	k8s.io/client-go v0.21.3
 	sigs.k8s.io/controller-runtime v0.9.6
 )

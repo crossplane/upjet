@@ -9,9 +9,8 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/crossplane-contrib/terrajet/pkg/json"
-	"github.com/crossplane-contrib/terrajet/pkg/terraform/resource"
-	"github.com/crossplane/crossplane-runtime/pkg/meta"
+	"github.com/crossplane-contrib/terrajet/pkg/resource"
+	"github.com/crossplane-contrib/terrajet/pkg/resource/json"
 	{{ .Imports }}
 )
 
@@ -20,8 +19,8 @@ func (mg *{{ .CRD.Kind }}) GetTerraformResourceType() string {
 	return "{{ .Terraform.ResourceType }}"
 }
 
-// GetTerraformResourceIdField returns Terraform identifier field for this {{ .CRD.Kind }}
-func (tr *{{ .CRD.Kind }}) GetTerraformResourceIdField() string {
+// GetTerraformResourceIDField returns Terraform identifier field for this {{ .CRD.Kind }}
+func (tr *{{ .CRD.Kind }}) GetTerraformResourceIDField() string {
 	return "{{ .Terraform.IdentifierField }}"
 }
 
@@ -87,8 +86,8 @@ func (tr *{{ .CRD.Kind }}) LateInitialize(attrs []byte) (bool, error) {
 	if err := json.TFParser.Unmarshal(attrs, params); err != nil {
 		return false, errors.Wrap(err, "failed to unmarshal Terraform state parameters for late-initialization")
 	}
-    li := conversion.NewLateInitializer(conversion.WithZeroValueJSONOmitEmptyFilter(conversion.CNameWildcard),
-        conversion.WithZeroElemPtrFilter(conversion.CNameWildcard))
+	li := resource.NewGenericLateInitializer(resource.WithZeroValueJSONOmitEmptyFilter(resource.CNameWildcard),
+		resource.WithZeroElemPtrFilter(resource.CNameWildcard))
 	return li.LateInitialize(&tr.Spec.ForProvider, params)
 }
 
