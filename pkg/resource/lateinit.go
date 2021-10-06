@@ -89,7 +89,7 @@ func zeroValueJSONOmitEmptyFilter(cName string) ValueFilter {
 			return false
 		case v.IsZero():
 			return true
-		case k == reflect.Slice && v.Len() == 0:
+		case (k == reflect.Slice || k == reflect.Map) && v.Len() == 0:
 			return true
 		case k == reflect.Ptr && v.Elem().IsZero():
 			return true
