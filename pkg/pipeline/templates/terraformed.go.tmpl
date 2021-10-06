@@ -5,8 +5,6 @@
 package {{ .CRD.APIVersion }}
 
 import (
-	"context"
-
 	"github.com/pkg/errors"
 
 	"github.com/crossplane-contrib/terrajet/pkg/resource"
@@ -24,8 +22,13 @@ func (tr *{{ .CRD.Kind }}) GetTerraformResourceIDField() string {
 	return "{{ .Terraform.IdentifierField }}"
 }
 
+// GetConnectionDetailsMapping for this {{ .CRD.Kind }}
+func (tr *{{ .CRD.Kind }}) GetConnectionDetailsMapping() map[string]string {
+  return map[string]string{ {{range $k, $v := .SensitiveFields}}"{{ $k }}": "{{ $v}}", {{end}} }
+}
+
 // GetObservation of this {{ .CRD.Kind }}
-func (tr *{{ .CRD.Kind }}) GetObservation(ctx context.Context, c resource.SecretClient) (map[string]interface{}, error) {
+func (tr *{{ .CRD.Kind }}) GetObservation() (map[string]interface{}, error) {
 	o, err := json.TFParser.Marshal(tr.Status.AtProvider)
 	if err != nil {
 		return nil, err
@@ -34,11 +37,7 @@ func (tr *{{ .CRD.Kind }}) GetObservation(ctx context.Context, c resource.Secret
 	if err := json.TFParser.Unmarshal(o, &base); err != nil {
 	  return nil, err
 	}
-  {{- if .SensitiveFields }}
-  return base, resource.GetSensitiveObservation(ctx, c, tr.GetWriteConnectionSecretToReference(), base)
-  {{- else }}
-  return base, nil
-  {{- end }}
+	return base, json.TFParser.Unmarshal(o, &base)
 }
 
 // SetObservation for this {{ .CRD.Kind }}
@@ -51,7 +50,7 @@ func (tr *{{ .CRD.Kind }}) SetObservation(obs map[string]interface{}) error {
 }
 
 // GetParameters of this {{ .CRD.Kind }}
-func (tr *{{ .CRD.Kind }}) GetParameters(ctx context.Context, c resource.SecretClient) (map[string]interface{}, error) {
+func (tr *{{ .CRD.Kind }}) GetParameters() (map[string]interface{}, error) {
 	p, err := json.TFParser.Marshal(tr.Spec.ForProvider)
 	if err != nil {
 		return nil, err
@@ -63,11 +62,7 @@ func (tr *{{ .CRD.Kind }}) GetParameters(ctx context.Context, c resource.SecretC
 	if err := json.TFParser.Unmarshal(p, &base); err != nil {
 		return nil, err
 	}
-	{{- if .SensitiveFields }}
-	return base, resource.GetSensitiveParameters(ctx, c, tr, base, map[string]string{ {{range $k, $v := .SensitiveFields}}"{{ $k }}": "{{ $v}}", {{end}} })
-	{{- else }}
-	return base, nil
-	{{- end }}
+	return base, json.TFParser.Unmarshal(p, &base)
 }
 
 // SetParameters for this {{ .CRD.Kind }}
@@ -91,12 +86,3 @@ func (tr *{{ .CRD.Kind }}) LateInitialize(attrs []byte) (bool, error) {
 	return li.LateInitialize(&tr.Spec.ForProvider, params)
 }
 
-
-// GetConnectionDetails of this {{ .CRD.Kind }}
-func (tr *{{ .CRD.Kind }}) GetConnectionDetails(obs map[string]interface{}) (map[string][]byte, error) {
-  {{- if .SensitiveFields }}
-  return resource.GetConnectionDetails(obs, map[string]string{ {{range $k, $v := .SensitiveFields}}"{{ $k }}": "{{ $v}}", {{end}} })
-  {{- else }}
-  return nil, nil
-  {{- end }}
-}

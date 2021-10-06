@@ -17,14 +17,10 @@ limitations under the License.
 package fake
 
 import (
-	"context"
-
 	"github.com/crossplane/crossplane-runtime/pkg/resource/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/json"
-
-	"github.com/crossplane-contrib/terrajet/pkg/resource"
 )
 
 // Observable is mock Observable.
@@ -33,7 +29,7 @@ type Observable struct {
 }
 
 // GetObservation is a mock.
-func (o *Observable) GetObservation(_ context.Context, _ resource.SecretClient) (map[string]interface{}, error) {
+func (o *Observable) GetObservation() (map[string]interface{}, error) {
 	return o.Observation, nil
 }
 
@@ -49,7 +45,7 @@ type Parameterizable struct {
 }
 
 // GetParameters is a mock.
-func (p *Parameterizable) GetParameters(_ context.Context, _ resource.SecretClient) (map[string]interface{}, error) {
+func (p *Parameterizable) GetParameters() (map[string]interface{}, error) {
 	return p.Parameters, nil
 }
 
@@ -59,15 +55,11 @@ func (p *Parameterizable) SetParameters(data map[string]interface{}) error {
 	return nil
 }
 
-// GetConnectionDetails is a mock.
-func (p *Parameterizable) GetConnectionDetails(_ map[string]interface{}) (map[string][]byte, error) {
-	return nil, nil
-}
-
 // MetadataProvider is mock MetadataProvider.
 type MetadataProvider struct {
-	Type    string
-	IDField string
+	Type                     string
+	IDField                  string
+	ConnectionDetailsMapping map[string]string
 }
 
 // GetTerraformResourceType is a mock.
@@ -78,6 +70,11 @@ func (mp *MetadataProvider) GetTerraformResourceType() string {
 // GetTerraformResourceIDField is a mock.
 func (mp *MetadataProvider) GetTerraformResourceIDField() string {
 	return mp.IDField
+}
+
+// GetConnectionDetailsMapping is a mock.
+func (mp *MetadataProvider) GetConnectionDetailsMapping() map[string]string {
+	return mp.ConnectionDetailsMapping
 }
 
 // LateInitializer is mock LateInitializer.

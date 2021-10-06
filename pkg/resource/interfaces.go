@@ -17,31 +17,20 @@ limitations under the License.
 package resource
 
 import (
-	"context"
-
-	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 )
 
-// SecretClient is the client to get sensitive data from kubernetes secrets
-//go:generate go run github.com/golang/mock/mockgen -copyright_file ../../hack/boilerplate.txt -destination ./fake/mocks/mock.go -package mocks github.com/crossplane-contrib/terrajet/pkg/resource SecretClient
-type SecretClient interface {
-	GetSecretData(ctx context.Context, ref *v1.SecretReference) (map[string][]byte, error)
-	GetSecretValue(ctx context.Context, sel v1.SecretKeySelector) ([]byte, error)
-}
-
 // Observable structs can get and set observations in the form of Terraform JSON.
 type Observable interface {
-	GetObservation(ctx context.Context, c SecretClient) (map[string]interface{}, error)
+	GetObservation() (map[string]interface{}, error)
 	SetObservation(map[string]interface{}) error
 }
 
 // Parameterizable structs can get and set parameters of the managed resource
 // using map form of Terraform JSON.
 type Parameterizable interface {
-	GetParameters(ctx context.Context, c SecretClient) (map[string]interface{}, error)
+	GetParameters() (map[string]interface{}, error)
 	SetParameters(map[string]interface{}) error
-	GetConnectionDetails(map[string]interface{}) (map[string][]byte, error)
 }
 
 // MetadataProvider provides Terraform metadata for the Terraform managed
@@ -49,6 +38,7 @@ type Parameterizable interface {
 type MetadataProvider interface {
 	GetTerraformResourceType() string
 	GetTerraformResourceIDField() string
+	GetConnectionDetailsMapping() map[string]string
 }
 
 // LateInitializer late-initializes the managed resource from observed Terraform

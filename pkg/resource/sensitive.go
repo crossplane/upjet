@@ -34,12 +34,22 @@ const (
 	errFmtCannotGetStringsForFieldPath = "cannot get strings matching field fieldpath: %q"
 )
 
+// SecretClient is the client to get sensitive data from kubernetes secrets
+//go:generate go run github.com/golang/mock/mockgen -copyright_file ../../hack/boilerplate.txt -destination ./fake/mocks/mock.go -package mocks github.com/crossplane-contrib/terrajet/pkg/resource SecretClient
+type SecretClient interface {
+	GetSecretData(ctx context.Context, ref *v1.SecretReference) (map[string][]byte, error)
+	GetSecretValue(ctx context.Context, sel v1.SecretKeySelector) ([]byte, error)
+}
+
 // GetConnectionDetails returns strings matching provided field paths in the
 // input data.
 // See the unit tests for examples.
-func GetConnectionDetails(from map[string]interface{}, at map[string]string) (map[string][]byte, error) {
+func GetConnectionDetails(from map[string]interface{}, mapping map[string]string) (map[string][]byte, error) {
+	if len(mapping) == 0 {
+		return nil, nil
+	}
 	vals := make(map[string][]byte)
-	for tf := range at {
+	for tf := range mapping {
 		vs, err := stringsMatchingFieldPath(from, tf)
 		if err != nil {
 			return nil, errors.Wrapf(err, errFmtCannotGetStringsForFieldPath, tf)
@@ -48,6 +58,7 @@ func GetConnectionDetails(from map[string]interface{}, at map[string]string) (ma
 			vals[k] = v
 		}
 	}
+
 	return vals, nil
 }
 
@@ -71,7 +82,15 @@ func stringsMatchingFieldPath(from map[string]interface{}, path string) (map[str
 
 // GetSensitiveParameters will collect sensitive information as terraform state
 // attributes by following secret references in the spec.
-func GetSensitiveParameters(ctx context.Context, client SecretClient, from runtime.Object, into map[string]interface{}, mapping map[string]string) error {
+func GetSensitiveParameters(ctx context.Context, client SecretClient, from runtime.Object, into map[string]interface{}, mapping map[string]string) error { //nolint: gocyclo
+	// Note(turkenh): Cyclomatic complexity of this function is slightly higher
+	// than the threshold but preferred to use nolint directive for better
+	// readability and not to split the logic.
+
+	if len(mapping) == 0 {
+		return nil
+	}
+
 	pv, err := fieldpath.PaveObject(from)
 	if err != nil {
 		return err
