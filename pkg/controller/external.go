@@ -160,7 +160,7 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot late initialize parameters")
 	}
 
-	conn, err := resource.GetConnectionDetails(attr, tr.GetConnectionDetailsMapping())
+	conn, err := resource.GetConnectionDetails(attr, tr.GetConnectionDetailsMapping(), tr.GetTerraformResourceIDField())
 	if err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot get connection details")
 	}
@@ -200,7 +200,7 @@ func (e *external) Create(ctx context.Context, mg xpresource.Managed) (managed.E
 		return managed.ExternalCreation{}, errors.Wrap(err, "cannot unmarshal state attributes")
 	}
 
-	conn, err := resource.GetConnectionDetails(attr, tr.GetConnectionDetailsMapping())
+	conn, err := resource.GetConnectionDetails(attr, tr.GetConnectionDetailsMapping(), tr.GetTerraformResourceIDField())
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, "cannot get connection details")
 	}

@@ -43,7 +43,7 @@ type SecretClient interface {
 // GetConnectionDetails returns strings matching provided field paths in the
 // input data.
 // See the unit tests for examples.
-func GetConnectionDetails(from map[string]interface{}, mapping map[string]string) (map[string][]byte, error) {
+func GetConnectionDetails(from map[string]interface{}, mapping map[string]string, idField string) (map[string][]byte, error) {
 	if len(mapping) == 0 {
 		return nil, nil
 	}
@@ -64,6 +64,10 @@ func GetConnectionDetails(from map[string]interface{}, mapping map[string]string
 		}
 	}
 
+	id, ok := from[idField].(string)
+	if ok {
+		vals[idField] = []byte(id)
+	}
 	return vals, nil
 }
 

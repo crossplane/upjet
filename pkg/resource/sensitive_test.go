@@ -99,6 +99,21 @@ func TestGetConnectionDetails(t *testing.T) {
 				},
 			},
 		},
+		"AddsIDIfExists": {
+			args: args{
+				paths: map[string]string{"top_level_secret": ""},
+				data: map[string]interface{}{
+					"id":               "secret-id",
+					"top_level_secret": "sensitive-data-top-level-secret",
+				},
+			},
+			want: want{
+				out: map[string][]byte{
+					"top_level_secret": []byte("sensitive-data-top-level-secret"),
+					"id":               []byte("secret-id"),
+				},
+			},
+		},
 		"SingleNonExisting": {
 			args: args{
 				paths: map[string]string{"missing_field": ""},
@@ -221,7 +236,7 @@ func TestGetConnectionDetails(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			got, gotErr := GetConnectionDetails(tc.data, tc.paths)
+			got, gotErr := GetConnectionDetails(tc.data, tc.paths, "id")
 			if diff := cmp.Diff(tc.want.err, gotErr, test.EquateErrors()); diff != "" {
 				t.Fatalf("GetFields(...): -want error, +got error: %s", diff)
 			}
