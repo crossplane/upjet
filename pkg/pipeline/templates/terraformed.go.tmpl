@@ -81,7 +81,7 @@ func (tr *{{ .CRD.Kind }}) LateInitialize(attrs []byte) (bool, error) {
 	}
 	opts := []resource.GenericLateInitializerOption{resource.WithZeroValueJSONOmitEmptyFilter(resource.CNameWildcard),
 	    resource.WithZeroElemPtrFilter(resource.CNameWildcard)}
-	{{ range .LateInitializer.OmittedFields -}}
+	{{ range .LateInitializer.IgnoredFields -}}
 	    opts = append(opts, resource.WithNameFilter("{{ . }}"))
 	{{ end }}
 

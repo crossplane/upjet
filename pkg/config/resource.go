@@ -86,9 +86,9 @@ type Sensitive struct {
 // LateInitializer represents configurations that control
 // late-initialization behaviour
 type LateInitializer struct {
-	// OmittedFields are the canonical field names to be skipped during
+	// IgnoredFields are the canonical field names to be skipped during
 	// late-initialization
-	OmittedFields []string
+	IgnoredFields []string
 }
 
 // GetFieldPaths returns the fieldPaths map for Sensitive

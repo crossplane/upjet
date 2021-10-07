@@ -70,7 +70,7 @@ func (tg *TerraformedGenerator) Generate(c *config.Resource) error {
 		},
 		"SensitiveFields": c.Sensitive.GetFieldPaths(),
 		"LateInitializer": map[string]interface{}{
-			"OmittedFields": c.LateInitializer.OmittedFields,
+			"IgnoredFields": c.LateInitializer.IgnoredFields,
 		},
 	}
 
