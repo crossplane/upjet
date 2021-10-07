@@ -79,8 +79,13 @@ func (tr *{{ .CRD.Kind }}) LateInitialize(attrs []byte) (bool, error) {
 	if err := json.TFParser.Unmarshal(attrs, params); err != nil {
 		return false, errors.Wrap(err, "failed to unmarshal Terraform state parameters for late-initialization")
 	}
-	li := resource.NewGenericLateInitializer(resource.WithZeroValueJSONOmitEmptyFilter(resource.CNameWildcard),
-		resource.WithZeroElemPtrFilter(resource.CNameWildcard))
+	opts := []resource.GenericLateInitializerOption{resource.WithZeroValueJSONOmitEmptyFilter(resource.CNameWildcard),
+	    resource.WithZeroElemPtrFilter(resource.CNameWildcard)}
+	{{ range .LateInitializer.IgnoredFields -}}
+	    opts = append(opts, resource.WithNameFilter("{{ . }}"))
+	{{ end }}
+
+	li := resource.NewGenericLateInitializer(opts...)
 	return li.LateInitialize(&tr.Spec.ForProvider, params)
 }
 

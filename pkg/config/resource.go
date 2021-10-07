@@ -83,6 +83,14 @@ type Sensitive struct {
 	fieldPaths map[string]string
 }
 
+// LateInitializer represents configurations that control
+// late-initialization behaviour
+type LateInitializer struct {
+	// IgnoredFields are the canonical field names to be skipped during
+	// late-initialization
+	IgnoredFields []string
+}
+
 // GetFieldPaths returns the fieldPaths map for Sensitive
 func (s *Sensitive) GetFieldPaths() map[string]string {
 	return s.fieldPaths
@@ -117,6 +125,9 @@ type Resource struct {
 
 	// Sensitive keeps the configuration to handle sensitive information
 	Sensitive Sensitive
+
+	// LateInitializer configuration to control late-initialization behaviour
+	LateInitializer LateInitializer
 
 	// TerraformIDFieldName is the name of the ID field in Terraform state of
 	// the resource. Its default is "id" and in almost all cases, you don't need

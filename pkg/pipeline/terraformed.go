@@ -69,6 +69,9 @@ func (tg *TerraformedGenerator) Generate(c *config.Resource) error {
 			"ResourceType":    c.TerraformResourceType,
 		},
 		"SensitiveFields": c.Sensitive.GetFieldPaths(),
+		"LateInitializer": map[string]interface{}{
+			"IgnoredFields": c.LateInitializer.IgnoredFields,
+		},
 	}
 
 	filePath := filepath.Join(tg.LocalDirectoryPath, fmt.Sprintf("zz_%s_terraformed.go", strings.ToLower(c.Kind)))

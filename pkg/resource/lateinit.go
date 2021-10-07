@@ -42,6 +42,7 @@ const (
 // GenericLateInitializer performs late-initialization of a Terraformed resource.
 type GenericLateInitializer struct {
 	valueFilters []ValueFilter
+	nameFilters  []NameFilter
 }
 
 // GenericLateInitializerOption are options that control the late-initialization
@@ -56,6 +57,24 @@ func NewGenericLateInitializer(opts ...GenericLateInitializerOption) *GenericLat
 		o(l)
 	}
 	return l
+}
+
+// NameFilter defines a late-initialization filter on CR field canonical names.
+// Fields with matching cnames will not be processed during late-initialization
+type NameFilter func(string) bool
+
+// WithNameFilter returns a GenericLateInitializer that causes to
+// skip initialization of the field with the specified canonical name
+func WithNameFilter(cname string) GenericLateInitializerOption {
+	return func(l *GenericLateInitializer) {
+		l.nameFilters = append(l.nameFilters, nameFilter(cname))
+	}
+}
+
+func nameFilter(cname string) NameFilter {
+	return func(s string) bool {
+		return cname == CNameWildcard || s == cname
+	}
 }
 
 // ValueFilter defines a late-initialization filter on CR field values.
@@ -177,6 +196,18 @@ func (li *GenericLateInitializer) handleStruct(parentName string, desiredObject 
 		desiredStructField := typeOfDesiredObject.Field(f)
 		desiredFieldValue := valueOfDesiredObject.FieldByName(desiredStructField.Name)
 		cName := getCanonicalName(parentName, desiredStructField.Name)
+		filtered := false
+
+		for _, f := range li.nameFilters {
+			if f(cName) {
+				filtered = true
+				break
+			}
+		}
+		if filtered {
+			continue
+		}
+
 		observedStructField, _ := typeOfObservedObject.FieldByName(desiredStructField.Name)
 		observedFieldValue := valueOfObservedObject.FieldByName(desiredStructField.Name)
 		desiredKeepField := false
@@ -186,7 +217,6 @@ func (li *GenericLateInitializer) handleStruct(parentName string, desiredObject 
 			continue
 		}
 
-		filtered := false
 		for _, f := range li.valueFilters {
 			if f(cName, observedStructField, observedFieldValue) {
 				// corresponding field value is filtered
@@ -272,6 +302,8 @@ func (li *GenericLateInitializer) handleSlice(cName string, desiredFieldValue, o
 		// if dealing with a slice of pointers
 		case reflect.Ptr:
 			_, err = li.handlePtr(cName, item.Elem(), observedFieldValue.Index(i))
+		case reflect.Struct:
+			_, err = li.handleStruct(cName, item.Interface(), observedFieldValue.Index(i).Addr().Interface())
 		case reflect.String, reflect.Bool, reflect.Int, reflect.Uint,
 			reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
 			reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
