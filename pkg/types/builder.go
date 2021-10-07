@@ -122,13 +122,13 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 			}
 
 			if isObservation(sch) {
-				cfg.Sensitive.AddFieldPath(tfFieldPath, xpFieldPath)
+				cfg.Sensitive.AddFieldPath(tfFieldPath, "status.atProvider."+xpFieldPath)
 				// Drop an observation field from schema if it is sensitive.
 				// Data will be stored in connection details secret
 				continue
 			}
 			sfx := "SecretRef"
-			cfg.Sensitive.AddFieldPath(tfFieldPath, xpFieldPath+sfx)
+			cfg.Sensitive.AddFieldPath(tfFieldPath, "spec.forProvider."+xpFieldPath+sfx)
 			// todo(turkenh): do we need to support other field types as sensitive?
 			if fieldType.String() != "string" && fieldType.String() != "*string" {
 				return nil, nil, fmt.Errorf(`got type %q for field %q, only types "string" and "*string" supported as sensitive`, fieldType.String(), fieldNameCamel)

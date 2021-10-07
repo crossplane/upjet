@@ -290,7 +290,7 @@ func TestGetSensitiveParameters(t *testing.T) {
 					"some_other_key": "some_other_value",
 				},
 				mapping: map[string]string{
-					"admin_password": "adminPasswordSecretRef",
+					"admin_password": "spec.forProvider.adminPasswordSecretRef",
 				},
 			},
 			want: want{
@@ -340,8 +340,8 @@ func TestGetSensitiveParameters(t *testing.T) {
 					"some_other_key": "some_other_value",
 				},
 				mapping: map[string]string{
-					"admin_password": "adminPasswordSecretRef",
-					"admin_key":      "adminKeySecretRef",
+					"admin_password": "spec.forProvider.adminPasswordSecretRef",
+					"admin_key":      "spec.forProvider.adminKeySecretRef",
 				},
 			},
 			want: want{
@@ -432,7 +432,7 @@ func TestGetSensitiveParameters(t *testing.T) {
 					},
 				},
 				mapping: map[string]string{
-					"database_users[*].password": "databaseUsers[*].passwordSecretRef",
+					"database_users[*].password": "spec.forProvider.databaseUsers[*].passwordSecretRef",
 				},
 			},
 			want: want{

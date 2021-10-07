@@ -18,6 +18,7 @@ package resource
 
 import (
 	"context"
+	"strings"
 
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -82,15 +83,10 @@ func GetSensitiveParameters(ctx context.Context, client SecretClient, from runti
 		return nil
 	}
 
-	pv, err := fieldpath.PaveObject(from)
+	pavedJSON, err := fieldpath.PaveObject(from)
 	if err != nil {
 		return err
 	}
-	xpParams := map[string]interface{}{}
-	if err = pv.GetValueInto("spec.forProvider", &xpParams); err != nil {
-		return err
-	}
-	pavedJSON := fieldpath.Pave(xpParams)
 	pavedTF := fieldpath.Pave(into)
 
 	var sensitive []byte
@@ -147,13 +143,13 @@ func GetSensitiveObservation(ctx context.Context, client SecretClient, from *v1.
 }
 
 func expandedTFPath(expandedXP string, mapping map[string]string) (string, error) {
-	sExp, err := fieldpath.Parse(expandedXP)
+	sExp, err := fieldpath.Parse(normalizeJSONPath(expandedXP))
 	if err != nil {
 		return "", err
 	}
 	tfWildcard := ""
 	for tf, xp := range mapping {
-		sxp, err := fieldpath.Parse(xp)
+		sxp, err := fieldpath.Parse(normalizeJSONPath(xp))
 		if err != nil {
 			return "", err
 		}
@@ -198,4 +194,8 @@ func expandedFor(expanded fieldpath.Segments, withWildcard fieldpath.Segments) b
 		}
 	}
 	return true
+}
+
+func normalizeJSONPath(s string) string {
+	return strings.TrimPrefix(strings.TrimPrefix(s, "spec.forProvider."), "status.atProvider.")
 }
