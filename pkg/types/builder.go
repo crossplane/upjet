@@ -21,8 +21,8 @@ import (
 	"go/token"
 	"go/types"
 	"sort"
-	"strings"
 
+	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	twtypes "github.com/muvaf/typewriter/pkg/types"
 	"github.com/pkg/errors"
@@ -48,12 +48,15 @@ type Builder struct {
 }
 
 // Build returns parameters and observation types built out of Terraform schema.
-func (g *Builder) Build(name string, schema *schema.Resource, refs config.References) ([]*types.Named, twtypes.Comments, error) {
-	_, _, err := g.buildResource(schema, refs, name)
+func (g *Builder) Build(cfg *config.Resource, schema *schema.Resource) ([]*types.Named, twtypes.Comments, error) {
+	_, _, err := g.buildResource(schema, cfg, nil, nil, cfg.Kind)
+	if len(cfg.Sensitive.CustomFieldPaths) > 0 {
+		return nil, nil, errors.Errorf("following sensitive custom field paths not supported: %s", cfg.Sensitive.CustomFieldPaths)
+	}
 	return g.genTypes, g.comments, errors.Wrapf(err, "cannot build the types")
 }
 
-func (g *Builder) buildResource(res *schema.Resource, refs config.References, names ...string) (*types.Named, *types.Named, error) { //nolint:gocyclo
+func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPath []string, xpPath []string, names ...string) (*types.Named, *types.Named, error) { //nolint:gocyclo
 	// NOTE(muvaf): There can be fields in the same CRD with same name but in
 	// different types. Since we generate the type using the field name, there
 	// can be collisions. In order to be able to generate unique names consistently,
@@ -62,13 +65,13 @@ func (g *Builder) buildResource(res *schema.Resource, refs config.References, na
 
 	paramTypeName, err := g.generateTypeName("Parameters", names...)
 	if err != nil {
-		return nil, nil, errors.Wrapf(err, "cannot generate parameters type name of %s", fieldPath(names...))
+		return nil, nil, errors.Wrapf(err, "cannot generate parameters type name of %s", fieldPath(names))
 	}
 	paramName := types.NewTypeName(token.NoPos, g.Package, paramTypeName, nil)
 
 	obsTypeName, err := g.generateTypeName("Observation", names...)
 	if err != nil {
-		return nil, nil, errors.Wrapf(err, "cannot generate observation type name of %s", fieldPath(names...))
+		return nil, nil, errors.Wrapf(err, "cannot generate observation type name of %s", fieldPath(names))
 	}
 	obsName := types.NewTypeName(token.NoPos, g.Package, obsTypeName, nil)
 
@@ -96,27 +99,58 @@ func (g *Builder) buildResource(res *schema.Resource, refs config.References, na
 		if comment.TerrajetOptions.FieldJSONTag != nil {
 			jsonTag = *comment.TerrajetOptions.FieldJSONTag
 		}
-		fieldType, err := g.buildSchema(sch, refs, append(names, fieldName.Camel))
+
+		tfPaths := append(tfPath, fieldName.Snake)
+		xpPaths := append(xpPath, fieldName.LowerCamel)
+
+		fieldType, err := g.buildSchema(sch, cfg, tfPaths, xpPaths, append(names, fieldName.Camel))
 		if err != nil {
 			return nil, nil, errors.Wrapf(err, "cannot infer type from schema of field %s", fieldName.Snake)
 		}
 
-		// Build the field path based on the fact that names is a slice of
-		// strings which contains the name of the parent fields sequentially.
-		// We skip the first element since it is the main CRD type.
-		fp := strings.Join(append(names[1:], fieldName.Camel), ".")
-		if ref, ok := refs[fp]; ok {
+		tfFieldPath := fieldPath(tfPaths)
+		xpFieldPath := fieldPath(xpPaths)
+		if ref, ok := cfg.References[tfFieldPath]; ok {
 			comment.Reference = ref
 			sch.Optional = true
 		}
-		field := types.NewField(token.NoPos, g.Package, fieldName.Camel, fieldType, false)
+
+		fieldNameCamel := fieldName.Camel
+		if index := containsAt(cfg.Sensitive.CustomFieldPaths, tfFieldPath); index != -1 || sch.Sensitive {
+			if index != -1 {
+				cfg.Sensitive.CustomFieldPaths = remove(cfg.Sensitive.CustomFieldPaths, index)
+			}
+
+			if isObservation(sch) {
+				cfg.Sensitive.AddFieldPath(tfFieldPath, "status.atProvider."+xpFieldPath)
+				// Drop an observation field from schema if it is sensitive.
+				// Data will be stored in connection details secret
+				continue
+			}
+			sfx := "SecretRef"
+			cfg.Sensitive.AddFieldPath(tfFieldPath, "spec.forProvider."+xpFieldPath+sfx)
+			// todo(turkenh): do we need to support other field types as sensitive?
+			if fieldType.String() != "string" && fieldType.String() != "*string" {
+				return nil, nil, fmt.Errorf(`got type %q for field %q, only types "string" and "*string" supported as sensitive`, fieldType.String(), fieldNameCamel)
+			}
+			// Replace a parameter field with secretKeyRef if it is sensitive.
+			// If it is an observation field, it will be dropped.
+			// Data will be loaded from the referenced secret key.
+			fieldNameCamel += sfx
+			// todo(hasan): do we need the pointer type if optional?
+			fieldType = typeSecretKeySelector
+
+			jsonTag += sfx
+			tfTag = "-"
+		}
+		field := types.NewField(token.NoPos, g.Package, fieldNameCamel, fieldType, false)
 
 		// NOTE(muvaf): If a field is not optional but computed, then it's
 		// definitely an observation field.
 		// If it's optional but also computed, then it means the field has a server
 		// side default but user can change it, so it needs to go to parameters.
 		switch {
-		case sch.Computed && !sch.Optional:
+		case isObservation(sch):
 			obsFields = append(obsFields, field)
 			obsTags = append(obsTags, fmt.Sprintf(`json:"%s,omitempty" tf:"%s"`, jsonTag, tfTag))
 		default:
@@ -129,14 +163,13 @@ func (g *Builder) buildResource(res *schema.Resource, refs config.References, na
 			comment.Required = &req
 			paramFields = append(paramFields, field)
 		}
-
-		if ref, ok := refs[fp]; ok {
+		if ref, ok := cfg.References[tfFieldPath]; ok {
 			refFields, refTags := g.generateReferenceFields(paramName, field, ref)
 			paramTags = append(paramTags, refTags...)
 			paramFields = append(paramFields, refFields...)
 		}
 
-		g.comments.AddFieldComment(paramName, fieldName.Camel, comment.Build())
+		g.comments.AddFieldComment(paramName, fieldNameCamel, comment.Build())
 	}
 
 	// NOTE(muvaf): Not every struct has both computed and configurable fields,
@@ -157,7 +190,7 @@ func (g *Builder) buildResource(res *schema.Resource, refs config.References, na
 	return paramType, obsType, nil
 }
 
-func (g *Builder) buildSchema(sch *schema.Schema, refs config.References, names []string) (types.Type, error) { // nolint:gocyclo
+func (g *Builder) buildSchema(sch *schema.Schema, cfg *config.Resource, tfPath []string, xpPath []string, names []string) (types.Type, error) { // nolint:gocyclo
 	switch sch.Type {
 	case schema.TypeBool:
 		if sch.Optional {
@@ -180,6 +213,8 @@ func (g *Builder) buildSchema(sch *schema.Schema, refs config.References, names 
 		}
 		return types.Universe.Lookup("string").Type(), nil
 	case schema.TypeMap, schema.TypeList, schema.TypeSet:
+		tfPath = append(tfPath, "*")
+		xpPath = append(xpPath, "*")
 		var elemType types.Type
 		var err error
 		switch et := sch.Elem.(type) {
@@ -194,19 +229,19 @@ func (g *Builder) buildSchema(sch *schema.Schema, refs config.References, names 
 			case schema.TypeString:
 				elemType = types.Universe.Lookup("string").Type()
 			case schema.TypeMap, schema.TypeList, schema.TypeSet, schema.TypeInvalid:
-				return nil, errors.Errorf("element type of %s is basic but not one of known basic types", fieldPath(names...))
+				return nil, errors.Errorf("element type of %s is basic but not one of known basic types", fieldPath(names))
 			}
 		case *schema.Schema:
-			elemType, err = g.buildSchema(et, refs, names)
+			elemType, err = g.buildSchema(et, cfg, tfPath, xpPath, names)
 			if err != nil {
-				return nil, errors.Wrapf(err, "cannot infer type from schema of element type of %s", fieldPath(names...))
+				return nil, errors.Wrapf(err, "cannot infer type from schema of element type of %s", fieldPath(names))
 			}
 		case *schema.Resource:
 			// TODO(muvaf): We skip the other type once we choose one of param
 			// or obs types. This might cause some fields to be completely omitted.
-			paramType, obsType, err := g.buildResource(et, refs, names...)
+			paramType, obsType, err := g.buildResource(et, cfg, tfPath, xpPath, names...)
 			if err != nil {
-				return nil, errors.Wrapf(err, "cannot infer type from resource schema of element type of %s", fieldPath(names...))
+				return nil, errors.Wrapf(err, "cannot infer type from resource schema of element type of %s", fieldPath(names))
 			}
 
 			// NOTE(muvaf): If a field is not optional but computed, then it's
@@ -214,19 +249,19 @@ func (g *Builder) buildSchema(sch *schema.Schema, refs config.References, names 
 			// If it's optional but also computed, then it means the field has a server
 			// side default but user can change it, so it needs to go to parameters.
 			switch {
-			case sch.Computed && !sch.Optional:
+			case isObservation(sch):
 				if obsType == nil {
-					return nil, errors.Errorf("element type of %s is computed but the underlying schema does not return observation type", fieldPath(names...))
+					return nil, errors.Errorf("element type of %s is computed but the underlying schema does not return observation type", fieldPath(names))
 				}
 				elemType = obsType
 			default:
 				if paramType == nil {
-					return nil, errors.Errorf("element type of %s is configurable but the underlying schema does not return a parameter type", fieldPath(names...))
+					return nil, errors.Errorf("element type of %s is configurable but the underlying schema does not return a parameter type", fieldPath(names))
 				}
 				elemType = paramType
 			}
 		default:
-			return nil, errors.Errorf("element type of %s should be either schema.Resource or schema.Schema", fieldPath(names...))
+			return nil, errors.Errorf("element type of %s should be either schema.Resource or schema.Schema", fieldPath(names))
 		}
 
 		// NOTE(muvaf): Maps and slices are already pointers, so we don't need to
@@ -259,6 +294,10 @@ func (g *Builder) generateTypeName(suffix string, names ...string) (string, erro
 	return "", errors.Errorf("could not generate a unique name for %s", n)
 }
 
+func isObservation(s *schema.Schema) bool {
+	return s.Computed && !s.Optional
+}
+
 func sortedKeys(m map[string]*schema.Schema) []string {
 	if len(m) == 0 {
 		return nil
@@ -273,10 +312,24 @@ func sortedKeys(m map[string]*schema.Schema) []string {
 	return keys
 }
 
-func fieldPath(names ...string) string {
-	path := ""
-	for _, n := range names {
-		path += "." + n
+func fieldPath(parts []string) string {
+	seg := make(fieldpath.Segments, len(parts))
+	for i, p := range parts {
+		seg[i] = fieldpath.Field(p)
 	}
-	return path
+	return seg.String()
+}
+
+func containsAt(ss []string, s string) int {
+	for i, v := range ss {
+		if s == v {
+			return i
+		}
+	}
+	return -1
+}
+
+func remove(ss []string, i int) []string {
+	ss[i] = ss[len(ss)-1]
+	return ss[:len(ss)-1]
 }

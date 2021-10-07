@@ -38,6 +38,7 @@ type Parameterizable interface {
 type MetadataProvider interface {
 	GetTerraformResourceType() string
 	GetTerraformResourceIDField() string
+	GetConnectionDetailsMapping() map[string]string
 }
 
 // LateInitializer late-initializes the managed resource from observed Terraform

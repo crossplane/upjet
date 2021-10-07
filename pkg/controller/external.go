@@ -90,7 +90,7 @@ func (c *Connector) Connect(ctx context.Context, mg xpresource.Managed) (managed
 		return nil, errors.Wrap(err, errGetTerraformSetup)
 	}
 
-	tf, err := c.store.Workspace(ctx, tr, ts)
+	tf, err := c.store.Workspace(ctx, &APISecretClient{kube: c.kube}, tr, ts)
 	if err != nil {
 		return nil, errors.Wrap(err, errGetWorkspace)
 	}
@@ -160,6 +160,11 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot late initialize parameters")
 	}
 
+	conn, err := resource.GetConnectionDetails(attr, tr.GetConnectionDetailsMapping(), tr.GetTerraformResourceIDField())
+	if err != nil {
+		return managed.ExternalObservation{}, errors.Wrap(err, "cannot get connection details")
+	}
+
 	// During creation (i.e. apply), Terraform already waits until resource is
 	// ready. So, I believe it would be safe to assume it is available if create
 	// step completed (i.e. resource exists).
@@ -170,11 +175,11 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 		return managed.ExternalObservation{}, errors.Wrap(err, errPlan)
 	}
 
-	// TODO(muvaf): Handle connection details.
 	return managed.ExternalObservation{
 		ResourceExists:          true,
 		ResourceUpToDate:        plan.UpToDate,
 		ResourceLateInitialized: lateInitedAnn || lateInitedParams,
+		ConnectionDetails:       conn,
 	}, nil
 }
 
@@ -194,11 +199,15 @@ func (e *external) Create(ctx context.Context, mg xpresource.Managed) (managed.E
 	if err := json.JSParser.Unmarshal(res.State.GetAttributes(), &attr); err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, "cannot unmarshal state attributes")
 	}
-	// TODO(muvaf): Handle connection details.
+
+	conn, err := resource.GetConnectionDetails(attr, tr.GetConnectionDetailsMapping(), tr.GetTerraformResourceIDField())
+	if err != nil {
+		return managed.ExternalCreation{}, errors.Wrap(err, "cannot get connection details")
+	}
 
 	// NOTE(muvaf): Only spec and metadata changes are saved after Create call.
 	_, err = lateInitializeAnnotations(tr, attr, string(res.State.GetPrivateRaw()))
-	return managed.ExternalCreation{}, errors.Wrap(err, "cannot late initialize annotations")
+	return managed.ExternalCreation{ConnectionDetails: conn}, errors.Wrap(err, "cannot late initialize annotations")
 }
 
 func (e *external) Update(ctx context.Context, mg xpresource.Managed) (managed.ExternalUpdate, error) {

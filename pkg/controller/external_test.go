@@ -83,11 +83,11 @@ func (c WorkspaceFns) Plan(ctx context.Context) (terraform.PlanResult, error) {
 }
 
 type StoreFns struct {
-	WorkspaceFn func(ctx context.Context, tr resource.Terraformed, ts terraform.Setup) (*terraform.Workspace, error)
+	WorkspaceFn func(ctx context.Context, c resource.SecretClient, tr resource.Terraformed, ts terraform.Setup) (*terraform.Workspace, error)
 }
 
-func (s StoreFns) Workspace(ctx context.Context, tr resource.Terraformed, ts terraform.Setup) (*terraform.Workspace, error) {
-	return s.WorkspaceFn(ctx, tr, ts)
+func (s StoreFns) Workspace(ctx context.Context, c resource.SecretClient, tr resource.Terraformed, ts terraform.Setup) (*terraform.Workspace, error) {
+	return s.WorkspaceFn(ctx, c, tr, ts)
 }
 
 func TestConnect(t *testing.T) {
@@ -132,7 +132,7 @@ func TestConnect(t *testing.T) {
 					return terraform.Setup{}, nil
 				},
 				store: StoreFns{
-					WorkspaceFn: func(_ context.Context, _ resource.Terraformed, _ terraform.Setup) (*terraform.Workspace, error) {
+					WorkspaceFn: func(_ context.Context, _ resource.SecretClient, _ resource.Terraformed, _ terraform.Setup) (*terraform.Workspace, error) {
 						return nil, errBoom
 					},
 				},
@@ -148,7 +148,7 @@ func TestConnect(t *testing.T) {
 					return terraform.Setup{}, nil
 				},
 				store: StoreFns{
-					WorkspaceFn: func(_ context.Context, _ resource.Terraformed, _ terraform.Setup) (*terraform.Workspace, error) {
+					WorkspaceFn: func(_ context.Context, _ resource.SecretClient, _ resource.Terraformed, _ terraform.Setup) (*terraform.Workspace, error) {
 						return nil, nil
 					},
 				},

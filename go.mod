@@ -3,8 +3,9 @@ module github.com/crossplane-contrib/terrajet
 go 1.16
 
 require (
-	github.com/crossplane/crossplane-runtime v0.15.1-0.20210930095326-d5661210733b
+	github.com/crossplane/crossplane-runtime v0.15.1-0.20211004150827-579c1833b513
 	github.com/fatih/camelcase v1.0.0
+	github.com/golang/mock v1.6.0
 	github.com/google/go-cmp v0.5.6
 	github.com/hashicorp/terraform-plugin-sdk/v2 v2.7.0
 	github.com/iancoleman/strcase v0.2.0

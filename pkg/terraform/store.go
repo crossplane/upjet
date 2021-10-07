@@ -94,12 +94,12 @@ type WorkspaceStore struct {
 // Workspace makes sure the Terraform workspace for the given resource is ready
 // to be used and returns the Workspace object configured to work in that
 // workspace folder in the filesystem.
-func (ws *WorkspaceStore) Workspace(ctx context.Context, tr resource.Terraformed, ts Setup) (*Workspace, error) {
+func (ws *WorkspaceStore) Workspace(ctx context.Context, c resource.SecretClient, tr resource.Terraformed, ts Setup) (*Workspace, error) {
 	dir := filepath.Join(ws.fs.GetTempDir(""), string(tr.GetUID()))
 	if err := ws.fs.MkdirAll(dir, os.ModePerm); err != nil {
 		return nil, errors.Wrap(err, "cannot create directory for workspace")
 	}
-	fp, err := NewFileProducer(dir, tr, ts)
+	fp, err := NewFileProducer(ctx, c, dir, tr, ts)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot create a new file producer")
 	}

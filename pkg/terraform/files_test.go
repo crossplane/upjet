@@ -17,6 +17,7 @@ limitations under the License.
 package terraform
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 
@@ -76,7 +77,7 @@ func TestWriteTFState(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			fs := afero.NewMemMapFs()
-			fp, err := NewFileProducer(dir, tc.args.tr, tc.args.s, WithFileSystem(fs))
+			fp, err := NewFileProducer(context.TODO(), nil, dir, tc.args.tr, tc.args.s, WithFileSystem(fs))
 			if err != nil {
 				t.Errorf("cannot initialize a file producer: %s", err.Error())
 			}
@@ -132,7 +133,7 @@ func TestWriteMainTF(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			fs := afero.NewMemMapFs()
-			fp, err := NewFileProducer(dir, tc.args.tr, tc.args.s, WithFileSystem(fs))
+			fp, err := NewFileProducer(context.TODO(), nil, dir, tc.args.tr, tc.args.s, WithFileSystem(fs))
 			if err != nil {
 				t.Errorf("cannot initialize a file producer: %s", err.Error())
 			}

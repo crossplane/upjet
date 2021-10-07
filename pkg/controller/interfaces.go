@@ -39,5 +39,5 @@ type Workspace interface {
 
 // Store is where we can get access to the Terraform workspace of given resource.
 type Store interface {
-	Workspace(ctx context.Context, tr resource.Terraformed, ts terraform.Setup) (*terraform.Workspace, error)
+	Workspace(ctx context.Context, c resource.SecretClient, tr resource.Terraformed, ts terraform.Setup) (*terraform.Workspace, error)
 }

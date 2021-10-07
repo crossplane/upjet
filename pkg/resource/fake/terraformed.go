@@ -57,8 +57,9 @@ func (p *Parameterizable) SetParameters(data map[string]interface{}) error {
 
 // MetadataProvider is mock MetadataProvider.
 type MetadataProvider struct {
-	Type    string
-	IDField string
+	Type                     string
+	IDField                  string
+	ConnectionDetailsMapping map[string]string
 }
 
 // GetTerraformResourceType is a mock.
@@ -69,6 +70,11 @@ func (mp *MetadataProvider) GetTerraformResourceType() string {
 // GetTerraformResourceIDField is a mock.
 func (mp *MetadataProvider) GetTerraformResourceIDField() string {
 	return mp.IDField
+}
+
+// GetConnectionDetailsMapping is a mock.
+func (mp *MetadataProvider) GetConnectionDetailsMapping() map[string]string {
+	return mp.ConnectionDetailsMapping
 }
 
 // LateInitializer is mock LateInitializer.

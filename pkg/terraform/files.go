@@ -17,17 +17,17 @@ limitations under the License.
 package terraform
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 
+	"github.com/crossplane/crossplane-runtime/pkg/meta"
+	"github.com/pkg/errors"
 	"github.com/spf13/afero"
 
 	"github.com/crossplane-contrib/terrajet/pkg/resource"
 	"github.com/crossplane-contrib/terrajet/pkg/resource/json"
-
-	"github.com/crossplane/crossplane-runtime/pkg/meta"
-	"github.com/pkg/errors"
 )
 
 const (
@@ -48,15 +48,23 @@ func WithFileSystem(fs afero.Fs) FileProducerOption {
 }
 
 // NewFileProducer returns a new FileProducer.
-func NewFileProducer(dir string, tr resource.Terraformed, ts Setup, opts ...FileProducerOption) (*FileProducer, error) {
+func NewFileProducer(ctx context.Context, client resource.SecretClient, dir string, tr resource.Terraformed, ts Setup, opts ...FileProducerOption) (*FileProducer, error) {
 	params, err := tr.GetParameters()
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot get parameters")
 	}
+	if err = resource.GetSensitiveParameters(ctx, client, tr, params, tr.GetConnectionDetailsMapping()); err != nil {
+		return nil, errors.Wrap(err, "cannot get sensitive parameters")
+	}
+
 	obs, err := tr.GetObservation()
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot get observation")
 	}
+	if err = resource.GetSensitiveObservation(ctx, client, tr.GetWriteConnectionSecretToReference(), obs); err != nil {
+		return nil, errors.Wrap(err, "cannot get sensitive observation")
+	}
+
 	fp := &FileProducer{
 		Resource:    tr,
 		Setup:       ts,

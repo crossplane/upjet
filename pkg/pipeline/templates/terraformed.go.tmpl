@@ -5,8 +5,7 @@
 package {{ .CRD.APIVersion }}
 
 import (
-   "github.com/crossplane/crossplane-runtime/pkg/meta"
-   "github.com/pkg/errors"
+	"github.com/pkg/errors"
 
 	"github.com/crossplane-contrib/terrajet/pkg/resource"
 	"github.com/crossplane-contrib/terrajet/pkg/resource/json"
@@ -21,6 +20,15 @@ func (mg *{{ .CRD.Kind }}) GetTerraformResourceType() string {
 // GetTerraformResourceIDField returns Terraform identifier field for this {{ .CRD.Kind }}
 func (tr *{{ .CRD.Kind }}) GetTerraformResourceIDField() string {
 	return "{{ .Terraform.IdentifierField }}"
+}
+
+// GetConnectionDetailsMapping for this {{ .CRD.Kind }}
+func (tr *{{ .CRD.Kind }}) GetConnectionDetailsMapping() map[string]string {
+  {{- if .SensitiveFields }}
+  return map[string]string{ {{range $k, $v := .SensitiveFields}}"{{ $k }}": "{{ $v}}", {{end}} }
+  {{- else }}
+  return nil
+  {{- end }}
 }
 
 // GetObservation of this {{ .CRD.Kind }}
@@ -75,3 +83,4 @@ func (tr *{{ .CRD.Kind }}) LateInitialize(attrs []byte) (bool, error) {
 		resource.WithZeroElemPtrFilter(resource.CNameWildcard))
 	return li.LateInitialize(&tr.Spec.ForProvider, params)
 }
+
