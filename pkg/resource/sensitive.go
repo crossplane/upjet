@@ -73,6 +73,11 @@ func GetConnectionDetails(from map[string]interface{}, mapping map[string]string
 			if err != nil {
 				return nil, errors.Wrapf(err, errFmtCannotGetStringForFieldPath, fp)
 			}
+			// Note(turkenh): k8s secrets uses a strict regex to validate secret
+			// keys which does not allow having brackets inside. So, we need to
+			// do a conversion to be able to store as connection secret keys.
+			// See https://github.com/crossplane-contrib/terrajet/pull/94 for
+			// more details.
 			k, err := fieldPathToSecretKey(fp)
 			if err != nil {
 				return nil, errors.Wrapf(err, "cannot convert fieldpath %q to secret key", fp)
