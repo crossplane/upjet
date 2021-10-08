@@ -193,25 +193,13 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 func (g *Builder) buildSchema(sch *schema.Schema, cfg *config.Resource, tfPath []string, xpPath []string, names []string) (types.Type, error) { // nolint:gocyclo
 	switch sch.Type {
 	case schema.TypeBool:
-		if sch.Optional {
-			return types.NewPointer(types.Universe.Lookup("bool").Type()), nil
-		}
-		return types.Universe.Lookup("bool").Type(), nil
+		return types.NewPointer(types.Universe.Lookup("bool").Type()), nil
 	case schema.TypeFloat:
-		if sch.Optional {
-			return types.NewPointer(types.Universe.Lookup("float64").Type()), nil
-		}
-		return types.Universe.Lookup("float64").Type(), nil
+		return types.NewPointer(types.Universe.Lookup("float64").Type()), nil
 	case schema.TypeInt:
-		if sch.Optional {
-			return types.NewPointer(types.Universe.Lookup("int64").Type()), nil
-		}
-		return types.Universe.Lookup("int64").Type(), nil
+		return types.NewPointer(types.Universe.Lookup("int64").Type()), nil
 	case schema.TypeString:
-		if sch.Optional {
-			return types.NewPointer(types.Universe.Lookup("string").Type()), nil
-		}
-		return types.Universe.Lookup("string").Type(), nil
+		return types.NewPointer(types.Universe.Lookup("string").Type()), nil
 	case schema.TypeMap, schema.TypeList, schema.TypeSet:
 		tfPath = append(tfPath, "*")
 		xpPath = append(xpPath, "*")
