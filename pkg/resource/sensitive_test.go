@@ -141,9 +141,9 @@ func TestGetConnectionDetails(t *testing.T) {
 			},
 			want: want{
 				out: map[string][]byte{
-					"top_config_secretmap[inner_config_secretmap.first]": []byte("sensitive-data-inner-first"),
-					"top_config_secretmap.inner_config_secretmap_second": []byte("sensitive-data-inner-second"),
-					"top_config_secretmap.inner_config_secretmap_third":  []byte("sensitive-data-inner-third"),
+					"top_config_secretmap...inner_config_secretmap.first...": []byte("sensitive-data-inner-first"),
+					"top_config_secretmap.inner_config_secretmap_second":     []byte("sensitive-data-inner-second"),
+					"top_config_secretmap.inner_config_secretmap_third":      []byte("sensitive-data-inner-third"),
 				},
 			},
 		},
@@ -154,9 +154,9 @@ func TestGetConnectionDetails(t *testing.T) {
 			},
 			want: want{
 				out: map[string][]byte{
-					"top_config_array[0].inner_some_field": []byte("non-sensitive-data-1"),
-					"top_config_array[1].inner_some_field": []byte("non-sensitive-data-2"),
-					"top_config_array[2].inner_some_field": []byte("non-sensitive-data-3"),
+					"top_config_array.0.inner_some_field": []byte("non-sensitive-data-1"),
+					"top_config_array.1.inner_some_field": []byte("non-sensitive-data-2"),
+					"top_config_array.2.inner_some_field": []byte("non-sensitive-data-3"),
 				},
 			},
 		},
@@ -167,9 +167,9 @@ func TestGetConnectionDetails(t *testing.T) {
 			},
 			want: want{
 				out: map[string][]byte{
-					"top_config_array[0].inner_config_array[0].bottom_level_secret": []byte("sensitive-data-bottom-level-1"),
-					"top_config_array[2].inner_config_array[0].bottom_level_secret": []byte("sensitive-data-bottom-level-3a"),
-					"top_config_array[2].inner_config_array[1].bottom_level_secret": []byte("sensitive-data-bottom-level-3b"),
+					"top_config_array.0.inner_config_array.0.bottom_level_secret": []byte("sensitive-data-bottom-level-1"),
+					"top_config_array.2.inner_config_array.0.bottom_level_secret": []byte("sensitive-data-bottom-level-3a"),
+					"top_config_array.2.inner_config_array.1.bottom_level_secret": []byte("sensitive-data-bottom-level-3b"),
 				},
 			},
 		},
@@ -180,8 +180,8 @@ func TestGetConnectionDetails(t *testing.T) {
 			},
 			want: want{
 				out: map[string][]byte{
-					"top_config_array[2].inner_config_array[0].bottom_level_secret": []byte("sensitive-data-bottom-level-3a"),
-					"top_config_array[2].inner_config_array[1].bottom_level_secret": []byte("sensitive-data-bottom-level-3b"),
+					"top_config_array.2.inner_config_array.0.bottom_level_secret": []byte("sensitive-data-bottom-level-3a"),
+					"top_config_array.2.inner_config_array.1.bottom_level_secret": []byte("sensitive-data-bottom-level-3b"),
 				},
 			},
 		},
@@ -193,11 +193,11 @@ func TestGetConnectionDetails(t *testing.T) {
 			want: want{
 				out: map[string][]byte{
 					"top_level_secret": []byte("sensitive-data-top-level-secret"),
-					"top_config_secretmap[inner_config_secretmap.first]":            []byte("sensitive-data-inner-first"),
-					"top_config_secretmap.inner_config_secretmap_second":            []byte("sensitive-data-inner-second"),
-					"top_config_secretmap.inner_config_secretmap_third":             []byte("sensitive-data-inner-third"),
-					"top_config_array[2].inner_config_array[0].bottom_level_secret": []byte("sensitive-data-bottom-level-3a"),
-					"top_config_array[2].inner_config_array[1].bottom_level_secret": []byte("sensitive-data-bottom-level-3b"),
+					"top_config_secretmap...inner_config_secretmap.first...":      []byte("sensitive-data-inner-first"),
+					"top_config_secretmap.inner_config_secretmap_second":          []byte("sensitive-data-inner-second"),
+					"top_config_secretmap.inner_config_secretmap_third":           []byte("sensitive-data-inner-third"),
+					"top_config_array.2.inner_config_array.0.bottom_level_secret": []byte("sensitive-data-bottom-level-3a"),
+					"top_config_array.2.inner_config_array.1.bottom_level_secret": []byte("sensitive-data-bottom-level-3b"),
 				},
 			},
 		},
@@ -539,9 +539,9 @@ func TestGetSensitiveObservation(t *testing.T) {
 				clientFn: func(client *mocks.MockSecretClient) {
 					client.EXPECT().GetSecretData(gomock.Any(), connSecretRef).
 						Return(map[string][]byte{
-							"database_users[0].password": []byte("foo"),
-							"database_users[1].password": []byte("bar"),
-							"database_users[2].password": []byte("baz"),
+							"database_users.0.password": []byte("foo"),
+							"database_users.1.password": []byte("bar"),
+							"database_users.2.password": []byte("baz"),
 						}, nil)
 				},
 				into: map[string]interface{}{
@@ -598,6 +598,175 @@ func TestGetSensitiveObservation(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.want.out, tc.args.into); diff != "" {
 				t.Errorf("GetSensitiveObservation(...) out = %v, want %v", tc.args.into, tc.want.out)
+			}
+		})
+	}
+}
+
+func Test_secretKeyToFieldPath(t *testing.T) {
+	type args struct {
+		s string
+	}
+	type want struct {
+		out string
+		err error
+	}
+	cases := map[string]struct {
+		args
+		want
+	}{
+		"EndIndex": {
+			args{
+				s: "kube_config.0",
+			},
+			want{
+				out: "kube_config[0]",
+				err: nil,
+			},
+		},
+		"MiddleIndex": {
+			args{
+				s: "kube_config.0.password",
+			},
+			want{
+				out: "kube_config[0].password",
+				err: nil,
+			},
+		},
+		"MultipleIndexes": {
+			args{
+				s: "kube_config.0.users.1.keys.0",
+			},
+			want{
+				out: "kube_config[0].users[1].keys[0]",
+				err: nil,
+			},
+		},
+		"EndsKeyWithDots": {
+			args{
+				s: "metadata.annotations...crossplane.io/external-name...",
+			},
+			want{
+				out: "metadata.annotations[crossplane.io/external-name]",
+				err: nil,
+			},
+		},
+		"MiddleKeyWithDots": {
+			args{
+				s: "users...crossplane.io/test-user....test",
+			},
+			want{
+				out: "users[crossplane.io/test-user].test",
+				err: nil,
+			},
+		},
+		"MultipleKeysWithDots": {
+			args{
+				s: "users...crossplane.io/test-user....test...abc.xyz...",
+			},
+			want{
+				out: "users[crossplane.io/test-user].test[abc.xyz]",
+				err: nil,
+			},
+		},
+		"MixedDotsAndIndexes": {
+			args{
+				s: "users...crossplane.io/test-user....test.0.users.3",
+			},
+			want{
+				out: "users[crossplane.io/test-user].test[0].users[3]",
+				err: nil,
+			},
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			got, gotErr := secretKeyToFieldPath(tc.args.s)
+			if diff := cmp.Diff(tc.want.err, gotErr, test.EquateErrors()); diff != "" {
+				t.Fatalf("secretKeyToFieldPath(...): -want error, +got error: %s", diff)
+			}
+			if diff := cmp.Diff(tc.want.out, got); diff != "" {
+				t.Errorf("secretKeyToFieldPath(...) out = %v, want %v", got, tc.want.out)
+			}
+		})
+	}
+}
+
+func Test_fieldPathToSecretKey(t *testing.T) {
+	type args struct {
+		s string
+	}
+	type want struct {
+		out string
+		err error
+	}
+	cases := map[string]struct {
+		args
+		want
+	}{
+		"EndIndex": {
+			args{
+				s: "kube_config[0]",
+			},
+			want{
+				out: "kube_config.0",
+				err: nil,
+			},
+		},
+		"MiddleIndex": {
+			args{
+				s: "kube_config[0].password",
+			},
+			want{
+				out: "kube_config.0.password",
+				err: nil,
+			},
+		},
+		"MultipleIndexes": {
+			args{
+				s: "kube_config[0].users[1].keys[0]",
+			},
+			want{
+				out: "kube_config.0.users.1.keys.0",
+				err: nil,
+			},
+		},
+		"EndsKeyWithDots": {
+			args{
+				s: "metadata.annotations[crossplane.io/external-name]",
+			},
+			want{
+				out: "metadata.annotations...crossplane.io/external-name...",
+				err: nil,
+			},
+		},
+		"MiddleKeyWithDots": {
+			args{
+				s: "users[crossplane.io/test-user].test",
+			},
+			want{
+				out: "users...crossplane.io/test-user....test",
+				err: nil,
+			},
+		},
+		"MixedDotsAndIndexes": {
+			args{
+				s: "users[crossplane.io/test-user].test[0].users[3]",
+			},
+			want{
+				out: "users...crossplane.io/test-user....test.0.users.3",
+				err: nil,
+			},
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			got, gotErr := fieldPathToSecretKey(tc.args.s)
+			if diff := cmp.Diff(tc.want.err, gotErr, test.EquateErrors()); diff != "" {
+				t.Fatalf("secretKeyToFieldPath(...): -want error, +got error: %s", diff)
+			}
+			if diff := cmp.Diff(tc.want.out, got); diff != "" {
+				t.Errorf("secretKeyToFieldPath(...) out = %v, want %v", got, tc.want.out)
 			}
 		})
 	}

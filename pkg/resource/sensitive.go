@@ -18,6 +18,8 @@ package resource
 
 import (
 	"context"
+	"fmt"
+	"regexp"
 	"strings"
 
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -33,6 +35,16 @@ const (
 
 	errFmtCannotGetStringForFieldPath = "cannot not get a string for fieldpath %q"
 )
+
+var reEndsWithIndex *regexp.Regexp
+var reMiddleIndex *regexp.Regexp
+var reInsideThreeDotsBlock *regexp.Regexp
+
+func init() {
+	reEndsWithIndex = regexp.MustCompile(`\.(\d+?)$`)
+	reMiddleIndex = regexp.MustCompile(`\.(\d+?)\.`)
+	reInsideThreeDotsBlock = regexp.MustCompile(`\.\.\.(.*?)\.\.\.`)
+}
 
 // SecretClient is the client to get sensitive data from kubernetes secrets
 //go:generate go run github.com/golang/mock/mockgen -copyright_file ../../hack/boilerplate.txt -destination ./fake/mocks/mock.go -package mocks github.com/crossplane-contrib/terrajet/pkg/resource SecretClient
@@ -51,17 +63,21 @@ func GetConnectionDetails(from map[string]interface{}, mapping map[string]string
 	vals := make(map[string][]byte)
 	for tf := range mapping {
 		paved := fieldpath.Pave(from)
-		segments, err := paved.ExpandWildcards(tf)
+		fieldPaths, err := paved.ExpandWildcards(tf)
 		if err != nil {
 			return nil, errors.Wrap(err, errCannotExpandWildcards)
 		}
 
-		for _, s := range segments {
-			v, err := paved.GetString(s)
+		for _, fp := range fieldPaths {
+			v, err := paved.GetString(fp)
 			if err != nil {
-				return nil, errors.Wrapf(err, errFmtCannotGetStringForFieldPath, s)
+				return nil, errors.Wrapf(err, errFmtCannotGetStringForFieldPath, fp)
 			}
-			vals[s] = []byte(v)
+			k, err := fieldPathToSecretKey(fp)
+			if err != nil {
+				return nil, errors.Wrapf(err, "cannot convert fieldpath %q to secret key", fp)
+			}
+			vals[k] = []byte(v)
 		}
 	}
 
@@ -135,8 +151,12 @@ func GetSensitiveObservation(ctx context.Context, client SecretClient, from *v1.
 
 	paveTF := fieldpath.Pave(into)
 	for k, v := range conn {
-		if err = paveTF.SetString(k, string(v)); err != nil {
-			return errors.Wrapf(err, "cannot set sensitive string in tf attributes for key %q", k)
+		fp, err := secretKeyToFieldPath(k)
+		if err != nil {
+			return errors.Wrapf(err, "cannot convert secret key %q to fieldpath", k)
+		}
+		if err = paveTF.SetString(fp, string(v)); err != nil {
+			return errors.Wrapf(err, "cannot set sensitive string in tf attributes for fieldpath %q", fp)
 		}
 	}
 	return nil
@@ -198,4 +218,38 @@ func expandedFor(expanded fieldpath.Segments, withWildcard fieldpath.Segments) b
 
 func normalizeJSONPath(s string) string {
 	return strings.TrimPrefix(strings.TrimPrefix(s, "spec.forProvider."), "status.atProvider.")
+}
+
+func secretKeyToFieldPath(s string) (string, error) {
+	s1 := reInsideThreeDotsBlock.ReplaceAllString(s, "[$1]")
+	s2 := reEndsWithIndex.ReplaceAllString(s1, "[$1]")
+	s3 := reMiddleIndex.ReplaceAllString(s2, "[$1].")
+	seg, err := fieldpath.Parse(s3)
+	if err != nil {
+		return "", errors.Wrapf(err, "cannot parse secret key %q as fieldpath", s3)
+	}
+	return seg.String(), nil
+}
+
+func fieldPathToSecretKey(s string) (string, error) {
+	sg, err := fieldpath.Parse(s)
+	if err != nil {
+		return "", errors.Wrapf(err, "cannot parse %q as fieldpath", s)
+	}
+
+	var b strings.Builder
+	for _, s := range sg {
+		switch s.Type {
+		case fieldpath.SegmentField:
+			if strings.ContainsRune(s.Field, '.') {
+				b.WriteString(fmt.Sprintf("...%s...", s.Field))
+				continue
+			}
+			b.WriteString(fmt.Sprintf(".%s", s.Field))
+		case fieldpath.SegmentIndex:
+			b.WriteString(fmt.Sprintf(".%d", s.Index))
+		}
+	}
+
+	return strings.TrimPrefix(b.String(), "."), nil
 }
