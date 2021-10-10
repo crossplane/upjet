@@ -25,7 +25,6 @@ import (
 type Operation struct {
 	Type string
 
-	err       error
 	startTime *time.Time
 	endTime   *time.Time
 	mu        sync.RWMutex
@@ -47,20 +46,6 @@ func (o *Operation) MarkEnd() {
 	defer o.mu.Unlock()
 	now := time.Now()
 	o.endTime = &now
-}
-
-// SetErr sets the operation error.
-func (o *Operation) SetErr(err error) {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	o.err = err
-}
-
-// Err returns the operation error.
-func (o *Operation) Err() error {
-	o.mu.RLock()
-	defer o.mu.RUnlock()
-	return o.err
 }
 
 // Flush cleans the operation information.

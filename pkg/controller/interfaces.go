@@ -30,15 +30,22 @@ import (
 
 // Workspace is the set of methods that are needed for the controller to work.
 type Workspace interface {
-	ApplyAsync(callback terraform.CallbackFn) error
-	Apply(ctx context.Context) (terraform.ApplyResult, error)
-	DestroyAsync() error
-	Destroy(ctx context.Context) error
-	Refresh(ctx context.Context) (terraform.RefreshResult, error)
-	Plan(ctx context.Context) (terraform.PlanResult, error)
+	ApplyAsync(terraform.CallbackFn) error
+	Apply(context.Context) (terraform.ApplyResult, error)
+	DestroyAsync(terraform.CallbackFn) error
+	Destroy(context.Context) error
+	Refresh(context.Context) (terraform.RefreshResult, error)
+	Plan(context.Context) (terraform.PlanResult, error)
 }
 
 // Store is where we can get access to the Terraform workspace of given resource.
 type Store interface {
 	Workspace(ctx context.Context, c resource.SecretClient, tr resource.Terraformed, ts terraform.Setup, cfg config.Resource) (*terraform.Workspace, error)
+}
+
+// CallbackProvider provides functions that can be called with the result of
+// async operations.
+type CallbackProvider interface {
+	Apply(name string) terraform.CallbackFn
+	Destroy(name string) terraform.CallbackFn
 }
