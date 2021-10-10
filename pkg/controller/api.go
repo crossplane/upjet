@@ -81,7 +81,7 @@ func (ac *APICallbacks) Apply(name string) terraform.CallbackFn {
 		if kErr := ac.kube.Get(ctx, nn, tr); kErr != nil {
 			return errors.Wrap(kErr, "cannot get Terraformed resource")
 		}
-		tr.SetConditions(resource.LastOperationCondition(err))
+		tr.SetConditions(resource.AsyncOperationCondition(err))
 		return errors.Wrap(ac.kube.Status().Update(ctx, tr), errStatusUpdate)
 	}
 }
@@ -95,7 +95,7 @@ func (ac *APICallbacks) Destroy(name string) terraform.CallbackFn {
 		if kErr := ac.kube.Get(ctx, nn, tr); kErr != nil {
 			return errors.Wrap(kErr, "cannot get Terraformed resource")
 		}
-		tr.SetConditions(resource.LastOperationCondition(err))
+		tr.SetConditions(resource.AsyncOperationCondition(err))
 		return errors.Wrap(ac.kube.Status().Update(ctx, tr), errStatusUpdate)
 	}
 }

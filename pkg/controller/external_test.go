@@ -183,9 +183,8 @@ func TestConnect(t *testing.T) {
 
 func TestObserve(t *testing.T) {
 	type args struct {
-		w     Workspace
-		async bool
-		obj   xpresource.Managed
+		w   Workspace
+		obj xpresource.Managed
 	}
 	type want struct {
 		obs managed.ExternalObservation

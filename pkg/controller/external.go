@@ -111,7 +111,7 @@ type external struct {
 	callback  CallbackProvider
 }
 
-func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.ExternalObservation, error) {
+func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.ExternalObservation, error) { //nolint:gocyclo
 	// We skip the gocyclo check because most of the operations are straight-forward
 	// and serial.
 	// TODO(muvaf): Look for ways to reduce the cyclomatic complexity without
@@ -188,7 +188,7 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 }
 
 func (e *external) Create(ctx context.Context, mg xpresource.Managed) (managed.ExternalCreation, error) {
-	if e.callback != nil {
+	if e.config.UseAsync {
 		return managed.ExternalCreation{}, errors.Wrap(e.workspace.ApplyAsync(e.callback.Apply(mg.GetName())), errStartAsyncApply)
 	}
 	tr, ok := mg.(resource.Terraformed)
@@ -215,7 +215,7 @@ func (e *external) Create(ctx context.Context, mg xpresource.Managed) (managed.E
 }
 
 func (e *external) Update(ctx context.Context, mg xpresource.Managed) (managed.ExternalUpdate, error) {
-	if e.callback != nil {
+	if e.config.UseAsync {
 		return managed.ExternalUpdate{}, errors.Wrap(e.workspace.ApplyAsync(e.callback.Apply(mg.GetName())), errStartAsyncApply)
 	}
 	tr, ok := mg.(resource.Terraformed)
@@ -234,7 +234,7 @@ func (e *external) Update(ctx context.Context, mg xpresource.Managed) (managed.E
 }
 
 func (e *external) Delete(ctx context.Context, mg xpresource.Managed) error {
-	if e.callback != nil {
+	if e.config.UseAsync {
 		return errors.Wrap(e.workspace.DestroyAsync(e.callback.Destroy(mg.GetName())), errStartAsyncDestroy)
 	}
 	return errors.Wrap(e.workspace.Destroy(ctx), errDestroy)
