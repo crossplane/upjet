@@ -21,6 +21,7 @@ import (
 	"go/token"
 	"go/types"
 	"sort"
+	"strings"
 
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -91,14 +92,8 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 		if err != nil {
 			return nil, nil, errors.Wrapf(err, "cannot build comment for description: %s", sch.Description)
 		}
-		tfTag := fieldName.Snake
-		jsonTag := fieldName.LowerCamelComputed
-		if comment.TerrajetOptions.FieldTFTag != nil {
-			tfTag = *comment.TerrajetOptions.FieldTFTag
-		}
-		if comment.TerrajetOptions.FieldJSONTag != nil {
-			jsonTag = *comment.TerrajetOptions.FieldJSONTag
-		}
+		tfTag := fmt.Sprintf("%s,omitempty", fieldName.Snake)
+		jsonTag := fmt.Sprintf("%s,omitempty", fieldName.LowerCamelComputed)
 
 		tfPaths := append(tfPath, fieldName.Snake)
 		xpPaths := append(xpPath, fieldName.LowerCamel)
@@ -140,10 +135,16 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 			// todo(hasan): do we need the pointer type if optional?
 			fieldType = typeSecretKeySelector
 
-			jsonTag += sfx
+			jsonTag = fmt.Sprintf("%s,omitempty", NewNameFromCamel(fieldNameCamel).LowerCamelComputed)
 			tfTag = "-"
 		}
 		field := types.NewField(token.NoPos, g.Package, fieldNameCamel, fieldType, false)
+		if comment.TerrajetOptions.FieldTFTag != nil {
+			tfTag = *comment.TerrajetOptions.FieldTFTag
+		}
+		if comment.TerrajetOptions.FieldJSONTag != nil {
+			jsonTag = *comment.TerrajetOptions.FieldJSONTag
+		}
 
 		// NOTE(muvaf): If a field is not optional but computed, then it's
 		// definitely an observation field.
@@ -152,12 +153,15 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 		switch {
 		case isObservation(sch):
 			obsFields = append(obsFields, field)
-			obsTags = append(obsTags, fmt.Sprintf(`json:"%s,omitempty" tf:"%s,omitempty"`, jsonTag, tfTag))
+			obsTags = append(obsTags, fmt.Sprintf(`json:"%s" tf:"%s"`, jsonTag, tfTag))
 		default:
 			if sch.Optional {
-				paramTags = append(paramTags, fmt.Sprintf(`json:"%s,omitempty" tf:"%s,omitempty"`, jsonTag, tfTag))
+				paramTags = append(paramTags, fmt.Sprintf(`json:"%s" tf:"%s"`, jsonTag, tfTag))
 			} else {
-				paramTags = append(paramTags, fmt.Sprintf(`json:"%s" tf:"%s,omitempty"`, jsonTag, tfTag))
+				// Required fields should not have omitempty tag in json tag.
+				// TODO(muvaf): This overrides user intent if they provided custom
+				// JSON tag.
+				paramTags = append(paramTags, fmt.Sprintf(`json:"%s" tf:"%s"`, strings.TrimSuffix(jsonTag, ",omitempty"), tfTag))
 			}
 			req := !sch.Optional
 			comment.Required = &req
