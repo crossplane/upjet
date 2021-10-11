@@ -152,12 +152,12 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 		switch {
 		case isObservation(sch):
 			obsFields = append(obsFields, field)
-			obsTags = append(obsTags, fmt.Sprintf(`json:"%s,omitempty" tf:"%s"`, jsonTag, tfTag))
+			obsTags = append(obsTags, fmt.Sprintf(`json:"%s,omitempty" tf:"%s,omitempty"`, jsonTag, tfTag))
 		default:
 			if sch.Optional {
-				paramTags = append(paramTags, fmt.Sprintf(`json:"%s,omitempty" tf:"%s"`, jsonTag, tfTag))
+				paramTags = append(paramTags, fmt.Sprintf(`json:"%s,omitempty" tf:"%s,omitempty"`, jsonTag, tfTag))
 			} else {
-				paramTags = append(paramTags, fmt.Sprintf(`json:"%s" tf:"%s"`, jsonTag, tfTag))
+				paramTags = append(paramTags, fmt.Sprintf(`json:"%s" tf:"%s,omitempty"`, jsonTag, tfTag))
 			}
 			req := !sch.Optional
 			comment.Required = &req
