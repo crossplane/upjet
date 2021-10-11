@@ -44,8 +44,8 @@ func (g *Builder) generateReferenceFields(t *types.TypeName, f *types.Var, r con
 
 	rn := NewNameFromCamel(rfn)
 	sn := NewNameFromCamel(sfn)
-	refTag := fmt.Sprintf(`json:"%s,omitempty" tf:"-"`, rn.LowerCamel)
-	selTag := fmt.Sprintf(`json:"%s,omitempty" tf:"-"`, sn.LowerCamel)
+	refTag := fmt.Sprintf(`json:"%s,omitempty" tf:"-"`, rn.LowerCamelComputed)
+	selTag := fmt.Sprintf(`json:"%s,omitempty" tf:"-"`, sn.LowerCamelComputed)
 
 	var tr types.Type
 	tr = types.NewPointer(typeReferenceField)
