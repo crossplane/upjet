@@ -52,6 +52,7 @@ type Setup struct {
 	Version       string
 	Requirement   ProviderRequirement
 	Configuration ProviderConfiguration
+	Env           []string
 }
 
 // WorkspaceStoreOption lets you configure the workspace store.
@@ -127,6 +128,7 @@ func (ws *WorkspaceStore) Workspace(ctx context.Context, c resource.SecretClient
 	if xpresource.Ignore(os.IsNotExist, err) != nil {
 		return nil, errors.Wrap(err, "cannot stat init lock file")
 	}
+	w.env = ts.Env
 	// We need to initialize only if the workspace hasn't been initialized yet.
 	if !os.IsNotExist(err) {
 		return w, nil
