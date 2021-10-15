@@ -22,9 +22,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/pkg/errors"
 	"github.com/spf13/afero"
+
+	"github.com/crossplane/crossplane-runtime/pkg/meta"
 
 	"github.com/crossplane-contrib/terrajet/pkg/resource"
 	"github.com/crossplane-contrib/terrajet/pkg/resource/json"
@@ -125,7 +126,7 @@ func (fp *FileProducer) WriteTFState() error {
 			ProviderConfig: fmt.Sprintf(`provider["registry.terraform.io/%s"]`, fp.Setup.Requirement.Source),
 			Instances: []json.InstanceObjectStateV4{
 				{
-					SchemaVersion: 0,
+					SchemaVersion: uint64(fp.Resource.GetTerraformSchemaVersion()),
 					PrivateRaw:    privateRaw,
 					AttributesRaw: attr,
 				},

@@ -38,6 +38,7 @@ type Parameterizable interface {
 type MetadataProvider interface {
 	GetTerraformResourceType() string
 	GetTerraformResourceIDField() string
+	GetTerraformSchemaVersion() int
 	GetConnectionDetailsMapping() map[string]string
 }
 

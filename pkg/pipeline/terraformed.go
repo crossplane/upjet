@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/muvaf/typewriter/pkg/wrapper"
 	"github.com/pkg/errors"
 
@@ -47,7 +48,7 @@ type TerraformedGenerator struct {
 }
 
 // Generate writes generated Terraformed interface functions
-func (tg *TerraformedGenerator) Generate(c *config.Resource) error {
+func (tg *TerraformedGenerator) Generate(c *config.Resource, sch *schema.Resource) error {
 	trFile := wrapper.NewFile(tg.pkg.Path(), tg.pkg.Name(), templates.TerraformedTemplate,
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath("hack/boilerplate.go.txt"), // todo
@@ -62,7 +63,7 @@ func (tg *TerraformedGenerator) Generate(c *config.Resource) error {
 			"Kind":                  c.Kind,
 			"ConfigureExternalName": cfgPath,
 		},
-		"Terraform": map[string]string{
+		"Terraform": map[string]interface{}{
 			// TODO(hasan): This identifier is used to generate external name.
 			//  However, external-name generation is not as straightforward as
 			//  just finding out the identifier field since Terraform uses
@@ -71,6 +72,7 @@ func (tg *TerraformedGenerator) Generate(c *config.Resource) error {
 			//  https://github.com/crossplane-contrib/terrajet/issues/11
 			"IdentifierField": c.TerraformIDFieldName,
 			"ResourceType":    c.TerraformResourceType,
+			"SchemaVersion":   sch.SchemaVersion,
 		},
 		"SensitiveFields": c.Sensitive.GetFieldPaths(),
 		"LateInitializer": map[string]interface{}{

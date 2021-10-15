@@ -88,3 +88,7 @@ func (tr *{{ .CRD.Kind }}) LateInitialize(attrs []byte) (bool, error) {
 	return li.LateInitialize(&tr.Spec.ForProvider, params)
 }
 
+// GetTerraformSchemaVersion returns the associated Terraform schema version
+func (tr *{{ .CRD.Kind }}) GetTerraformSchemaVersion() int {
+    return {{ .Terraform.SchemaVersion }}
+}
