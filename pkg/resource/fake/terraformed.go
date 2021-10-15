@@ -17,10 +17,11 @@ limitations under the License.
 package fake
 
 import (
-	"github.com/crossplane/crossplane-runtime/pkg/resource/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/json"
+
+	"github.com/crossplane/crossplane-runtime/pkg/resource/fake"
 )
 
 // Observable is mock Observable.
@@ -59,6 +60,7 @@ func (p *Parameterizable) SetParameters(data map[string]interface{}) error {
 type MetadataProvider struct {
 	Type                     string
 	IDField                  string
+	SchemaVersion            int
 	ConnectionDetailsMapping map[string]string
 }
 
@@ -70,6 +72,11 @@ func (mp *MetadataProvider) GetTerraformResourceType() string {
 // GetTerraformResourceIDField is a mock.
 func (mp *MetadataProvider) GetTerraformResourceIDField() string {
 	return mp.IDField
+}
+
+// GetTerraformSchemaVersion is a mock.
+func (mp *MetadataProvider) GetTerraformSchemaVersion() int {
+	return mp.SchemaVersion
 }
 
 // GetConnectionDetailsMapping is a mock.
