@@ -22,11 +22,11 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/pkg/errors"
 	"github.com/spf13/afero"
 
-	"github.com/crossplane/crossplane-runtime/pkg/meta"
-
+	"github.com/crossplane-contrib/terrajet/pkg/config"
 	"github.com/crossplane-contrib/terrajet/pkg/resource"
 	"github.com/crossplane-contrib/terrajet/pkg/resource/json"
 )
@@ -48,8 +48,24 @@ func WithFileSystem(fs afero.Fs) FileProducerOption {
 	}
 }
 
+// WithConfig sets the resource configuration to be used.
+func WithConfig(cfg config.Resource) FileProducerOption {
+	return func(fp *FileProducer) {
+		fp.Config = cfg
+	}
+}
+
 // NewFileProducer returns a new FileProducer.
 func NewFileProducer(ctx context.Context, client resource.SecretClient, dir string, tr resource.Terraformed, ts Setup, opts ...FileProducerOption) (*FileProducer, error) {
+	fp := &FileProducer{
+		Resource: tr,
+		Setup:    ts,
+		Dir:      dir,
+		fs:       afero.Afero{Fs: afero.NewOsFs()},
+	}
+	for _, f := range opts {
+		f(fp)
+	}
 	params, err := tr.GetParameters()
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot get parameters")
@@ -57,6 +73,11 @@ func NewFileProducer(ctx context.Context, client resource.SecretClient, dir stri
 	if err = resource.GetSensitiveParameters(ctx, client, tr, params, tr.GetConnectionDetailsMapping()); err != nil {
 		return nil, errors.Wrap(err, "cannot get sensitive parameters")
 	}
+	// TODO(muvaf): Once we have automatic defaulting, remove this if check.
+	if fp.Config.ExternalName.ConfigureFn != nil {
+		fp.Config.ExternalName.ConfigureFn(params, meta.GetExternalName(tr))
+	}
+	fp.parameters = params
 
 	obs, err := tr.GetObservation()
 	if err != nil {
@@ -65,18 +86,8 @@ func NewFileProducer(ctx context.Context, client resource.SecretClient, dir stri
 	if err = resource.GetSensitiveObservation(ctx, client, tr.GetWriteConnectionSecretToReference(), obs); err != nil {
 		return nil, errors.Wrap(err, "cannot get sensitive observation")
 	}
+	fp.observation = obs
 
-	fp := &FileProducer{
-		Resource:    tr,
-		Setup:       ts,
-		Dir:         dir,
-		parameters:  params,
-		observation: obs,
-		fs:          afero.Afero{Fs: afero.NewOsFs()},
-	}
-	for _, f := range opts {
-		f(fp)
-	}
 	return fp, nil
 }
 
@@ -86,6 +97,7 @@ type FileProducer struct {
 	Resource resource.Terraformed
 	Setup    Setup
 	Dir      string
+	Config   config.Resource
 
 	parameters  map[string]interface{}
 	observation map[string]interface{}

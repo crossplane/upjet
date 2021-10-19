@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/crossplane-contrib/terrajet/pkg/config"
 	"github.com/crossplane-contrib/terrajet/pkg/resource"
 )
 
@@ -66,12 +67,13 @@ func WithFs(fs afero.Fs) WorkspaceStoreOption {
 }
 
 // NewWorkspaceStore returns a new WorkspaceStore.
-func NewWorkspaceStore(l logging.Logger, opts ...WorkspaceStoreOption) *WorkspaceStore {
+func NewWorkspaceStore(configs *config.Provider, l logging.Logger, opts ...WorkspaceStoreOption) *WorkspaceStore {
 	ws := &WorkspaceStore{
-		store:  map[types.UID]*Workspace{},
-		logger: l,
-		mu:     sync.Mutex{},
-		fs:     afero.Afero{Fs: afero.NewOsFs()},
+		Configurations: configs,
+		store:          map[types.UID]*Workspace{},
+		logger:         l,
+		mu:             sync.Mutex{},
+		fs:             afero.Afero{Fs: afero.NewOsFs()},
 	}
 	for _, f := range opts {
 		f(ws)
@@ -81,6 +83,8 @@ func NewWorkspaceStore(l logging.Logger, opts ...WorkspaceStoreOption) *Workspac
 
 // WorkspaceStore allows you to manage multiple Terraform workspaces.
 type WorkspaceStore struct {
+	Configurations *config.Provider
+
 	// store holds information about ongoing operations of given resource.
 	// Since there can be multiple calls that add/remove values from the map at
 	// the same time, it has to be safe for concurrency since those operations
@@ -100,7 +104,7 @@ func (ws *WorkspaceStore) Workspace(ctx context.Context, c resource.SecretClient
 	if err := ws.fs.MkdirAll(dir, os.ModePerm); err != nil {
 		return nil, errors.Wrap(err, "cannot create directory for workspace")
 	}
-	fp, err := NewFileProducer(ctx, c, dir, tr, ts)
+	fp, err := NewFileProducer(ctx, c, dir, tr, ts, WithConfig(ws.Configurations.GetForResource(tr.GetTerraformResourceType())))
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot create a new file producer")
 	}
