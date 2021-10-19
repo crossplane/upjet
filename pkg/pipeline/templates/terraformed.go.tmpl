@@ -24,10 +24,19 @@ func (tr *{{ .CRD.Kind }}) GetTerraformResourceIDField() string {
 
 // GetConnectionDetailsMapping for this {{ .CRD.Kind }}
 func (tr *{{ .CRD.Kind }}) GetConnectionDetailsMapping() map[string]string {
-  {{- if .SensitiveFields }}
-  return map[string]string{ {{range $k, $v := .SensitiveFields}}"{{ $k }}": "{{ $v}}", {{end}} }
+  {{- if .Sensitive.Fields }}
+  return map[string]string{ {{range $k, $v := .Sensitive.Fields}}"{{ $k }}": "{{ $v}}", {{end}} }
   {{- else }}
   return nil
+  {{- end }}
+}
+
+// GetCustomConnectionKeys for this {{ .CRD.Kind }}
+func (tr *{{ .CRD.Kind }}) GetCustomConnectionKeys(attr map[string]interface{}) (map[string][]byte, error) {
+  {{- if .Sensitive.CustomKeysFunctionName }}
+  return {{ .Sensitive.CustomKeysFunctionName }}(attr)
+  {{- else }}
+  return nil, nil
   {{- end }}
 }
 

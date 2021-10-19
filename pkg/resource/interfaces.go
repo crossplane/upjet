@@ -24,6 +24,7 @@ import (
 type Observable interface {
 	GetObservation() (map[string]interface{}, error)
 	SetObservation(map[string]interface{}) error
+	GetCustomConnectionKeys(attr map[string]interface{}) (map[string][]byte, error)
 }
 
 // Parameterizable structs can get and set parameters of the managed resource

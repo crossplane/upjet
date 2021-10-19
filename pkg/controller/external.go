@@ -155,7 +155,7 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 	if err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot late initialize annotations")
 	}
-	conn, err := resource.GetConnectionDetails(attr, tr.GetConnectionDetailsMapping(), tr.GetTerraformResourceIDField())
+	conn, err := getConnectionDetails(attr, tr)
 	if err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot get connection details")
 	}
@@ -290,4 +290,38 @@ func CriticalAnnotationsCallback(kube client.Client, tr resource.Terraformed) te
 		c := managed.NewRetryingCriticalAnnotationUpdater(kube)
 		return errors.Wrap(c.UpdateCriticalAnnotations(ctx, tr), "cannot update critical annotations")
 	}
+}
+
+
+func getConnectionDetails(attr map[string]interface{}, tr resource.Terraformed) (managed.ConnectionDetails, error) {
+	conn, err := resource.GetSensitiveAttributes(attr, tr.GetConnectionDetailsMapping(), tr.GetTerraformResourceIDField())
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot get connection details")
+	}
+
+	custom, err := tr.GetCustomConnectionKeys(attr)
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot get custom connection keys")
+	}
+
+	if conn == nil {
+		// if there is no sensitive attributes but still some custom connection
+		// keys, e.g. endpoint
+		conn = map[string][]byte{}
+	}
+	for k, v := range custom {
+		if _, ok := conn[k]; ok {
+			// We return error if a custom key tries to override an existing
+			// connection key. This is because we use connection keys to rebuild
+			// the tfstate, i.e. otherwise we would lose the original value in
+			// tfstate.
+			// Indeed, we are prepending "attribute_" to the Terraform
+			// state sensitive keys and connection keys starting with this
+			// prefix are reserved and should not be used as a custom connection
+			// key.
+			return nil, errors.Errorf("custom connection keys cannot start with %q, overriding reserved connection key (%q) is not allowed", k, resource.PrefixAttribute)
+		}
+		conn[k] = v
+	}
+	return conn, nil
 }
