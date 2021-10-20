@@ -41,8 +41,8 @@ func (o *Observable) SetObservation(data map[string]interface{}) error {
 	return nil
 }
 
-// GetCustomConnectionKeys is a mock
-func (o *Observable) GetCustomConnectionKeys(_ map[string]interface{}) (map[string][]byte, error) {
+// GetAdditionalConnectionDetails is a mock
+func (o *Observable) GetAdditionalConnectionDetails(_ map[string]interface{}) (map[string][]byte, error) {
 	return o.CustomConnectionKeys, nil
 }
 

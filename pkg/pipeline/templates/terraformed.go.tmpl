@@ -32,9 +32,9 @@ func (tr *{{ .CRD.Kind }}) GetConnectionDetailsMapping() map[string]string {
 }
 
 // GetCustomConnectionKeys for this {{ .CRD.Kind }}
-func (tr *{{ .CRD.Kind }}) GetCustomConnectionKeys(attr map[string]interface{}) (map[string][]byte, error) {
+func (tr *{{ .CRD.Kind }}) GetAdditionalConnectionDetails(attributes map[string]interface{}) (map[string][]byte, error) {
   {{- if .Sensitive.CustomKeysFunctionName }}
-  return {{ .Sensitive.CustomKeysFunctionName }}(attr)
+  return {{ .Sensitive.CustomKeysFunctionName }}(attributes)
   {{- else }}
   return nil, nil
   {{- end }}

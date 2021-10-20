@@ -40,7 +40,7 @@ const (
 	// Terraform attributes. We need this prefix to ensure that they are not
 	// overridden by any custom connection key configured which would break
 	// our ability to build tfstate back.
-	PrefixAttribute = "attribute_"
+	PrefixAttribute = "attribute."
 )
 
 var reEndsWithIndex *regexp.Regexp

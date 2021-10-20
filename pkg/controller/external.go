@@ -299,7 +299,7 @@ func getConnectionDetails(attr map[string]interface{}, tr resource.Terraformed) 
 		return nil, errors.Wrap(err, "cannot get connection details")
 	}
 
-	custom, err := tr.GetCustomConnectionKeys(attr)
+	custom, err := tr.GetAdditionalConnectionDetails(attr)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot get custom connection keys")
 	}
