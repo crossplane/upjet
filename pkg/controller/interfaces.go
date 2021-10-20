@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 
+	"github.com/crossplane-contrib/terrajet/pkg/config"
 	"github.com/crossplane-contrib/terrajet/pkg/resource"
 	"github.com/crossplane-contrib/terrajet/pkg/terraform"
 )
@@ -39,5 +40,5 @@ type Workspace interface {
 
 // Store is where we can get access to the Terraform workspace of given resource.
 type Store interface {
-	Workspace(ctx context.Context, c resource.SecretClient, tr resource.Terraformed, ts terraform.Setup) (*terraform.Workspace, error)
+	Workspace(ctx context.Context, c resource.SecretClient, tr resource.Terraformed, ts terraform.Setup, cfg config.Resource) (*terraform.Workspace, error)
 }

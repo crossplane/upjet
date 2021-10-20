@@ -89,7 +89,7 @@ type Sensitive struct {
 
 	// CustomKeysFunctionPath is the path for function adding custom connection
 	// details keys
-	CustomKeysFunctionPath string
+	CustomKeysFn CustomConnectionKeysFn
 
 	fieldPaths map[string]string
 }

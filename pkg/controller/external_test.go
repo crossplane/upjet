@@ -29,6 +29,7 @@ import (
 	"github.com/pkg/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/crossplane-contrib/terrajet/pkg/config"
 	"github.com/crossplane-contrib/terrajet/pkg/resource"
 	"github.com/crossplane-contrib/terrajet/pkg/resource/fake"
 	"github.com/crossplane-contrib/terrajet/pkg/resource/json"
@@ -84,11 +85,11 @@ func (c WorkspaceFns) Plan(ctx context.Context) (terraform.PlanResult, error) {
 }
 
 type StoreFns struct {
-	WorkspaceFn func(ctx context.Context, c resource.SecretClient, tr resource.Terraformed, ts terraform.Setup) (*terraform.Workspace, error)
+	WorkspaceFn func(ctx context.Context, c resource.SecretClient, tr resource.Terraformed, ts terraform.Setup, cfg config.Resource) (*terraform.Workspace, error)
 }
 
-func (s StoreFns) Workspace(ctx context.Context, c resource.SecretClient, tr resource.Terraformed, ts terraform.Setup) (*terraform.Workspace, error) {
-	return s.WorkspaceFn(ctx, c, tr, ts)
+func (s StoreFns) Workspace(ctx context.Context, c resource.SecretClient, tr resource.Terraformed, ts terraform.Setup, cfg config.Resource) (*terraform.Workspace, error) {
+	return s.WorkspaceFn(ctx, c, tr, ts, cfg)
 }
 
 func TestConnect(t *testing.T) {
@@ -96,6 +97,7 @@ func TestConnect(t *testing.T) {
 		setupFn terraform.SetupFn
 		store   Store
 		obj     xpresource.Managed
+		cfg     config.Resource
 	}
 	type want struct {
 		err error
@@ -133,7 +135,7 @@ func TestConnect(t *testing.T) {
 					return terraform.Setup{}, nil
 				},
 				store: StoreFns{
-					WorkspaceFn: func(_ context.Context, _ resource.SecretClient, _ resource.Terraformed, _ terraform.Setup) (*terraform.Workspace, error) {
+					WorkspaceFn: func(_ context.Context, _ resource.SecretClient, _ resource.Terraformed, _ terraform.Setup, _ config.Resource) (*terraform.Workspace, error) {
 						return nil, errBoom
 					},
 				},
@@ -149,7 +151,7 @@ func TestConnect(t *testing.T) {
 					return terraform.Setup{}, nil
 				},
 				store: StoreFns{
-					WorkspaceFn: func(_ context.Context, _ resource.SecretClient, _ resource.Terraformed, _ terraform.Setup) (*terraform.Workspace, error) {
+					WorkspaceFn: func(_ context.Context, _ resource.SecretClient, _ resource.Terraformed, _ terraform.Setup, _ config.Resource) (*terraform.Workspace, error) {
 						return nil, nil
 					},
 				},
@@ -158,7 +160,7 @@ func TestConnect(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			c := NewConnector(nil, tc.args.store, tc.args.setupFn)
+			c := NewConnector(nil, tc.args.store, tc.args.setupFn, tc.args.cfg)
 			_, err := c.Connect(context.TODO(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nConnect(...): -want error, +got error:\n%s", tc.reason, diff)
@@ -169,10 +171,10 @@ func TestConnect(t *testing.T) {
 
 func TestObserve(t *testing.T) {
 	type args struct {
-		w     Workspace
-		kube  client.Client
-		async bool
-		obj   xpresource.Managed
+		w    Workspace
+		kube client.Client
+		cfg  config.Resource
+		obj  xpresource.Managed
 	}
 	type want struct {
 		obs managed.ExternalObservation
@@ -238,7 +240,7 @@ func TestObserve(t *testing.T) {
 		"LastOperationFailed": {
 			reason: "It should report the last operation error without failing",
 			args: args{
-				async: true,
+				cfg: config.Resource{UseAsync: true},
 				obj: &fake.Terraformed{
 					MetadataProvider: fake.MetadataProvider{
 						IDField: "id",
@@ -270,8 +272,8 @@ func TestObserve(t *testing.T) {
 		"StatusUpdateFailed": {
 			reason: "It should fail if status cannot be updated",
 			args: args{
-				async: true,
-				obj:   &fake.Terraformed{},
+				cfg: config.Resource{UseAsync: true},
+				obj: &fake.Terraformed{},
 				kube: &test.MockClient{
 					MockStatusUpdate: test.NewMockStatusUpdateFn(errBoom),
 				},
@@ -376,7 +378,7 @@ func TestObserve(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			e := &external{workspace: tc.w, kube: tc.kube, async: tc.async}
+			e := &external{workspace: tc.w, kube: tc.kube, config: tc.cfg}
 			_, err := e.Observe(context.TODO(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nObserve(...): -want error, +got error:\n%s", tc.reason, diff)
@@ -387,9 +389,9 @@ func TestObserve(t *testing.T) {
 
 func TestCreate(t *testing.T) {
 	type args struct {
-		w     Workspace
-		async bool
-		obj   xpresource.Managed
+		w   Workspace
+		cfg config.Resource
+		obj xpresource.Managed
 	}
 	type want struct {
 		err error
@@ -410,8 +412,8 @@ func TestCreate(t *testing.T) {
 		"AsyncFailed": {
 			reason: "It should return error if it cannot trigger the async apply",
 			args: args{
-				async: true,
-				obj:   &fake.Terraformed{},
+				cfg: config.Resource{UseAsync: true},
+				obj: &fake.Terraformed{},
 				w: WorkspaceFns{
 					ApplyAsyncFn: func(_ terraform.CallbackFn) error {
 						return errBoom
@@ -439,7 +441,7 @@ func TestCreate(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			e := &external{workspace: tc.w, async: tc.async}
+			e := &external{workspace: tc.w, config: tc.cfg}
 			_, err := e.Create(context.TODO(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nCreate(...): -want error, +got error:\n%s", tc.reason, diff)
@@ -450,9 +452,9 @@ func TestCreate(t *testing.T) {
 
 func TestUpdate(t *testing.T) {
 	type args struct {
-		w     Workspace
-		async bool
-		obj   xpresource.Managed
+		w   Workspace
+		cfg config.Resource
+		obj xpresource.Managed
 	}
 	type want struct {
 		err error
@@ -473,8 +475,8 @@ func TestUpdate(t *testing.T) {
 		"AsyncFailed": {
 			reason: "It should return error if it cannot trigger the async apply",
 			args: args{
-				async: true,
-				obj:   &fake.Terraformed{},
+				cfg: config.Resource{UseAsync: true},
+				obj: &fake.Terraformed{},
 				w: WorkspaceFns{
 					ApplyAsyncFn: func(_ terraform.CallbackFn) error {
 						return errBoom
@@ -502,7 +504,7 @@ func TestUpdate(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			e := &external{workspace: tc.w, async: tc.async}
+			e := &external{workspace: tc.w, config: tc.cfg}
 			_, err := e.Update(context.TODO(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nCreate(...): -want error, +got error:\n%s", tc.reason, diff)
@@ -513,9 +515,9 @@ func TestUpdate(t *testing.T) {
 
 func TestDelete(t *testing.T) {
 	type args struct {
-		w     Workspace
-		async bool
-		obj   xpresource.Managed
+		w   Workspace
+		cfg config.Resource
+		obj xpresource.Managed
 	}
 	type want struct {
 		err error
@@ -528,8 +530,8 @@ func TestDelete(t *testing.T) {
 		"AsyncFailed": {
 			reason: "It should return error if it cannot trigger the async destroy",
 			args: args{
-				async: true,
-				obj:   &fake.Terraformed{},
+				cfg: config.Resource{UseAsync: true},
+				obj: &fake.Terraformed{},
 				w: WorkspaceFns{
 					DestroyAsyncFn: func() error {
 						return errBoom
@@ -557,7 +559,7 @@ func TestDelete(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			e := &external{workspace: tc.w, async: tc.async}
+			e := &external{workspace: tc.w, config: tc.cfg}
 			err := e.Delete(context.TODO(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nCreate(...): -want error, +got error:\n%s", tc.reason, diff)

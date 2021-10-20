@@ -31,15 +31,6 @@ func (tr *{{ .CRD.Kind }}) GetConnectionDetailsMapping() map[string]string {
   {{- end }}
 }
 
-// GetCustomConnectionKeys for this {{ .CRD.Kind }}
-func (tr *{{ .CRD.Kind }}) GetAdditionalConnectionDetails(attributes map[string]interface{}) (map[string][]byte, error) {
-  {{- if .Sensitive.CustomKeysFunctionName }}
-  return {{ .Sensitive.CustomKeysFunctionName }}(attributes)
-  {{- else }}
-  return nil, nil
-  {{- end }}
-}
-
 // GetObservation of this {{ .CRD.Kind }}
 func (tr *{{ .CRD.Kind }}) GetObservation() (map[string]interface{}, error) {
 	o, err := json.TFParser.Marshal(tr.Status.AtProvider)

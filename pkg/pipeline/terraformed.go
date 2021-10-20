@@ -53,10 +53,6 @@ func (tg *TerraformedGenerator) Generate(c *config.Resource, sch *schema.Resourc
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath("hack/boilerplate.go.txt"), // todo
 	)
-	customKeysPath := ""
-	if c.Sensitive.CustomKeysFunctionPath != "" {
-		customKeysPath = trFile.Imports.UseType(c.Sensitive.CustomKeysFunctionPath)
-	}
 	vars := map[string]interface{}{
 		"CRD": map[string]string{
 			"APIVersion": c.Version,
@@ -74,8 +70,7 @@ func (tg *TerraformedGenerator) Generate(c *config.Resource, sch *schema.Resourc
 			"SchemaVersion":   sch.SchemaVersion,
 		},
 		"Sensitive": map[string]interface{}{
-			"Fields":                 c.Sensitive.GetFieldPaths(),
-			"CustomKeysFunctionName": customKeysPath,
+			"Fields": c.Sensitive.GetFieldPaths(),
 		},
 		"LateInitializer": map[string]interface{}{
 			"IgnoredFields": c.LateInitializer.IgnoredFields,

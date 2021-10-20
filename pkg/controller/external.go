@@ -26,6 +26,7 @@ import (
 	"github.com/pkg/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/crossplane-contrib/terrajet/pkg/config"
 	"github.com/crossplane-contrib/terrajet/pkg/resource"
 	"github.com/crossplane-contrib/terrajet/pkg/resource/json"
 	"github.com/crossplane-contrib/terrajet/pkg/terraform"
@@ -47,20 +48,13 @@ const (
 // Option allows you to configure Connector.
 type Option func(*Connector)
 
-// UseAsync configures the controller to use async variant of the functions
-// of the Terraform client.
-func UseAsync() Option {
-	return func(c *Connector) {
-		c.async = true
-	}
-}
-
 // NewConnector returns a new Connector object.
-func NewConnector(kube client.Client, ws Store, sf terraform.SetupFn, opts ...Option) *Connector {
+func NewConnector(kube client.Client, ws Store, sf terraform.SetupFn, cfg config.Resource, opts ...Option) *Connector {
 	c := &Connector{
 		kube:              kube,
 		getTerraformSetup: sf,
 		store:             ws,
+		config:            cfg,
 	}
 	for _, f := range opts {
 		f(c)
@@ -74,7 +68,7 @@ type Connector struct {
 	kube              client.Client
 	store             Store
 	getTerraformSetup terraform.SetupFn
-	async             bool
+	config            config.Resource
 }
 
 // Connect makes sure the underlying client is ready to issue requests to the
@@ -90,7 +84,7 @@ func (c *Connector) Connect(ctx context.Context, mg xpresource.Managed) (managed
 		return nil, errors.Wrap(err, errGetTerraformSetup)
 	}
 
-	tf, err := c.store.Workspace(ctx, &APISecretClient{kube: c.kube}, tr, ts)
+	tf, err := c.store.Workspace(ctx, &APISecretClient{kube: c.kube}, tr, ts, c.config)
 	if err != nil {
 		return nil, errors.Wrap(err, errGetWorkspace)
 	}
@@ -98,15 +92,14 @@ func (c *Connector) Connect(ctx context.Context, mg xpresource.Managed) (managed
 	return &external{
 		kube:      c.kube,
 		workspace: tf,
-		async:     c.async,
+		config:    c.config,
 	}, nil
 }
 
 type external struct {
 	kube      client.Client
 	workspace Workspace
-
-	async bool
+	config    config.Resource
 }
 
 func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.ExternalObservation, error) { // nolint:gocyclo
@@ -123,7 +116,7 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 	if err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, errRefresh)
 	}
-	if e.async {
+	if e.config.UseAsync {
 		tr.SetConditions(resource.LastOperationCondition(res.LastOperationError))
 		if err := e.kube.Status().Update(ctx, tr); err != nil {
 			return managed.ExternalObservation{}, errors.Wrap(err, errStatusUpdate)
@@ -155,7 +148,7 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 	if err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot late initialize annotations")
 	}
-	conn, err := getConnectionDetails(attr, tr)
+	conn, err := getConnectionDetails(attr, tr, e.config)
 	if err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot get connection details")
 	}
@@ -197,7 +190,7 @@ func (e *external) Create(ctx context.Context, mg xpresource.Managed) (managed.E
 	if !ok {
 		return managed.ExternalCreation{}, errors.New(errUnexpectedObject)
 	}
-	if e.async {
+	if e.config.UseAsync {
 		return managed.ExternalCreation{}, errors.Wrap(e.workspace.ApplyAsync(CriticalAnnotationsCallback(e.kube, tr)), errStartAsyncApply)
 	}
 	res, err := e.workspace.Apply(ctx)
@@ -209,7 +202,7 @@ func (e *external) Create(ctx context.Context, mg xpresource.Managed) (managed.E
 		return managed.ExternalCreation{}, errors.Wrap(err, "cannot unmarshal state attributes")
 	}
 
-	conn, err := resource.GetConnectionDetails(attr, tr.GetConnectionDetailsMapping(), tr.GetTerraformResourceIDField())
+	conn, err := getConnectionDetails(attr, tr, e.config)
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, "cannot get connection details")
 	}
@@ -220,7 +213,7 @@ func (e *external) Create(ctx context.Context, mg xpresource.Managed) (managed.E
 }
 
 func (e *external) Update(ctx context.Context, mg xpresource.Managed) (managed.ExternalUpdate, error) {
-	if e.async {
+	if e.config.UseAsync {
 		return managed.ExternalUpdate{}, errors.Wrap(e.workspace.ApplyAsync(terraform.NopCallbackFn), errStartAsyncApply)
 	}
 	tr, ok := mg.(resource.Terraformed)
@@ -239,7 +232,7 @@ func (e *external) Update(ctx context.Context, mg xpresource.Managed) (managed.E
 }
 
 func (e *external) Delete(ctx context.Context, _ xpresource.Managed) error {
-	if e.async {
+	if e.config.UseAsync {
 		return errors.Wrap(e.workspace.DestroyAsync(), errStartAsyncDestroy)
 	}
 	return errors.Wrap(e.workspace.Destroy(ctx), errDestroy)
@@ -292,16 +285,18 @@ func CriticalAnnotationsCallback(kube client.Client, tr resource.Terraformed) te
 	}
 }
 
-
-func getConnectionDetails(attr map[string]interface{}, tr resource.Terraformed) (managed.ConnectionDetails, error) {
+func getConnectionDetails(attr map[string]interface{}, tr resource.Terraformed, cfg config.Resource) (managed.ConnectionDetails, error) {
 	conn, err := resource.GetSensitiveAttributes(attr, tr.GetConnectionDetailsMapping(), tr.GetTerraformResourceIDField())
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot get connection details")
 	}
 
-	custom, err := tr.GetAdditionalConnectionDetails(attr)
-	if err != nil {
-		return nil, errors.Wrap(err, "cannot get custom connection keys")
+	custom := map[string][]byte{}
+	// TODO(turkenh): Once we have automatic defaulting, remove this if check.
+	if cfg.Sensitive.CustomKeysFn != nil {
+		if custom, err = cfg.Sensitive.CustomKeysFn(attr); err != nil {
+			return nil, errors.Wrap(err, "cannot get custom connection keys")
+		}
 	}
 
 	if conn == nil {
