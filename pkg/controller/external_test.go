@@ -20,6 +20,7 @@ import (
 	"context"
 	"testing"
 
+	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	xpfake "github.com/crossplane/crossplane-runtime/pkg/resource/fake"
@@ -287,12 +288,41 @@ func TestObserve(t *testing.T) {
 				err: errors.Wrap(errBoom, errStatusUpdate),
 			},
 		},
+		"GetReady": {
+			reason: "We need to return early if the resource has just become ready",
+			args: args{
+				obj: &fake.Terraformed{
+					MetadataProvider: fake.MetadataProvider{
+						IDField: "id",
+					},
+				},
+				w: WorkspaceFns{
+					RefreshFn: func(_ context.Context) (terraform.RefreshResult, error) {
+						return terraform.RefreshResult{
+							Exists: true,
+							State:  exampleState,
+						}, nil
+					},
+				},
+			},
+			want: want{
+				obs: managed.ExternalObservation{
+					ResourceExists:   true,
+					ResourceUpToDate: true,
+				},
+			},
+		},
 		"PlanFailed": {
 			reason: "Failure of plan should be reported",
 			args: args{
 				obj: &fake.Terraformed{
 					MetadataProvider: fake.MetadataProvider{
 						IDField: "id",
+					},
+					Managed: xpfake.Managed{
+						ConditionedStatus: xpv1.ConditionedStatus{
+							Conditions: []xpv1.Condition{xpv1.Available()},
+						},
 					},
 				},
 				w: WorkspaceFns{
@@ -317,11 +347,17 @@ func TestObserve(t *testing.T) {
 					MetadataProvider: fake.MetadataProvider{
 						IDField: "id",
 					},
+					Managed: xpfake.Managed{
+						ConditionedStatus: xpv1.ConditionedStatus{
+							Conditions: []xpv1.Condition{xpv1.Available()},
+						},
+					},
 				},
 				w: WorkspaceFns{
 					RefreshFn: func(_ context.Context) (terraform.RefreshResult, error) {
 						return terraform.RefreshResult{
-							State: exampleState,
+							Exists: true,
+							State:  exampleState,
 						}, nil
 					},
 					PlanFn: func(_ context.Context) (terraform.PlanResult, error) {
