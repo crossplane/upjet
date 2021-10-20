@@ -53,15 +53,10 @@ func (tg *TerraformedGenerator) Generate(c *config.Resource, sch *schema.Resourc
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath("hack/boilerplate.go.txt"), // todo
 	)
-	cfgPath := ""
-	if c.ExternalName.ConfigureFunctionPath != "" {
-		cfgPath = trFile.Imports.UseType(c.ExternalName.ConfigureFunctionPath)
-	}
 	vars := map[string]interface{}{
 		"CRD": map[string]string{
-			"APIVersion":            c.Version,
-			"Kind":                  c.Kind,
-			"ConfigureExternalName": cfgPath,
+			"APIVersion": c.Version,
+			"Kind":       c.Kind,
 		},
 		"Terraform": map[string]interface{}{
 			// TODO(hasan): This identifier is used to generate external name.
