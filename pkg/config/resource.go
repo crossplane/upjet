@@ -18,13 +18,12 @@ package config
 
 import "github.com/imdario/mergo"
 
-// ConfigureFn functions configure the base resource fields by using
-// given name value.
-type ConfigureFn func(base map[string]interface{}, name string)
+// SetNameAttributeFn sets the name of the resource in Terraform attributes map.
+type SetNameAttributeFn func(base map[string]interface{}, name string)
 
-// NopConfigureWithName does nothing. It's useful for cases where the external
+// NopSetNameAttribute does nothing. It's useful for cases where the external
 // name is calculated by provider and doesn't have any effect on spec fields.
-func NopConfigureWithName(_ map[string]interface{}, _ string) {}
+func NopSetNameAttribute(_ map[string]interface{}, _ string) {}
 
 // ResourceOption allows setting optional fields of a Resource object.
 type ResourceOption func(*Resource)
@@ -44,7 +43,7 @@ func NewResource(version, kind, terraformResourceType string, opts ...ResourceOp
 		TerraformResourceType: terraformResourceType,
 		TerraformIDFieldName:  "id",
 		ExternalName: ExternalName{
-			ConfigureFn: NopConfigureWithName,
+			SetNameAttributeFn: NopSetNameAttribute,
 		},
 	}
 	for _, f := range opts {
@@ -57,8 +56,9 @@ func NewResource(version, kind, terraformResourceType string, opts ...ResourceOp
 // such as removal of those fields from spec schema and calling Configure function
 // to fill attributes with information given in external name.
 type ExternalName struct {
-	// ConfigureFn add attributes that can be set with external name.
-	ConfigureFn ConfigureFn
+	// SetNameAttributeFn sets the name of the resource in Terraform attribute
+	// map.
+	SetNameAttributeFn SetNameAttributeFn
 
 	// OmittedFields are the ones you'd like to be removed from the schema since
 	// they are specified via external name. You can omit only the top level fields.

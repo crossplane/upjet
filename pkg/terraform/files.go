@@ -74,8 +74,8 @@ func NewFileProducer(ctx context.Context, client resource.SecretClient, dir stri
 		return nil, errors.Wrap(err, "cannot get sensitive parameters")
 	}
 	// TODO(muvaf): Once we have automatic defaulting, remove this if check.
-	if fp.Config.ExternalName.ConfigureFn != nil {
-		fp.Config.ExternalName.ConfigureFn(params, meta.GetExternalName(tr))
+	if fp.Config.ExternalName.SetNameAttributeFn != nil {
+		fp.Config.ExternalName.SetNameAttributeFn(params, meta.GetExternalName(tr))
 	}
 	fp.parameters = params
 
