@@ -18,12 +18,12 @@ package config
 
 import "github.com/imdario/mergo"
 
-// SetNameAttributeFn sets the name of the resource in Terraform attributes map.
-type SetNameAttributeFn func(base map[string]interface{}, name string)
+// SetIdentifierArgumentFn sets the name of the resource in Terraform attributes map.
+type SetIdentifierArgumentFn func(base map[string]interface{}, name string)
 
-// NopSetNameAttribute does nothing. It's useful for cases where the external
+// NopSetIdentifierArgument does nothing. It's useful for cases where the external
 // name is calculated by provider and doesn't have any effect on spec fields.
-func NopSetNameAttribute(_ map[string]interface{}, _ string) {}
+func NopSetIdentifierArgument(_ map[string]interface{}, _ string) {}
 
 // ResourceOption allows setting optional fields of a Resource object.
 type ResourceOption func(*Resource)
@@ -43,7 +43,7 @@ func NewResource(version, kind, terraformResourceType string, opts ...ResourceOp
 		TerraformResourceType: terraformResourceType,
 		TerraformIDFieldName:  "id",
 		ExternalName: ExternalName{
-			SetNameAttributeFn: NopSetNameAttribute,
+			SetIdentifierArgumentFn: NopSetIdentifierArgument,
 		},
 	}
 	for _, f := range opts {
@@ -56,9 +56,9 @@ func NewResource(version, kind, terraformResourceType string, opts ...ResourceOp
 // such as removal of those fields from spec schema and calling Configure function
 // to fill attributes with information given in external name.
 type ExternalName struct {
-	// SetNameAttributeFn sets the name of the resource in Terraform attribute
+	// SetIdentifierArgumentFn sets the name of the resource in Terraform argument
 	// map.
-	SetNameAttributeFn SetNameAttributeFn
+	SetIdentifierArgumentFn SetIdentifierArgumentFn
 
 	// OmittedFields are the ones you'd like to be removed from the schema since
 	// they are specified via external name. You can omit only the top level fields.
