@@ -155,20 +155,29 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 	if err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot late initialize annotations")
 	}
-	lateInitedParams, err := tr.LateInitialize(res.State.GetAttributes())
-	if err != nil {
-		return managed.ExternalObservation{}, errors.Wrap(err, "cannot late initialize parameters")
-	}
-
 	conn, err := resource.GetConnectionDetails(attr, tr.GetConnectionDetailsMapping(), tr.GetTerraformResourceIDField())
 	if err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot get connection details")
 	}
 
-	// During creation (i.e. apply), Terraform already waits until resource is
-	// ready. So, I believe it would be safe to assume it is available if create
-	// step completed (i.e. resource exists).
-	tr.SetConditions(xpv1.Available())
+	// We try to mark the resource ready before the spec late initialization
+	// and a call for "Plan" because those operations are costly, i.e. late-init
+	// causes a spec update which defers status update to the next reconcile and
+	// "Plan" takes a few seconds.
+	if !tr.GetCondition(xpv1.TypeReady).Equal(xpv1.Available()) {
+		tr.SetConditions(xpv1.Available())
+		return managed.ExternalObservation{
+			ResourceExists:          true,
+			ResourceUpToDate:        true,
+			ConnectionDetails:       conn,
+			ResourceLateInitialized: lateInitedAnn,
+		}, nil
+	}
+
+	lateInitedParams, err := tr.LateInitialize(res.State.GetAttributes())
+	if err != nil {
+		return managed.ExternalObservation{}, errors.Wrap(err, "cannot late initialize parameters")
+	}
 
 	plan, err := e.workspace.Plan(ctx)
 	if err != nil {
