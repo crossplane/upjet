@@ -1,29 +1,35 @@
 package config
 
-import "sync"
+import (
+	"sync"
 
-// Store stores a global configuration for the Provider to generate with
-// terrajet.
-var Store = Provider{
-	resource: map[string]Resource{},
-}
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+)
 
 // Provider stores configuration for a provider to generate with terrajet.
 type Provider struct {
+	Schema         *schema.Provider
+	GroupSuffix    string
+	ResourcePrefix string
+	ShortName      string
+	ModulePath     string
+	SkipList       map[string]struct{}
+	IncludeList    []string
+
 	mx       sync.RWMutex
-	resource map[string]Resource
+	Resource map[string]Resource
 }
 
 // SetForResource sets configuration for a given resource.
 func (p *Provider) SetForResource(resource string, cfg Resource) {
 	defer p.mx.Unlock()
 	p.mx.Lock()
-	p.resource[resource] = cfg
+	p.Resource[resource] = cfg
 }
 
 // GetForResource gets the configuration for a given resource.
 func (p *Provider) GetForResource(resource string) Resource {
 	defer p.mx.RUnlock()
 	p.mx.RLock()
-	return p.resource[resource]
+	return p.Resource[resource]
 }

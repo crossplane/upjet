@@ -29,6 +29,12 @@ func NopSetIdentifierArgument(_ map[string]interface{}, _ string) {}
 // secret using input terraform attributes
 type AdditionalConnectionDetailsFn func(attr map[string]interface{}) (map[string][]byte, error)
 
+// NopCustomConnectionKeys does nothing, when no custom configuration function
+// provided.
+func NopCustomConnectionKeys(_ map[string]interface{}) (map[string][]byte, error) {
+	return nil, nil
+}
+
 // ResourceOption allows setting optional fields of a Resource object.
 type ResourceOption func(*Resource)
 
@@ -48,6 +54,9 @@ func NewResource(version, kind, terraformResourceType string, opts ...ResourceOp
 		TerraformIDFieldName:  "id",
 		ExternalName: ExternalName{
 			SetIdentifierArgumentFn: NopSetIdentifierArgument,
+		},
+		Sensitive: Sensitive{
+			CustomKeysFn: NopCustomConnectionKeys,
 		},
 	}
 	for _, f := range opts {
