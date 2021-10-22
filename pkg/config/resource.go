@@ -83,8 +83,8 @@ type References map[string]Reference
 
 // Sensitive represents configurations to handle sensitive information
 type Sensitive struct {
-	// CustomKeysFunctionPath is the path for function adding custom connection
-	// details keys
+	// AdditionalConnectionDetailsFn is the path for function adding additional
+	// connection details keys
 	AdditionalConnectionDetailsFn AdditionalConnectionDetailsFn
 
 	fieldPaths map[string]string

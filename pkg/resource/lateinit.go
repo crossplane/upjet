@@ -23,7 +23,6 @@ import (
 	"strings"
 
 	xpmeta "github.com/crossplane/crossplane-runtime/pkg/meta"
-
 	"github.com/pkg/errors"
 )
 

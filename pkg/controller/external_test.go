@@ -20,8 +20,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/crossplane-contrib/terrajet/pkg/config"
-
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
@@ -31,6 +29,7 @@ import (
 	"github.com/pkg/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/crossplane-contrib/terrajet/pkg/config"
 	"github.com/crossplane-contrib/terrajet/pkg/resource"
 	"github.com/crossplane-contrib/terrajet/pkg/resource/fake"
 	"github.com/crossplane-contrib/terrajet/pkg/resource/json"
