@@ -247,6 +247,32 @@ func TestObserve(t *testing.T) {
 				},
 			},
 		},
+		"TransitionToReady": {
+			reason: "We should mark the resource as ready if the refresh succeeds and there is no ongoing operation",
+			args: args{
+				obj: &fake.Terraformed{
+					MetadataProvider: fake.MetadataProvider{
+						IDField: "id",
+					},
+				},
+				w: WorkspaceFns{
+					RefreshFn: func(_ context.Context) (terraform.RefreshResult, error) {
+						return terraform.RefreshResult{
+							Exists: true,
+							State:  exampleState,
+						}, nil
+					},
+				},
+			},
+			want: want{
+				obs: managed.ExternalObservation{
+					ResourceExists:          true,
+					ResourceUpToDate:        true,
+					ConnectionDetails:       nil,
+					ResourceLateInitialized: false,
+				},
+			},
+		},
 		"PlanFailed": {
 			reason: "Failure of plan should be reported",
 			args: args{
@@ -324,6 +350,7 @@ func TestCreate(t *testing.T) {
 	type args struct {
 		w   Workspace
 		c   CallbackProvider
+		cfg config.Resource
 		obj xpresource.Managed
 	}
 	type want struct {
@@ -345,6 +372,9 @@ func TestCreate(t *testing.T) {
 		"AsyncFailed": {
 			reason: "It should return error if it cannot trigger the async apply",
 			args: args{
+				cfg: config.Resource{
+					UseAsync: true,
+				},
 				c: CallbackFns{
 					ApplyFn: func(s string) terraform.CallbackFn {
 						return nil
@@ -378,7 +408,7 @@ func TestCreate(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			e := &external{workspace: tc.w, callback: tc.c}
+			e := &external{workspace: tc.w, callback: tc.c, config: tc.cfg}
 			_, err := e.Create(context.TODO(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nCreate(...): -want error, +got error:\n%s", tc.reason, diff)
@@ -390,6 +420,7 @@ func TestCreate(t *testing.T) {
 func TestUpdate(t *testing.T) {
 	type args struct {
 		w   Workspace
+		cfg config.Resource
 		c   CallbackProvider
 		obj xpresource.Managed
 	}
@@ -412,6 +443,9 @@ func TestUpdate(t *testing.T) {
 		"AsyncFailed": {
 			reason: "It should return error if it cannot trigger the async apply",
 			args: args{
+				cfg: config.Resource{
+					UseAsync: true,
+				},
 				c: CallbackFns{
 					ApplyFn: func(s string) terraform.CallbackFn {
 						return nil
@@ -445,7 +479,7 @@ func TestUpdate(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			e := &external{workspace: tc.w, callback: tc.c}
+			e := &external{workspace: tc.w, callback: tc.c, config: tc.cfg}
 			_, err := e.Update(context.TODO(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nCreate(...): -want error, +got error:\n%s", tc.reason, diff)
@@ -457,6 +491,7 @@ func TestUpdate(t *testing.T) {
 func TestDelete(t *testing.T) {
 	type args struct {
 		w   Workspace
+		cfg config.Resource
 		c   CallbackProvider
 		obj xpresource.Managed
 	}
@@ -471,6 +506,9 @@ func TestDelete(t *testing.T) {
 		"AsyncFailed": {
 			reason: "It should return error if it cannot trigger the async destroy",
 			args: args{
+				cfg: config.Resource{
+					UseAsync: true,
+				},
 				c: CallbackFns{
 					DestroyFn: func(_ string) terraform.CallbackFn {
 						return nil
@@ -487,7 +525,7 @@ func TestDelete(t *testing.T) {
 				err: errors.Wrap(errBoom, errStartAsyncDestroy),
 			},
 		},
-		"SyncApplyFailed": {
+		"SyncDestroyFailed": {
 			reason: "It should return error if it cannot destroy in sync mode",
 			args: args{
 				obj: &fake.Terraformed{},
@@ -504,7 +542,7 @@ func TestDelete(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			e := &external{workspace: tc.w, callback: tc.c}
+			e := &external{workspace: tc.w, callback: tc.c, config: tc.cfg}
 			err := e.Delete(context.TODO(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nCreate(...): -want error, +got error:\n%s", tc.reason, diff)
