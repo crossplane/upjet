@@ -95,7 +95,7 @@ func TestGetSensitiveAttributes(t *testing.T) {
 			},
 			want: want{
 				out: map[string][]byte{
-					PrefixAttribute + "top_level_secret": []byte("sensitive-data-top-level-secret"),
+					prefixAttribute + "top_level_secret": []byte("sensitive-data-top-level-secret"),
 				},
 			},
 		},
@@ -109,8 +109,8 @@ func TestGetSensitiveAttributes(t *testing.T) {
 			},
 			want: want{
 				out: map[string][]byte{
-					PrefixAttribute + "top_level_secret": []byte("sensitive-data-top-level-secret"),
-					PrefixAttribute + "id":               []byte("secret-id"),
+					prefixAttribute + "top_level_secret": []byte("sensitive-data-top-level-secret"),
+					prefixAttribute + "id":               []byte("secret-id"),
 				},
 			},
 		},
@@ -141,9 +141,9 @@ func TestGetSensitiveAttributes(t *testing.T) {
 			},
 			want: want{
 				out: map[string][]byte{
-					PrefixAttribute + "top_config_secretmap...inner_config_secretmap.first...": []byte("sensitive-data-inner-first"),
-					PrefixAttribute + "top_config_secretmap.inner_config_secretmap_second":     []byte("sensitive-data-inner-second"),
-					PrefixAttribute + "top_config_secretmap.inner_config_secretmap_third":      []byte("sensitive-data-inner-third"),
+					prefixAttribute + "top_config_secretmap...inner_config_secretmap.first...": []byte("sensitive-data-inner-first"),
+					prefixAttribute + "top_config_secretmap.inner_config_secretmap_second":     []byte("sensitive-data-inner-second"),
+					prefixAttribute + "top_config_secretmap.inner_config_secretmap_third":      []byte("sensitive-data-inner-third"),
 				},
 			},
 		},
@@ -154,9 +154,9 @@ func TestGetSensitiveAttributes(t *testing.T) {
 			},
 			want: want{
 				out: map[string][]byte{
-					PrefixAttribute + "top_config_array.0.inner_some_field": []byte("non-sensitive-data-1"),
-					PrefixAttribute + "top_config_array.1.inner_some_field": []byte("non-sensitive-data-2"),
-					PrefixAttribute + "top_config_array.2.inner_some_field": []byte("non-sensitive-data-3"),
+					prefixAttribute + "top_config_array.0.inner_some_field": []byte("non-sensitive-data-1"),
+					prefixAttribute + "top_config_array.1.inner_some_field": []byte("non-sensitive-data-2"),
+					prefixAttribute + "top_config_array.2.inner_some_field": []byte("non-sensitive-data-3"),
 				},
 			},
 		},
@@ -167,9 +167,9 @@ func TestGetSensitiveAttributes(t *testing.T) {
 			},
 			want: want{
 				out: map[string][]byte{
-					PrefixAttribute + "top_config_array.0.inner_config_array.0.bottom_level_secret": []byte("sensitive-data-bottom-level-1"),
-					PrefixAttribute + "top_config_array.2.inner_config_array.0.bottom_level_secret": []byte("sensitive-data-bottom-level-3a"),
-					PrefixAttribute + "top_config_array.2.inner_config_array.1.bottom_level_secret": []byte("sensitive-data-bottom-level-3b"),
+					prefixAttribute + "top_config_array.0.inner_config_array.0.bottom_level_secret": []byte("sensitive-data-bottom-level-1"),
+					prefixAttribute + "top_config_array.2.inner_config_array.0.bottom_level_secret": []byte("sensitive-data-bottom-level-3a"),
+					prefixAttribute + "top_config_array.2.inner_config_array.1.bottom_level_secret": []byte("sensitive-data-bottom-level-3b"),
 				},
 			},
 		},
@@ -180,8 +180,8 @@ func TestGetSensitiveAttributes(t *testing.T) {
 			},
 			want: want{
 				out: map[string][]byte{
-					PrefixAttribute + "top_config_array.2.inner_config_array.0.bottom_level_secret": []byte("sensitive-data-bottom-level-3a"),
-					PrefixAttribute + "top_config_array.2.inner_config_array.1.bottom_level_secret": []byte("sensitive-data-bottom-level-3b"),
+					prefixAttribute + "top_config_array.2.inner_config_array.0.bottom_level_secret": []byte("sensitive-data-bottom-level-3a"),
+					prefixAttribute + "top_config_array.2.inner_config_array.1.bottom_level_secret": []byte("sensitive-data-bottom-level-3b"),
 				},
 			},
 		},
@@ -192,12 +192,12 @@ func TestGetSensitiveAttributes(t *testing.T) {
 			},
 			want: want{
 				out: map[string][]byte{
-					PrefixAttribute + "top_level_secret":                                            []byte("sensitive-data-top-level-secret"),
-					PrefixAttribute + "top_config_secretmap...inner_config_secretmap.first...":      []byte("sensitive-data-inner-first"),
-					PrefixAttribute + "top_config_secretmap.inner_config_secretmap_second":          []byte("sensitive-data-inner-second"),
-					PrefixAttribute + "top_config_secretmap.inner_config_secretmap_third":           []byte("sensitive-data-inner-third"),
-					PrefixAttribute + "top_config_array.2.inner_config_array.0.bottom_level_secret": []byte("sensitive-data-bottom-level-3a"),
-					PrefixAttribute + "top_config_array.2.inner_config_array.1.bottom_level_secret": []byte("sensitive-data-bottom-level-3b"),
+					prefixAttribute + "top_level_secret":                                            []byte("sensitive-data-top-level-secret"),
+					prefixAttribute + "top_config_secretmap...inner_config_secretmap.first...":      []byte("sensitive-data-inner-first"),
+					prefixAttribute + "top_config_secretmap.inner_config_secretmap_second":          []byte("sensitive-data-inner-second"),
+					prefixAttribute + "top_config_secretmap.inner_config_secretmap_third":           []byte("sensitive-data-inner-third"),
+					prefixAttribute + "top_config_array.2.inner_config_array.0.bottom_level_secret": []byte("sensitive-data-bottom-level-3a"),
+					prefixAttribute + "top_config_array.2.inner_config_array.1.bottom_level_secret": []byte("sensitive-data-bottom-level-3b"),
 				},
 			},
 		},
@@ -498,7 +498,7 @@ func TestGetSensitiveObservation(t *testing.T) {
 				clientFn: func(client *mocks.MockSecretClient) {
 					client.EXPECT().GetSecretData(gomock.Any(), connSecretRef).
 						Return(map[string][]byte{
-							PrefixAttribute + "admin_password": []byte("foo"),
+							prefixAttribute + "admin_password": []byte("foo"),
 							"a_custom_key":                     []byte("t0p-s3cr3t"),
 						}, nil)
 				},
@@ -519,8 +519,8 @@ func TestGetSensitiveObservation(t *testing.T) {
 					client.EXPECT().
 						GetSecretData(gomock.Any(), connSecretRef).
 						Return(map[string][]byte{
-							PrefixAttribute + "admin_password":    []byte("foo"),
-							PrefixAttribute + "admin_private_key": []byte("bar"),
+							prefixAttribute + "admin_password":    []byte("foo"),
+							prefixAttribute + "admin_private_key": []byte("bar"),
 						}, nil)
 				},
 				into: map[string]interface{}{
@@ -540,9 +540,9 @@ func TestGetSensitiveObservation(t *testing.T) {
 				clientFn: func(client *mocks.MockSecretClient) {
 					client.EXPECT().GetSecretData(gomock.Any(), connSecretRef).
 						Return(map[string][]byte{
-							PrefixAttribute + "database_users.0.password": []byte("foo"),
-							PrefixAttribute + "database_users.1.password": []byte("bar"),
-							PrefixAttribute + "database_users.2.password": []byte("baz"),
+							prefixAttribute + "database_users.0.password": []byte("foo"),
+							prefixAttribute + "database_users.1.password": []byte("bar"),
+							prefixAttribute + "database_users.2.password": []byte("baz"),
 							"a_custom_key": []byte("t0p-s3cr3t"),
 						}, nil)
 				},

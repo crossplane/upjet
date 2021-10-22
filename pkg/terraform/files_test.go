@@ -57,8 +57,8 @@ func TestWriteTFState(t *testing.T) {
 				Managed: xpfake.Managed{
 					ObjectMeta: metav1.ObjectMeta{
 						Annotations: map[string]string{
-							AnnotationKeyPrivateRawAttribute: "privateraw",
-							meta.AnnotationKeyExternalName:   "some-id",
+							resource.AnnotationKeyPrivateRawAttribute: "privateraw",
+							meta.AnnotationKeyExternalName:            "some-id",
 						},
 					},
 				},
@@ -113,8 +113,8 @@ func TestWriteMainTF(t *testing.T) {
 				Managed: xpfake.Managed{
 					ObjectMeta: metav1.ObjectMeta{
 						Annotations: map[string]string{
-							AnnotationKeyPrivateRawAttribute: "privateraw",
-							meta.AnnotationKeyExternalName:   "some-id",
+							resource.AnnotationKeyPrivateRawAttribute: "privateraw",
+							meta.AnnotationKeyExternalName:            "some-id",
 						},
 					},
 				},

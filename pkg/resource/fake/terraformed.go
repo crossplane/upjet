@@ -26,8 +26,8 @@ import (
 
 // Observable is mock Observable.
 type Observable struct {
-	Observation          map[string]interface{}
-	CustomConnectionKeys map[string][]byte
+	Observation                 map[string]interface{}
+	AdditionalConnectionDetails map[string][]byte
 }
 
 // GetObservation is a mock.
@@ -43,7 +43,7 @@ func (o *Observable) SetObservation(data map[string]interface{}) error {
 
 // GetAdditionalConnectionDetails is a mock
 func (o *Observable) GetAdditionalConnectionDetails(_ map[string]interface{}) (map[string][]byte, error) {
-	return o.CustomConnectionKeys, nil
+	return o.AdditionalConnectionDetails, nil
 }
 
 // Parameterizable is mock Parameterizable.

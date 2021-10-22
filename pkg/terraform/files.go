@@ -31,13 +31,6 @@ import (
 	"github.com/crossplane-contrib/terrajet/pkg/resource/json"
 )
 
-const (
-	// AnnotationKeyPrivateRawAttribute is the key that points to private attribute
-	// of the Terraform State. It's non-sensitive and used by provider to store
-	// arbitrary metadata, usually details about schema version.
-	AnnotationKeyPrivateRawAttribute = "terrajet.crossplane.io/provider-meta"
-)
-
 // FileProducerOption allows you to configure FileProducer
 type FileProducerOption func(*FileProducer)
 
@@ -122,7 +115,7 @@ func (fp *FileProducer) WriteTFState() error {
 		return errors.Wrap(err, "cannot marshal produced state attributes")
 	}
 	var privateRaw []byte
-	if pr, ok := fp.Resource.GetAnnotations()[AnnotationKeyPrivateRawAttribute]; ok {
+	if pr, ok := fp.Resource.GetAnnotations()[resource.AnnotationKeyPrivateRawAttribute]; ok {
 		privateRaw = []byte(pr)
 	}
 	s := json.NewStateV4()

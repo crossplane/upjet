@@ -22,14 +22,22 @@ import (
 	"runtime/debug"
 	"strings"
 
+	xpmeta "github.com/crossplane/crossplane-runtime/pkg/meta"
+
 	"github.com/pkg/errors"
 )
 
 const (
+	// AnnotationKeyPrivateRawAttribute is the key that points to private attribute
+	// of the Terraform State. It's non-sensitive and used by provider to store
+	// arbitrary metadata, usually details about schema version.
+	AnnotationKeyPrivateRawAttribute = "terrajet.crossplane.io/provider-meta"
+
 	// CNameWildcard can be used as the canonical name of a value filter option
 	// that will apply to all fields of a struct
 	CNameWildcard = ""
-
+)
+const (
 	// error messages
 	errFmtTypeMismatch        = "observed object's type %q does not match desired object's type %q"
 	errFmtPanic               = "recovered from panic: %v\n%s"
@@ -43,6 +51,35 @@ const (
 type GenericLateInitializer struct {
 	valueFilters []ValueFilter
 	nameFilters  []NameFilter
+}
+
+// LateInitializeAnnotations late initializes annotations of the resource
+func LateInitializeAnnotations(tr Terraformed, attr map[string]interface{}, privateRaw string) (bool, error) {
+	if tr.GetAnnotations()[AnnotationKeyPrivateRawAttribute] == privateRaw &&
+		xpmeta.GetExternalName(tr) != "" {
+		return false, nil
+	}
+	xpmeta.AddAnnotations(tr, map[string]string{
+		AnnotationKeyPrivateRawAttribute: privateRaw,
+	})
+	if xpmeta.GetExternalName(tr) != "" {
+		return true, nil
+	}
+
+	// Terraform stores id for the external resource as an attribute in the
+	// resource state. Key for the attribute holding external identifier is
+	// resource specific. We rely on GetTerraformResourceIDField() function
+	// to find out that key.
+	id, exists := attr[tr.GetTerraformResourceIDField()]
+	if !exists {
+		return false, errors.Errorf("no value for id field: %s", tr.GetTerraformResourceIDField())
+	}
+	extID, ok := id.(string)
+	if !ok {
+		return false, errors.Errorf("value of id field is not a string: %v", id)
+	}
+	xpmeta.SetExternalName(tr, extID)
+	return true, nil
 }
 
 // GenericLateInitializerOption are options that control the late-initialization

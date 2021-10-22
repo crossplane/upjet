@@ -51,9 +51,6 @@ type Builder struct {
 // Build returns parameters and observation types built out of Terraform schema.
 func (g *Builder) Build(cfg *config.Resource, schema *schema.Resource) ([]*types.Named, twtypes.Comments, error) {
 	_, _, err := g.buildResource(schema, cfg, nil, nil, cfg.Kind)
-	if len(cfg.Sensitive.CustomFieldPaths) > 0 {
-		return nil, nil, errors.Errorf("following sensitive custom field paths not supported: %s", cfg.Sensitive.CustomFieldPaths)
-	}
 	return g.genTypes, g.comments, errors.Wrapf(err, "cannot build the types")
 }
 
@@ -111,11 +108,7 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 		}
 
 		fieldNameCamel := fieldName.Camel
-		if index := containsAt(cfg.Sensitive.CustomFieldPaths, tfFieldPath); index != -1 || sch.Sensitive {
-			if index != -1 {
-				cfg.Sensitive.CustomFieldPaths = remove(cfg.Sensitive.CustomFieldPaths, index)
-			}
-
+		if sch.Sensitive {
 			if isObservation(sch) {
 				cfg.Sensitive.AddFieldPath(tfFieldPath, "status.atProvider."+xpFieldPath)
 				// Drop an observation field from schema if it is sensitive.
@@ -310,18 +303,4 @@ func fieldPath(parts []string) string {
 		seg[i] = fieldpath.Field(p)
 	}
 	return seg.String()
-}
-
-func containsAt(ss []string, s string) int {
-	for i, v := range ss {
-		if s == v {
-			return i
-		}
-	}
-	return -1
-}
-
-func remove(ss []string, i int) []string {
-	ss[i] = ss[len(ss)-1]
-	return ss[:len(ss)-1]
 }
