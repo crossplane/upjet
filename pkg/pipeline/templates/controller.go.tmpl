@@ -27,7 +27,7 @@ func Setup(mgr ctrl.Manager, l logging.Logger, rl workqueue.RateLimiter, s terra
 	name := managed.ControllerName({{ .TypePackageAlias }}{{ .CRD.Kind }}GroupVersionKind.String())
 	r := managed.NewReconciler(mgr,
 		xpresource.ManagedKind({{ .TypePackageAlias }}{{ .CRD.Kind }}GroupVersionKind),
-		managed.WithExternalConnecter(tjcontroller.NewConnector(mgr.GetClient(), ws, s,
+		managed.WithExternalConnecter(tjcontroller.NewConnector(mgr.GetClient(), ws, s, config.Store.GetForResource("{{ .ResourceType }}"),
 			{{- if .UseAsync }}
 			tjcontroller.UseAsync(),
 			{{- end}}

@@ -22,18 +22,27 @@ import (
 	"regexp"
 	"strings"
 
+	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
+	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
+	"github.com/pkg/errors"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 
-	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
-	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
-	"github.com/pkg/errors"
+	"github.com/crossplane-contrib/terrajet/pkg/config"
 )
 
 const (
-	errCannotExpandWildcards = "cannot expand wildcards"
-
+	errCannotExpandWildcards          = "cannot expand wildcards"
 	errFmtCannotGetStringForFieldPath = "cannot not get a string for fieldpath %q"
+)
+
+const (
+	// prefixAttribute used to prefix connection detail keys for sensitive
+	// Terraform attributes. We need this prefix to ensure that they are not
+	// overridden by any custom connection key configured which would break
+	// our ability to build tfstate back.
+	prefixAttribute = "attribute."
 )
 
 var reEndsWithIndex *regexp.Regexp
@@ -53,10 +62,48 @@ type SecretClient interface {
 	GetSecretValue(ctx context.Context, sel v1.SecretKeySelector) ([]byte, error)
 }
 
-// GetConnectionDetails returns strings matching provided field paths in the
+// GetConnectionDetails returns connection details including the sensitive
+// Terraform attributes and additions connection details configured.
+func GetConnectionDetails(attr map[string]interface{}, tr Terraformed, cfg config.Resource) (managed.ConnectionDetails, error) {
+	conn, err := GetSensitiveAttributes(attr, tr.GetConnectionDetailsMapping(), tr.GetTerraformResourceIDField())
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot get connection details")
+	}
+
+	var custom map[string][]byte
+	// TODO(turkenh): Once we have automatic defaulting, remove this if check.
+	if cfg.Sensitive.AdditionalConnectionDetailsFn != nil {
+		if custom, err = cfg.Sensitive.AdditionalConnectionDetailsFn(attr); err != nil {
+			return nil, errors.Wrap(err, "cannot get custom connection keys")
+		}
+	}
+
+	if conn == nil {
+		// if there is no sensitive attributes but still some custom connection
+		// keys, e.g. endpoint
+		return custom, nil
+	}
+	for k, v := range custom {
+		if _, ok := conn[k]; ok {
+			// We return error if a custom key tries to override an existing
+			// connection key. This is because we use connection keys to rebuild
+			// the tfstate, i.e. otherwise we would lose the original value in
+			// tfstate.
+			// Indeed, we are prepending "attribute_" to the Terraform
+			// state sensitive keys and connection keys starting with this
+			// prefix are reserved and should not be used as a custom connection
+			// key.
+			return nil, errors.Errorf("custom connection keys cannot start with %q, overriding reserved connection key (%q) is not allowed", k, prefixAttribute)
+		}
+		conn[k] = v
+	}
+	return conn, nil
+}
+
+// GetSensitiveAttributes returns strings matching provided field paths in the
 // input data.
 // See the unit tests for examples.
-func GetConnectionDetails(from map[string]interface{}, mapping map[string]string, idField string) (map[string][]byte, error) {
+func GetSensitiveAttributes(from map[string]interface{}, mapping map[string]string, idField string) (map[string][]byte, error) {
 	if len(mapping) == 0 {
 		return nil, nil
 	}
@@ -82,13 +129,13 @@ func GetConnectionDetails(from map[string]interface{}, mapping map[string]string
 			if err != nil {
 				return nil, errors.Wrapf(err, "cannot convert fieldpath %q to secret key", fp)
 			}
-			vals[k] = []byte(v)
+			vals[fmt.Sprintf("%s%s", prefixAttribute, k)] = []byte(v)
 		}
 	}
 
 	id, ok := from[idField].(string)
 	if ok {
-		vals[idField] = []byte(id)
+		vals[fmt.Sprintf("%s%s", prefixAttribute, idField)] = []byte(id)
 	}
 	return vals, nil
 }
@@ -156,7 +203,12 @@ func GetSensitiveObservation(ctx context.Context, client SecretClient, from *v1.
 
 	paveTF := fieldpath.Pave(into)
 	for k, v := range conn {
-		fp, err := secretKeyToFieldPath(k)
+		if !strings.HasPrefix(k, prefixAttribute) {
+			// this is not an attribute key (e.g. custom key), we don't put it
+			// into tfstate attributes.
+			continue
+		}
+		fp, err := secretKeyToFieldPath(strings.TrimPrefix(k, prefixAttribute))
 		if err != nil {
 			return errors.Wrapf(err, "cannot convert secret key %q to fieldpath", k)
 		}

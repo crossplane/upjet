@@ -25,6 +25,10 @@ type SetIdentifierArgumentFn func(base map[string]interface{}, name string)
 // name is calculated by provider and doesn't have any effect on spec fields.
 func NopSetIdentifierArgument(_ map[string]interface{}, _ string) {}
 
+// AdditionalConnectionDetailsFn functions adds custom keys to connection details
+// secret using input terraform attributes
+type AdditionalConnectionDetailsFn func(attr map[string]interface{}) (map[string][]byte, error)
+
 // ResourceOption allows setting optional fields of a Resource object.
 type ResourceOption func(*Resource)
 
@@ -79,9 +83,9 @@ type References map[string]Reference
 
 // Sensitive represents configurations to handle sensitive information
 type Sensitive struct {
-	// CustomFieldPaths are the list of custom field paths to sensitive fields
-	// in terraform attributes.
-	CustomFieldPaths []string
+	// AdditionalConnectionDetailsFn is the path for function adding additional
+	// connection details keys
+	AdditionalConnectionDetailsFn AdditionalConnectionDetailsFn
 
 	fieldPaths map[string]string
 }

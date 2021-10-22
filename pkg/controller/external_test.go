@@ -29,6 +29,7 @@ import (
 	"github.com/pkg/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/crossplane-contrib/terrajet/pkg/config"
 	"github.com/crossplane-contrib/terrajet/pkg/resource"
 	"github.com/crossplane-contrib/terrajet/pkg/resource/fake"
 	"github.com/crossplane-contrib/terrajet/pkg/resource/json"
@@ -84,11 +85,11 @@ func (c WorkspaceFns) Plan(ctx context.Context) (terraform.PlanResult, error) {
 }
 
 type StoreFns struct {
-	WorkspaceFn func(ctx context.Context, c resource.SecretClient, tr resource.Terraformed, ts terraform.Setup) (*terraform.Workspace, error)
+	WorkspaceFn func(ctx context.Context, c resource.SecretClient, tr resource.Terraformed, ts terraform.Setup, cfg config.Resource) (*terraform.Workspace, error)
 }
 
-func (s StoreFns) Workspace(ctx context.Context, c resource.SecretClient, tr resource.Terraformed, ts terraform.Setup) (*terraform.Workspace, error) {
-	return s.WorkspaceFn(ctx, c, tr, ts)
+func (s StoreFns) Workspace(ctx context.Context, c resource.SecretClient, tr resource.Terraformed, ts terraform.Setup, cfg config.Resource) (*terraform.Workspace, error) {
+	return s.WorkspaceFn(ctx, c, tr, ts, cfg)
 }
 
 func TestConnect(t *testing.T) {
@@ -133,7 +134,7 @@ func TestConnect(t *testing.T) {
 					return terraform.Setup{}, nil
 				},
 				store: StoreFns{
-					WorkspaceFn: func(_ context.Context, _ resource.SecretClient, _ resource.Terraformed, _ terraform.Setup) (*terraform.Workspace, error) {
+					WorkspaceFn: func(_ context.Context, _ resource.SecretClient, _ resource.Terraformed, _ terraform.Setup, _ config.Resource) (*terraform.Workspace, error) {
 						return nil, errBoom
 					},
 				},
@@ -149,7 +150,7 @@ func TestConnect(t *testing.T) {
 					return terraform.Setup{}, nil
 				},
 				store: StoreFns{
-					WorkspaceFn: func(_ context.Context, _ resource.SecretClient, _ resource.Terraformed, _ terraform.Setup) (*terraform.Workspace, error) {
+					WorkspaceFn: func(_ context.Context, _ resource.SecretClient, _ resource.Terraformed, _ terraform.Setup, _ config.Resource) (*terraform.Workspace, error) {
 						return nil, nil
 					},
 				},
@@ -158,7 +159,7 @@ func TestConnect(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			c := NewConnector(nil, tc.args.store, tc.args.setupFn)
+			c := NewConnector(nil, tc.args.store, tc.args.setupFn, config.Resource{})
 			_, err := c.Connect(context.TODO(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nConnect(...): -want error, +got error:\n%s", tc.reason, diff)

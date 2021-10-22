@@ -69,7 +69,9 @@ func (tg *TerraformedGenerator) Generate(c *config.Resource, sch *schema.Resourc
 			"ResourceType":    c.TerraformResourceType,
 			"SchemaVersion":   sch.SchemaVersion,
 		},
-		"SensitiveFields": c.Sensitive.GetFieldPaths(),
+		"Sensitive": map[string]interface{}{
+			"Fields": c.Sensitive.GetFieldPaths(),
+		},
 		"LateInitializer": map[string]interface{}{
 			"IgnoredFields": c.LateInitializer.IgnoredFields,
 		},
