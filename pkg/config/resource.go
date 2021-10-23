@@ -55,9 +55,6 @@ func NewResource(version, kind, terraformResourceType string, opts ...ResourceOp
 		ExternalName: ExternalName{
 			SetIdentifierArgumentFn: NopSetIdentifierArgument,
 		},
-		Sensitive: Sensitive{
-			CustomKeysFn: NopCustomConnectionKeys,
-		},
 	}
 	for _, f := range opts {
 		f(c)

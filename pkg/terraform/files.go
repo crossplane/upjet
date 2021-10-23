@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/pkg/errors"
@@ -154,17 +155,20 @@ func (fp *FileProducer) WriteMainTF() error {
 	fp.parameters["lifecycle"] = map[string]bool{
 		"prevent_destroy": !meta.WasDeleted(fp.Resource),
 	}
+	// Note(turkenh): To use third party providers, we need to configure
+	// provider name in required_providers.
+	providerSource := strings.Split(fp.Setup.Requirement.Source, "/")
 	m := map[string]interface{}{
 		"terraform": map[string]interface{}{
 			"required_providers": map[string]interface{}{
-				"tf-provider": map[string]string{
+				providerSource[1]: map[string]string{
 					"source":  fp.Setup.Requirement.Source,
 					"version": fp.Setup.Requirement.Version,
 				},
 			},
 		},
 		"provider": map[string]interface{}{
-			"tf-provider": fp.Setup.Configuration,
+			providerSource[1]: fp.Setup.Configuration,
 		},
 		"resource": map[string]interface{}{
 			fp.Resource.GetTerraformResourceType(): map[string]interface{}{
