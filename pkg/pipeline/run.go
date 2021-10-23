@@ -88,7 +88,16 @@ func Run(pc config.Provider) { // nolint:gocyclo
 		fmt.Printf("Generating code for resource: %s\n", name)
 
 		words := strings.Split(name, "_")
+		// As group name we default to the second element if resource name
+		// has at least 3 elements, otherwise, we took the first element as
+		// default group name, examples:
+		// - aws_rds_cluster => rds
+		// - aws_rds_cluster_parameter_group => rds
+		// - kafka_topic => kafka
 		groupName := words[1]
+		if len(words) < 3 {
+			groupName = words[0]
+		}
 		if len(groups[groupName]) == 0 {
 			groups[groupName] = map[string]*schema.Resource{}
 		}
