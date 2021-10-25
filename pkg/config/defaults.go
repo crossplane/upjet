@@ -37,4 +37,9 @@ var (
 		SetIdentifierArgumentFn: NopSetIdentifierArgument,
 		DisableNameInitializer:  true,
 	}
+
+	DefaultResource = Resource{
+		TerraformIDFieldName: "id",
+		ExternalName:         NameAsIdentifier,
+	}
 )

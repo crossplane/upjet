@@ -18,7 +18,6 @@ package pipeline
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -32,19 +31,15 @@ import (
 	"github.com/iancoleman/strcase"
 )
 
+const (
+	defaultAPIVersion = "v1alpha1"
+)
+
 func Run(pc config.Provider) { // nolint:gocyclo
 	// Cyclomatic complexity of this function is above our goal of 10,
 	// and it establishes a Terrajet code generation pipeline that's very similar
 	// to other Terrajet based providers.
 	// delete API dirs
-	/*	deleteGenDirs("../apis", map[string]struct{}{
-			"v1alpha1": {},
-			"rconfig":  {},
-		})
-		// delete controller dirs
-		deleteGenDirs("../internal/controller", map[string]struct{}{
-			"config": {},
-		})*/
 
 	//genConfig.SetResourceConfigurations()
 	wd, err := os.Getwd()
@@ -66,22 +61,8 @@ func Run(pc config.Provider) { // nolint:gocyclo
 			fmt.Printf("Skipping resource %s because it has no schema\n", name)
 			continue
 		}
-		if _, ok := pc.SkipList[name]; ok {
-			continue
-		}
 
-		match := false
-		for _, r := range pc.IncludeList {
-			ok, err := regexp.MatchString(r, name)
-			if err != nil {
-				panic(errors.Wrap(err, "cannot match regular expression"))
-			}
-			if ok {
-				match = true
-				break
-			}
-		}
-		if !match {
+		if matches(name, pc.SkipList) || !matches(name, pc.IncludeList) {
 			continue
 		}
 
@@ -112,8 +93,8 @@ func Run(pc config.Provider) { // nolint:gocyclo
 		filepath.Join(pc.ModulePath, "internal", "controller", "providerconfig"),
 	}
 	for group, resources := range groups {
-		version := "v1alpha1"
-		versionGen := NewVersionGenerator(wd, pc.ModulePath, strings.ToLower(group)+pc.GroupSuffix, version)
+		// Todo(turkenh): Handle APIVersions other than "v1alpha1"
+		versionGen := NewVersionGenerator(wd, pc.ModulePath, strings.ToLower(group)+pc.GroupSuffix, defaultAPIVersion)
 
 		crdGen := NewCRDGenerator(versionGen.Package(), versionGen.DirectoryPath(), strings.ToLower(group)+pc.GroupSuffix, pc.ShortName)
 		tfGen := NewTerraformedGenerator(versionGen.Package(), versionGen.DirectoryPath())
@@ -130,18 +111,22 @@ func Run(pc config.Provider) { // nolint:gocyclo
 		for _, name := range keys {
 			// We don't want Azurerm prefix in all kinds.
 			kind := strcase.ToCamel(strings.TrimPrefix(strings.TrimPrefix(name, pc.ResourcePrefix), group))
-			resource := resources[name]
-			r := config.NewResource(version, kind, name)
-			if err = r.OverrideConfig(pc.GetForResource(name)); err != nil {
-				panic(errors.Wrap(err, "cannot override config"))
+			resourceSchema := resources[name]
+			resourceConfig := pc.GetResource(name)
+			resourceConfig.TerraformResourceName = name
+			if resourceConfig.Version == "" {
+				resourceConfig.Version = defaultAPIVersion
 			}
-			if err := crdGen.Generate(r, resource); err != nil {
+			if resourceConfig.Kind == "" {
+				resourceConfig.Kind = kind
+			}
+			if err := crdGen.Generate(&resourceConfig, resourceSchema); err != nil {
 				panic(errors.Wrap(err, "cannot generate crd"))
 			}
-			if err := tfGen.Generate(r, resource); err != nil {
+			if err := tfGen.Generate(&resourceConfig, resourceSchema); err != nil {
 				panic(errors.Wrap(err, "cannot generate terraformed"))
 			}
-			ctrlPkgPath, err := ctrlGen.Generate(r, versionGen.Package().Path())
+			ctrlPkgPath, err := ctrlGen.Generate(&resourceConfig, versionGen.Package().Path())
 			if err != nil {
 				panic(errors.Wrap(err, "cannot generate controller"))
 			}
@@ -170,23 +155,15 @@ func Run(pc config.Provider) { // nolint:gocyclo
 	fmt.Printf("\nGenerated %d resources!\n", count)
 }
 
-// delete API subdirs for a clean start
-func deleteGenDirs(rootDir string, keepMap map[string]struct{}) {
-	files, err := ioutil.ReadDir(rootDir)
-	if err != nil {
-		panic(errors.Wrapf(err, "cannot list files under %s", rootDir))
-	}
-
-	for _, f := range files {
-		if !f.IsDir() {
-			continue
+func matches(name string, regexList []string) bool {
+	for _, r := range regexList {
+		ok, err := regexp.MatchString(r, name)
+		if err != nil {
+			panic(errors.Wrap(err, "cannot match regular expression"))
 		}
-		if _, ok := keepMap[f.Name()]; ok {
-			continue
-		}
-		removeDir := filepath.Join(rootDir, f.Name())
-		if err := os.RemoveAll(removeDir); err != nil {
-			panic(errors.Wrapf(err, "cannot remove API dir: %s", removeDir))
+		if ok {
+			return true
 		}
 	}
+	return false
 }

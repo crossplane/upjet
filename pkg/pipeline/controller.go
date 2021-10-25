@@ -45,25 +45,25 @@ type ControllerGenerator struct {
 }
 
 // Generate writes controller setup functions.
-func (cg *ControllerGenerator) Generate(c *config.Resource, typesPkgPath string) (pkgPath string, err error) {
-	controllerPkgPath := filepath.Join(cg.ModulePath, "internal", "controller", strings.ToLower(strings.Split(cg.Group, ".")[0]), strings.ToLower(c.Kind))
-	ctrlFile := wrapper.NewFile(controllerPkgPath, strings.ToLower(c.Kind), templates.ControllerTemplate,
+func (cg *ControllerGenerator) Generate(cfg *config.Resource, typesPkgPath string) (pkgPath string, err error) {
+	controllerPkgPath := filepath.Join(cg.ModulePath, "internal", "controller", strings.ToLower(strings.Split(cg.Group, ".")[0]), strings.ToLower(cfg.Kind))
+	ctrlFile := wrapper.NewFile(controllerPkgPath, strings.ToLower(cfg.Kind), templates.ControllerTemplate,
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath("hack/boilerplate.go.txt"), // todo
 	)
 
 	vars := map[string]interface{}{
-		"Package": strings.ToLower(c.Kind),
+		"Package": strings.ToLower(cfg.Kind),
 		"CRD": map[string]string{
-			"Kind": c.Kind,
+			"Kind": cfg.Kind,
 		},
-		"DisableNameInitializer": c.ExternalName.DisableNameInitializer,
+		"DisableNameInitializer": cfg.ExternalName.DisableNameInitializer,
 		"TypePackageAlias":       ctrlFile.Imports.UsePackage(typesPkgPath),
-		"UseAsync":               c.UseAsync,
-		"ResourceType":           c.TerraformResourceType,
+		"UseAsync":               cfg.UseAsync,
+		"ResourceType":           cfg.TerraformResourceName,
 	}
 
-	filePath := filepath.Join(cg.ControllerGroupDir, strings.ToLower(c.Kind), "zz_controller.go")
+	filePath := filepath.Join(cg.ControllerGroupDir, strings.ToLower(cfg.Kind), "zz_controller.go")
 	return controllerPkgPath, errors.Wrap(
 		ctrlFile.Write(filePath, vars, os.ModePerm),
 		"cannot write controller file",

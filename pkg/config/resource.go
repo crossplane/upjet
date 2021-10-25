@@ -16,8 +16,6 @@ limitations under the License.
 
 package config
 
-import "github.com/imdario/mergo"
-
 // SetIdentifierArgumentFn sets the name of the resource in Terraform attributes map.
 type SetIdentifierArgumentFn func(base map[string]interface{}, name string)
 
@@ -43,23 +41,6 @@ func WithTerraformIDFieldName(n string) ResourceOption {
 	return func(c *Resource) {
 		c.TerraformIDFieldName = n
 	}
-}
-
-// NewResource returns a new configuration of type *Resource.
-func NewResource(version, kind, terraformResourceType string, opts ...ResourceOption) *Resource {
-	c := &Resource{
-		Version:               version,
-		Kind:                  kind,
-		TerraformResourceType: terraformResourceType,
-		TerraformIDFieldName:  "id",
-		ExternalName: ExternalName{
-			SetIdentifierArgumentFn: NopSetIdentifierArgument,
-		},
-	}
-	for _, f := range opts {
-		f(c)
-	}
-	return c
 }
 
 // ExternalName contains all information that is necessary for naming operations,
@@ -126,9 +107,15 @@ type Resource struct {
 	// Kind is the kind of the CRD.
 	Kind string
 
-	// TerraformResourceType is the name of the resource type in Terraform,
-	// like aws_rds_cluster.
-	TerraformResourceType string
+	// TerraformIDFieldName is the name of the ID field in Terraform state of
+	// the resource. Its default is "id" and in almost all cases, you don't need
+	// to overwrite it.
+	TerraformIDFieldName string
+
+	// UseAsync should be enabled for resource whose creation and/or deletion
+	// takes more than 1 minute to complete such as Kubernetes clusters or
+	// databases.
+	UseAsync bool
 
 	// ExternalName allows you to specify a custom ExternalName.
 	ExternalName ExternalName
@@ -142,19 +129,7 @@ type Resource struct {
 	// LateInitializer configuration to control late-initialization behaviour
 	LateInitializer LateInitializer
 
-	// TerraformIDFieldName is the name of the ID field in Terraform state of
-	// the resource. Its default is "id" and in almost all cases, you don't need
-	// to overwrite it.
-	TerraformIDFieldName string
-
-	// UseAsync should be enabled for resource whose creation and/or deletion
-	// takes more than 1 minute to complete such as Kubernetes clusters or
-	// databases.
-	UseAsync bool
-}
-
-// OverrideConfig merges existing resource configuration with the input
-// one by overriding the existing one.
-func (c *Resource) OverrideConfig(o Resource) error {
-	return mergo.Merge(c, o, mergo.WithOverride)
+	// TerraformResourceName is the name of the resource type in Terraform,
+	// e.g. aws_rds_cluster.
+	TerraformResourceName string
 }
