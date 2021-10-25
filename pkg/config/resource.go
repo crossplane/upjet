@@ -83,6 +83,21 @@ type LateInitializer struct {
 	// IgnoredFields are the canonical field names to be skipped during
 	// late-initialization
 	IgnoredFields []string
+
+	ignoredCanonicalFieldPaths []string
+}
+
+// GetIgnoredCanonicalFields returns the ignoredCanonicalFields
+func (l *LateInitializer) GetIgnoredCanonicalFields() []string {
+	return l.ignoredCanonicalFieldPaths
+}
+
+// AddIgnoredCanonicalFields sets ignored canonical fields
+func (l *LateInitializer) AddIgnoredCanonicalFields(cf string) {
+	if l.ignoredCanonicalFieldPaths == nil {
+		l.ignoredCanonicalFieldPaths = make([]string, 0)
+	}
+	l.ignoredCanonicalFieldPaths = append(l.ignoredCanonicalFieldPaths, cf)
 }
 
 // GetFieldPaths returns the fieldPaths map for Sensitive

@@ -96,8 +96,19 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 		tfTag := fmt.Sprintf("%s,omitempty", fieldName.Snake)
 		jsonTag := fmt.Sprintf("%s,omitempty", fieldName.LowerCamelComputed)
 
+		// Terraform paths, e.g. { "lifecycle_rule", "*", "transition", "*", "days" } for https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket#lifecycle_rule
 		tfPaths := append(tfPath, fieldName.Snake)
+		// Crossplane paths, e.g. {"lifecycleRule", "*", "transition", "*", "days"}
 		xpPaths := append(xpPath, fieldName.LowerCamel)
+		// Canonical paths, e.g. {"LifecycleRule", "Transition", "Days"}
+		cnPaths := append(names[1:], fieldName.Camel)
+
+		for _, f := range cfg.LateInitializer.IgnoredFields {
+			// Convert configuration input from Terraform path to canonical path
+			if f == fieldPath(tfPaths) {
+				cfg.LateInitializer.AddIgnoredCanonicalFields(fieldPath(cnPaths))
+			}
+		}
 
 		fieldType, err := g.buildSchema(sch, cfg, tfPaths, xpPaths, append(names, fieldName.Camel))
 		if err != nil {

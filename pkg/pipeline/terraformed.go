@@ -73,7 +73,7 @@ func (tg *TerraformedGenerator) Generate(cfg *config.Resource, sch *schema.Resou
 			"Fields": cfg.Sensitive.GetFieldPaths(),
 		},
 		"LateInitializer": map[string]interface{}{
-			"IgnoredFields": cfg.LateInitializer.IgnoredFields,
+			"IgnoredFields": cfg.LateInitializer.GetIgnoredCanonicalFields(),
 		},
 	}
 
