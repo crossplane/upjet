@@ -16,6 +16,10 @@ limitations under the License.
 
 package config
 
+const (
+	defaultAPIVersion = "v1alpha1"
+)
+
 // Common ExternalName configurations.
 var (
 	// NameAsIdentifier uses "name" field in the arguments as the identifier of
@@ -39,6 +43,7 @@ var (
 	}
 
 	DefaultResource = Resource{
+		Version:              defaultAPIVersion,
 		TerraformIDFieldName: "id",
 		ExternalName:         NameAsIdentifier,
 	}

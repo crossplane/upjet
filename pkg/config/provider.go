@@ -2,13 +2,16 @@ package config
 
 import (
 	"fmt"
+	"regexp"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/iancoleman/strcase"
+	"github.com/pkg/errors"
 )
 
 // Provider stores configuration for a provider to generate with terrajet.
 type Provider struct {
-	Schema         *schema.Provider
 	GroupSuffix    string
 	ResourcePrefix string
 	ShortName      string
@@ -17,8 +20,7 @@ type Provider struct {
 	SkipList    []string
 	IncludeList []string
 
-	DefaultResource Resource
-	resources       map[string]Resource
+	Resources map[string]*Resource
 }
 
 type ProviderOption func(*Provider)
@@ -47,45 +49,76 @@ func WithSkipList(l []string) ProviderOption {
 	}
 }
 
-func WithDefaultResource(r Resource) ProviderOption {
-	return func(p *Provider) {
-		p.DefaultResource = r
-	}
-}
-
 func NewProvider(schema *schema.Provider, prefix string, modulePath string, opts ...ProviderOption) Provider {
 	p := Provider{
-		Schema:         schema,
 		ResourcePrefix: fmt.Sprintf("%s_", prefix),
 		ModulePath:     modulePath,
 		GroupSuffix:    fmt.Sprintf(".%s.tf.crossplane.io", prefix),
 		ShortName:      fmt.Sprintf("tf%s", prefix),
 
 		IncludeList: []string{
-			// Include all resources starting with the prefix
+			// Include all Resources
 			".+",
 		},
-		DefaultResource: DefaultResource,
-		resources:       map[string]Resource{},
+		Resources: map[string]*Resource{},
 	}
 
 	for _, o := range opts {
 		o(&p)
 	}
 
+	p.parseSchema(schema)
+
 	return p
 }
 
-// GetResource gets the configuration for a given resource.
-func (p *Provider) GetResource(resource string) Resource {
-	r, ok := p.resources[resource]
-	if ok {
-		return r
-	}
-	return p.DefaultResource
+// OverrideResourceConfig overrides default configuration for a given resource
+// with the provided configuration.
+func (p *Provider) OverrideResourceConfig(resource string, o *Resource) {
+	p.Resources[resource].OverrideConfig(o)
 }
 
-// SetResource sets configuration for a given resource.
-func (p *Provider) SetResource(resource string, cfg Resource) {
-	p.resources[resource] = cfg
+func (p *Provider) parseSchema(schema *schema.Provider) {
+	for name, trResource := range schema.ResourcesMap {
+		if len(trResource.Schema) == 0 {
+			// There are resources with no schema, that we will address later.
+			fmt.Printf("Skipping resource %s because it has no schema\n", name)
+			continue
+		}
+		if matches(name, p.SkipList) || !matches(name, p.IncludeList) {
+			continue
+		}
+		words := strings.Split(name, "_")
+		// As group name we default to the second element if resource name
+		// has at least 3 elements, otherwise, we took the first element as
+		// default group name, examples:
+		// - aws_rds_cluster => rds
+		// - aws_rds_cluster_parameter_group => rds
+		// - kafka_topic => kafka
+		groupName := words[1]
+		if len(words) < 3 {
+			groupName = words[0]
+		}
+
+		resource := DefaultResource
+		resource.Group = groupName
+		resource.Kind = strcase.ToCamel(strings.TrimPrefix(strings.TrimPrefix(name, p.ResourcePrefix), groupName))
+		resource.TerraformResourceName = name
+		resource.TerraformResource = trResource
+
+		p.Resources[name] = &resource
+	}
+}
+
+func matches(name string, regexList []string) bool {
+	for _, r := range regexList {
+		ok, err := regexp.MatchString(r, name)
+		if err != nil {
+			panic(errors.Wrap(err, "cannot match regular expression"))
+		}
+		if ok {
+			return true
+		}
+	}
+	return false
 }

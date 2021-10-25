@@ -16,6 +16,11 @@ limitations under the License.
 
 package config
 
+import (
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/imdario/mergo"
+)
+
 // SetIdentifierArgumentFn sets the name of the resource in Terraform attributes map.
 type SetIdentifierArgumentFn func(base map[string]interface{}, name string)
 
@@ -116,16 +121,26 @@ func (s *Sensitive) AddFieldPath(tf, xp string) {
 // Resource is the set of information that you can override at different steps
 // of the code generation pipeline.
 type Resource struct {
-	// Version is the version CRD will have.
-	Version string
+	// TerraformResourceName is the name of the resource type in Terraform,
+	// e.g. aws_rds_cluster.
+	TerraformResourceName string
 
-	// Kind is the kind of the CRD.
-	Kind string
+	// TerraformResource is the Terraform representation of the resource.
+	TerraformResource *schema.Resource
 
 	// TerraformIDFieldName is the name of the ID field in Terraform state of
 	// the resource. Its default is "id" and in almost all cases, you don't need
 	// to overwrite it.
 	TerraformIDFieldName string
+
+	// Group is the group of CRD.
+	Group string
+
+	// Version is the version CRD will have.
+	Version string
+
+	// Kind is the kind of the CRD.
+	Kind string
 
 	// UseAsync should be enabled for resource whose creation and/or deletion
 	// takes more than 1 minute to complete such as Kubernetes clusters or
@@ -143,8 +158,10 @@ type Resource struct {
 
 	// LateInitializer configuration to control late-initialization behaviour
 	LateInitializer LateInitializer
+}
 
-	// TerraformResourceName is the name of the resource type in Terraform,
-	// e.g. aws_rds_cluster.
-	TerraformResourceName string
+// OverrideConfig merges existing resource configuration with the input
+// one by overriding the existing one.
+func (c *Resource) OverrideConfig(o *Resource) error {
+	return mergo.Merge(c, o, mergo.WithOverride)
 }

@@ -23,7 +23,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	twtypes "github.com/muvaf/typewriter/pkg/types"
 	"github.com/muvaf/typewriter/pkg/wrapper"
 	"github.com/pkg/errors"
@@ -57,15 +56,15 @@ type CRDGenerator struct {
 }
 
 // Generate builds and writes a new CRD out of Terraform resource definition.
-func (cg *CRDGenerator) Generate(cfg *config.Resource, sch *schema.Resource) error {
+func (cg *CRDGenerator) Generate(cfg *config.Resource) error {
 	file := wrapper.NewFile(cg.pkg.Path(), cg.pkg.Name(), templates.CRDTypesTemplate,
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath("hack/boilerplate.go.txt"), // todo
 	)
 	for _, omit := range cfg.ExternalName.OmittedFields {
-		delete(sch.Schema, omit)
+		delete(cfg.TerraformResource.Schema, omit)
 	}
-	typeList, comments, err := tjtypes.NewBuilder(cg.pkg).Build(cfg, sch)
+	typeList, comments, err := tjtypes.NewBuilder(cg.pkg).Build(cfg)
 	if err != nil {
 		return errors.Wrapf(err, "cannot build types for %s", cfg.Kind)
 	}

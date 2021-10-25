@@ -53,8 +53,8 @@ type Builder struct {
 }
 
 // Build returns parameters and observation types built out of Terraform schema.
-func (g *Builder) Build(cfg *config.Resource, schema *schema.Resource) ([]*types.Named, twtypes.Comments, error) {
-	_, _, err := g.buildResource(schema, cfg, nil, nil, cfg.Kind)
+func (g *Builder) Build(cfg *config.Resource) ([]*types.Named, twtypes.Comments, error) {
+	_, _, err := g.buildResource(cfg.TerraformResource, cfg, nil, nil, cfg.Kind)
 	return g.genTypes, g.comments, errors.Wrapf(err, "cannot build the types")
 }
 
