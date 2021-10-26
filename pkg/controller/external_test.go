@@ -337,7 +337,7 @@ func TestObserve(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			e := &external{workspace: tc.w}
+			e := &external{workspace: tc.w, config: config.Resource{}}
 			_, err := e.Observe(context.TODO(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nObserve(...): -want error, +got error:\n%s", tc.reason, diff)

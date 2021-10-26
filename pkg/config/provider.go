@@ -17,11 +17,12 @@ type ProviderConfig struct {
 
 // Provider stores configuration for a provider to generate with terrajet.
 type Provider struct {
-	GroupSuffix    string
-	ResourcePrefix string
-	ShortName      string
-	ModulePath     string
-	Config         ProviderConfig
+	GroupSuffix       string
+	ResourcePrefix    string
+	ShortName         string
+	ModulePath        string
+	Config            ProviderConfig
+	DefaultResourceFn DefaultResourceFn
 
 	SkipList    []string
 	IncludeList []string
@@ -29,6 +30,7 @@ type Provider struct {
 	Resources map[string]*Resource
 }
 
+type DefaultResourceFn func() Resource
 type ProviderOption func(*Provider)
 
 func WithGroupSuffix(s string) ProviderOption {
@@ -61,13 +63,19 @@ func WithProviderConfig(c ProviderConfig) ProviderOption {
 	}
 }
 
+func WithDefaultResourceFn(f DefaultResourceFn) ProviderOption {
+	return func(p *Provider) {
+		p.DefaultResourceFn = f
+	}
+}
+
 func NewProvider(schema *schema.Provider, prefix string, modulePath string, opts ...ProviderOption) Provider {
 	p := Provider{
-		ResourcePrefix: fmt.Sprintf("%s_", prefix),
-		ModulePath:     modulePath,
-		GroupSuffix:    fmt.Sprintf(".%s.tf.crossplane.io", prefix),
-		ShortName:      fmt.Sprintf("tf%s", prefix),
-
+		ResourcePrefix:    fmt.Sprintf("%s_", prefix),
+		ModulePath:        modulePath,
+		GroupSuffix:       fmt.Sprintf(".%s.tf.crossplane.io", prefix),
+		ShortName:         fmt.Sprintf("tf%s", prefix),
+		DefaultResourceFn: getDefaultResource,
 		Config: ProviderConfig{
 			Version:           defaultAPIVersion,
 			ControllerPackage: "providerconfig",
@@ -120,7 +128,7 @@ func (p *Provider) parseSchema(schema *schema.Provider) {
 			groupName = words[0]
 		}
 
-		resource := DefaultResource
+		resource := p.DefaultResourceFn()
 		resource.TerraformResourceName = name
 		resource.TerraformResource = trResource
 		resource.Group = groupName

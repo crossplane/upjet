@@ -53,12 +53,12 @@ type Builder struct {
 }
 
 // Build returns parameters and observation types built out of Terraform schema.
-func (g *Builder) Build(cfg *config.Resource) ([]*types.Named, twtypes.Comments, error) {
+func (g *Builder) Build(cfg config.Resource) ([]*types.Named, twtypes.Comments, error) {
 	_, _, err := g.buildResource(cfg.TerraformResource, cfg, nil, nil, cfg.Kind)
 	return g.genTypes, g.comments, errors.Wrapf(err, "cannot build the types")
 }
 
-func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPath []string, xpPath []string, names ...string) (*types.Named, *types.Named, error) { //nolint:gocyclo
+func (g *Builder) buildResource(res *schema.Resource, cfg config.Resource, tfPath []string, xpPath []string, names ...string) (*types.Named, *types.Named, error) { //nolint:gocyclo
 	// NOTE(muvaf): There can be fields in the same CRD with same name but in
 	// different types. Since we generate the type using the field name, there
 	// can be collisions. In order to be able to generate unique names consistently,
@@ -129,7 +129,7 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 				continue
 			}
 			sfx := "SecretRef"
-			cfg.Sensitive.AddFieldPath(fieldPathWithWildcard(tfPaths), "spec.forProvider."+fieldPathWithWildcard(xpPaths))
+			cfg.Sensitive.AddFieldPath(fieldPathWithWildcard(tfPaths), "spec.forProvider."+fieldPathWithWildcard(xpPaths)+sfx)
 			// todo(turkenh): do we need to support other field types as sensitive?
 			if fieldType.String() != "string" && fieldType.String() != "*string" {
 				return nil, nil, fmt.Errorf(`got type %q for field %q, only types "string" and "*string" supported as sensitive`, fieldType.String(), fieldNameCamel)
@@ -200,7 +200,7 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 	return paramType, obsType, nil
 }
 
-func (g *Builder) buildSchema(sch *schema.Schema, cfg *config.Resource, tfPath []string, xpPath []string, names []string) (types.Type, error) { // nolint:gocyclo
+func (g *Builder) buildSchema(sch *schema.Schema, cfg config.Resource, tfPath []string, xpPath []string, names []string) (types.Type, error) { // nolint:gocyclo
 	switch sch.Type {
 	case schema.TypeBool:
 		return types.NewPointer(types.Universe.Lookup("bool").Type()), nil

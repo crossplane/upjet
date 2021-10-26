@@ -64,7 +64,7 @@ func (cg *CRDGenerator) Generate(cfg *config.Resource) error {
 	for _, omit := range cfg.ExternalName.OmittedFields {
 		delete(cfg.TerraformResource.Schema, omit)
 	}
-	typeList, comments, err := tjtypes.NewBuilder(cg.pkg).Build(cfg)
+	typeList, comments, err := tjtypes.NewBuilder(cg.pkg).Build(*cfg)
 	if err != nil {
 		return errors.Wrapf(err, "cannot build types for %s", cfg.Kind)
 	}
