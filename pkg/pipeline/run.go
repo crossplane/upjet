@@ -76,14 +76,14 @@ func Run(pc config.Provider) { // nolint:gocyclo
 
 			for _, name := range keys {
 				if err := crdGen.Generate(resources[name]); err != nil {
-					panic(errors.Wrap(err, "cannot generate crd"))
+					panic(errors.Wrapf(err, "cannot generate crd for resource %s", name))
 				}
 				if err := tfGen.Generate(resources[name]); err != nil {
-					panic(errors.Wrap(err, "cannot generate terraformed"))
+					panic(errors.Wrapf(err, "cannot generate terraformed for resource %s", name))
 				}
 				ctrlPkgPath, err := ctrlGen.Generate(resources[name], versionGen.Package().Path())
 				if err != nil {
-					panic(errors.Wrap(err, "cannot generate controller"))
+					panic(errors.Wrapf(err, "cannot generate controller for resource %s", name))
 				}
 				controllerPkgList = append(controllerPkgList, ctrlPkgPath)
 				count++

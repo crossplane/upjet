@@ -173,7 +173,7 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 			comment.Required = &req
 			paramFields = append(paramFields, field)
 		}
-		if ref, ok := cfg.References[fieldPath(tfPath)]; ok {
+		if ref, ok := cfg.References[fieldPath(tfPaths)]; ok {
 			refFields, refTags := g.generateReferenceFields(paramName, field, ref)
 			paramTags = append(paramTags, refTags...)
 			paramFields = append(paramFields, refFields...)
