@@ -29,39 +29,36 @@ import (
 )
 
 func Run(pc config.Provider) { // nolint:gocyclo
-	// Cyclomatic complexity of this function is above our goal of 10,
-	// and it establishes a Terrajet code generation pipeline that's very similar
-	// to other Terrajet based providers.
-	// delete API dirs
 
-	//genConfig.SetResourceConfigurations()
 	wd, err := os.Getwd()
 	if err != nil {
 		panic(errors.Wrap(err, "cannot get working directory"))
 	}
 	fmt.Println(wd)
-	groupVersions := map[string]map[string]map[string]*config.Resource{}
+
+	// Group resources based on their Group and API Versions
+	resourcesGroups := map[string]map[string]map[string]*config.Resource{}
 	for name, resource := range pc.Resources {
 		fmt.Printf("Generating code for resource: %s\n", name)
 
-		if len(groupVersions[resource.Group]) == 0 {
-			groupVersions[resource.Group] = map[string]map[string]*config.Resource{}
+		if len(resourcesGroups[resource.Group]) == 0 {
+			resourcesGroups[resource.Group] = map[string]map[string]*config.Resource{}
 		}
-		if len(groupVersions[resource.Group][resource.Version]) == 0 {
-			groupVersions[resource.Group][resource.Version] = map[string]*config.Resource{}
+		if len(resourcesGroups[resource.Group][resource.Version]) == 0 {
+			resourcesGroups[resource.Group][resource.Version] = map[string]*config.Resource{}
 		}
-		groupVersions[resource.Group][resource.Version][name] = resource
+		resourcesGroups[resource.Group][resource.Version][name] = resource
+	}
+
+	versionPkgList := []string{
+		filepath.Join(pc.ModulePath, "apis", pc.Config.Version),
+	}
+	controllerPkgList := []string{
+		filepath.Join(pc.ModulePath, "internal", "controller", pc.Config.ControllerPackage),
 	}
 
 	count := 0
-	versionPkgList := []string{
-		// TODO(turkenh): a parameter for v1alpha1 here?
-		filepath.Join(pc.ModulePath, "apis", "v1alpha1"),
-	}
-	controllerPkgList := []string{
-		filepath.Join(pc.ModulePath, "internal", "controller", "providerconfig"),
-	}
-	for group, versions := range groupVersions {
+	for group, versions := range resourcesGroups {
 		for version, resources := range versions {
 			versionGen := NewVersionGenerator(wd, pc.ModulePath, strings.ToLower(group)+pc.GroupSuffix, version)
 
@@ -78,16 +75,13 @@ func Run(pc config.Provider) { // nolint:gocyclo
 			sort.Strings(keys)
 
 			for _, name := range keys {
-
-				resourceConfig := resources[name]
-
-				if err := crdGen.Generate(resourceConfig); err != nil {
+				if err := crdGen.Generate(resources[name]); err != nil {
 					panic(errors.Wrap(err, "cannot generate crd"))
 				}
-				if err := tfGen.Generate(resourceConfig); err != nil {
+				if err := tfGen.Generate(resources[name]); err != nil {
 					panic(errors.Wrap(err, "cannot generate terraformed"))
 				}
-				ctrlPkgPath, err := ctrlGen.Generate(resourceConfig, versionGen.Package().Path())
+				ctrlPkgPath, err := ctrlGen.Generate(resources[name], versionGen.Package().Path())
 				if err != nil {
 					panic(errors.Wrap(err, "cannot generate controller"))
 				}
@@ -114,5 +108,6 @@ func Run(pc config.Provider) { // nolint:gocyclo
 	if out, err := exec.Command("bash", "-c", "goimports -w $(find internal -iname 'zz_*')").CombinedOutput(); err != nil {
 		panic(errors.Wrap(err, "cannot run goimports for internal folder: "+string(out)))
 	}
+
 	fmt.Printf("\nGenerated %d resources!\n", count)
 }

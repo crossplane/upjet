@@ -10,12 +10,18 @@ import (
 	"github.com/pkg/errors"
 )
 
+type ProviderConfig struct {
+	Version           string
+	ControllerPackage string
+}
+
 // Provider stores configuration for a provider to generate with terrajet.
 type Provider struct {
 	GroupSuffix    string
 	ResourcePrefix string
 	ShortName      string
 	ModulePath     string
+	Config         ProviderConfig
 
 	SkipList    []string
 	IncludeList []string
@@ -49,12 +55,23 @@ func WithSkipList(l []string) ProviderOption {
 	}
 }
 
+func WithProviderConfig(c ProviderConfig) ProviderOption {
+	return func(p *Provider) {
+		p.Config = c
+	}
+}
+
 func NewProvider(schema *schema.Provider, prefix string, modulePath string, opts ...ProviderOption) Provider {
 	p := Provider{
 		ResourcePrefix: fmt.Sprintf("%s_", prefix),
 		ModulePath:     modulePath,
 		GroupSuffix:    fmt.Sprintf(".%s.tf.crossplane.io", prefix),
 		ShortName:      fmt.Sprintf("tf%s", prefix),
+
+		Config: ProviderConfig{
+			Version:           defaultAPIVersion,
+			ControllerPackage: "providerconfig",
+		},
 
 		IncludeList: []string{
 			// Include all Resources
@@ -78,6 +95,9 @@ func (p *Provider) OverrideResourceConfig(resource string, o *Resource) {
 	p.Resources[resource].OverrideConfig(o)
 }
 
+// parseSchema parses Terraform provider schema and builds a (default) resource
+// configuration for each resource which could be overridden with custom
+// configurations at later stages of the pipeline.
 func (p *Provider) parseSchema(schema *schema.Provider) {
 	for name, trResource := range schema.ResourcesMap {
 		if len(trResource.Schema) == 0 {
@@ -101,10 +121,10 @@ func (p *Provider) parseSchema(schema *schema.Provider) {
 		}
 
 		resource := DefaultResource
-		resource.Group = groupName
-		resource.Kind = strcase.ToCamel(strings.TrimPrefix(strings.TrimPrefix(name, p.ResourcePrefix), groupName))
 		resource.TerraformResourceName = name
 		resource.TerraformResource = trResource
+		resource.Group = groupName
+		resource.Kind = strcase.ToCamel(strings.TrimPrefix(strings.TrimPrefix(name, p.ResourcePrefix), groupName))
 
 		p.Resources[name] = &resource
 	}
