@@ -24,7 +24,7 @@ const (
 var (
 	// NameAsIdentifier uses "name" field in the arguments as the identifier of
 	// the resource.
-	NameAsIdentifier = &ExternalName{
+	NameAsIdentifier = ExternalName{
 		SetIdentifierArgumentFn: func(base map[string]interface{}, name string) {
 			base["name"] = name
 		},
@@ -37,7 +37,7 @@ var (
 	// IdentifierFromProvider is used in resources whose identifier is assigned by
 	// the remote client, such as AWS VPC where it gets an identifier like
 	// vpc-2213das instead of letting user choose a name.
-	IdentifierFromProvider = &ExternalName{
+	IdentifierFromProvider = ExternalName{
 		SetIdentifierArgumentFn: NopSetIdentifierArgument,
 		DisableNameInitializer:  true,
 	}
@@ -48,7 +48,6 @@ func getDefaultResource() Resource {
 		Version:              defaultAPIVersion,
 		TerraformIDFieldName: "id",
 		ExternalName:         NameAsIdentifier,
-		LateInitializer:      &LateInitializer{},
-		Sensitive:            &Sensitive{},
+		References:           map[string]Reference{},
 	}
 }

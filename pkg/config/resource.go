@@ -120,9 +120,9 @@ func (s *Sensitive) AddFieldPath(tf, xp string) {
 // Resource is the set of information that you can override at different steps
 // of the code generation pipeline.
 type Resource struct {
-	// TerraformResourceName is the name of the resource type in Terraform,
+	// Name is the name of the resource type in Terraform,
 	// e.g. aws_rds_cluster.
-	TerraformResourceName string
+	Name string
 
 	// TerraformResource is the Terraform representation of the resource.
 	TerraformResource *schema.Resource
@@ -144,53 +144,17 @@ type Resource struct {
 	// UseAsync should be enabled for resource whose creation and/or deletion
 	// takes more than 1 minute to complete such as Kubernetes clusters or
 	// databases.
-	UseAsync *bool
+	UseAsync bool
 
 	// ExternalName allows you to specify a custom ExternalName.
-	ExternalName *ExternalName
+	ExternalName ExternalName
 
 	// References keeps the configuration to build cross resource references
 	References References
 
 	// Sensitive keeps the configuration to handle sensitive information
-	Sensitive *Sensitive
+	Sensitive Sensitive
 
 	// LateInitializer configuration to control late-initialization behaviour
-	LateInitializer *LateInitializer
-}
-
-// OverrideConfig merges existing resource configuration with the input
-// one by overriding the existing one.
-func (c *Resource) OverrideConfig(o *Resource) {
-	if c == nil || o == nil {
-		return
-	}
-	if o.TerraformIDFieldName != "" {
-		c.TerraformIDFieldName = o.TerraformIDFieldName
-	}
-	if o.Group != "" {
-		c.Group = o.Group
-	}
-	if o.Version != "" {
-		c.Version = o.Version
-	}
-	if o.Kind != "" {
-		c.Kind = o.Kind
-	}
-	if o.UseAsync != nil {
-		c.UseAsync = o.UseAsync
-	}
-	if o.ExternalName != nil {
-		c.ExternalName = o.ExternalName
-	}
-	if len(o.References) > 0 {
-		// Todo(turkenh): Should we merge?
-		c.References = o.References
-	}
-	if o.Sensitive != nil {
-		c.Sensitive = o.Sensitive
-	}
-	if o.LateInitializer != nil {
-		c.LateInitializer = o.LateInitializer
-	}
+	LateInitializer LateInitializer
 }

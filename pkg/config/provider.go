@@ -10,6 +10,24 @@ import (
 	"github.com/pkg/errors"
 )
 
+type ResourceCustomizerFn func(r *Resource)
+
+func (c ResourceCustomizerFn) Customize(r *Resource) {
+	c(r)
+}
+
+type ResourceCustomizer interface {
+	Customize(r *Resource)
+}
+
+type ResourceCustomizerChain []ResourceCustomizer
+
+func (cc ResourceCustomizerChain) Customize(r *Resource) {
+	for _, c := range cc {
+		c.Customize(r)
+	}
+}
+
 type ProviderConfig struct {
 	Version           string
 	ControllerPackage string
@@ -28,6 +46,8 @@ type Provider struct {
 	IncludeList []string
 
 	Resources map[string]*Resource
+
+	resourceCustomizations map[string]ResourceCustomizerChain
 }
 
 type DefaultResourceFn func() Resource
@@ -97,10 +117,22 @@ func NewProvider(schema *schema.Provider, prefix string, modulePath string, opts
 	return p
 }
 
-// OverrideResourceConfig overrides default configuration for a given resource
-// with the provided configuration.
-func (p *Provider) OverrideResourceConfig(resource string, o *Resource) {
-	p.Resources[resource].OverrideConfig(o)
+// AddResourceCustomization allows resource specific customization for a given
+// resource configuration.
+func (p *Provider) AddResourceCustomization(resource string, fn ResourceCustomizerFn) {
+	p.resourceCustomizations[resource] = append(p.resourceCustomizations[resource], fn)
+}
+
+func (p *Provider) GetResourceCustomization(resource string) ResourceCustomizer {
+	return p.resourceCustomizations[resource]
+}
+
+// AddResourceCustomization allows resource specific customization for a given
+// resource configuration.
+func (p *Provider) AddCommonResourceCustomization(fn ResourceCustomizerFn) {
+	for name := range p.Resources {
+		p.AddResourceCustomization(name, fn)
+	}
 }
 
 // parseSchema parses Terraform provider schema and builds a (default) resource
