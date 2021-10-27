@@ -33,9 +33,9 @@ const (
 	ReasonSuccess        xpv1.ConditionReason = "Success"
 )
 
-// LastOperationCondition returns the condition depending on the content
+// AsyncOperationCondition returns the condition depending on the content
 // of the error.
-func LastOperationCondition(err error) xpv1.Condition {
+func AsyncOperationCondition(err error) xpv1.Condition {
 	switch {
 	case err == nil:
 		return xpv1.Condition{

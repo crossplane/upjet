@@ -60,10 +60,7 @@ func NewWorkspace(dir string, opts ...WorkspaceOption) *Workspace {
 
 // CallbackFn is the type of accepted function that can be called after an async
 // operation is completed.
-type CallbackFn func(context.Context, *json.StateV4) error
-
-// NopCallbackFn does nothing.
-func NopCallbackFn(_ context.Context, _ *json.StateV4) error { return nil }
+type CallbackFn func(error, context.Context) error
 
 // Workspace runs Terraform operations in its directory and holds the information
 // about their statuses.
@@ -91,31 +88,15 @@ func (w *Workspace) ApplyAsync(callback CallbackFn) error {
 		out, err := cmd.CombinedOutput()
 		w.LastOperation.MarkEnd()
 		w.logger.Debug("apply async ended", "out", string(out))
+		defer func() {
+			if cErr := callback(err, ctx); cErr != nil {
+				w.logger.Info("callback failed", "error", cErr.Error())
+			}
+		}()
 		if err != nil {
 			// Only the last line contains the error.
 			l := strings.Split(string(out), "\n")
-			w.LastOperation.SetErr(tferrors.NewApplyFailed(l[len(l)-2]))
-			return
-		}
-		w.LastOperation.SetErr(nil)
-
-		// After the operation is completed, we need to get the results saved on
-		// the custom resource as soon as possible. We can wait for the next
-		// reconciliation, enqueue manually or update the CR independent of the
-		// reconciliation.
-		raw, err := os.ReadFile(filepath.Join(w.dir, "terraform.tfstate"))
-		if err != nil {
-			w.LastOperation.SetErr(errors.Wrap(err, "cannot read tfstate file"))
-			return
-		}
-		s := &json.StateV4{}
-		if err := json.JSParser.Unmarshal(raw, s); err != nil {
-			w.LastOperation.SetErr(errors.Wrap(err, "cannot unmarshal tfstate file"))
-			return
-		}
-		if err := callback(ctx, s); err != nil {
-			w.LastOperation.SetErr(errors.Wrap(err, "callback failed"))
-			return
+			err = tferrors.NewApplyFailed(errors.Wrap(err, l[len(l)-2]).Error())
 		}
 	}()
 	return nil
@@ -153,7 +134,7 @@ func (w *Workspace) Apply(ctx context.Context) (ApplyResult, error) {
 // a callback because destroy operations are not time sensitive as ApplyAsync
 // where you might need to store the server-side computed information as soon
 // as possible.
-func (w *Workspace) DestroyAsync() error {
+func (w *Workspace) DestroyAsync(callback CallbackFn) error {
 	switch {
 	// Destroy call is idempotent and can be called repeatedly.
 	case w.LastOperation.Type == "destroy":
@@ -172,13 +153,16 @@ func (w *Workspace) DestroyAsync() error {
 		out, err := cmd.CombinedOutput()
 		w.LastOperation.MarkEnd()
 		w.logger.Debug("destroy async ended", "out", string(out))
+		defer func() {
+			if cErr := callback(err, ctx); cErr != nil {
+				w.logger.Info("callback failed", "error", cErr.Error())
+			}
+		}()
 		if err != nil {
 			// Only the last line contains the error.
 			l := strings.Split(string(out), "\n")
-			w.LastOperation.SetErr(tferrors.NewDestroyFailed(l[len(l)-2]))
-			return
+			err = tferrors.NewDestroyFailed(l[len(l)-2])
 		}
-		w.LastOperation.SetErr(nil)
 	}()
 	return nil
 }
@@ -197,11 +181,10 @@ func (w *Workspace) Destroy(ctx context.Context) error {
 
 // RefreshResult contains information about the current state of the resource.
 type RefreshResult struct {
-	Exists             bool
-	IsApplying         bool
-	IsDestroying       bool
-	State              *json.StateV4
-	LastOperationError error
+	Exists       bool
+	IsApplying   bool
+	IsDestroying bool
+	State        *json.StateV4
 }
 
 // Refresh makes a blocking terraform apply -refresh-only call where only the state file
@@ -210,16 +193,11 @@ func (w *Workspace) Refresh(ctx context.Context) (RefreshResult, error) {
 	switch {
 	case w.LastOperation.IsRunning():
 		return RefreshResult{
-			IsApplying:         w.LastOperation.Type == "apply",
-			IsDestroying:       w.LastOperation.Type == "destroy",
-			LastOperationError: w.LastOperation.Err(),
+			IsApplying:   w.LastOperation.Type == "apply",
+			IsDestroying: w.LastOperation.Type == "destroy",
 		}, nil
 	case w.LastOperation.IsEnded():
 		defer w.LastOperation.Flush()
-		// The deletion is completed so there is no resource to refresh.
-		if w.LastOperation.Type == "destroy" && w.LastOperation.Err() == nil {
-			return RefreshResult{Exists: false}, nil
-		}
 	}
 	cmd := exec.CommandContext(ctx, "terraform", "apply", "-refresh-only", "-auto-approve", "-input=false", "-lock=false", "-json")
 	w.configureCmd(cmd)
@@ -237,9 +215,8 @@ func (w *Workspace) Refresh(ctx context.Context) (RefreshResult, error) {
 		return RefreshResult{}, errors.Wrap(err, "cannot unmarshal tfstate file")
 	}
 	return RefreshResult{
-		Exists:             s.GetAttributes() != nil,
-		State:              s,
-		LastOperationError: w.LastOperation.Err(),
+		Exists: s.GetAttributes() != nil,
+		State:  s,
 	}, nil
 }
 

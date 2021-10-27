@@ -66,7 +66,6 @@ func TestOperation(t *testing.T) {
 			args: args{
 				calls: func(o *Operation) {
 					o.MarkStart("type")
-					o.SetErr(errBoom)
 					o.MarkEnd()
 					o.Flush()
 				},

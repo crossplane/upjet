@@ -32,7 +32,7 @@ import (
 )
 
 const (
-	errUnexpectedObject  = "the managed resource is not a Terraformed resource"
+	errUnexpectedObject  = "the custom resource is not a Terraformed resource"
 	errGetTerraformSetup = "cannot get terraform setup"
 	errGetWorkspace      = "cannot get a terraform workspace for resource"
 	errRefresh           = "cannot run refresh"
@@ -47,11 +47,12 @@ const (
 // Option allows you to configure Connector.
 type Option func(*Connector)
 
-// UseAsync configures the controller to use async variant of the functions
-// of the Terraform client.
-func UseAsync() Option {
+// WithCallbackProvider configures the controller to use async variant of the functions
+// of the Terraform client and run given callbacks once those operations are
+// completed.
+func WithCallbackProvider(ac CallbackProvider) Option {
 	return func(c *Connector) {
-		c.async = true
+		c.callback = ac
 	}
 }
 
@@ -75,8 +76,8 @@ type Connector struct {
 	kube              client.Client
 	store             Store
 	getTerraformSetup terraform.SetupFn
-	async             bool
 	config            config.Resource
+	callback          CallbackProvider
 }
 
 // Connect makes sure the underlying client is ready to issue requests to the
@@ -98,22 +99,19 @@ func (c *Connector) Connect(ctx context.Context, mg xpresource.Managed) (managed
 	}
 
 	return &external{
-		kube:      c.kube,
 		workspace: tf,
-		async:     c.async,
 		config:    c.config,
+		callback:  c.callback,
 	}, nil
 }
 
 type external struct {
-	kube      client.Client
 	workspace Workspace
-
-	async  bool
-	config config.Resource
+	config    config.Resource
+	callback  CallbackProvider
 }
 
-func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.ExternalObservation, error) { // nolint:gocyclo
+func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.ExternalObservation, error) { //nolint:gocyclo
 	// We skip the gocyclo check because most of the operations are straight-forward
 	// and serial.
 	// TODO(muvaf): Look for ways to reduce the cyclomatic complexity without
@@ -122,16 +120,9 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 	if !ok {
 		return managed.ExternalObservation{}, errors.New(errUnexpectedObject)
 	}
-
 	res, err := e.workspace.Refresh(ctx)
 	if err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, errRefresh)
-	}
-	if e.async {
-		tr.SetConditions(resource.LastOperationCondition(res.LastOperationError))
-		if err := e.kube.Status().Update(ctx, tr); err != nil {
-			return managed.ExternalObservation{}, errors.Wrap(err, errStatusUpdate)
-		}
 	}
 	switch {
 	case res.IsApplying, res.IsDestroying:
@@ -197,12 +188,12 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 }
 
 func (e *external) Create(ctx context.Context, mg xpresource.Managed) (managed.ExternalCreation, error) {
+	if e.config.UseAsync {
+		return managed.ExternalCreation{}, errors.Wrap(e.workspace.ApplyAsync(e.callback.Apply(mg.GetName())), errStartAsyncApply)
+	}
 	tr, ok := mg.(resource.Terraformed)
 	if !ok {
 		return managed.ExternalCreation{}, errors.New(errUnexpectedObject)
-	}
-	if e.async {
-		return managed.ExternalCreation{}, errors.Wrap(e.workspace.ApplyAsync(CriticalAnnotationsCallback(e.kube, tr)), errStartAsyncApply)
 	}
 	res, err := e.workspace.Apply(ctx)
 	if err != nil {
@@ -224,8 +215,8 @@ func (e *external) Create(ctx context.Context, mg xpresource.Managed) (managed.E
 }
 
 func (e *external) Update(ctx context.Context, mg xpresource.Managed) (managed.ExternalUpdate, error) {
-	if e.async {
-		return managed.ExternalUpdate{}, errors.Wrap(e.workspace.ApplyAsync(terraform.NopCallbackFn), errStartAsyncApply)
+	if e.config.UseAsync {
+		return managed.ExternalUpdate{}, errors.Wrap(e.workspace.ApplyAsync(e.callback.Apply(mg.GetName())), errStartAsyncApply)
 	}
 	tr, ok := mg.(resource.Terraformed)
 	if !ok {
@@ -242,28 +233,9 @@ func (e *external) Update(ctx context.Context, mg xpresource.Managed) (managed.E
 	return managed.ExternalUpdate{}, errors.Wrap(tr.SetObservation(attr), "cannot set observation")
 }
 
-func (e *external) Delete(ctx context.Context, _ xpresource.Managed) error {
-	if e.async {
-		return errors.Wrap(e.workspace.DestroyAsync(), errStartAsyncDestroy)
+func (e *external) Delete(ctx context.Context, mg xpresource.Managed) error {
+	if e.config.UseAsync {
+		return errors.Wrap(e.workspace.DestroyAsync(e.callback.Destroy(mg.GetName())), errStartAsyncDestroy)
 	}
 	return errors.Wrap(e.workspace.Destroy(ctx), errDestroy)
-}
-
-// CriticalAnnotationsCallback returns a callback function that would store the
-// time-sensitive annotations.
-func CriticalAnnotationsCallback(kube client.Client, tr resource.Terraformed) terraform.CallbackFn {
-	return func(ctx context.Context, s *json.StateV4) error {
-		attr := map[string]interface{}{}
-		if err := json.JSParser.Unmarshal(s.GetAttributes(), &attr); err != nil {
-			return errors.Wrap(err, "cannot unmarshal state attributes")
-		}
-		if _, err := resource.LateInitializeAnnotations(tr, attr, string(s.GetPrivateRaw())); err != nil {
-			return errors.Wrap(err, "cannot late initialize annotations")
-		}
-		// TODO(muvaf): We issue the update call even if the annotations didn't
-		// change so that the resource gets enqueued. We need to test this
-		// assumption.
-		c := managed.NewRetryingCriticalAnnotationUpdater(kube)
-		return errors.Wrap(c.UpdateCriticalAnnotations(ctx, tr), "cannot update critical annotations")
-	}
 }
