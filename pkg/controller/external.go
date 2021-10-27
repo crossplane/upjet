@@ -32,7 +32,7 @@ import (
 )
 
 const (
-	errUnexpectedObject  = "the managed resource is not a Terraformed resource"
+	errUnexpectedObject  = "the custom resource is not a Terraformed resource"
 	errGetTerraformSetup = "cannot get terraform setup"
 	errGetWorkspace      = "cannot get a terraform workspace for resource"
 	errRefresh           = "cannot run refresh"

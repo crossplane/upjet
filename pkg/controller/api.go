@@ -32,6 +32,10 @@ import (
 	"github.com/crossplane-contrib/terrajet/pkg/terraform"
 )
 
+const (
+	errGet = "cannot get resource"
+)
+
 // APISecretClient is a client for getting k8s secrets
 type APISecretClient struct {
 	kube client.Client
@@ -72,28 +76,26 @@ type APICallbacks struct {
 	newTerraformed func() resource.Terraformed
 }
 
-// Apply makes sure the error is saved and then makes sure all information
-// is saved to the API server.
+// Apply makes sure the error is saved in async operation condition.
 func (ac *APICallbacks) Apply(name string) terraform.CallbackFn {
 	return func(err error, ctx context.Context) error {
 		nn := types.NamespacedName{Name: name}
 		tr := ac.newTerraformed()
 		if kErr := ac.kube.Get(ctx, nn, tr); kErr != nil {
-			return errors.Wrap(kErr, "cannot get Terraformed resource")
+			return errors.Wrap(kErr, errGet)
 		}
 		tr.SetConditions(resource.AsyncOperationCondition(err))
 		return errors.Wrap(ac.kube.Status().Update(ctx, tr), errStatusUpdate)
 	}
 }
 
-// Destroy returns a callback function that would set last operation error
-// if destroy failed.
+// Destroy makes sure the error is saved in async operation condition.
 func (ac *APICallbacks) Destroy(name string) terraform.CallbackFn {
 	return func(err error, ctx context.Context) error {
 		nn := types.NamespacedName{Name: name}
 		tr := ac.newTerraformed()
 		if kErr := ac.kube.Get(ctx, nn, tr); kErr != nil {
-			return errors.Wrap(kErr, "cannot get Terraformed resource")
+			return errors.Wrap(kErr, errGet)
 		}
 		tr.SetConditions(resource.AsyncOperationCondition(err))
 		return errors.Wrap(ac.kube.Status().Update(ctx, tr), errStatusUpdate)
