@@ -10,94 +10,140 @@ import (
 	"github.com/pkg/errors"
 )
 
-type ResourceCustomizerFn func(r *Resource)
+// ResourceConfiguratorFn is a function that implements the ResourceConfigurator
+// interface
+type ResourceConfiguratorFn func(r *Resource)
 
-func (c ResourceCustomizerFn) Customize(r *Resource) {
+// Configure configures a resource by calling ResourceConfiguratorFn
+func (c ResourceConfiguratorFn) Configure(r *Resource) {
 	c(r)
 }
 
-type ResourceCustomizer interface {
-	Customize(r *Resource)
+// ResourceConfigurator configures a Resource
+type ResourceConfigurator interface {
+	Configure(r *Resource)
 }
 
-type ResourceCustomizerChain []ResourceCustomizer
+// A ResourceConfiguratorChain chains multiple ResourceConfigurators.
+type ResourceConfiguratorChain []ResourceConfigurator
 
-func (cc ResourceCustomizerChain) Customize(r *Resource) {
+// Configure configures a resource by calling each ResourceConfigurator in the
+// chain serially.
+func (cc ResourceConfiguratorChain) Configure(r *Resource) {
 	for _, c := range cc {
-		c.Customize(r)
+		c.Configure(r)
 	}
 }
 
-type ProviderConfig struct {
-	Version           string
+// XPProviderConfig stores configuration for the Crossplane ProviderConfig
+// resource like API Version of the type and name of the controller package.
+type XPProviderConfig struct {
+	APIVersion        string
 	ControllerPackage string
 }
 
-// Provider stores configuration for a provider to generate with terrajet.
+// DefaultResourceFn returns a default resource configuration to be used while
+// building resource configurations.
+type DefaultResourceFn func() Resource
+
+// Provider holds configuration for a provider to be generated with Terrajet.
 type Provider struct {
-	GroupSuffix       string
-	ResourcePrefix    string
-	ShortName         string
-	ModulePath        string
-	Config            ProviderConfig
+	// TerraformResourcePrefix is the prefix used in all resources of this
+	// Terraform provider, e.g. "aws_". Defaults to "<prefix>_".
+	TerraformResourcePrefix string
+	// GroupSuffix is the suffix to append to resource groups, e.g.
+	// ".aws.tf.crossplane.io". Defaults to ".<prefix>.tf.crossplane.io".
+	GroupSuffix string
+	// ShortName is the short name of the provider. Typically, added as a CRD
+	// category, e.g. "tfaws". Default to "tf<prefix>". For more details on CRD
+	// categories, see: https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#categories
+	ShortName string
+	// ModulePath is the go module path for the tf based provider repo, e.g.
+	// "github.com/crossplane-contrib/provider-tf-aws"
+	ModulePath string
+	// XPProviderConfig is the configuration for the Crossplane "ProviderConfig"
+	// type.
+	XPProviderConfig XPProviderConfig
+	// DefaultResourceFn is a function that returns resource configuration to be
+	// used as default while building the resources.
 	DefaultResourceFn DefaultResourceFn
 
-	SkipList    []string
+	// SkipList is a list of regex for the Terraform resources to be skipped.
+	// For example, to skip generation of "aws_shield_protection_group", one
+	// can add "aws_shield_protection_group$". To skip whole aws waf group, one
+	// can add "aws_waf.*" to the list.
+	SkipList []string
+	// IncludeList is a list of regex for the Terraform resources to be
+	// skipped. For example, to include "aws_shield_protection_group" into
+	// the generated resources, one can add "aws_shield_protection_group$".
+	// To include whole aws waf group, one can add "aws_waf.*" to the list.
+	// Defaults to []string{".+"} which would include all resources.
 	IncludeList []string
 
+	// Resources is a map holding resource configurations where key is Terraform
+	// resource name.
 	Resources map[string]*Resource
 
-	resourceCustomizations map[string]ResourceCustomizerChain
+	// resourceConfigurators is a map holding resource configurators where key
+	// is Terraform resource name.
+	resourceConfigurators map[string]ResourceConfiguratorChain
 }
 
-type DefaultResourceFn func() Resource
+// A ProviderOption configures a Provider.
 type ProviderOption func(*Provider)
 
+// WithGroupSuffix configures GroupSuffix for resources of this Provider.
 func WithGroupSuffix(s string) ProviderOption {
 	return func(p *Provider) {
 		p.GroupSuffix = s
 	}
 }
 
+// WithShortName configures ShortName for resources of this Provider.
 func WithShortName(s string) ProviderOption {
 	return func(p *Provider) {
 		p.ShortName = s
 	}
 }
 
+// WithIncludeList configures IncludeList for this Provider.
 func WithIncludeList(l []string) ProviderOption {
 	return func(p *Provider) {
 		p.IncludeList = l
 	}
 }
 
+// WithSkipList configures SkipList for this Provider.
 func WithSkipList(l []string) ProviderOption {
 	return func(p *Provider) {
 		p.SkipList = l
 	}
 }
 
-func WithProviderConfig(c ProviderConfig) ProviderOption {
+// WithXPProviderConfig configures XPProviderConfig for this Provider.
+func WithXPProviderConfig(c XPProviderConfig) ProviderOption {
 	return func(p *Provider) {
-		p.Config = c
+		p.XPProviderConfig = c
 	}
 }
 
+// WithDefaultResourceFn configures DefaultResourceFn for this Provider
 func WithDefaultResourceFn(f DefaultResourceFn) ProviderOption {
 	return func(p *Provider) {
 		p.DefaultResourceFn = f
 	}
 }
 
+// NewProvider builds and returns a new Provider.
 func NewProvider(schema *schema.Provider, prefix string, modulePath string, opts ...ProviderOption) Provider {
 	p := Provider{
-		ResourcePrefix:    fmt.Sprintf("%s_", prefix),
-		ModulePath:        modulePath,
-		GroupSuffix:       fmt.Sprintf(".%s.tf.crossplane.io", prefix),
-		ShortName:         fmt.Sprintf("tf%s", prefix),
-		DefaultResourceFn: getDefaultResource,
-		Config: ProviderConfig{
-			Version:           defaultAPIVersion,
+		ModulePath:              modulePath,
+		TerraformResourcePrefix: fmt.Sprintf("%s_", prefix),
+		GroupSuffix:             fmt.Sprintf(".%s.tf.crossplane.io", prefix),
+		ShortName:               fmt.Sprintf("tf%s", prefix),
+		DefaultResourceFn:       getDefaultResource,
+		XPProviderConfig: XPProviderConfig{
+			APIVersion:        defaultAPIVersion,
 			ControllerPackage: "providerconfig",
 		},
 
@@ -106,6 +152,8 @@ func NewProvider(schema *schema.Provider, prefix string, modulePath string, opts
 			".+",
 		},
 		Resources: map[string]*Resource{},
+
+		resourceConfigurators: map[string]ResourceConfiguratorChain{},
 	}
 
 	for _, o := range opts {
@@ -117,27 +165,23 @@ func NewProvider(schema *schema.Provider, prefix string, modulePath string, opts
 	return p
 }
 
-// AddResourceCustomization allows resource specific customization for a given
-// resource configuration.
-func (p *Provider) AddResourceCustomization(resource string, fn ResourceCustomizerFn) {
-	p.resourceCustomizations[resource] = append(p.resourceCustomizations[resource], fn)
+// AddResourceConfigurator adds resource specific configurators.
+func (p *Provider) AddResourceConfigurator(resource string, c ResourceConfiguratorFn) { //nolint:interfacer
+	// Note(turkenh): nolint reasoning - easier to provide a function without
+	// converting to an explicit type supporting the ResourceConfigurator
+	// interface. Since this function would be a frequently used one, it should
+	// be a reasonable simplification.
+	p.resourceConfigurators[resource] = append(p.resourceConfigurators[resource], c)
 }
 
-func (p *Provider) GetResourceCustomization(resource string) ResourceCustomizer {
-	return p.resourceCustomizations[resource]
-}
-
-// AddResourceCustomization allows resource specific customization for a given
-// resource configuration.
-func (p *Provider) AddCommonResourceCustomization(fn ResourceCustomizerFn) {
-	for name := range p.Resources {
-		p.AddResourceCustomization(name, fn)
-	}
+// GetResourceConfigurator returns a resource specific configurator.
+func (p *Provider) GetResourceConfigurator(resource string) ResourceConfigurator {
+	return p.resourceConfigurators[resource]
 }
 
 // parseSchema parses Terraform provider schema and builds a (default) resource
 // configuration for each resource which could be overridden with custom
-// configurations at later stages of the pipeline.
+// configurations later.
 func (p *Provider) parseSchema(schema *schema.Provider) {
 	for name, trResource := range schema.ResourcesMap {
 		if len(trResource.Schema) == 0 {
@@ -148,23 +192,23 @@ func (p *Provider) parseSchema(schema *schema.Provider) {
 		if matches(name, p.SkipList) || !matches(name, p.IncludeList) {
 			continue
 		}
-		words := strings.Split(name, "_")
 		// As group name we default to the second element if resource name
 		// has at least 3 elements, otherwise, we took the first element as
 		// default group name, examples:
 		// - aws_rds_cluster => rds
 		// - aws_rds_cluster_parameter_group => rds
 		// - kafka_topic => kafka
+		words := strings.Split(name, "_")
 		groupName := words[1]
 		if len(words) < 3 {
 			groupName = words[0]
 		}
 
 		resource := p.DefaultResourceFn()
-		resource.TerraformResourceName = name
-		resource.TerraformResource = trResource
+		resource.Name = name
+		resource.Terraform = trResource
 		resource.Group = groupName
-		resource.Kind = strcase.ToCamel(strings.TrimPrefix(strings.TrimPrefix(name, p.ResourcePrefix), groupName))
+		resource.Kind = strcase.ToCamel(strings.TrimPrefix(strings.TrimPrefix(name, p.TerraformResourcePrefix), groupName))
 
 		p.Resources[name] = &resource
 	}

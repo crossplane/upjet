@@ -43,7 +43,7 @@ func WithFileSystem(fs afero.Fs) FileProducerOption {
 }
 
 // NewFileProducer returns a new FileProducer.
-func NewFileProducer(ctx context.Context, client resource.SecretClient, dir string, tr resource.Terraformed, ts Setup, cfg *config.Resource, opts ...FileProducerOption) (*FileProducer, error) {
+func NewFileProducer(ctx context.Context, client resource.SecretClient, dir string, tr resource.Terraformed, ts Setup, cfg config.Resource, opts ...FileProducerOption) (*FileProducer, error) {
 	fp := &FileProducer{
 		Resource: tr,
 		Setup:    ts,
@@ -62,7 +62,7 @@ func NewFileProducer(ctx context.Context, client resource.SecretClient, dir stri
 		return nil, errors.Wrap(err, "cannot get sensitive parameters")
 	}
 	// TODO(muvaf): Once we have automatic defaulting, remove this if check.
-	if fp.Config.ExternalName != nil && fp.Config.ExternalName.SetIdentifierArgumentFn != nil {
+	if fp.Config.ExternalName.SetIdentifierArgumentFn != nil {
 		fp.Config.ExternalName.SetIdentifierArgumentFn(params, meta.GetExternalName(tr))
 	}
 	fp.parameters = params
@@ -85,7 +85,7 @@ type FileProducer struct {
 	Resource resource.Terraformed
 	Setup    Setup
 	Dir      string
-	Config   *config.Resource
+	Config   config.Resource
 
 	parameters  map[string]interface{}
 	observation map[string]interface{}

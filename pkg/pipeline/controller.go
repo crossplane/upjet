@@ -60,7 +60,7 @@ func (cg *ControllerGenerator) Generate(cfg *config.Resource, typesPkgPath strin
 		"DisableNameInitializer": cfg.ExternalName.DisableNameInitializer,
 		"TypePackageAlias":       ctrlFile.Imports.UsePackage(typesPkgPath),
 		"UseAsync":               cfg.UseAsync,
-		"ResourceType":           cfg.TerraformResourceName,
+		"ResourceType":           cfg.Name,
 	}
 
 	filePath := filepath.Join(cg.ControllerGroupDir, strings.ToLower(cfg.Kind), "zz_controller.go")

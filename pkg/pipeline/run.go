@@ -25,23 +25,26 @@ import (
 	"strings"
 
 	"github.com/crossplane-contrib/terrajet/pkg/config"
+
 	"github.com/crossplane/crossplane-runtime/pkg/errors"
 )
 
+// Run runs the Terrajet code generation pipelines.
 func Run(pc config.Provider) { // nolint:gocyclo
-
+	// Note(turkenh): nolint reasoning - this is the main function of the code
+	// generation pipeline. We didn't want to split it into multiple functions
+	// for better readability considering the straightforward logic here.
 	wd, err := os.Getwd()
 	if err != nil {
 		panic(errors.Wrap(err, "cannot get working directory"))
 	}
-	fmt.Println(wd)
 
-	// Group resources based on their Group and API Versions
+	// Group resources based on their Group and API Versions.
 	resourcesGroups := map[string]map[string]map[string]*config.Resource{}
 	for name, resource := range pc.Resources {
 		fmt.Printf("Generating code for resource: %s\n", name)
 
-		pc.GetResourceCustomization(name).Customize(resource)
+		pc.GetResourceConfigurator(name).Configure(resource)
 
 		if len(resourcesGroups[resource.Group]) == 0 {
 			resourcesGroups[resource.Group] = map[string]map[string]*config.Resource{}
@@ -52,18 +55,18 @@ func Run(pc config.Provider) { // nolint:gocyclo
 		resourcesGroups[resource.Group][resource.Version][name] = resource
 	}
 
+	// Add ProviderConfig API package to the list of API version packages.
 	versionPkgList := []string{
-		filepath.Join(pc.ModulePath, "apis", pc.Config.Version),
+		filepath.Join(pc.ModulePath, "apis", pc.XPProviderConfig.APIVersion),
 	}
+	// Add ProviderConfig controller package to the list of controller packages.
 	controllerPkgList := []string{
-		filepath.Join(pc.ModulePath, "internal", "controller", pc.Config.ControllerPackage),
+		filepath.Join(pc.ModulePath, "internal", "controller", pc.XPProviderConfig.ControllerPackage),
 	}
-
 	count := 0
 	for group, versions := range resourcesGroups {
 		for version, resources := range versions {
 			versionGen := NewVersionGenerator(wd, pc.ModulePath, strings.ToLower(group)+pc.GroupSuffix, version)
-
 			crdGen := NewCRDGenerator(versionGen.Package(), versionGen.DirectoryPath(), strings.ToLower(group)+pc.GroupSuffix, pc.ShortName)
 			tfGen := NewTerraformedGenerator(versionGen.Package(), versionGen.DirectoryPath())
 			ctrlGen := NewControllerGenerator(wd, pc.ModulePath, strings.ToLower(group)+pc.GroupSuffix)

@@ -21,16 +21,14 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/crossplane-contrib/terrajet/pkg/config"
-
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
-
 	xpfake "github.com/crossplane/crossplane-runtime/pkg/resource/fake"
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	"github.com/google/go-cmp/cmp"
 	"github.com/spf13/afero"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/crossplane-contrib/terrajet/pkg/config"
 	"github.com/crossplane-contrib/terrajet/pkg/resource"
 	"github.com/crossplane-contrib/terrajet/pkg/resource/fake"
 )
@@ -79,7 +77,7 @@ func TestWriteTFState(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			fs := afero.NewMemMapFs()
-			fp, err := NewFileProducer(context.TODO(), nil, dir, tc.args.tr, tc.args.s, &config.Resource{}, WithFileSystem(fs))
+			fp, err := NewFileProducer(context.TODO(), nil, dir, tc.args.tr, tc.args.s, config.Resource{}, WithFileSystem(fs))
 			if err != nil {
 				t.Errorf("cannot initialize a file producer: %s", err.Error())
 			}
@@ -145,7 +143,7 @@ func TestWriteMainTF(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			fs := afero.NewMemMapFs()
-			fp, err := NewFileProducer(context.TODO(), nil, dir, tc.args.tr, tc.args.s, &config.Resource{}, WithFileSystem(fs))
+			fp, err := NewFileProducer(context.TODO(), nil, dir, tc.args.tr, tc.args.s, config.Resource{}, WithFileSystem(fs))
 			if err != nil {
 				t.Errorf("cannot initialize a file producer: %s", err.Error())
 			}

@@ -45,9 +45,9 @@ var (
 
 func getDefaultResource() Resource {
 	return Resource{
-		Version:              defaultAPIVersion,
-		TerraformIDFieldName: "id",
-		ExternalName:         NameAsIdentifier,
-		References:           map[string]Reference{},
+		Version:      defaultAPIVersion,
+		IDFieldName:  "id",
+		ExternalName: NameAsIdentifier,
+		References:   map[string]Reference{},
 	}
 }

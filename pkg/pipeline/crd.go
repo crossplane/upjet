@@ -62,9 +62,9 @@ func (cg *CRDGenerator) Generate(cfg *config.Resource) error {
 		wrapper.WithHeaderPath("hack/boilerplate.go.txt"), // todo
 	)
 	for _, omit := range cfg.ExternalName.OmittedFields {
-		delete(cfg.TerraformResource.Schema, omit)
+		delete(cfg.Terraform.Schema, omit)
 	}
-	typeList, comments, err := tjtypes.NewBuilder(cg.pkg).Build(*cfg)
+	typeList, comments, err := tjtypes.NewBuilder(cg.pkg).Build(cfg)
 	if err != nil {
 		return errors.Wrapf(err, "cannot build types for %s", cfg.Kind)
 	}

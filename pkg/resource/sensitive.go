@@ -64,7 +64,7 @@ type SecretClient interface {
 
 // GetConnectionDetails returns connection details including the sensitive
 // Terraform attributes and additions connection details configured.
-func GetConnectionDetails(attr map[string]interface{}, tr Terraformed, cfg *config.Resource) (managed.ConnectionDetails, error) {
+func GetConnectionDetails(attr map[string]interface{}, tr Terraformed, cfg config.Resource) (managed.ConnectionDetails, error) {
 	conn, err := GetSensitiveAttributes(attr, tr.GetConnectionDetailsMapping(), tr.GetTerraformResourceIDField())
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot get connection details")
@@ -72,7 +72,7 @@ func GetConnectionDetails(attr map[string]interface{}, tr Terraformed, cfg *conf
 
 	var custom map[string][]byte
 	// TODO(turkenh): Once we have automatic defaulting, remove this if check.
-	if cfg.Sensitive != nil && cfg.Sensitive.AdditionalConnectionDetailsFn != nil {
+	if cfg.Sensitive.AdditionalConnectionDetailsFn != nil {
 		if custom, err = cfg.Sensitive.AdditionalConnectionDetailsFn(attr); err != nil {
 			return nil, errors.Wrap(err, "cannot get custom connection keys")
 		}

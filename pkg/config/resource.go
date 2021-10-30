@@ -40,10 +40,10 @@ func NopCustomConnectionKeys(_ map[string]interface{}) (map[string][]byte, error
 // ResourceOption allows setting optional fields of a Resource object.
 type ResourceOption func(*Resource)
 
-// WithTerraformIDFieldName allows you to set TerraformIDFieldName.
+// WithTerraformIDFieldName allows you to set IDFieldName.
 func WithTerraformIDFieldName(n string) ResourceOption {
 	return func(c *Resource) {
-		c.TerraformIDFieldName = n
+		c.IDFieldName = n
 	}
 }
 
@@ -124,13 +124,13 @@ type Resource struct {
 	// e.g. aws_rds_cluster.
 	Name string
 
-	// TerraformResource is the Terraform representation of the resource.
-	TerraformResource *schema.Resource
+	// Terraform is the Terraform representation of the resource.
+	Terraform *schema.Resource
 
-	// TerraformIDFieldName is the name of the ID field in Terraform state of
-	// the resource. Its default is "id" and in almost all cases, you don't need
+	// IDFieldName is the name of the ID field in Terraform state of the
+	// resource. Its default is "id" and in almost all cases, you don't need
 	// to overwrite it.
-	TerraformIDFieldName string
+	IDFieldName string
 
 	// Group is the group of CRD.
 	Group string
