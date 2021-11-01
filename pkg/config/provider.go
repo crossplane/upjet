@@ -135,7 +135,7 @@ func WithDefaultResourceFn(f DefaultResourceFn) ProviderOption {
 }
 
 // NewProvider builds and returns a new Provider.
-func NewProvider(schema *schema.Provider, prefix string, modulePath string, opts ...ProviderOption) Provider {
+func NewProvider(resourceMap map[string]*schema.Resource, prefix string, modulePath string, opts ...ProviderOption) Provider {
 	p := Provider{
 		ModulePath:              modulePath,
 		TerraformResourcePrefix: fmt.Sprintf("%s_", prefix),
@@ -160,7 +160,7 @@ func NewProvider(schema *schema.Provider, prefix string, modulePath string, opts
 		o(&p)
 	}
 
-	p.parseSchema(schema)
+	p.parseSchema(resourceMap)
 
 	return p
 }
@@ -174,16 +174,18 @@ func (p *Provider) AddResourceConfigurator(resource string, c ResourceConfigurat
 	p.resourceConfigurators[resource] = append(p.resourceConfigurators[resource], c)
 }
 
-// GetResourceConfigurator returns a resource specific configurator.
-func (p *Provider) GetResourceConfigurator(resource string) ResourceConfigurator {
-	return p.resourceConfigurators[resource]
+// ConfigureResources configures resources with provided ResourceConfigurator's
+func (p *Provider) ConfigureResources() {
+	for name := range p.Resources {
+		p.resourceConfigurators[name].Configure(p.Resources[name])
+	}
 }
 
 // parseSchema parses Terraform provider schema and builds a (default) resource
 // configuration for each resource which could be overridden with custom
 // configurations later.
-func (p *Provider) parseSchema(schema *schema.Provider) {
-	for name, trResource := range schema.ResourcesMap {
+func (p *Provider) parseSchema(resourceMap map[string]*schema.Resource) {
+	for name, trResource := range resourceMap {
 		if len(trResource.Schema) == 0 {
 			// There are resources with no schema, that we will address later.
 			fmt.Printf("Skipping resource %s because it has no schema\n", name)

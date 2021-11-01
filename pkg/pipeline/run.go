@@ -43,9 +43,6 @@ func Run(pc config.Provider) { // nolint:gocyclo
 	resourcesGroups := map[string]map[string]map[string]*config.Resource{}
 	for name, resource := range pc.Resources {
 		fmt.Printf("Generating code for resource: %s\n", name)
-
-		pc.GetResourceConfigurator(name).Configure(resource)
-
 		if len(resourcesGroups[resource.Group]) == 0 {
 			resourcesGroups[resource.Group] = map[string]map[string]*config.Resource{}
 		}
