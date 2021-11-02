@@ -59,13 +59,6 @@ func NopAdditionalConnectionDetails(_ map[string]interface{}) (map[string][]byte
 // ResourceOption allows setting optional fields of a Resource object.
 type ResourceOption func(*Resource)
 
-// WithTerraformIDFieldName allows you to set IDFieldName.
-func WithTerraformIDFieldName(n string) ResourceOption {
-	return func(c *Resource) {
-		c.IDFieldName = n
-	}
-}
-
 // ExternalName contains all information that is necessary for naming operations,
 // such as removal of those fields from spec schema and calling Configure function
 // to fill attributes with information given in external name.
