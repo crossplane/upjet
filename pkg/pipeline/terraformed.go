@@ -60,15 +60,8 @@ func (tg *TerraformedGenerator) Generate(cfg *config.Resource) error {
 			"Kind":       cfg.Kind,
 		},
 		"Terraform": map[string]interface{}{
-			// TODO(hasan): This identifier is used to generate external name.
-			//  However, external-name generation is not as straightforward as
-			//  just finding out the identifier field since Terraform uses
-			//  more complex logic like combining multiple fields etc.
-			//  I'll revisit this with
-			//  https://github.com/crossplane-contrib/terrajet/issues/11
-			"IdentifierField": cfg.IDFieldName,
-			"ResourceType":    cfg.Name,
-			"SchemaVersion":   cfg.TerraformResource.SchemaVersion,
+			"ResourceType":  cfg.Name,
+			"SchemaVersion": cfg.TerraformResource.SchemaVersion,
 		},
 		"Sensitive": map[string]interface{}{
 			"Fields": cfg.Sensitive.GetFieldPaths(),

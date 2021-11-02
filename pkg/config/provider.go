@@ -152,13 +152,11 @@ func NewProvider(resourceMap map[string]*schema.Resource, prefix string, moduleP
 		ShortName:               fmt.Sprintf("tf%s", prefix),
 		BasePackages:            DefaultBasePackages,
 		DefaultResourceFn:       DefaultResource,
-
 		IncludeList: []string{
 			// Include all Resources
 			".+",
 		},
-		Resources: map[string]*Resource{},
-
+		Resources:             map[string]*Resource{},
 		resourceConfigurators: map[string]ResourceConfiguratorChain{},
 	}
 

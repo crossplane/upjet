@@ -59,6 +59,13 @@ var (
 			"internal/controller/providerconfig",
 		},
 	}
+
+	// NopSensitive does nothing.
+	NopSensitive = Sensitive{
+		AdditionalConnectionDetailsFn: func(_ map[string]interface{}) (map[string][]byte, error) {
+			return nil, nil
+		},
+	}
 )
 
 // DefaultResource keeps an initial default configuration for all resources of a
@@ -86,13 +93,12 @@ func DefaultResource(name string, terraformSchema *schema.Resource) *Resource {
 	return &Resource{
 		Name:              name,
 		TerraformResource: terraformSchema,
-
-		ShortGroup: group,
-		Kind:       kind,
-		Version:    "v1alpha1",
-
-		IDFieldName:  "id",
-		ExternalName: NameAsIdentifier,
-		References:   map[string]Reference{},
+		ShortGroup:        group,
+		Kind:              kind,
+		Version:           "v1alpha1",
+		IDFieldName:       "id",
+		ExternalName:      NameAsIdentifier,
+		References:        map[string]Reference{},
+		Sensitive:         NopSensitive,
 	}
 }

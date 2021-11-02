@@ -24,6 +24,7 @@ import (
 
 	xpmeta "github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/pkg/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -53,7 +54,7 @@ type GenericLateInitializer struct {
 }
 
 // LateInitializeAnnotations late initializes annotations of the resource
-func LateInitializeAnnotations(tr Terraformed, id string, privateRaw string) (bool, error) {
+func LateInitializeAnnotations(tr metav1.Object, id string, privateRaw string) (bool, error) {
 	if tr.GetAnnotations()[AnnotationKeyPrivateRawAttribute] == privateRaw &&
 		xpmeta.GetExternalName(tr) != "" {
 		return false, nil
