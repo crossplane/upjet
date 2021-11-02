@@ -31,6 +31,8 @@ var (
 		SetIdentifierArgumentFn: func(base map[string]interface{}, name string) {
 			base["name"] = name
 		},
+		GetNameFn: IDAsName,
+		SetIDFn:   NameAsID,
 		OmittedFields: []string{
 			"name",
 			"name_prefix",
@@ -42,6 +44,8 @@ var (
 	// vpc-2213das instead of letting user choose a name.
 	IdentifierFromProvider = ExternalName{
 		SetIdentifierArgumentFn: NopSetIdentifierArgument,
+		GetNameFn:               IDAsName,
+		SetIDFn:                 NameAsID,
 		DisableNameInitializer:  true,
 	}
 

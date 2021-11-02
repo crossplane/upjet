@@ -61,10 +61,7 @@ func NewFileProducer(ctx context.Context, client resource.SecretClient, dir stri
 	if err = resource.GetSensitiveParameters(ctx, client, tr, params, tr.GetConnectionDetailsMapping()); err != nil {
 		return nil, errors.Wrap(err, "cannot get sensitive parameters")
 	}
-	// TODO(muvaf): Once we have automatic defaulting, remove this if check.
-	if fp.Config.ExternalName.SetIdentifierArgumentFn != nil {
-		fp.Config.ExternalName.SetIdentifierArgumentFn(params, meta.GetExternalName(tr))
-	}
+	fp.Config.ExternalName.SetIdentifierArgumentFn(params, meta.GetExternalName(tr))
 	fp.parameters = params
 
 	obs, err := tr.GetObservation()
@@ -104,7 +101,7 @@ func (fp *FileProducer) WriteTFState() error {
 	for k, v := range fp.observation {
 		base[k] = v
 	}
-	base["id"] = meta.GetExternalName(fp.Resource)
+	fp.Config.ExternalName.SetIDFn(meta.GetExternalName(fp.Resource), fp.parameters, base)
 	attr, err := json.JSParser.Marshal(base)
 	if err != nil {
 		return errors.Wrap(err, "cannot marshal produced state attributes")

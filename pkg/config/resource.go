@@ -25,7 +25,26 @@ type SetIdentifierArgumentFn func(base map[string]interface{}, name string)
 
 // NopSetIdentifierArgument does nothing. It's useful for cases where the external
 // name is calculated by provider and doesn't have any effect on spec fields.
-func NopSetIdentifierArgument(_ map[string]interface{}, _ string) {}
+var NopSetIdentifierArgument SetIdentifierArgumentFn = func(_ map[string]interface{}, _ string) {}
+
+// SetIDFn sets the ID in TF State file.
+type SetIDFn func(name string, parameters map[string]interface{}, tfstate map[string]interface{})
+
+// NameAsID returns the name to be used as ID in TF State file.
+var NameAsID SetIDFn = func(name string, _ map[string]interface{}, tfstate map[string]interface{}) {
+	if tfstate == nil {
+		tfstate = map[string]interface{}{}
+	}
+	tfstate["id"] = name
+}
+
+// GetNameFn returns the external name extracted from the TF State.
+type GetNameFn func(tfstate map[string]interface{}) string
+
+// IDAsName returns the TF State ID as external name.
+var IDAsName GetNameFn = func(tfstate map[string]interface{}) string {
+	return tfstate["id"].(string)
+}
 
 // AdditionalConnectionDetailsFn functions adds custom keys to connection details
 // secret using input terraform attributes
@@ -52,8 +71,16 @@ func WithTerraformIDFieldName(n string) ResourceOption {
 // to fill attributes with information given in external name.
 type ExternalName struct {
 	// SetIdentifierArgumentFn sets the name of the resource in Terraform argument
-	// map.
+	// map, otherwise we cannot know which field in HCL we should treat as identifier.
 	SetIdentifierArgumentFn SetIdentifierArgumentFn
+
+	// GetNameFn returns the external name extracted from TF State. In most cases,
+	// "id" key of TF State should be returned.
+	GetNameFn GetNameFn
+
+	// SetIDFn sets the identification keys in TF State file. In most cases,
+	// external name should be set to "id" key.
+	SetIDFn SetIDFn
 
 	// OmittedFields are the ones you'd like to be removed from the schema since
 	// they are specified via external name. You can omit only the top level fields.

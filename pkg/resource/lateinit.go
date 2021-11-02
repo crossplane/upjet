@@ -53,7 +53,7 @@ type GenericLateInitializer struct {
 }
 
 // LateInitializeAnnotations late initializes annotations of the resource
-func LateInitializeAnnotations(tr Terraformed, attr map[string]interface{}, privateRaw string) (bool, error) {
+func LateInitializeAnnotations(tr Terraformed, id string, privateRaw string) (bool, error) {
 	if tr.GetAnnotations()[AnnotationKeyPrivateRawAttribute] == privateRaw &&
 		xpmeta.GetExternalName(tr) != "" {
 		return false, nil
@@ -64,20 +64,7 @@ func LateInitializeAnnotations(tr Terraformed, attr map[string]interface{}, priv
 	if xpmeta.GetExternalName(tr) != "" {
 		return true, nil
 	}
-
-	// Terraform stores id for the external resource as an attribute in the
-	// resource state. Key for the attribute holding external identifier is
-	// resource specific. We rely on GetTerraformResourceIDField() function
-	// to find out that key.
-	id, exists := attr[tr.GetTerraformResourceIDField()]
-	if !exists {
-		return false, errors.Errorf("no value for id field: %s", tr.GetTerraformResourceIDField())
-	}
-	extID, ok := id.(string)
-	if !ok {
-		return false, errors.Errorf("value of id field is not a string: %v", id)
-	}
-	xpmeta.SetExternalName(tr, extID)
+	xpmeta.SetExternalName(tr, id)
 	return true, nil
 }
 
