@@ -66,7 +66,7 @@ func (tg *TerraformedGenerator) Generate(cfg *config.Resource) error {
 			//  https://github.com/crossplane-contrib/terrajet/issues/11
 			"IdentifierField": cfg.IDFieldName,
 			"ResourceType":    cfg.Name,
-			"SchemaVersion":   cfg.Terraform.SchemaVersion,
+			"SchemaVersion":   cfg.TerraformResource.SchemaVersion,
 		},
 		"Sensitive": map[string]interface{}{
 			"Fields": cfg.Sensitive.GetFieldPaths(),

@@ -20,4 +20,8 @@ require (
 	sigs.k8s.io/controller-runtime v0.9.6
 )
 
+// This is a temporary workaround until https://github.com/crossplane-contrib/terrajet/issues/131
+// is resolved. We basically need this just to be able to import both v1 and v2
+// versions of terraform plugin sdk in order to do a schema conversion for
+// Terraform providers still using v1 sdk.
 replace github.com/hashicorp/terraform-plugin-sdk => github.com/turkenh/terraform-plugin-sdk v1.17.2-patch1

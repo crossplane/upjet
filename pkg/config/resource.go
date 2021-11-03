@@ -31,9 +31,9 @@ func NopSetIdentifierArgument(_ map[string]interface{}, _ string) {}
 // secret using input terraform attributes
 type AdditionalConnectionDetailsFn func(attr map[string]interface{}) (map[string][]byte, error)
 
-// NopCustomConnectionKeys does nothing, when no custom configuration function
-// provided.
-func NopCustomConnectionKeys(_ map[string]interface{}) (map[string][]byte, error) {
+// NopAdditionalConnectionDetails does nothing, when no additional connection
+// details configuration function provided.
+func NopAdditionalConnectionDetails(_ map[string]interface{}) (map[string][]byte, error) {
 	return nil, nil
 }
 
@@ -84,8 +84,11 @@ type Sensitive struct {
 // LateInitializer represents configurations that control
 // late-initialization behaviour
 type LateInitializer struct {
-	// IgnoredFields are the canonical field names to be skipped during
-	// late-initialization
+	// IgnoredFields are the field paths to be skipped during
+	// late-initialization. Similar to other configurations, these paths are
+	// Terraform field paths concatenated with dots. For example, if we want to
+	// ignore "ebs" block in "aws_launch_template", we should add
+	// "block_device_mappings.ebs".
 	IgnoredFields []string
 
 	ignoredCanonicalFieldPaths []string
@@ -124,8 +127,8 @@ type Resource struct {
 	// e.g. aws_rds_cluster.
 	Name string
 
-	// Terraform is the Terraform representation of the resource.
-	Terraform *schema.Resource
+	// TerraformResource is the Terraform representation of the resource.
+	TerraformResource *schema.Resource
 
 	// IDFieldName is the name of the ID field in Terraform state of the
 	// resource. Its default is "id" and in almost all cases, you don't need

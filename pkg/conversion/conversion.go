@@ -14,7 +14,7 @@
  limitations under the License.
 */
 
-package config
+package conversion
 
 import (
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"

@@ -57,7 +57,7 @@ func WithCallbackProvider(ac CallbackProvider) Option {
 }
 
 // NewConnector returns a new Connector object.
-func NewConnector(kube client.Client, ws Store, sf terraform.SetupFn, cfg config.Resource, opts ...Option) *Connector {
+func NewConnector(kube client.Client, ws Store, sf terraform.SetupFn, cfg *config.Resource, opts ...Option) *Connector {
 	c := &Connector{
 		kube:              kube,
 		getTerraformSetup: sf,
@@ -76,7 +76,7 @@ type Connector struct {
 	kube              client.Client
 	store             Store
 	getTerraformSetup terraform.SetupFn
-	config            config.Resource
+	config            *config.Resource
 	callback          CallbackProvider
 }
 
@@ -107,7 +107,7 @@ func (c *Connector) Connect(ctx context.Context, mg xpresource.Managed) (managed
 
 type external struct {
 	workspace Workspace
-	config    config.Resource
+	config    *config.Resource
 	callback  CallbackProvider
 }
 

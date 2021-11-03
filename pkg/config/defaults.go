@@ -16,8 +16,11 @@ limitations under the License.
 
 package config
 
-const (
-	defaultAPIVersion = "v1alpha1"
+import (
+	"strings"
+
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/iancoleman/strcase"
 )
 
 // Common ExternalName configurations.
@@ -41,11 +44,49 @@ var (
 		SetIdentifierArgumentFn: NopSetIdentifierArgument,
 		DisableNameInitializer:  true,
 	}
+
+	DefaultBasePackages = BasePackages{
+		APIVersion: []string{
+			// Default package for ProviderConfig APIs
+			"apis/v1alpha1",
+		},
+		Controller: []string{
+			// Default package for ProviderConfig controllers
+			"internal/controller/providerconfig",
+		},
+	}
 )
 
-func getDefaultResource() Resource {
-	return Resource{
-		Version:      defaultAPIVersion,
+// DefaultResource keeps an initial default configuration for all resources of a
+// provider.
+func DefaultResource(name string, terraformSchema *schema.Resource) *Resource {
+	words := strings.Split(name, "_")
+	// As group name we default to the second element if resource name
+	// has at least 3 elements, otherwise, we took the first element as
+	// default group name, examples:
+	// - aws_rds_cluster => rds
+	// - aws_rds_cluster_parameter_group => rds
+	// - kafka_topic => kafka
+	group := words[1]
+	// As kind, we default to camel case version of what is left after dropping
+	// elements before what is selected as group:
+	// - aws_rds_cluster => Cluster
+	// - aws_rds_cluster_parameter_group => ClusterParameterGroup
+	// - kafka_topic => Topic
+	kind := strcase.ToCamel(strings.Join(words[2:], "_"))
+	if len(words) < 3 {
+		group = words[0]
+		kind = strcase.ToCamel(words[1])
+	}
+
+	return &Resource{
+		Name:              name,
+		TerraformResource: terraformSchema,
+
+		Group:   group,
+		Kind:    kind,
+		Version: "v1alpha1",
+
 		IDFieldName:  "id",
 		ExternalName: NameAsIdentifier,
 		References:   map[string]Reference{},

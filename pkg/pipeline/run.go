@@ -30,7 +30,7 @@ import (
 )
 
 // Run runs the Terrajet code generation pipelines.
-func Run(pc config.Provider) { // nolint:gocyclo
+func Run(pc *config.Provider) { // nolint:gocyclo
 	// Note(turkenh): nolint reasoning - this is the main function of the code
 	// generation pipeline. We didn't want to split it into multiple functions
 	// for better readability considering the straightforward logic here.
@@ -42,7 +42,6 @@ func Run(pc config.Provider) { // nolint:gocyclo
 	// Group resources based on their Group and API Versions.
 	resourcesGroups := map[string]map[string]map[string]*config.Resource{}
 	for name, resource := range pc.Resources {
-		fmt.Printf("Generating code for resource: %s\n", name)
 		if len(resourcesGroups[resource.Group]) == 0 {
 			resourcesGroups[resource.Group] = map[string]map[string]*config.Resource{}
 		}
@@ -53,12 +52,14 @@ func Run(pc config.Provider) { // nolint:gocyclo
 	}
 
 	// Add ProviderConfig API package to the list of API version packages.
-	versionPkgList := []string{
-		filepath.Join(pc.ModulePath, "apis", pc.XPProviderConfig.APIVersion),
+	apiVersionPkgList := make([]string, 0)
+	for _, p := range pc.BasePackages.APIVersion {
+		apiVersionPkgList = append(apiVersionPkgList, filepath.Join(pc.ModulePath, p))
 	}
 	// Add ProviderConfig controller package to the list of controller packages.
-	controllerPkgList := []string{
-		filepath.Join(pc.ModulePath, "internal", "controller", pc.XPProviderConfig.ControllerPackage),
+	controllerPkgList := make([]string, 0)
+	for _, p := range pc.BasePackages.Controller {
+		controllerPkgList = append(controllerPkgList, filepath.Join(pc.ModulePath, p))
 	}
 	count := 0
 	for group, versions := range resourcesGroups {
@@ -94,11 +95,11 @@ func Run(pc config.Provider) { // nolint:gocyclo
 			if err := versionGen.Generate(); err != nil {
 				panic(errors.Wrap(err, "cannot generate version files"))
 			}
-			versionPkgList = append(versionPkgList, versionGen.Package().Path())
+			apiVersionPkgList = append(apiVersionPkgList, versionGen.Package().Path())
 		}
 	}
 
-	if err := NewRegisterGenerator(wd, pc.ModulePath).Generate(versionPkgList); err != nil {
+	if err := NewRegisterGenerator(wd, pc.ModulePath).Generate(apiVersionPkgList); err != nil {
 		panic(errors.Wrap(err, "cannot generate register file"))
 	}
 	if err := NewSetupGenerator(wd, pc.ModulePath).Generate(controllerPkgList); err != nil {

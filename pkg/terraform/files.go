@@ -43,13 +43,13 @@ func WithFileSystem(fs afero.Fs) FileProducerOption {
 }
 
 // NewFileProducer returns a new FileProducer.
-func NewFileProducer(ctx context.Context, client resource.SecretClient, dir string, tr resource.Terraformed, ts Setup, cfg config.Resource, opts ...FileProducerOption) (*FileProducer, error) {
+func NewFileProducer(ctx context.Context, client resource.SecretClient, dir string, tr resource.Terraformed, ts Setup, cfg *config.Resource, opts ...FileProducerOption) (*FileProducer, error) {
 	fp := &FileProducer{
 		Resource: tr,
 		Setup:    ts,
 		Dir:      dir,
-		fs:       afero.Afero{Fs: afero.NewOsFs()},
 		Config:   cfg,
+		fs:       afero.Afero{Fs: afero.NewOsFs()},
 	}
 	for _, f := range opts {
 		f(fp)
@@ -85,7 +85,7 @@ type FileProducer struct {
 	Resource resource.Terraformed
 	Setup    Setup
 	Dir      string
-	Config   config.Resource
+	Config   *config.Resource
 
 	parameters  map[string]interface{}
 	observation map[string]interface{}

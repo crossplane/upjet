@@ -54,7 +54,7 @@ type Builder struct {
 
 // Build returns parameters and observation types built out of Terraform schema.
 func (g *Builder) Build(cfg *config.Resource) ([]*types.Named, twtypes.Comments, error) {
-	_, _, err := g.buildResource(cfg.Terraform, cfg, nil, nil, cfg.Kind)
+	_, _, err := g.buildResource(cfg.TerraformResource, cfg, nil, nil, cfg.Kind)
 	return g.genTypes, g.comments, errors.Wrapf(err, "cannot build the types")
 }
 
@@ -105,6 +105,10 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 
 		for _, f := range cfg.LateInitializer.IgnoredFields {
 			// Convert configuration input from Terraform path to canonical path
+			// Todo(turkenh/muvaf): Replace with a simple string conversion
+			//  like GetIgnoredCanonicalFields where we just make each word
+			//  between points camel case using names.go utilities. If the path
+			//  doesn't match anything, it's no-op in late-init logic anyway.
 			if f == fieldPath(tfPaths) {
 				cfg.LateInitializer.AddIgnoredCanonicalFields(fieldPath(cnPaths))
 			}
