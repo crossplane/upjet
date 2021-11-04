@@ -72,12 +72,34 @@ type ExternalName struct {
 // given resource. Key should be the field path of the field to be referenced.
 type References map[string]Reference
 
+// Reference represents the Crossplane options used to generate
+// reference resolvers for fields
+type Reference struct {
+	// Type is the type name of the CRD if it is in the same package or
+	// <package-path>.<type-name> if it is in a different package.
+	Type string
+	// Extractor is the function to be used to extract value from the
+	// referenced type. Defaults to getting external name.
+	// Optional
+	Extractor string
+	// RefFieldName is the field name for the Reference field. Defaults to
+	// <field-name>Ref or <field-name>Refs.
+	// Optional
+	RefFieldName string
+	// SelectorFieldName is the field name for the Selector field. Defaults to
+	// <field-name>Selector.
+	// Optional
+	SelectorFieldName string
+}
+
 // Sensitive represents configurations to handle sensitive information
 type Sensitive struct {
 	// AdditionalConnectionDetailsFn is the path for function adding additional
 	// connection details keys
 	AdditionalConnectionDetailsFn AdditionalConnectionDetailsFn
 
+	// fieldPaths keeps the mapping of sensitive fields in Terraform schema with
+	// terraform field path as key and xp field path as value.
 	fieldPaths map[string]string
 }
 
@@ -91,6 +113,9 @@ type LateInitializer struct {
 	// "block_device_mappings.ebs".
 	IgnoredFields []string
 
+	// ignoredCanonicalFieldPaths are the Canonical field paths to be skipped
+	// during late-initialization. This is filled using the `IgnoredFields`
+	// field which keeps Terraform paths by converting them to Canonical paths.
 	ignoredCanonicalFieldPaths []string
 }
 

@@ -190,10 +190,16 @@ func (p *Provider) AddResourceConfigurator(resource string, c ResourceConfigurat
 	p.resourceConfigurators[resource] = append(p.resourceConfigurators[resource], c)
 }
 
+// SetResourceConfigurator sets ResourceConfigurator for a resource. This will
+// override all previously added ResourceConfigurators for this resource.
+func (p *Provider) SetResourceConfigurator(resource string, c ResourceConfigurator) {
+	p.resourceConfigurators[resource] = ResourceConfiguratorChain{c}
+}
+
 // ConfigureResources configures resources with provided ResourceConfigurator's
 func (p *Provider) ConfigureResources() {
-	for name := range p.Resources {
-		p.resourceConfigurators[name].Configure(p.Resources[name])
+	for name, c := range p.resourceConfigurators {
+		c.Configure(p.Resources[name])
 	}
 }
 
