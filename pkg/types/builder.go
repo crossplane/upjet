@@ -32,6 +32,10 @@ import (
 	"github.com/crossplane-contrib/terrajet/pkg/types/comments"
 )
 
+const (
+	wildcard = "*"
+)
+
 // NewBuilder returns a new Builder.
 func NewBuilder(pkg *types.Package) *Builder {
 	return &Builder{
@@ -49,8 +53,8 @@ type Builder struct {
 }
 
 // Build returns parameters and observation types built out of Terraform schema.
-func (g *Builder) Build(cfg *config.Resource, schema *schema.Resource) ([]*types.Named, twtypes.Comments, error) {
-	_, _, err := g.buildResource(schema, cfg, nil, nil, cfg.Kind)
+func (g *Builder) Build(cfg *config.Resource) ([]*types.Named, twtypes.Comments, error) {
+	_, _, err := g.buildResource(cfg.TerraformResource, cfg, nil, nil, cfg.Kind)
 	return g.genTypes, g.comments, errors.Wrapf(err, "cannot build the types")
 }
 
@@ -92,17 +96,30 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 		tfTag := fmt.Sprintf("%s,omitempty", fieldName.Snake)
 		jsonTag := fmt.Sprintf("%s,omitempty", fieldName.LowerCamelComputed)
 
+		// Terraform paths, e.g. { "lifecycle_rule", "*", "transition", "*", "days" } for https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket#lifecycle_rule
 		tfPaths := append(tfPath, fieldName.Snake)
+		// Crossplane paths, e.g. {"lifecycleRule", "*", "transition", "*", "days"}
 		xpPaths := append(xpPath, fieldName.LowerCamel)
+		// Canonical paths, e.g. {"LifecycleRule", "Transition", "Days"}
+		cnPaths := append(names[1:], fieldName.Camel)
+
+		for _, f := range cfg.LateInitializer.IgnoredFields {
+			// Convert configuration input from Terraform path to canonical path
+			// Todo(turkenh/muvaf): Replace with a simple string conversion
+			//  like GetIgnoredCanonicalFields where we just make each word
+			//  between points camel case using names.go utilities. If the path
+			//  doesn't match anything, it's no-op in late-init logic anyway.
+			if f == fieldPath(tfPaths) {
+				cfg.LateInitializer.AddIgnoredCanonicalFields(fieldPath(cnPaths))
+			}
+		}
 
 		fieldType, err := g.buildSchema(sch, cfg, tfPaths, xpPaths, append(names, fieldName.Camel))
 		if err != nil {
 			return nil, nil, errors.Wrapf(err, "cannot infer type from schema of field %s", fieldName.Snake)
 		}
 
-		tfFieldPath := fieldPath(tfPaths)
-		xpFieldPath := fieldPath(xpPaths)
-		if ref, ok := cfg.References[tfFieldPath]; ok {
+		if ref, ok := cfg.References[fieldPath(tfPaths)]; ok {
 			comment.Reference = ref
 			sch.Optional = true
 		}
@@ -110,13 +127,13 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 		fieldNameCamel := fieldName.Camel
 		if sch.Sensitive {
 			if isObservation(sch) {
-				cfg.Sensitive.AddFieldPath(tfFieldPath, "status.atProvider."+xpFieldPath)
+				cfg.Sensitive.AddFieldPath(fieldPathWithWildcard(tfPaths), "status.atProvider."+fieldPathWithWildcard(xpPaths))
 				// Drop an observation field from schema if it is sensitive.
 				// Data will be stored in connection details secret
 				continue
 			}
 			sfx := "SecretRef"
-			cfg.Sensitive.AddFieldPath(tfFieldPath, "spec.forProvider."+xpFieldPath+sfx)
+			cfg.Sensitive.AddFieldPath(fieldPathWithWildcard(tfPaths), "spec.forProvider."+fieldPathWithWildcard(xpPaths)+sfx)
 			// todo(turkenh): do we need to support other field types as sensitive?
 			if fieldType.String() != "string" && fieldType.String() != "*string" {
 				return nil, nil, fmt.Errorf(`got type %q for field %q, only types "string" and "*string" supported as sensitive`, fieldType.String(), fieldNameCamel)
@@ -160,7 +177,7 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 			comment.Required = &req
 			paramFields = append(paramFields, field)
 		}
-		if ref, ok := cfg.References[tfFieldPath]; ok {
+		if ref, ok := cfg.References[fieldPath(tfPaths)]; ok {
 			refFields, refTags := g.generateReferenceFields(paramName, field, ref)
 			paramTags = append(paramTags, refTags...)
 			paramFields = append(paramFields, refFields...)
@@ -198,8 +215,8 @@ func (g *Builder) buildSchema(sch *schema.Schema, cfg *config.Resource, tfPath [
 	case schema.TypeString:
 		return types.NewPointer(types.Universe.Lookup("string").Type()), nil
 	case schema.TypeMap, schema.TypeList, schema.TypeSet:
-		tfPath = append(tfPath, "*")
-		xpPath = append(xpPath, "*")
+		tfPath = append(tfPath, wildcard)
+		xpPath = append(xpPath, wildcard)
 		var elemType types.Type
 		var err error
 		switch et := sch.Elem.(type) {
@@ -298,6 +315,17 @@ func sortedKeys(m map[string]*schema.Schema) []string {
 }
 
 func fieldPath(parts []string) string {
+	seg := make(fieldpath.Segments, len(parts))
+	for i, p := range parts {
+		if p == wildcard {
+			continue
+		}
+		seg[i] = fieldpath.Field(p)
+	}
+	return seg.String()
+}
+
+func fieldPathWithWildcard(parts []string) string {
 	seg := make(fieldpath.Segments, len(parts))
 	for i, p := range parts {
 		seg[i] = fieldpath.Field(p)

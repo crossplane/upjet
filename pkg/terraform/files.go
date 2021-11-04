@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/pkg/errors"
@@ -41,19 +42,13 @@ func WithFileSystem(fs afero.Fs) FileProducerOption {
 	}
 }
 
-// WithConfig sets the resource configuration to be used.
-func WithConfig(cfg config.Resource) FileProducerOption {
-	return func(fp *FileProducer) {
-		fp.Config = cfg
-	}
-}
-
 // NewFileProducer returns a new FileProducer.
-func NewFileProducer(ctx context.Context, client resource.SecretClient, dir string, tr resource.Terraformed, ts Setup, opts ...FileProducerOption) (*FileProducer, error) {
+func NewFileProducer(ctx context.Context, client resource.SecretClient, dir string, tr resource.Terraformed, ts Setup, cfg *config.Resource, opts ...FileProducerOption) (*FileProducer, error) {
 	fp := &FileProducer{
 		Resource: tr,
 		Setup:    ts,
 		Dir:      dir,
+		Config:   cfg,
 		fs:       afero.Afero{Fs: afero.NewOsFs()},
 	}
 	for _, f := range opts {
@@ -90,7 +85,7 @@ type FileProducer struct {
 	Resource resource.Terraformed
 	Setup    Setup
 	Dir      string
-	Config   config.Resource
+	Config   *config.Resource
 
 	parameters  map[string]interface{}
 	observation map[string]interface{}
@@ -154,17 +149,20 @@ func (fp *FileProducer) WriteMainTF() error {
 	fp.parameters["lifecycle"] = map[string]bool{
 		"prevent_destroy": !meta.WasDeleted(fp.Resource),
 	}
+	// Note(turkenh): To use third party providers, we need to configure
+	// provider name in required_providers.
+	providerSource := strings.Split(fp.Setup.Requirement.Source, "/")
 	m := map[string]interface{}{
 		"terraform": map[string]interface{}{
 			"required_providers": map[string]interface{}{
-				"tf-provider": map[string]string{
+				providerSource[1]: map[string]string{
 					"source":  fp.Setup.Requirement.Source,
 					"version": fp.Setup.Requirement.Version,
 				},
 			},
 		},
 		"provider": map[string]interface{}{
-			"tf-provider": fp.Setup.Configuration,
+			providerSource[1]: fp.Setup.Configuration,
 		},
 		"resource": map[string]interface{}{
 			fp.Resource.GetTerraformResourceType(): map[string]interface{}{

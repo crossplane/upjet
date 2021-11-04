@@ -22,13 +22,13 @@ import (
 	"testing"
 
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
-
 	xpfake "github.com/crossplane/crossplane-runtime/pkg/resource/fake"
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	"github.com/google/go-cmp/cmp"
 	"github.com/spf13/afero"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/crossplane-contrib/terrajet/pkg/config"
 	"github.com/crossplane-contrib/terrajet/pkg/resource"
 	"github.com/crossplane-contrib/terrajet/pkg/resource/fake"
 )
@@ -77,7 +77,7 @@ func TestWriteTFState(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			fs := afero.NewMemMapFs()
-			fp, err := NewFileProducer(context.TODO(), nil, dir, tc.args.tr, tc.args.s, WithFileSystem(fs))
+			fp, err := NewFileProducer(context.TODO(), nil, dir, tc.args.tr, tc.args.s, &config.Resource{}, WithFileSystem(fs))
 			if err != nil {
 				t.Errorf("cannot initialize a file producer: %s", err.Error())
 			}
@@ -109,31 +109,41 @@ func TestWriteMainTF(t *testing.T) {
 	}{
 		"Success": {
 			reason: "Standard resources should be able to write everything it has into maintf file",
-			args: args{tr: &fake.Terraformed{
-				Managed: xpfake.Managed{
-					ObjectMeta: metav1.ObjectMeta{
-						Annotations: map[string]string{
-							resource.AnnotationKeyPrivateRawAttribute: "privateraw",
-							meta.AnnotationKeyExternalName:            "some-id",
+			args: args{
+				tr: &fake.Terraformed{
+					Managed: xpfake.Managed{
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: map[string]string{
+								resource.AnnotationKeyPrivateRawAttribute: "privateraw",
+								meta.AnnotationKeyExternalName:            "some-id",
+							},
 						},
 					},
+					Parameterizable: fake.Parameterizable{Parameters: map[string]interface{}{
+						"param": "paramval",
+					}},
+					Observable: fake.Observable{Observation: map[string]interface{}{
+						"obs": "obsval",
+					}},
 				},
-				Parameterizable: fake.Parameterizable{Parameters: map[string]interface{}{
-					"param": "paramval",
-				}},
-				Observable: fake.Observable{Observation: map[string]interface{}{
-					"obs": "obsval",
-				}},
-			}},
+				s: Setup{
+					Requirement: ProviderRequirement{
+						Source:  "hashicorp/provider-test",
+						Version: "1.2.3",
+					},
+					Configuration: nil,
+					Env:           nil,
+				},
+			},
 			want: want{
-				maintf: `{"provider":{"tf-provider":null},"resource":{"":{"":{"lifecycle":{"prevent_destroy":true},"param":"paramval"}}},"terraform":{"required_providers":{"tf-provider":{"source":"","version":""}}}}`,
+				maintf: `{"provider":{"provider-test":null},"resource":{"":{"":{"lifecycle":{"prevent_destroy":true},"param":"paramval"}}},"terraform":{"required_providers":{"provider-test":{"source":"hashicorp/provider-test","version":"1.2.3"}}}}`,
 			},
 		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			fs := afero.NewMemMapFs()
-			fp, err := NewFileProducer(context.TODO(), nil, dir, tc.args.tr, tc.args.s, WithFileSystem(fs))
+			fp, err := NewFileProducer(context.TODO(), nil, dir, tc.args.tr, tc.args.s, &config.Resource{}, WithFileSystem(fs))
 			if err != nil {
 				t.Errorf("cannot initialize a file producer: %s", err.Error())
 			}

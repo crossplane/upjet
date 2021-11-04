@@ -40,7 +40,7 @@ type Workspace interface {
 
 // Store is where we can get access to the Terraform workspace of given resource.
 type Store interface {
-	Workspace(ctx context.Context, c resource.SecretClient, tr resource.Terraformed, ts terraform.Setup, cfg config.Resource) (*terraform.Workspace, error)
+	Workspace(ctx context.Context, c resource.SecretClient, tr resource.Terraformed, ts terraform.Setup, cfg *config.Resource) (*terraform.Workspace, error)
 }
 
 // CallbackProvider provides functions that can be called with the result of

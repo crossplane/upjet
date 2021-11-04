@@ -85,10 +85,10 @@ func (c WorkspaceFns) Plan(ctx context.Context) (terraform.PlanResult, error) {
 }
 
 type StoreFns struct {
-	WorkspaceFn func(ctx context.Context, c resource.SecretClient, tr resource.Terraformed, ts terraform.Setup, cfg config.Resource) (*terraform.Workspace, error)
+	WorkspaceFn func(ctx context.Context, c resource.SecretClient, tr resource.Terraformed, ts terraform.Setup, cfg *config.Resource) (*terraform.Workspace, error)
 }
 
-func (s StoreFns) Workspace(ctx context.Context, c resource.SecretClient, tr resource.Terraformed, ts terraform.Setup, cfg config.Resource) (*terraform.Workspace, error) {
+func (s StoreFns) Workspace(ctx context.Context, c resource.SecretClient, tr resource.Terraformed, ts terraform.Setup, cfg *config.Resource) (*terraform.Workspace, error) {
 	return s.WorkspaceFn(ctx, c, tr, ts, cfg)
 }
 
@@ -147,7 +147,7 @@ func TestConnect(t *testing.T) {
 					return terraform.Setup{}, nil
 				},
 				store: StoreFns{
-					WorkspaceFn: func(_ context.Context, _ resource.SecretClient, _ resource.Terraformed, _ terraform.Setup, _ config.Resource) (*terraform.Workspace, error) {
+					WorkspaceFn: func(_ context.Context, _ resource.SecretClient, _ resource.Terraformed, _ terraform.Setup, _ *config.Resource) (*terraform.Workspace, error) {
 						return nil, errBoom
 					},
 				},
@@ -163,7 +163,7 @@ func TestConnect(t *testing.T) {
 					return terraform.Setup{}, nil
 				},
 				store: StoreFns{
-					WorkspaceFn: func(_ context.Context, _ resource.SecretClient, _ resource.Terraformed, _ terraform.Setup, _ config.Resource) (*terraform.Workspace, error) {
+					WorkspaceFn: func(_ context.Context, _ resource.SecretClient, _ resource.Terraformed, _ terraform.Setup, _ *config.Resource) (*terraform.Workspace, error) {
 						return nil, nil
 					},
 				},
@@ -172,7 +172,7 @@ func TestConnect(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			c := NewConnector(nil, tc.args.store, tc.args.setupFn, config.Resource{})
+			c := NewConnector(nil, tc.args.store, tc.args.setupFn, &config.Resource{})
 			_, err := c.Connect(context.TODO(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nConnect(...): -want error, +got error:\n%s", tc.reason, diff)
@@ -337,7 +337,7 @@ func TestObserve(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			e := &external{workspace: tc.w}
+			e := &external{workspace: tc.w, config: &config.Resource{}}
 			_, err := e.Observe(context.TODO(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nObserve(...): -want error, +got error:\n%s", tc.reason, diff)
@@ -350,7 +350,7 @@ func TestCreate(t *testing.T) {
 	type args struct {
 		w   Workspace
 		c   CallbackProvider
-		cfg config.Resource
+		cfg *config.Resource
 		obj xpresource.Managed
 	}
 	type want struct {
@@ -363,6 +363,7 @@ func TestCreate(t *testing.T) {
 	}{
 		"WrongType": {
 			args: args{
+				cfg: &config.Resource{},
 				obj: &xpfake.Managed{},
 			},
 			want: want{
@@ -372,7 +373,7 @@ func TestCreate(t *testing.T) {
 		"AsyncFailed": {
 			reason: "It should return error if it cannot trigger the async apply",
 			args: args{
-				cfg: config.Resource{
+				cfg: &config.Resource{
 					UseAsync: true,
 				},
 				c: CallbackFns{
@@ -394,6 +395,7 @@ func TestCreate(t *testing.T) {
 		"SyncApplyFailed": {
 			reason: "It should return error if it cannot apply in sync mode",
 			args: args{
+				cfg: &config.Resource{},
 				obj: &fake.Terraformed{},
 				w: WorkspaceFns{
 					ApplyFn: func(_ context.Context) (terraform.ApplyResult, error) {
@@ -420,7 +422,7 @@ func TestCreate(t *testing.T) {
 func TestUpdate(t *testing.T) {
 	type args struct {
 		w   Workspace
-		cfg config.Resource
+		cfg *config.Resource
 		c   CallbackProvider
 		obj xpresource.Managed
 	}
@@ -434,6 +436,7 @@ func TestUpdate(t *testing.T) {
 	}{
 		"WrongType": {
 			args: args{
+				cfg: &config.Resource{},
 				obj: &xpfake.Managed{},
 			},
 			want: want{
@@ -443,7 +446,7 @@ func TestUpdate(t *testing.T) {
 		"AsyncFailed": {
 			reason: "It should return error if it cannot trigger the async apply",
 			args: args{
-				cfg: config.Resource{
+				cfg: &config.Resource{
 					UseAsync: true,
 				},
 				c: CallbackFns{
@@ -465,6 +468,7 @@ func TestUpdate(t *testing.T) {
 		"SyncApplyFailed": {
 			reason: "It should return error if it cannot apply in sync mode",
 			args: args{
+				cfg: &config.Resource{},
 				obj: &fake.Terraformed{},
 				w: WorkspaceFns{
 					ApplyFn: func(_ context.Context) (terraform.ApplyResult, error) {
@@ -491,7 +495,7 @@ func TestUpdate(t *testing.T) {
 func TestDelete(t *testing.T) {
 	type args struct {
 		w   Workspace
-		cfg config.Resource
+		cfg *config.Resource
 		c   CallbackProvider
 		obj xpresource.Managed
 	}
@@ -506,7 +510,7 @@ func TestDelete(t *testing.T) {
 		"AsyncFailed": {
 			reason: "It should return error if it cannot trigger the async destroy",
 			args: args{
-				cfg: config.Resource{
+				cfg: &config.Resource{
 					UseAsync: true,
 				},
 				c: CallbackFns{
@@ -529,6 +533,7 @@ func TestDelete(t *testing.T) {
 			reason: "It should return error if it cannot destroy in sync mode",
 			args: args{
 				obj: &fake.Terraformed{},
+				cfg: &config.Resource{},
 				w: WorkspaceFns{
 					DestroyFn: func(_ context.Context) error {
 						return errBoom

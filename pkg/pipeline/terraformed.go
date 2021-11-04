@@ -23,7 +23,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/muvaf/typewriter/pkg/wrapper"
 	"github.com/pkg/errors"
 
@@ -48,15 +47,15 @@ type TerraformedGenerator struct {
 }
 
 // Generate writes generated Terraformed interface functions
-func (tg *TerraformedGenerator) Generate(c *config.Resource, sch *schema.Resource) error {
+func (tg *TerraformedGenerator) Generate(cfg *config.Resource) error {
 	trFile := wrapper.NewFile(tg.pkg.Path(), tg.pkg.Name(), templates.TerraformedTemplate,
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath("hack/boilerplate.go.txt"), // todo
 	)
 	vars := map[string]interface{}{
 		"CRD": map[string]string{
-			"APIVersion": c.Version,
-			"Kind":       c.Kind,
+			"APIVersion": cfg.Version,
+			"Kind":       cfg.Kind,
 		},
 		"Terraform": map[string]interface{}{
 			// TODO(hasan): This identifier is used to generate external name.
@@ -65,19 +64,19 @@ func (tg *TerraformedGenerator) Generate(c *config.Resource, sch *schema.Resourc
 			//  more complex logic like combining multiple fields etc.
 			//  I'll revisit this with
 			//  https://github.com/crossplane-contrib/terrajet/issues/11
-			"IdentifierField": c.TerraformIDFieldName,
-			"ResourceType":    c.TerraformResourceType,
-			"SchemaVersion":   sch.SchemaVersion,
+			"IdentifierField": cfg.IDFieldName,
+			"ResourceType":    cfg.Name,
+			"SchemaVersion":   cfg.TerraformResource.SchemaVersion,
 		},
 		"Sensitive": map[string]interface{}{
-			"Fields": c.Sensitive.GetFieldPaths(),
+			"Fields": cfg.Sensitive.GetFieldPaths(),
 		},
 		"LateInitializer": map[string]interface{}{
-			"IgnoredFields": c.LateInitializer.IgnoredFields,
+			"IgnoredFields": cfg.LateInitializer.GetIgnoredCanonicalFields(),
 		},
 	}
 
-	filePath := filepath.Join(tg.LocalDirectoryPath, fmt.Sprintf("zz_%s_terraformed.go", strings.ToLower(c.Kind)))
+	filePath := filepath.Join(tg.LocalDirectoryPath, fmt.Sprintf("zz_%s_terraformed.go", strings.ToLower(cfg.Kind)))
 	return errors.Wrap(
 		trFile.Write(filePath, vars, os.ModePerm),
 		"cannot write terraformed conversion methods file",
