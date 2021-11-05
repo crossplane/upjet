@@ -3,7 +3,7 @@
 In this guide, we will generate a Crossplane provider based on an existing
 Terraform provider using Terrajet.
 
-We have chosen [Terraform GitHub provider] as an example, but the process would
+We have chosen [Terraform GitHub provider] as an example, but the process will
 be quite similar for any other Terraform provider.
 
 ## Generate
@@ -15,14 +15,14 @@ be quite similar for any other Terraform provider.
 
     1. Export `ProviderName`:
 
-        ```console
+        ```bash
         export ProviderNameLower=github
         export ProviderNameUpper=GitHub
         ```
 
     2. Replace all occurrences of `template` with your provider name:
 
-        ```console
+        ```bash
         git grep -l 'template' -- './*' ':!build/**' ':!go.sum' | xargs sed -i.bak "s/template/${ProviderNameLower}/g"
         git grep -l 'Template' -- './*' ':!build/**' ':!go.sum' | xargs sed -i.bak "s/Template/${ProviderNameUpper}/g"
         # Clean up the .bak files created by sed
@@ -47,7 +47,7 @@ be quite similar for any other Terraform provider.
        You could find `TERRAFORM_PROVIDER_SOURCE` and `TERRAFORM_PROVIDER_VERSION` in
        Terraform documentation of the provider by hitting the "**USE PROVIDER**"
        button. Check [this line in controller Dockerfile] to see how these
-       variables used to build the provider plugin binary.
+       variables are used to build the provider plugin binary.
 
     2. Update import path of the Terraform provider schema package in
        `config/provider.go`. This is typically under the `<provider-name>`
@@ -65,7 +65,7 @@ be quite similar for any other Terraform provider.
        ```
 
        Run:
-       ```
+       ```bash
        go mod tidy
        ```
 
@@ -83,7 +83,7 @@ be quite similar for any other Terraform provider.
        resourceMap := conversion.GetV2ResourceMap(tf.Provider())
        ```
 
-       And in `go.mod` file, set the following replace directive
+       And in `go.mod` file, set the following `replace directive`
        (uncomment related section):
 
        ```
@@ -91,7 +91,7 @@ be quite similar for any other Terraform provider.
        ```
 
        Run:
-       ```
+       ```bash
        go mod tidy
        ```
 
@@ -131,7 +131,7 @@ be quite similar for any other Terraform provider.
    }
    ```
 
-6. Before generating all resource that the provider has, let's go step by step
+6. Before generating all resources that the provider has, let's go step by step
    and only start with generating `github_repository` and `github_branch`
    resources.
 
@@ -150,14 +150,14 @@ be quite similar for any other Terraform provider.
 7. Finally, we would need to add some custom configurations for these two
    resources as follows:
 
-   ```console
+   ```bash
    # Create custom configuration directory for whole repository group
    mkdir config/repository
    # Create custom configuration directory for whole branch group
    mkdir config/branch
    ```
 
-   ```console
+   ```bash
    cat <<EOF > config/repository/config.go
    package repository
 
@@ -165,13 +165,16 @@ be quite similar for any other Terraform provider.
 
    func Customize(p *config.Provider) {
        p.AddResourceConfigurator("github_repository", func(r *config.Resource) {
+   
+           // we need to override the default group that terrajet generated for
+           // this resource, which would be "github"  
            r.Group = "repository"
        })
    }
    EOF
    ```
 
-   ```console
+   ```bash
    cat <<EOF > config/branch/config.go
    package branch
 
@@ -179,8 +182,19 @@ be quite similar for any other Terraform provider.
 
    func Customize(p *config.Provider) {
        p.AddResourceConfigurator("github_branch", func(r *config.Resource) {
+   
+           // we need to override the default group that terrajet generated for
+           // this resource, which would be "github" 
            r.Group = "branch"
+   
+           // Identifier for this resource is assigned by the provider. In other
+           // words it is not simply the name of the resource.
            r.ExternalName = config.IdentifierFromProvider
+   
+           // This resource need the repository in which branch would be created
+           // as an input. And by defining it as a reference to Repository
+           // object, we can build cross resource referencing. See 
+           // repositoryRef in the example in the Testing section below.
            r.References["repository"] = config.Reference{
                Type: "github.com/crossplane-contrib/provider-tf-github/apis/repository/v1alpha1.Repository",
            }
@@ -213,31 +227,37 @@ be quite similar for any other Terraform provider.
        }
    ```
 
+   **_To learn more about custom resource configurations (in step 7), please see
+   the [Configuring a Resource](/docs/configuring-a-resource.md) document._**
+
+
 8. Now we can generate our Terrajet Provider:
 
-   ```console
+   ```bash
    make generate
    ```
+
+**_To add more resources, please follow the steps between 6-8 for each resource._**
 
 ## Test
 
 Now let's test our generated resources.
 
-1. First, we will create example resources under `examples` directory:
+1. First, we will create example resources under the `examples` directory:
 
    Create example directories for repository and branch groups:
 
-   ```console
+   ```bash
    mkdir examples/repository
    mkdir examples/branch
    
-   # remove the sample directory which was an example in template
+   # remove the sample directory which was an example in the template
    rm -rf examples/sample
    ```
 
    Create a provider secret template:
 
-   ```console
+   ```bash
    cat <<EOF > examples/providerconfig/secret.yaml.tmpl
    apiVersion: v1
    kind: Secret
@@ -257,7 +277,7 @@ Now let's test our generated resources.
    `provider-tf-template` repo as template for the repository
    to be created:
 
-   ```console
+   ```bash
    cat <<EOF > examples/repository/repository.yaml
    apiVersion: repository.github.tf.crossplane.io/v1alpha1
    kind: Repository
@@ -269,7 +289,7 @@ Now let's test our generated resources.
        visibility: public
        template:
          - owner: crossplane-contrib
-       repository: provider-tf-template
+           repository: provider-tf-template
      providerConfigRef:
        name: default
    EOF
@@ -278,7 +298,7 @@ Now let's test our generated resources.
    Create `branch` resource which refers to the above repository
    managed resource:
 
-   ```console
+   ```bash
    cat <<EOF > examples/branch/branch.yaml
    apiVersion: branch.github.tf.crossplane.io/v1alpha1
    kind: Branch
@@ -300,27 +320,27 @@ Now let's test our generated resources.
 3. Create `examples/providerconfig/secret.yaml` from
    `examples/providerconfig/secret.yaml.tmpl` and set your token in the file:
 
-   ```console
+   ```bash
    GITHUB_TOKEN=<your-token-here>
    cat examples/providerconfig/secret.yaml.tmpl | sed -e "s/y0ur-t0k3n/${GITHUB_TOKEN}/g" > examples/providerconfig/secret.yaml
    ```
 
 4. Apply CRDs:
 
-   ```console
+   ```bash
    kubectl apply -f package/crds
    ```
 
 5. Run the provider:
 
-   ```console
+   ```bash
    make run
    ```
 
 6. Apply ProviderConfig and example manifests (_In another terminal since
    the previous command is blocking_):
 
-   ```console
+   ```bash
    # Create "crossplane-system" namespace if not exists
    kubectl create namespace crossplane-system --dry-run=client -o yaml | kubectl apply -f -
 
@@ -331,11 +351,11 @@ Now let's test our generated resources.
 
 7. Observe managed resources and wait until they are ready:
 
-   ```console
+   ```bash
    watch kubectl get managed
    ```
 
-   ```console
+   ```bash
    NAME                                                   READY   SYNCED   EXTERNAL-NAME                     AGE
    branch.branch.github.tf.crossplane.io/hello-terrajet   True    True     hello-crossplane:hello-terrajet   89s
 
@@ -349,12 +369,13 @@ Now let's test our generated resources.
 
 9. Cleanup
 
-   ```console
+   ```bash
    kubectl delete -f examples/branch/branch.yaml
    kubectl delete -f examples/repository/repository.yaml
    ```
 
-   Verify that repo got deleted once deletion completed on the control plane.
+   Verify that the repo got deleted once deletion is completed on the control
+   plane.
 
 
 [comment]: <> (References)
