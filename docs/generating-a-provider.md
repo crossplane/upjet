@@ -1,6 +1,6 @@
 # Generating a Crossplane Provider using Terrajet
 
-In this Guide, we will generate a Crossplane provider leveraging an existing
+In this Guide, we will generate a Crossplane provider based on an existing
 Terraform provider using Terrajet. 
 
 We have chosen [Terraform GitHub provider] as an example, but the process would
@@ -12,14 +12,15 @@ be identical for any other Terraform provider.
    "Use this template" button in [provider-tf-template] repository.
 2. Clone the repository to your local and `cd` into the repository directory.
 3. Replace `template` with your provider name.
-    1. Export `ProviderName`
+
+    1. Export `ProviderName`:
 
     ```shell
     export ProviderNameLower=github
     export ProviderNameUpper=GitHub
     ```
 
-    2. Replace all occurrences of `template` with your provider name.
+    2. Replace all occurrences of `template` with your provider name:
 
     ```shell
     git grep -l 'template' -- './*' ':!build/**' ':!go.sum' | xargs sed -i.bak "s/template/${ProviderNameLower}/g"
@@ -33,6 +34,7 @@ be identical for any other Terraform provider.
     ```
 
 4. Configure your repo with Terraform provider and schema:
+
    1. Update Makefile variables for Terraform Provider (`TERRAFORM_PROVIDER_*`)
 
        ```makefile
