@@ -293,6 +293,14 @@ func (g *Builder) generateTypeName(suffix string, names ...string) (string, erro
 	if g.Package.Scope().Lookup(n) == nil {
 		return n, nil
 	}
+	// start from 2 considering the 1st of this type is the one without an
+	// index.
+	for i := 2; i < 10; i++ {
+		nn := fmt.Sprintf("%s%d", n, i)
+		if g.Package.Scope().Lookup(nn) == nil {
+			return nn, nil
+		}
+	}
 	return "", errors.Errorf("could not generate a unique name for %s", n)
 }
 
