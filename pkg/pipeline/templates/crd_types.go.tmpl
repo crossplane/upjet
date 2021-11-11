@@ -16,13 +16,13 @@ import (
 // {{ .CRD.Kind }}Spec defines the desired state of {{ .CRD.Kind }}
 type {{ .CRD.Kind }}Spec struct {
 	{{ .XPCommonAPIsPackageAlias }}ResourceSpec `json:",inline"`
-	ForProvider       {{ .CRD.ParametersType }} `json:"forProvider"`
+	ForProvider       {{ .CRD.ForProviderType }} `json:"forProvider"`
 }
 
 // {{ .CRD.Kind }}Status defines the observed state of {{ .CRD.Kind }}.
 type {{ .CRD.Kind }}Status struct {
 	{{ .XPCommonAPIsPackageAlias }}ResourceStatus `json:",inline"`
-	AtProvider          {{ .CRD.ObservationType }} `json:"atProvider,omitempty"`
+	AtProvider          {{ .CRD.AtProviderType }} `json:"atProvider,omitempty"`
 }
 
 // +kubebuilder:object:root=true
