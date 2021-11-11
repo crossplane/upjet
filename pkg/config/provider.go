@@ -199,7 +199,10 @@ func (p *Provider) SetResourceConfigurator(resource string, c ResourceConfigurat
 // ConfigureResources configures resources with provided ResourceConfigurator's
 func (p *Provider) ConfigureResources() {
 	for name, c := range p.resourceConfigurators {
-		c.Configure(p.Resources[name])
+		// if not skipped & included & configured via the default configurator
+		if r, ok := p.Resources[name]; ok {
+			c.Configure(r)
+		}
 	}
 }
 
