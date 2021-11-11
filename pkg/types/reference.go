@@ -55,8 +55,8 @@ func (g *Builder) generateReferenceFields(t *types.TypeName, f *types.Var, r con
 	ref := types.NewField(token.NoPos, g.Package, rfn, tr, false)
 	sel := types.NewField(token.NoPos, g.Package, sfn, types.NewPointer(typeSelectorField), false)
 
-	g.Comments.AddFieldComment(t, rfn, commentOptional.Build())
-	g.Comments.AddFieldComment(t, sfn, commentOptional.Build())
+	g.comments.AddFieldComment(t, rfn, commentOptional.Build())
+	g.comments.AddFieldComment(t, sfn, commentOptional.Build())
 
 	return []*types.Var{ref, sel}, []string{refTag, selTag}
 }
@@ -64,7 +64,7 @@ func (g *Builder) generateReferenceFields(t *types.TypeName, f *types.Var, r con
 func init() {
 	pkgs, err := packages.Load(&packages.Config{Mode: loadMode}, PackagePathXPCommonAPIs)
 	if err != nil {
-		panic(errors.Wrap(err, "cannot load crossplane-runtime package to get reference Types"))
+		panic(errors.Wrap(err, "cannot load crossplane-runtime package to get reference types"))
 	}
 	if len(pkgs) != 1 && pkgs[0].Name != "v1" {
 		panic(errors.Errorf("unexpected package name %s", pkgs[0].Name))

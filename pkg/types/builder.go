@@ -39,14 +39,12 @@ const (
 // NewBuilder returns a new Builder.
 func NewBuilder(pkg *types.Package) *Builder {
 	return &Builder{
-		Package: pkg,
-		Generated: Generated{
-			Comments: twtypes.Comments{},
-		},
+		Package:  pkg,
+		comments: twtypes.Comments{},
 	}
 }
 
-// Generated stores the information of the generated types
+// Generated is a struct that holds generated types
 type Generated struct {
 	Types    []*types.Named
 	Comments twtypes.Comments
@@ -58,19 +56,25 @@ type Generated struct {
 // Builder is used to generate Go type equivalence of given Terraform schema.
 type Builder struct {
 	Package *types.Package
-	Generated
+
+	genTypes []*types.Named
+	comments twtypes.Comments
 }
 
-// Build returns parameters and observation Types built out of Terraform schema.
+// Build returns parameters and observation types built out of Terraform schema.
 func (g *Builder) Build(cfg *config.Resource) (Generated, error) {
-	var err error
-	g.ForProviderType, g.AtProviderType, err = g.buildResource(cfg.TerraformResource, cfg, nil, nil, cfg.Kind)
-	return g.Generated, errors.Wrapf(err, "cannot build the Types")
+	fp, ap, err := g.buildResource(cfg.TerraformResource, cfg, nil, nil, cfg.Kind)
+	return Generated{
+		Types:           g.genTypes,
+		Comments:        g.comments,
+		ForProviderType: fp,
+		AtProviderType:  ap,
+	}, errors.Wrapf(err, "cannot build the Types")
 }
 
 func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPath []string, xpPath []string, names ...string) (*types.Named, *types.Named, error) { //nolint:gocyclo
 	// NOTE(muvaf): There can be fields in the same CRD with same name but in
-	// different Types. Since we generate the type using the field name, there
+	// different types. Since we generate the type using the field name, there
 	// can be collisions. In order to be able to generate unique names consistently,
 	// we need to process all fields in the same order all the time.
 	keys := sortedKeys(res.Schema)
@@ -144,9 +148,9 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 			}
 			sfx := "SecretRef"
 			cfg.Sensitive.AddFieldPath(fieldPathWithWildcard(tfPaths), "spec.forProvider."+fieldPathWithWildcard(xpPaths)+sfx)
-			// todo(turkenh): do we need to support other field Types as sensitive?
+			// todo(turkenh): do we need to support other field types as sensitive?
 			if fieldType.String() != "string" && fieldType.String() != "*string" {
-				return nil, nil, fmt.Errorf(`got type %q for field %q, only Types "string" and "*string" supported as sensitive`, fieldType.String(), fieldNameCamel)
+				return nil, nil, fmt.Errorf(`got type %q for field %q, only types "string" and "*string" supported as sensitive`, fieldType.String(), fieldNameCamel)
 			}
 			// Replace a parameter field with secretKeyRef if it is sensitive.
 			// If it is an observation field, it will be dropped.
@@ -193,23 +197,23 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 			paramFields = append(paramFields, refFields...)
 		}
 
-		g.Comments.AddFieldComment(paramName, fieldNameCamel, comment.Build())
+		g.comments.AddFieldComment(paramName, fieldNameCamel, comment.Build())
 	}
 
 	// NOTE(muvaf): Not every struct has both computed and configurable fields,
-	// so some of the Types we generate here are empty and unnecessary. However,
-	// there are valid Types with zero fields and we don't have the information
+	// so some of the types we generate here are empty and unnecessary. However,
+	// there are valid types with zero fields and we don't have the information
 	// to differentiate between valid zero fields and unnecessary one. So we generate
 	// two structs for every complex type.
 	// See usage of wafv2EmptySchema() in aws_wafv2_web_acl here:
 	// https://github.com/hashicorp/terraform-provider-aws/blob/main/aws/wafv2_helper.go#L13
 	paramType := types.NewNamed(paramName, types.NewStruct(paramFields, paramTags), nil)
 	g.Package.Scope().Insert(paramType.Obj())
-	g.Types = append(g.Types, paramType)
+	g.genTypes = append(g.genTypes, paramType)
 
 	obsType := types.NewNamed(obsName, types.NewStruct(obsFields, obsTags), nil)
 	g.Package.Scope().Insert(obsType.Obj())
-	g.Types = append(g.Types, obsType)
+	g.genTypes = append(g.genTypes, obsType)
 
 	return paramType, obsType, nil
 }
@@ -241,7 +245,7 @@ func (g *Builder) buildSchema(sch *schema.Schema, cfg *config.Resource, tfPath [
 			case schema.TypeString:
 				elemType = types.Universe.Lookup("string").Type()
 			case schema.TypeMap, schema.TypeList, schema.TypeSet, schema.TypeInvalid:
-				return nil, errors.Errorf("element type of %s is basic but not one of known basic Types", fieldPath(names))
+				return nil, errors.Errorf("element type of %s is basic but not one of known basic types", fieldPath(names))
 			}
 		case *schema.Schema:
 			elemType, err = g.buildSchema(et, cfg, tfPath, xpPath, names)
@@ -250,7 +254,7 @@ func (g *Builder) buildSchema(sch *schema.Schema, cfg *config.Resource, tfPath [
 			}
 		case *schema.Resource:
 			// TODO(muvaf): We skip the other type once we choose one of param
-			// or obs Types. This might cause some fields to be completely omitted.
+			// or obs types. This might cause some fields to be completely omitted.
 			paramType, obsType, err := g.buildResource(et, cfg, tfPath, xpPath, names...)
 			if err != nil {
 				return nil, errors.Wrapf(err, "cannot infer type from resource schema of element type of %s", fieldPath(names))
