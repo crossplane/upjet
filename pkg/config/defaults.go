@@ -32,7 +32,7 @@ var (
 			base["name"] = name
 		},
 		GetNameFn: IDAsName,
-		SetIDFn:   NameAsID,
+		GetIDFn:   NameAsID,
 		OmittedFields: []string{
 			"name",
 			"name_prefix",
@@ -45,7 +45,7 @@ var (
 	IdentifierFromProvider = ExternalName{
 		SetIdentifierArgumentFn: NopSetIdentifierArgument,
 		GetNameFn:               IDAsName,
-		SetIDFn:                 NameAsID,
+		GetIDFn:                 NameAsID,
 		DisableNameInitializer:  true,
 	}
 

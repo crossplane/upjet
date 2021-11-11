@@ -54,7 +54,7 @@ type GenericLateInitializer struct {
 }
 
 // LateInitializeAnnotations late initializes annotations of the resource
-func LateInitializeAnnotations(tr metav1.Object, id string, privateRaw string) (bool, error) {
+func LateInitializeAnnotations(tr metav1.Object, name string, privateRaw string) (bool, error) {
 	if tr.GetAnnotations()[AnnotationKeyPrivateRawAttribute] == privateRaw &&
 		xpmeta.GetExternalName(tr) != "" {
 		return false, nil
@@ -65,7 +65,7 @@ func LateInitializeAnnotations(tr metav1.Object, id string, privateRaw string) (
 	if xpmeta.GetExternalName(tr) != "" {
 		return true, nil
 	}
-	xpmeta.SetExternalName(tr, id)
+	xpmeta.SetExternalName(tr, name)
 	return true, nil
 }
 

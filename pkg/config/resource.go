@@ -20,22 +20,21 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
-// SetIdentifierArgumentFn sets the name of the resource in Terraform attributes map.
-type SetIdentifierArgumentFn func(base map[string]interface{}, name string)
+// SetIdentifierArgumentsFn sets the name of the resource in Terraform attributes map,
+// i.e. Main HCL file.
+type SetIdentifierArgumentsFn func(base map[string]interface{}, name string)
 
 // NopSetIdentifierArgument does nothing. It's useful for cases where the external
 // name is calculated by provider and doesn't have any effect on spec fields.
-var NopSetIdentifierArgument SetIdentifierArgumentFn = func(_ map[string]interface{}, _ string) {}
+var NopSetIdentifierArgument SetIdentifierArgumentsFn = func(_ map[string]interface{}, _ string) {}
 
-// SetIDFn sets the ID in TF State file.
-type SetIDFn func(name string, parameters map[string]interface{}, tfstate map[string]interface{})
+// GetIDFn returns the ID to be used in TF State file, i.e. "id" field in
+// terraform.tfstate.
+type GetIDFn func(name string, parameters map[string]interface{}, providerConfig map[string]interface{}) string
 
 // NameAsID returns the name to be used as ID in TF State file.
-var NameAsID SetIDFn = func(name string, _ map[string]interface{}, tfstate map[string]interface{}) {
-	if tfstate == nil {
-		tfstate = map[string]interface{}{}
-	}
-	tfstate["id"] = name
+var NameAsID GetIDFn = func(name string, _ map[string]interface{}, _ map[string]interface{}) string {
+	return name
 }
 
 // GetNameFn returns the external name extracted from the TF State.
@@ -43,7 +42,10 @@ type GetNameFn func(tfstate map[string]interface{}) string
 
 // IDAsName returns the TF State ID as external name.
 var IDAsName GetNameFn = func(tfstate map[string]interface{}) string {
-	return tfstate["id"].(string)
+	if id, ok := tfstate["id"].(string); ok {
+		return id
+	}
+	return ""
 }
 
 // AdditionalConnectionDetailsFn functions adds custom keys to connection details
@@ -65,15 +67,15 @@ type ResourceOption func(*Resource)
 type ExternalName struct {
 	// SetIdentifierArgumentFn sets the name of the resource in Terraform argument
 	// map, otherwise we cannot know which field in HCL we should treat as identifier.
-	SetIdentifierArgumentFn SetIdentifierArgumentFn
+	SetIdentifierArgumentFn SetIdentifierArgumentsFn
 
 	// GetNameFn returns the external name extracted from TF State. In most cases,
 	// "id" key of TF State should be returned.
 	GetNameFn GetNameFn
 
-	// SetIDFn sets the identification keys in TF State file. In most cases,
-	// external name should be set to "id" key.
-	SetIDFn SetIDFn
+	// GetIDFn returns the string that will be used as "id" key in TF state. In
+	// most cases, it should return given external name as is.
+	GetIDFn GetIDFn
 
 	// OmittedFields are the ones you'd like to be removed from the schema since
 	// they are specified via external name. You can omit only the top level fields.
