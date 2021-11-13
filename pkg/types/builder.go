@@ -44,6 +44,15 @@ func NewBuilder(pkg *types.Package) *Builder {
 	}
 }
 
+// Generated is a struct that holds generated types
+type Generated struct {
+	Types    []*types.Named
+	Comments twtypes.Comments
+
+	ForProviderType *types.Named
+	AtProviderType  *types.Named
+}
+
 // Builder is used to generate Go type equivalence of given Terraform schema.
 type Builder struct {
 	Package *types.Package
@@ -53,9 +62,14 @@ type Builder struct {
 }
 
 // Build returns parameters and observation types built out of Terraform schema.
-func (g *Builder) Build(cfg *config.Resource) ([]*types.Named, twtypes.Comments, error) {
-	_, _, err := g.buildResource(cfg.TerraformResource, cfg, nil, nil, cfg.Kind)
-	return g.genTypes, g.comments, errors.Wrapf(err, "cannot build the types")
+func (g *Builder) Build(cfg *config.Resource) (Generated, error) {
+	fp, ap, err := g.buildResource(cfg.TerraformResource, cfg, nil, nil, cfg.Kind)
+	return Generated{
+		Types:           g.genTypes,
+		Comments:        g.comments,
+		ForProviderType: fp,
+		AtProviderType:  ap,
+	}, errors.Wrapf(err, "cannot build the Types")
 }
 
 func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPath []string, xpPath []string, names ...string) (*types.Named, *types.Named, error) { //nolint:gocyclo
@@ -292,6 +306,14 @@ func (g *Builder) generateTypeName(suffix string, names ...string) (string, erro
 	}
 	if g.Package.Scope().Lookup(n) == nil {
 		return n, nil
+	}
+	// start from 2 considering the 1st of this type is the one without an
+	// index.
+	for i := 2; i < 10; i++ {
+		nn := fmt.Sprintf("%s_%d", n, i)
+		if g.Package.Scope().Lookup(nn) == nil {
+			return nn, nil
+		}
 	}
 	return "", errors.Errorf("could not generate a unique name for %s", n)
 }

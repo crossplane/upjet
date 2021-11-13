@@ -64,7 +64,7 @@ func (cg *CRDGenerator) Generate(cfg *config.Resource) error {
 	for _, omit := range cfg.ExternalName.OmittedFields {
 		delete(cfg.TerraformResource.Schema, omit)
 	}
-	typeList, comments, err := tjtypes.NewBuilder(cg.pkg).Build(cfg)
+	gen, err := tjtypes.NewBuilder(cg.pkg).Build(cfg)
 	if err != nil {
 		return errors.Wrapf(err, "cannot build types for %s", cfg.Kind)
 	}
@@ -74,17 +74,19 @@ func (cg *CRDGenerator) Generate(cfg *config.Resource) error {
 	// any compilation errors, which is the case before running kubebuilder
 	// generators. For now, we act like the target package is empty.
 	pkg := types.NewPackage(cg.pkg.Path(), cg.pkg.Name())
-	typePrinter := twtypes.NewPrinter(file.Imports, pkg.Scope(), twtypes.WithComments(comments))
-	typesStr, err := typePrinter.Print(typeList)
+	typePrinter := twtypes.NewPrinter(file.Imports, pkg.Scope(), twtypes.WithComments(gen.Comments))
+	typesStr, err := typePrinter.Print(gen.Types)
 	if err != nil {
 		return errors.Wrap(err, "cannot print the type list")
 	}
 	vars := map[string]interface{}{
 		"Types": typesStr,
 		"CRD": map[string]string{
-			"APIVersion": cfg.Version,
-			"Group":      cg.Group,
-			"Kind":       cfg.Kind,
+			"APIVersion":      cfg.Version,
+			"Group":           cg.Group,
+			"Kind":            cfg.Kind,
+			"ForProviderType": gen.ForProviderType.Obj().Name(),
+			"AtProviderType":  gen.AtProviderType.Obj().Name(),
 		},
 		"Provider": map[string]string{
 			"ShortName": cg.ProviderShortName,
