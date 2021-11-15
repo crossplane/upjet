@@ -54,12 +54,9 @@ type AdditionalConnectionDetailsFn func(attr map[string]interface{}) (map[string
 
 // NopAdditionalConnectionDetails does nothing, when no additional connection
 // details configuration function provided.
-func NopAdditionalConnectionDetails(_ map[string]interface{}) (map[string][]byte, error) {
+var NopAdditionalConnectionDetails AdditionalConnectionDetailsFn = func(_ map[string]interface{}) (map[string][]byte, error) {
 	return nil, nil
 }
-
-// ResourceOption allows setting optional fields of a Resource object.
-type ResourceOption func(*Resource)
 
 // ExternalName contains all information that is necessary for naming operations,
 // such as removal of those fields from spec schema and calling Configure function
@@ -176,11 +173,6 @@ type Resource struct {
 
 	// TerraformResource is the Terraform representation of the resource.
 	TerraformResource *schema.Resource
-
-	// IDFieldName is the name of the ID field in Terraform state of the
-	// resource. Its default is "id" and in almost all cases, you don't need
-	// to overwrite it.
-	IDFieldName string
 
 	// ShortGroup is the short name of the API group of this CRD. The full
 	// CRD API group is calculated by adding the group suffix of the provider.
