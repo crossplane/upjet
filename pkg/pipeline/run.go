@@ -37,13 +37,13 @@ func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
 	// Group resources based on their Group and API Versions.
 	resourcesGroups := map[string]map[string]map[string]*config.Resource{}
 	for name, resource := range pc.Resources {
-		if len(resourcesGroups[resource.ShortGroupName]) == 0 {
-			resourcesGroups[resource.ShortGroupName] = map[string]map[string]*config.Resource{}
+		if len(resourcesGroups[resource.ShortGroup]) == 0 {
+			resourcesGroups[resource.ShortGroup] = map[string]map[string]*config.Resource{}
 		}
-		if len(resourcesGroups[resource.ShortGroupName][resource.Version]) == 0 {
-			resourcesGroups[resource.ShortGroupName][resource.Version] = map[string]*config.Resource{}
+		if len(resourcesGroups[resource.ShortGroup][resource.Version]) == 0 {
+			resourcesGroups[resource.ShortGroup][resource.Version] = map[string]*config.Resource{}
 		}
-		resourcesGroups[resource.ShortGroupName][resource.Version][name] = resource
+		resourcesGroups[resource.ShortGroup][resource.Version][name] = resource
 	}
 
 	// Add ProviderConfig API package to the list of API version packages.
@@ -57,12 +57,16 @@ func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
 		controllerPkgList = append(controllerPkgList, filepath.Join(pc.ModulePath, p))
 	}
 	count := 0
-	for group, versions := range resourcesGroups {
+	for shortGroup, versions := range resourcesGroups {
+		group := pc.GroupSuffix
+		if shortGroup != "" {
+			group = strings.ToLower(shortGroup) + "." + pc.GroupSuffix
+		}
 		for version, resources := range versions {
-			versionGen := NewVersionGenerator(rootDir, pc.ModulePath, strings.ToLower(group)+pc.GroupSuffix, version)
-			crdGen := NewCRDGenerator(versionGen.Package(), rootDir, pc.ShortName, strings.ToLower(group)+pc.GroupSuffix, version)
-			tfGen := NewTerraformedGenerator(versionGen.Package(), rootDir, strings.ToLower(group)+pc.GroupSuffix, version)
-			ctrlGen := NewControllerGenerator(rootDir, pc.ModulePath, strings.ToLower(group)+pc.GroupSuffix)
+			versionGen := NewVersionGenerator(rootDir, pc.ModulePath, group, version)
+			crdGen := NewCRDGenerator(versionGen.Package(), rootDir, pc.ShortName, group, version)
+			tfGen := NewTerraformedGenerator(versionGen.Package(), rootDir, group, version)
+			ctrlGen := NewControllerGenerator(rootDir, pc.ModulePath, group)
 
 			keys := make([]string, len(resources))
 			i := 0
@@ -100,8 +104,8 @@ func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
 	if err := NewSetupGenerator(rootDir, pc.ModulePath).Generate(controllerPkgList); err != nil {
 		panic(errors.Wrap(err, "cannot generate setup file"))
 	}
-	apisDir := filepath.Join(rootDir, "apis")
-	internalDir := filepath.Join(rootDir, "internal")
+	apisDir := filepath.Clean(filepath.Join(rootDir, "apis"))
+	internalDir := filepath.Clean(filepath.Join(rootDir, "internal"))
 	if out, err := exec.Command("bash", "-c", fmt.Sprintf("goimports -w $(find %s -iname 'zz_*')", apisDir)).CombinedOutput(); err != nil {
 		panic(errors.Wrap(err, "cannot run goimports for apis folder: "+string(out)))
 	}

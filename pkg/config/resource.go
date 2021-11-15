@@ -160,12 +160,12 @@ type Resource struct {
 	// to overwrite it.
 	IDFieldName string
 
-	// ShortGroupName is the short name of the API group of this CRD. The full
+	// ShortGroup is the short name of the API group of this CRD. The full
 	// CRD API group is calculated by adding the group suffix of the provider.
-	// For example, ShortGroupName could be `ec2` where group suffix of the
+	// For example, ShortGroup could be `ec2` where group suffix of the
 	// provider is `aws.crossplane.io` and in that case, the full group would
 	// be `ec2.aws.crossplane.io`
-	ShortGroupName string
+	ShortGroup string
 
 	// Version is the version CRD will have.
 	Version string
