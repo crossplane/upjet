@@ -37,13 +37,13 @@ func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
 	// Group resources based on their Group and API Versions.
 	resourcesGroups := map[string]map[string]map[string]*config.Resource{}
 	for name, resource := range pc.Resources {
-		if len(resourcesGroups[resource.Group]) == 0 {
-			resourcesGroups[resource.Group] = map[string]map[string]*config.Resource{}
+		if len(resourcesGroups[resource.ShortGroupName]) == 0 {
+			resourcesGroups[resource.ShortGroupName] = map[string]map[string]*config.Resource{}
 		}
-		if len(resourcesGroups[resource.Group][resource.Version]) == 0 {
-			resourcesGroups[resource.Group][resource.Version] = map[string]*config.Resource{}
+		if len(resourcesGroups[resource.ShortGroupName][resource.Version]) == 0 {
+			resourcesGroups[resource.ShortGroupName][resource.Version] = map[string]*config.Resource{}
 		}
-		resourcesGroups[resource.Group][resource.Version][name] = resource
+		resourcesGroups[resource.ShortGroupName][resource.Version][name] = resource
 	}
 
 	// Add ProviderConfig API package to the list of API version packages.
