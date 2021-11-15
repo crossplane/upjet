@@ -52,10 +52,10 @@ type {{ .CRD.Kind }}List struct {
 
 // Repository type metadata.
 var (
-	{{ .CRD.Kind }}Kind             = "{{ .CRD.Kind }}"
-	{{ .CRD.Kind }}GroupKind        = schema.GroupKind{Group: Group, Kind: {{ .CRD.Kind }}Kind}.String()
-	{{ .CRD.Kind }}KindAPIVersion   = {{ .CRD.Kind }}Kind + "." + GroupVersion.String()
-	{{ .CRD.Kind }}GroupVersionKind = GroupVersion.WithKind({{ .CRD.Kind }}Kind)
+	{{ .CRD.Kind }}_Kind             = "{{ .CRD.Kind }}"
+	{{ .CRD.Kind }}_GroupKind        = schema.GroupKind{Group: Group, Kind: {{ .CRD.Kind }}_Kind}.String()
+	{{ .CRD.Kind }}_KindAPIVersion   = {{ .CRD.Kind }}_Kind + "." + GroupVersion.String()
+	{{ .CRD.Kind }}_GroupVersionKind = GroupVersion.WithKind({{ .CRD.Kind }}_Kind)
 )
 
 func init() {
