@@ -20,13 +20,14 @@ import (
 	"context"
 	"testing"
 
-	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
-	xpfake "github.com/crossplane/crossplane-runtime/pkg/resource/fake"
-	"github.com/crossplane/crossplane-runtime/pkg/test"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrl "sigs.k8s.io/controller-runtime/pkg/manager"
+
+	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
+	xpfake "github.com/crossplane/crossplane-runtime/pkg/resource/fake"
+	"github.com/crossplane/crossplane-runtime/pkg/test"
 
 	"github.com/crossplane-contrib/terrajet/pkg/resource"
 	"github.com/crossplane-contrib/terrajet/pkg/resource/fake"
@@ -56,7 +57,7 @@ func TestAPICallbacks_Apply(t *testing.T) {
 						MockGet: test.NewMockGetFn(nil),
 						MockStatusUpdate: func(_ context.Context, obj client.Object, _ ...client.UpdateOption) error {
 							got := obj.(resource.Terraformed).GetCondition(resource.TypeAsyncOperation)
-							if diff := cmp.Diff(resource.AsyncOperationCondition(tjerrors.NewApplyFailed(errBoom.Error())), got); diff != "" {
+							if diff := cmp.Diff(resource.AsyncOperationCondition(tjerrors.WrapApplyFailed(errBoom, nil)), got); diff != "" {
 								t.Errorf("\nApply(...): -want error, +got error:\n%s", diff)
 							}
 							return nil
@@ -64,7 +65,7 @@ func TestAPICallbacks_Apply(t *testing.T) {
 					},
 					Scheme: xpfake.SchemeWith(&fake.Terraformed{}),
 				},
-				err: tjerrors.NewApplyFailed(errBoom.Error()),
+				err: tjerrors.WrapApplyFailed(errBoom, nil),
 			},
 		},
 		"ApplyOperationSucceeded": {
@@ -138,7 +139,7 @@ func TestAPICallbacks_Destroy(t *testing.T) {
 						MockGet: test.NewMockGetFn(nil),
 						MockStatusUpdate: func(_ context.Context, obj client.Object, _ ...client.UpdateOption) error {
 							got := obj.(resource.Terraformed).GetCondition(resource.TypeAsyncOperation)
-							if diff := cmp.Diff(resource.AsyncOperationCondition(tjerrors.NewDestroyFailed(errBoom.Error())), got); diff != "" {
+							if diff := cmp.Diff(resource.AsyncOperationCondition(tjerrors.WrapDestroyFailed(errBoom, nil)), got); diff != "" {
 								t.Errorf("\nApply(...): -want error, +got error:\n%s", diff)
 							}
 							return nil
@@ -146,7 +147,7 @@ func TestAPICallbacks_Destroy(t *testing.T) {
 					},
 					Scheme: xpfake.SchemeWith(&fake.Terraformed{}),
 				},
-				err: tjerrors.NewDestroyFailed(errBoom.Error()),
+				err: tjerrors.WrapDestroyFailed(errBoom, nil),
 			},
 		},
 		"DestroyOperationSucceeded": {
