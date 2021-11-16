@@ -52,13 +52,17 @@ type Provider struct {
 	// for "aws_rds_cluster", we drop "aws_" prefix and its group ("rds") to set
 	// Kind of the resource as "Cluster".
 	TerraformResourcePrefix string
-	// GroupSuffix is the suffix to append to resource groups, e.g.
-	// ".aws.tf.crossplane.io". Defaults to ".<prefix>.tf.crossplane.io".
-	GroupSuffix string
+
+	// RootGroup is the root group that all CRDs groups in the provider are based
+	// on, e.g. "aws.tf.crossplane.io".
+	// Defaults to "<TerraformResourcePrefix>.tf.crossplane.io".
+	RootGroup string
+
 	// ShortName is the short name of the provider. Typically, added as a CRD
 	// category, e.g. "tfaws". Default to "tf<prefix>". For more details on CRD
 	// categories, see: https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#categories
 	ShortName string
+
 	// ModulePath is the go module path for the tf based provider repo, e.g.
 	// "github.com/crossplane-contrib/provider-tf-aws"
 	ModulePath string
@@ -77,6 +81,7 @@ type Provider struct {
 	// can add "aws_shield_protection_group$". To skip whole aws waf group, one
 	// can add "aws_waf.*" to the list.
 	SkipList []string
+
 	// IncludeList is a list of regex for the Terraform resources to be
 	// skipped. For example, to include "aws_shield_protection_group" into
 	// the generated resources, one can add "aws_shield_protection_group$".
@@ -96,10 +101,10 @@ type Provider struct {
 // A ProviderOption configures a Provider.
 type ProviderOption func(*Provider)
 
-// WithGroupSuffix configures GroupSuffix for resources of this Provider.
+// WithGroupSuffix configures RootGroup for resources of this Provider.
 func WithGroupSuffix(s string) ProviderOption {
 	return func(p *Provider) {
-		p.GroupSuffix = s
+		p.RootGroup = s
 	}
 }
 
@@ -143,7 +148,7 @@ func NewProvider(resourceMap map[string]*schema.Resource, prefix string, moduleP
 	p := &Provider{
 		ModulePath:              modulePath,
 		TerraformResourcePrefix: fmt.Sprintf("%s_", prefix),
-		GroupSuffix:             fmt.Sprintf(".%s.tf.crossplane.io", prefix),
+		RootGroup:               fmt.Sprintf("%s.tf.crossplane.io", prefix),
 		ShortName:               fmt.Sprintf("tf%s", prefix),
 		BasePackages:            DefaultBasePackages,
 		DefaultResourceFn:       DefaultResource,
