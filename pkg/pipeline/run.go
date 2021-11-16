@@ -104,12 +104,17 @@ func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
 	if err := NewSetupGenerator(rootDir, pc.ModulePath).Generate(controllerPkgList); err != nil {
 		panic(errors.Wrap(err, "cannot generate setup file"))
 	}
-	apisDir := filepath.Clean(filepath.Join(rootDir, "apis"))
-	internalDir := filepath.Clean(filepath.Join(rootDir, "internal"))
-	if out, err := exec.Command("bash", "-c", fmt.Sprintf("goimports -w $(find %s -iname 'zz_*')", apisDir)).CombinedOutput(); err != nil {
+
+	// NOTE(muvaf): gosec linter requires that the whole command is hard-coded.
+	// So, we set the directory of the command instead of passing in the directory
+	// as an argument to "find".
+	goimportsCmd := exec.Command("bash", "-c", "goimports -w $(find . -iname 'zz_*')")
+	goimportsCmd.Dir = filepath.Clean(filepath.Join(rootDir, "apis"))
+	if out, err := goimportsCmd.CombinedOutput(); err != nil {
 		panic(errors.Wrap(err, "cannot run goimports for apis folder: "+string(out)))
 	}
-	if out, err := exec.Command("bash", "-c", fmt.Sprintf("goimports -w $(find %s -iname 'zz_*')", internalDir)).CombinedOutput(); err != nil {
+	goimportsCmd.Dir = filepath.Clean(filepath.Join(rootDir, "internal"))
+	if out, err := goimportsCmd.CombinedOutput(); err != nil {
 		panic(errors.Wrap(err, "cannot run goimports for internal folder: "+string(out)))
 	}
 
