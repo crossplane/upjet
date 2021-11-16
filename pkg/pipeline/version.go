@@ -54,8 +54,8 @@ type VersionGenerator struct {
 func (vg *VersionGenerator) Generate() error {
 	vars := map[string]interface{}{
 		"CRD": map[string]string{
-			"APIVersion": vg.Version,
-			"Group":      vg.Group,
+			"Version": vg.Version,
+			"Group":   vg.Group,
 		},
 	}
 	gviFile := wrapper.NewFile(vg.pkg.Path(), vg.Version, templates.GroupVersionInfoTemplate,
