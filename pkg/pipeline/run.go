@@ -18,7 +18,6 @@ package pipeline
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
@@ -30,14 +29,10 @@ import (
 )
 
 // Run runs the Terrajet code generation pipelines.
-func Run(pc *config.Provider) { // nolint:gocyclo
+func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
 	// Note(turkenh): nolint reasoning - this is the main function of the code
 	// generation pipeline. We didn't want to split it into multiple functions
 	// for better readability considering the straightforward logic here.
-	wd, err := os.Getwd()
-	if err != nil {
-		panic(errors.Wrap(err, "cannot get working directory"))
-	}
 
 	// Group resources based on their Group and API Versions.
 	resourcesGroups := map[string]map[string]map[string]*config.Resource{}
@@ -64,10 +59,10 @@ func Run(pc *config.Provider) { // nolint:gocyclo
 	count := 0
 	for group, versions := range resourcesGroups {
 		for version, resources := range versions {
-			versionGen := NewVersionGenerator(wd, pc.ModulePath, strings.ToLower(group)+pc.GroupSuffix, version)
-			crdGen := NewCRDGenerator(versionGen.Package(), versionGen.DirectoryPath(), strings.ToLower(group)+pc.GroupSuffix, pc.ShortName)
-			tfGen := NewTerraformedGenerator(versionGen.Package(), versionGen.DirectoryPath())
-			ctrlGen := NewControllerGenerator(wd, pc.ModulePath, strings.ToLower(group)+pc.GroupSuffix)
+			versionGen := NewVersionGenerator(rootDir, pc.ModulePath, strings.ToLower(group)+pc.GroupSuffix, version)
+			crdGen := NewCRDGenerator(versionGen.Package(), rootDir, pc.ShortName, strings.ToLower(group)+pc.GroupSuffix, version)
+			tfGen := NewTerraformedGenerator(versionGen.Package(), rootDir, strings.ToLower(group)+pc.GroupSuffix, version)
+			ctrlGen := NewControllerGenerator(rootDir, pc.ModulePath, strings.ToLower(group)+pc.GroupSuffix)
 
 			keys := make([]string, len(resources))
 			i := 0
@@ -99,10 +94,10 @@ func Run(pc *config.Provider) { // nolint:gocyclo
 		}
 	}
 
-	if err := NewRegisterGenerator(wd, pc.ModulePath).Generate(apiVersionPkgList); err != nil {
+	if err := NewRegisterGenerator(rootDir, pc.ModulePath).Generate(apiVersionPkgList); err != nil {
 		panic(errors.Wrap(err, "cannot generate register file"))
 	}
-	if err := NewSetupGenerator(wd, pc.ModulePath).Generate(controllerPkgList); err != nil {
+	if err := NewSetupGenerator(rootDir, pc.ModulePath).Generate(controllerPkgList); err != nil {
 		panic(errors.Wrap(err, "cannot generate setup file"))
 	}
 	if out, err := exec.Command("bash", "-c", "goimports -w $(find apis -iname 'zz_*')").CombinedOutput(); err != nil {

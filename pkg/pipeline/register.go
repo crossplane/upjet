@@ -31,6 +31,7 @@ import (
 func NewRegisterGenerator(rootDir, modulePath string) *RegisterGenerator {
 	return &RegisterGenerator{
 		LocalDirectoryPath: filepath.Join(rootDir, "apis"),
+		LicenseHeaderPath:  filepath.Join(rootDir, "hack", "boilerplate.go.txt"),
 		ModulePath:         modulePath,
 	}
 }
@@ -39,6 +40,7 @@ func NewRegisterGenerator(rootDir, modulePath string) *RegisterGenerator {
 type RegisterGenerator struct {
 	LocalDirectoryPath string
 	ModulePath         string
+	LicenseHeaderPath  string
 }
 
 // Generate writes the register file with the content produced using given
@@ -46,7 +48,7 @@ type RegisterGenerator struct {
 func (rg *RegisterGenerator) Generate(versionPkgList []string) error {
 	registerFile := wrapper.NewFile(filepath.Join(rg.ModulePath, "apis"), "apis", templates.RegisterTemplate,
 		wrapper.WithGenStatement(GenStatement),
-		wrapper.WithHeaderPath("hack/boilerplate.go.txt"),
+		wrapper.WithHeaderPath(rg.LicenseHeaderPath),
 	)
 	aliases := make([]string, len(versionPkgList))
 	for i, pkgPath := range versionPkgList {

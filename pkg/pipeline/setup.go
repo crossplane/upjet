@@ -31,6 +31,7 @@ import (
 func NewSetupGenerator(rootDir, modulePath string) *SetupGenerator {
 	return &SetupGenerator{
 		LocalDirectoryPath: filepath.Join(rootDir, "internal", "controller"),
+		LicenseHeaderPath:  filepath.Join(rootDir, "hack", "boilerplate.go.txt"),
 		ModulePath:         modulePath,
 	}
 }
@@ -38,15 +39,16 @@ func NewSetupGenerator(rootDir, modulePath string) *SetupGenerator {
 // SetupGenerator generates controller setup file.
 type SetupGenerator struct {
 	LocalDirectoryPath string
+	LicenseHeaderPath  string
 	ModulePath         string
 }
 
 // Generate writes the setup file with the content produced using given
 // list of version packages.
-func (rg *SetupGenerator) Generate(versionPkgList []string) error {
-	setupFile := wrapper.NewFile(filepath.Join(rg.ModulePath, "apis"), "apis", templates.SetupTemplate,
+func (sg *SetupGenerator) Generate(versionPkgList []string) error {
+	setupFile := wrapper.NewFile(filepath.Join(sg.ModulePath, "apis"), "apis", templates.SetupTemplate,
 		wrapper.WithGenStatement(GenStatement),
-		wrapper.WithHeaderPath("hack/boilerplate.go.txt"),
+		wrapper.WithHeaderPath(sg.LicenseHeaderPath),
 	)
 	aliases := make([]string, len(versionPkgList))
 	for i, pkgPath := range versionPkgList {
@@ -56,6 +58,6 @@ func (rg *SetupGenerator) Generate(versionPkgList []string) error {
 	vars := map[string]interface{}{
 		"Aliases": aliases,
 	}
-	filePath := filepath.Join(rg.LocalDirectoryPath, "zz_setup.go")
+	filePath := filepath.Join(sg.LocalDirectoryPath, "zz_setup.go")
 	return errors.Wrap(setupFile.Write(filePath, vars, os.ModePerm), "cannot write setup file")
 }

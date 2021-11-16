@@ -31,9 +31,10 @@ import (
 )
 
 // NewTerraformedGenerator returns a new TerraformedGenerator.
-func NewTerraformedGenerator(pkg *types.Package, localDirectoryPath string) *TerraformedGenerator {
+func NewTerraformedGenerator(pkg *types.Package, rootDir, group, version string) *TerraformedGenerator {
 	return &TerraformedGenerator{
-		LocalDirectoryPath: localDirectoryPath,
+		LocalDirectoryPath: filepath.Join(rootDir, "apis", strings.ToLower(strings.Split(group, ".")[0]), version),
+		LicenseHeaderPath:  filepath.Join(rootDir, "hack", "boilerplate.go.txt"),
 		pkg:                pkg,
 	}
 }
@@ -42,6 +43,7 @@ func NewTerraformedGenerator(pkg *types.Package, localDirectoryPath string) *Ter
 // interface on CRD structs.
 type TerraformedGenerator struct {
 	LocalDirectoryPath string
+	LicenseHeaderPath  string
 
 	pkg *types.Package
 }
@@ -50,7 +52,7 @@ type TerraformedGenerator struct {
 func (tg *TerraformedGenerator) Generate(cfg *config.Resource) error {
 	trFile := wrapper.NewFile(tg.pkg.Path(), tg.pkg.Name(), templates.TerraformedTemplate,
 		wrapper.WithGenStatement(GenStatement),
-		wrapper.WithHeaderPath("hack/boilerplate.go.txt"), // todo
+		wrapper.WithHeaderPath(tg.LicenseHeaderPath),
 	)
 	vars := map[string]interface{}{
 		"CRD": map[string]string{
