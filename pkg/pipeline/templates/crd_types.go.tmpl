@@ -53,9 +53,9 @@ type {{ .CRD.Kind }}List struct {
 // Repository type metadata.
 var (
 	{{ .CRD.Kind }}_Kind             = "{{ .CRD.Kind }}"
-	{{ .CRD.Kind }}_GroupKind        = schema.GroupKind{Group: Group, Kind: {{ .CRD.Kind }}_Kind}.String()
-	{{ .CRD.Kind }}_KindAPIVersion   = {{ .CRD.Kind }}_Kind + "." + GroupVersion.String()
-	{{ .CRD.Kind }}_GroupVersionKind = GroupVersion.WithKind({{ .CRD.Kind }}_Kind)
+	{{ .CRD.Kind }}_GroupKind        = schema.GroupKind{Group: CRDGroup, Kind: {{ .CRD.Kind }}_Kind}.String()
+	{{ .CRD.Kind }}_KindAPIVersion   = {{ .CRD.Kind }}_Kind + "." + CRDGroupVersion.String()
+	{{ .CRD.Kind }}_GroupVersionKind = CRDGroupVersion.WithKind({{ .CRD.Kind }}_Kind)
 )
 
 func init() {
