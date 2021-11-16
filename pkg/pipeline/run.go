@@ -100,10 +100,12 @@ func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
 	if err := NewSetupGenerator(rootDir, pc.ModulePath).Generate(controllerPkgList); err != nil {
 		panic(errors.Wrap(err, "cannot generate setup file"))
 	}
-	if out, err := exec.Command("bash", "-c", "goimports -w $(find apis -iname 'zz_*')").CombinedOutput(); err != nil {
+	apisDir := filepath.Join(rootDir, "apis")
+	internalDir := filepath.Join(rootDir, "internal")
+	if out, err := exec.Command("bash", "-c", fmt.Sprintf("goimports -w $(find %s -iname 'zz_*')", apisDir)).CombinedOutput(); err != nil {
 		panic(errors.Wrap(err, "cannot run goimports for apis folder: "+string(out)))
 	}
-	if out, err := exec.Command("bash", "-c", "goimports -w $(find internal -iname 'zz_*')").CombinedOutput(); err != nil {
+	if out, err := exec.Command("bash", "-c", fmt.Sprintf("goimports -w $(find %s -iname 'zz_*')", internalDir)).CombinedOutput(); err != nil {
 		panic(errors.Wrap(err, "cannot run goimports for internal folder: "+string(out)))
 	}
 
