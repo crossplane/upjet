@@ -29,9 +29,6 @@ const (
 )
 
 type tfError struct {
-	logs    []byte
-	tfLogs  []*TerraformLog
-	cause   error
 	message string
 }
 
@@ -55,12 +52,21 @@ type LogDiagnostic struct {
 }
 
 func (t *tfError) Error() string {
-	if t == nil {
-		return ""
+	return t.message
+}
+
+func newTFError(message string, logs []byte) (string, *tfError) {
+	tfError := &tfError{
+		message: message,
 	}
 
-	messages := make([]string, 0, len(t.tfLogs))
-	for _, l := range t.tfLogs {
+	tfLogs, err := parseTerraformLogs(logs)
+	if err != nil {
+		return err.Error(), tfError
+	}
+
+	messages := make([]string, 0, len(tfLogs))
+	for _, l := range tfLogs {
 		// only use error logs
 		if l == nil || l.Level != levelError {
 			continue
@@ -71,28 +77,7 @@ func (t *tfError) Error() string {
 		}
 		messages = append(messages, m)
 	}
-	return fmt.Sprintf("%s: %s", t.message, strings.Join(messages, "\n"))
-}
-
-func (t *tfError) Unwrap() error {
-	if t == nil {
-		return nil
-	}
-	return t.cause
-}
-
-func newTFError(message string, cause error, logs []byte) (string, *tfError) {
-	tfError := &tfError{
-		logs:    logs,
-		cause:   cause,
-		message: message,
-	}
-
-	tfLogs, err := parseTerraformLogs(logs)
-	if err != nil {
-		return err.Error(), tfError
-	}
-	tfError.tfLogs = tfLogs
+	tfError.message = fmt.Sprintf("%s: %s", message, strings.Join(messages, "\n"))
 	return "", tfError
 }
 
@@ -113,26 +98,9 @@ func parseTerraformLogs(logs []byte) ([]*TerraformLog, error) {
 	return tfLogs, nil
 }
 
-// WrapTFError returns a new Terraform CLI failure error with given logs.
-func WrapTFError(message string, cause error, logs []byte) error {
-	if cause == nil {
-		return nil
-	}
-
-	parseError, tfError := newTFError(message, cause, logs)
-	if parseError == "" {
-		return tfError
-	}
-	return errors.WithMessage(tfError, parseError)
-}
-
-// WrapApplyFailed returns a new apply failure error with given logs.
-func WrapApplyFailed(cause error, logs []byte) error {
-	if cause == nil {
-		return nil
-	}
-
-	parseError, tfError := newTFError("apply failed", cause, logs)
+// NewApplyFailed returns a new apply failure error with given logs.
+func NewApplyFailed(logs []byte) error {
+	parseError, tfError := newTFError("apply failed", logs)
 	result := &applyFailed{tfError: tfError}
 	if parseError == "" {
 		return result
@@ -150,13 +118,9 @@ type destroyFailed struct {
 	*tfError
 }
 
-// WrapDestroyFailed returns a new destroy failure error with given logs.
-func WrapDestroyFailed(cause error, logs []byte) error {
-	if cause == nil {
-		return nil
-	}
-
-	parseError, tfError := newTFError("destroy failed", cause, logs)
+// NewDestroyFailed returns a new destroy failure error with given logs.
+func NewDestroyFailed(logs []byte) error {
+	parseError, tfError := newTFError("destroy failed", logs)
 	result := &destroyFailed{tfError: tfError}
 	if parseError == "" {
 		return result
@@ -167,5 +131,45 @@ func WrapDestroyFailed(cause error, logs []byte) error {
 // IsDestroyFailed returns whether error is due to failure of a destroy operation.
 func IsDestroyFailed(err error) bool {
 	r := &destroyFailed{}
+	return errors.As(err, &r)
+}
+
+type refreshFailed struct {
+	*tfError
+}
+
+// NewRefreshFailed returns a new destroy failure error with given logs.
+func NewRefreshFailed(logs []byte) error {
+	parseError, tfError := newTFError("refresh failed", logs)
+	result := &refreshFailed{tfError: tfError}
+	if parseError == "" {
+		return result
+	}
+	return errors.WithMessage(result, parseError)
+}
+
+// IsRefreshFailed returns whether error is due to failure of a destroy operation.
+func IsRefreshFailed(err error) bool {
+	r := &refreshFailed{}
+	return errors.As(err, &r)
+}
+
+type planFailed struct {
+	*tfError
+}
+
+// NewPlanFailed returns a new destroy failure error with given logs.
+func NewPlanFailed(logs []byte) error {
+	parseError, tfError := newTFError("plan failed", logs)
+	result := &planFailed{tfError: tfError}
+	if parseError == "" {
+		return result
+	}
+	return errors.WithMessage(result, parseError)
+}
+
+// IsPlanFailed returns whether error is due to failure of a destroy operation.
+func IsPlanFailed(err error) bool {
+	r := &planFailed{}
 	return errors.As(err, &r)
 }

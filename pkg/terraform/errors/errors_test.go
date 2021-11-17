@@ -57,13 +57,13 @@ func TestIsApplyFailed(t *testing.T) {
 		},
 		"ApplyErrorNoLog": {
 			args: args{
-				err: WrapApplyFailed(errorBoom, nil),
+				err: NewApplyFailed(nil),
 			},
 			want: true,
 		},
 		"ApplyErrorWithLog": {
 			args: args{
-				err: WrapApplyFailed(errorBoom, errorLog),
+				err: NewApplyFailed(errorLog),
 			},
 			want: true,
 		},
@@ -104,13 +104,13 @@ func TestIsDestroyFailed(t *testing.T) {
 		},
 		"DestroyErrorNoLog": {
 			args: args{
-				err: WrapDestroyFailed(errorBoom, nil),
+				err: NewDestroyFailed(nil),
 			},
 			want: true,
 		},
 		"DestroyErrorWithLog": {
 			args: args{
-				err: WrapDestroyFailed(errorBoom, errorLog),
+				err: NewDestroyFailed(errorLog),
 			},
 			want: true,
 		},
@@ -124,7 +124,101 @@ func TestIsDestroyFailed(t *testing.T) {
 	}
 }
 
-func TestWrapApplyFailed(t *testing.T) {
+func TestIsRefreshFailed(t *testing.T) {
+	var nilRefreshErr *refreshFailed
+	type args struct {
+		err error
+	}
+	tests := map[string]struct {
+		args args
+		want bool
+	}{
+		"NilError": {
+			args: args{},
+			want: false,
+		},
+		"NilRefreshError": {
+			args: args{
+				err: nilRefreshErr,
+			},
+			want: true,
+		},
+		"NonRefreshError": {
+			args: args{
+				err: errorBoom,
+			},
+			want: false,
+		},
+		"RefreshErrorNoLog": {
+			args: args{
+				err: NewRefreshFailed(nil),
+			},
+			want: true,
+		},
+		"RefreshErrorWithLog": {
+			args: args{
+				err: NewRefreshFailed(errorLog),
+			},
+			want: true,
+		},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			if got := IsRefreshFailed(tt.args.err); got != tt.want {
+				t.Errorf("IsRefreshFailed() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsPlanFailed(t *testing.T) {
+	var nilPlanErr *planFailed
+	type args struct {
+		err error
+	}
+	tests := map[string]struct {
+		args args
+		want bool
+	}{
+		"NilError": {
+			args: args{},
+			want: false,
+		},
+		"NilPlanError": {
+			args: args{
+				err: nilPlanErr,
+			},
+			want: true,
+		},
+		"NonPlanError": {
+			args: args{
+				err: errorBoom,
+			},
+			want: false,
+		},
+		"PlanErrorNoLog": {
+			args: args{
+				err: NewPlanFailed(nil),
+			},
+			want: true,
+		},
+		"PlanErrorWithLog": {
+			args: args{
+				err: NewPlanFailed(errorLog),
+			},
+			want: true,
+		},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			if got := IsPlanFailed(tt.args.err); got != tt.want {
+				t.Errorf("IsPlanFailed() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNewApplyFailed(t *testing.T) {
 	type args struct {
 		cause error
 		logs  []byte
@@ -133,9 +227,6 @@ func TestWrapApplyFailed(t *testing.T) {
 		args           args
 		wantErrMessage string
 	}{
-		"NilCause": {
-			args: args{},
-		},
 		"ApplyError": {
 			args: args{
 				cause: errorBoom,
@@ -146,7 +237,7 @@ func TestWrapApplyFailed(t *testing.T) {
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			err := WrapApplyFailed(tt.args.cause, tt.args.logs)
+			err := NewApplyFailed(tt.args.logs)
 			got := ""
 			if err != nil {
 				got = err.Error()
@@ -158,29 +249,24 @@ func TestWrapApplyFailed(t *testing.T) {
 	}
 }
 
-func TestWrapDestroyFailed(t *testing.T) {
+func TestNewDestroyFailed(t *testing.T) {
 	type args struct {
-		cause error
-		logs  []byte
+		logs []byte
 	}
 	tests := map[string]struct {
 		args           args
 		wantErrMessage string
 	}{
-		"NilCause": {
-			args: args{},
-		},
 		"DestroyError": {
 			args: args{
-				cause: errorBoom,
-				logs:  errorLog,
+				logs: errorLog,
 			},
 			wantErrMessage: "destroy failed: Missing required argument: The argument \"location\" is required, but no definition was found.\nMissing required argument: The argument \"name\" is required, but no definition was found.",
 		},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			err := WrapDestroyFailed(tt.args.cause, tt.args.logs)
+			err := NewDestroyFailed(tt.args.logs)
 			got := ""
 			if err != nil {
 				got = err.Error()
@@ -192,7 +278,7 @@ func TestWrapDestroyFailed(t *testing.T) {
 	}
 }
 
-func TestWrapTFError(t *testing.T) {
+func TestNewRefreshFailed(t *testing.T) {
 	type args struct {
 		cause error
 		logs  []byte
@@ -201,26 +287,54 @@ func TestWrapTFError(t *testing.T) {
 		args           args
 		wantErrMessage string
 	}{
-		"NilCause": {
-			args: args{},
-		},
-		"ApplyError": {
+		"RefreshError": {
 			args: args{
 				cause: errorBoom,
 				logs:  errorLog,
 			},
-			wantErrMessage: "test operation: Missing required argument: The argument \"location\" is required, but no definition was found.\nMissing required argument: The argument \"name\" is required, but no definition was found.",
+			wantErrMessage: "refresh failed: Missing required argument: The argument \"location\" is required, but no definition was found.\nMissing required argument: The argument \"name\" is required, but no definition was found.",
 		},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			err := WrapTFError("test operation", tt.args.cause, tt.args.logs)
+			err := NewRefreshFailed(tt.args.logs)
 			got := ""
 			if err != nil {
 				got = err.Error()
 			}
 			if diff := cmp.Diff(tt.wantErrMessage, got); diff != "" {
-				t.Errorf("\nWrapApplyFailed(...): -want message, +got message:\n%s", diff)
+				t.Errorf("\nWrapRefreshFailed(...): -want message, +got message:\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestNewPlanFailed(t *testing.T) {
+	type args struct {
+		cause error
+		logs  []byte
+	}
+	tests := map[string]struct {
+		args           args
+		wantErrMessage string
+	}{
+		"PlanError": {
+			args: args{
+				cause: errorBoom,
+				logs:  errorLog,
+			},
+			wantErrMessage: "plan failed: Missing required argument: The argument \"location\" is required, but no definition was found.\nMissing required argument: The argument \"name\" is required, but no definition was found.",
+		},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			err := NewPlanFailed(tt.args.logs)
+			got := ""
+			if err != nil {
+				got = err.Error()
+			}
+			if diff := cmp.Diff(tt.wantErrMessage, got); diff != "" {
+				t.Errorf("\nWrapPlanFailed(...): -want message, +got message:\n%s", diff)
 			}
 		})
 	}
