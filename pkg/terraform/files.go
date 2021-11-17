@@ -101,7 +101,11 @@ func (fp *FileProducer) WriteTFState() error {
 	for k, v := range fp.observation {
 		base[k] = v
 	}
-	base["id"] = fp.Config.ExternalName.GetIDFn(meta.GetExternalName(fp.Resource), fp.parameters, fp.Setup.Configuration)
+	id, err := fp.Config.ExternalName.GetIDFn(meta.GetExternalName(fp.Resource), fp.parameters, fp.Setup.Configuration)
+	if err != nil {
+		return errors.Wrap(err, "cannot get id")
+	}
+	base["id"] = id
 	attr, err := json.JSParser.Marshal(base)
 	if err != nil {
 		return errors.Wrap(err, "cannot marshal produced state attributes")

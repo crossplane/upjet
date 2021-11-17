@@ -25,6 +25,8 @@ import (
 	xpmeta "github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/crossplane-contrib/terrajet/pkg/config"
 )
 
 const (
@@ -54,7 +56,7 @@ type GenericLateInitializer struct {
 }
 
 // LateInitializeAnnotations late initializes annotations of the resource
-func LateInitializeAnnotations(tr metav1.Object, name string, privateRaw string) (bool, error) {
+func LateInitializeAnnotations(tr metav1.Object, cfg *config.Resource, tfstate map[string]interface{}, privateRaw string) (bool, error) {
 	if tr.GetAnnotations()[AnnotationKeyPrivateRawAttribute] == privateRaw &&
 		xpmeta.GetExternalName(tr) != "" {
 		return false, nil
@@ -64,6 +66,10 @@ func LateInitializeAnnotations(tr metav1.Object, name string, privateRaw string)
 	})
 	if xpmeta.GetExternalName(tr) != "" {
 		return true, nil
+	}
+	name, err := cfg.ExternalName.GetExternalNameFn(tfstate)
+	if err != nil {
+		return false, errors.Wrap(err, "cannot get external name")
 	}
 	xpmeta.SetExternalName(tr, name)
 	return true, nil

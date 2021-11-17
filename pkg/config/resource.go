@@ -18,6 +18,7 @@ package config
 
 import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/pkg/errors"
 )
 
 // SetIdentifierArgumentsFn sets the name of the resource in Terraform attributes map,
@@ -30,22 +31,22 @@ var NopSetIdentifierArgument SetIdentifierArgumentsFn = func(_ map[string]interf
 
 // GetIDFn returns the ID to be used in TF State file, i.e. "id" field in
 // terraform.tfstate.
-type GetIDFn func(externalName string, parameters map[string]interface{}, providerConfig map[string]interface{}) string
+type GetIDFn func(externalName string, parameters map[string]interface{}, providerConfig map[string]interface{}) (string, error)
 
 // ExternalNameAsID returns the name to be used as ID in TF State file.
-var ExternalNameAsID GetIDFn = func(externalName string, _ map[string]interface{}, _ map[string]interface{}) string {
-	return externalName
+var ExternalNameAsID GetIDFn = func(externalName string, _ map[string]interface{}, _ map[string]interface{}) (string, error) {
+	return externalName, nil
 }
 
 // GetExternalNameFn returns the external name extracted from the TF State.
-type GetExternalNameFn func(tfstate map[string]interface{}) string
+type GetExternalNameFn func(tfstate map[string]interface{}) (string, error)
 
 // IDAsExternalName returns the TF State ID as external name.
-var IDAsExternalName GetExternalNameFn = func(tfstate map[string]interface{}) string {
-	if id, ok := tfstate["id"].(string); ok {
-		return id
+var IDAsExternalName GetExternalNameFn = func(tfstate map[string]interface{}) (string, error) {
+	if id, ok := tfstate["id"].(string); ok && id != "" {
+		return id, nil
 	}
-	return ""
+	return "", errors.New("cannot find id in tfstate")
 }
 
 // AdditionalConnectionDetailsFn functions adds custom keys to connection details
