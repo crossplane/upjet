@@ -50,11 +50,11 @@ func (sg *SetupGenerator) Generate(versionPkgList []string) error {
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath(sg.LicenseHeaderPath),
 	)
+	sort.Strings(versionPkgList)
 	aliases := make([]string, len(versionPkgList))
 	for i, pkgPath := range versionPkgList {
 		aliases[i] = setupFile.Imports.UsePackage(pkgPath)
 	}
-	sort.Strings(aliases)
 	vars := map[string]interface{}{
 		"Aliases": aliases,
 	}
