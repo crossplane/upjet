@@ -63,27 +63,44 @@ var NopAdditionalConnectionDetails AdditionalConnectionDetailsFn = func(_ map[st
 // to fill attributes with information given in external name.
 type ExternalName struct {
 	// SetIdentifierArgumentFn sets the name of the resource in Terraform argument
-	// map, otherwise we cannot know which field in HCL we should treat as identifier.
+	// map. In many cases, there is a field called "name" in the HCL schema, however,
+	// there are cases like RDS DB Cluster where the name field in HCL is called
+	// "cluster_identifier". This function is the place that you can take external
+	// name and assign it to that specific key for that resource type.
 	SetIdentifierArgumentFn SetIdentifierArgumentsFn
 
 	// GetNameFn returns the external name extracted from TF State. In most cases,
-	// "id" key of TF State should be returned.
+	// "id" field contains all the information you need. You'll need to extract
+	// the format that is decided for external name annotation to use.
+	// For example the following is an Azure resource ID:
+	// /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/mygroup1
+	// The function should return "mygroup1" so that it can be used to set external
+	// name if it was not set already.
 	GetNameFn GetNameFn
 
 	// GetIDFn returns the string that will be used as "id" key in TF state. In
-	// most cases, it should return given external name as is.
+	// many cases, external name format is the same as "id" but when it is not
+	// we may need information from other places to construct it. For example,
+	// the following is an Azure resource ID:
+	// /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/mygroup1
+	// The function here should use information from supplied arguments to
+	// construct this ID, i.e. "mygroup1" from external name, subscription ID
+	// from providerConfig, and others from parameters map if needed.
 	GetIDFn GetIDFn
 
 	// OmittedFields are the ones you'd like to be removed from the schema since
-	// they are specified via external name. You can omit only the top level fields.
+	// they are specified via external name. For example, if you set
+	// "cluster_identifier" in SetIdentifierArgumentFn, then you need to omit
+	// that field.
+	// You can omit only the top level fields.
 	// No field is omitted by default.
 	OmittedFields []string
 
 	// DisableNameInitializer allows you to specify whether the name initializer
 	// that sets external name to metadata.name if none specified should be disabled.
-	// It needs to be disabled for resources whose external name includes information
-	// more than the actual name of the resource, like subscription ID or region
-	// etc. which is unlikely to be included in metadata.name
+	// It needs to be disabled for resources whose external identifier is randomly
+	// assigned by the provider, like AWS VPC where it gets vpc-21kn123 identifier
+	// and not let you name it.
 	DisableNameInitializer bool
 }
 
