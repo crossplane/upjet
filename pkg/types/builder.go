@@ -156,11 +156,14 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 			// If it is an observation field, it will be dropped.
 			// Data will be loaded from the referenced secret key.
 			fieldNameCamel += sfx
-			// todo(hasan): do we need the pointer type if optional?
-			fieldType = typeSecretKeySelector
 
-			jsonTag = fmt.Sprintf("%s,omitempty", NewNameFromCamel(fieldNameCamel).LowerCamelComputed)
 			tfTag = "-"
+			fieldType = typeSecretKeySelector
+			jsonTag = NewNameFromCamel(fieldNameCamel).LowerCamelComputed
+			if sch.Optional {
+				fieldType = types.NewPointer(typeSecretKeySelector)
+				jsonTag += ",omitempty"
+			}
 		}
 		field := types.NewField(token.NoPos, g.Package, fieldNameCamel, fieldType, false)
 		if comment.TerrajetOptions.FieldTFTag != nil {
