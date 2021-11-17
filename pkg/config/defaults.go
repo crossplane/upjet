@@ -83,9 +83,9 @@ func DefaultResource(name string, terraformSchema *schema.Resource) *Resource {
 		Name:              name,
 		TerraformResource: terraformSchema,
 
-		Group:   group,
-		Kind:    kind,
-		Version: "v1alpha1",
+		ShortGroup: group,
+		Kind:       kind,
+		Version:    "v1alpha1",
 
 		IDFieldName:  "id",
 		ExternalName: NameAsIdentifier,

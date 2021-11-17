@@ -35,15 +35,21 @@ func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
 	// for better readability considering the straightforward logic here.
 
 	// Group resources based on their Group and API Versions.
+	// An example entry in the tree would be:
+	// ec2.tfaws.crossplane.io -> v1alpha1 -> aws_vpc
 	resourcesGroups := map[string]map[string]map[string]*config.Resource{}
 	for name, resource := range pc.Resources {
-		if len(resourcesGroups[resource.Group]) == 0 {
-			resourcesGroups[resource.Group] = map[string]map[string]*config.Resource{}
+		group := pc.RootGroup
+		if resource.ShortGroup != "" {
+			group = strings.ToLower(resource.ShortGroup) + "." + pc.RootGroup
 		}
-		if len(resourcesGroups[resource.Group][resource.Version]) == 0 {
-			resourcesGroups[resource.Group][resource.Version] = map[string]*config.Resource{}
+		if len(resourcesGroups[group]) == 0 {
+			resourcesGroups[group] = map[string]map[string]*config.Resource{}
 		}
-		resourcesGroups[resource.Group][resource.Version][name] = resource
+		if len(resourcesGroups[group][resource.Version]) == 0 {
+			resourcesGroups[group][resource.Version] = map[string]*config.Resource{}
+		}
+		resourcesGroups[group][resource.Version][name] = resource
 	}
 
 	// Add ProviderConfig API package to the list of API version packages.
@@ -59,10 +65,10 @@ func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
 	count := 0
 	for group, versions := range resourcesGroups {
 		for version, resources := range versions {
-			versionGen := NewVersionGenerator(rootDir, pc.ModulePath, strings.ToLower(group)+pc.GroupSuffix, version)
-			crdGen := NewCRDGenerator(versionGen.Package(), rootDir, pc.ShortName, strings.ToLower(group)+pc.GroupSuffix, version)
-			tfGen := NewTerraformedGenerator(versionGen.Package(), rootDir, strings.ToLower(group)+pc.GroupSuffix, version)
-			ctrlGen := NewControllerGenerator(rootDir, pc.ModulePath, strings.ToLower(group)+pc.GroupSuffix)
+			versionGen := NewVersionGenerator(rootDir, pc.ModulePath, group, version)
+			crdGen := NewCRDGenerator(versionGen.Package(), rootDir, pc.ShortName, group, version)
+			tfGen := NewTerraformedGenerator(versionGen.Package(), rootDir, group, version)
+			ctrlGen := NewControllerGenerator(rootDir, pc.ModulePath, group)
 
 			keys := make([]string, len(resources))
 			i := 0
@@ -100,12 +106,19 @@ func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
 	if err := NewSetupGenerator(rootDir, pc.ModulePath).Generate(controllerPkgList); err != nil {
 		panic(errors.Wrap(err, "cannot generate setup file"))
 	}
-	apisDir := filepath.Join(rootDir, "apis")
-	internalDir := filepath.Join(rootDir, "internal")
-	if out, err := exec.Command("bash", "-c", fmt.Sprintf("goimports -w $(find %s -iname 'zz_*')", apisDir)).CombinedOutput(); err != nil {
+
+	// NOTE(muvaf): gosec linter requires that the whole command is hard-coded.
+	// So, we set the directory of the command instead of passing in the directory
+	// as an argument to "find".
+	apisCmd := exec.Command("bash", "-c", "goimports -w $(find . -iname 'zz_*')")
+	apisCmd.Dir = filepath.Clean(filepath.Join(rootDir, "apis"))
+	if out, err := apisCmd.CombinedOutput(); err != nil {
 		panic(errors.Wrap(err, "cannot run goimports for apis folder: "+string(out)))
 	}
-	if out, err := exec.Command("bash", "-c", fmt.Sprintf("goimports -w $(find %s -iname 'zz_*')", internalDir)).CombinedOutput(); err != nil {
+
+	internalCmd := exec.Command("bash", "-c", "goimports -w $(find . -iname 'zz_*')")
+	internalCmd.Dir = filepath.Clean(filepath.Join(rootDir, "internal"))
+	if out, err := internalCmd.CombinedOutput(); err != nil {
 		panic(errors.Wrap(err, "cannot run goimports for internal folder: "+string(out)))
 	}
 
