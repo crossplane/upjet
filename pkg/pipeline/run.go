@@ -63,22 +63,16 @@ func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
 		controllerPkgList = append(controllerPkgList, filepath.Join(pc.ModulePath, p))
 	}
 	count := 0
-	for group, versions := range resourcesGroups {
-		for version, resources := range versions {
+	for _, group := range sortedGroups(resourcesGroups) {
+		versions := resourcesGroups[group]
+		for _, version := range sortedVersions(versions) {
+			resources := versions[version]
 			versionGen := NewVersionGenerator(rootDir, pc.ModulePath, group, version)
 			crdGen := NewCRDGenerator(versionGen.Package(), rootDir, pc.ShortName, group, version)
 			tfGen := NewTerraformedGenerator(versionGen.Package(), rootDir, group, version)
 			ctrlGen := NewControllerGenerator(rootDir, pc.ModulePath, group)
 
-			keys := make([]string, len(resources))
-			i := 0
-			for k := range resources {
-				keys[i] = k
-				i++
-			}
-			sort.Strings(keys)
-
-			for _, name := range keys {
+			for _, name := range sortedResources(resources) {
 				if err := crdGen.Generate(resources[name]); err != nil {
 					panic(errors.Wrapf(err, "cannot generate crd for resource %s", name))
 				}
@@ -123,4 +117,39 @@ func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
 	}
 
 	fmt.Printf("\nGenerated %d resources!\n", count)
+}
+
+// We will have generics one day. But until then..
+
+func sortedGroups(m map[string]map[string]map[string]*config.Resource) []string {
+	result := make([]string, len(m))
+	i := 0
+	for g := range m {
+		result[i] = g
+		i++
+	}
+	sort.Strings(result)
+	return result
+}
+
+func sortedVersions(m map[string]map[string]*config.Resource) []string {
+	result := make([]string, len(m))
+	i := 0
+	for g := range m {
+		result[i] = g
+		i++
+	}
+	sort.Strings(result)
+	return result
+}
+
+func sortedResources(m map[string]*config.Resource) []string {
+	result := make([]string, len(m))
+	i := 0
+	for g := range m {
+		result[i] = g
+		i++
+	}
+	sort.Strings(result)
+	return result
 }
