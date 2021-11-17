@@ -146,7 +146,7 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot set observation")
 	}
 
-	lateInitedAnn, err := resource.LateInitializeAnnotations(tr, e.config.ExternalName.GetNameFn(attr), string(res.State.GetPrivateRaw()))
+	lateInitedAnn, err := resource.LateInitializeAnnotations(tr, e.config.ExternalName.GetExternalNameFn(attr), string(res.State.GetPrivateRaw()))
 	if err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot late initialize annotations")
 	}
@@ -210,7 +210,7 @@ func (e *external) Create(ctx context.Context, mg xpresource.Managed) (managed.E
 	}
 
 	// NOTE(muvaf): Only spec and metadata changes are saved after Create call.
-	_, err = resource.LateInitializeAnnotations(tr, e.config.ExternalName.GetNameFn(attr), string(res.State.GetPrivateRaw()))
+	_, err = resource.LateInitializeAnnotations(tr, e.config.ExternalName.GetExternalNameFn(attr), string(res.State.GetPrivateRaw()))
 	return managed.ExternalCreation{ConnectionDetails: conn}, errors.Wrap(err, "cannot late initialize annotations")
 }
 

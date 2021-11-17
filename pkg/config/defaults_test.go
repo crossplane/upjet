@@ -73,7 +73,7 @@ func TestDefaultResource(t *testing.T) {
 	ignoreUnexported := []cmp.Option{
 		cmpopts.IgnoreFields(Sensitive{}, "fieldPaths", "AdditionalConnectionDetailsFn"),
 		cmpopts.IgnoreFields(LateInitializer{}, "ignoredCanonicalFieldPaths"),
-		cmpopts.IgnoreFields(ExternalName{}, "SetIdentifierArgumentFn", "GetNameFn", "GetIDFn"),
+		cmpopts.IgnoreFields(ExternalName{}, "SetIdentifierArgumentFn", "GetExternalNameFn", "GetIDFn"),
 	}
 
 	for name, tc := range cases {

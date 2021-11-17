@@ -22,7 +22,7 @@ import (
 
 // SetIdentifierArgumentsFn sets the name of the resource in Terraform attributes map,
 // i.e. Main HCL file.
-type SetIdentifierArgumentsFn func(base map[string]interface{}, name string)
+type SetIdentifierArgumentsFn func(base map[string]interface{}, externalName string)
 
 // NopSetIdentifierArgument does nothing. It's useful for cases where the external
 // name is calculated by provider and doesn't have any effect on spec fields.
@@ -30,18 +30,18 @@ var NopSetIdentifierArgument SetIdentifierArgumentsFn = func(_ map[string]interf
 
 // GetIDFn returns the ID to be used in TF State file, i.e. "id" field in
 // terraform.tfstate.
-type GetIDFn func(name string, parameters map[string]interface{}, providerConfig map[string]interface{}) string
+type GetIDFn func(externalName string, parameters map[string]interface{}, providerConfig map[string]interface{}) string
 
-// NameAsID returns the name to be used as ID in TF State file.
-var NameAsID GetIDFn = func(name string, _ map[string]interface{}, _ map[string]interface{}) string {
-	return name
+// ExternalNameAsID returns the name to be used as ID in TF State file.
+var ExternalNameAsID GetIDFn = func(externalName string, _ map[string]interface{}, _ map[string]interface{}) string {
+	return externalName
 }
 
-// GetNameFn returns the external name extracted from the TF State.
-type GetNameFn func(tfstate map[string]interface{}) string
+// GetExternalNameFn returns the external name extracted from the TF State.
+type GetExternalNameFn func(tfstate map[string]interface{}) string
 
-// IDAsName returns the TF State ID as external name.
-var IDAsName GetNameFn = func(tfstate map[string]interface{}) string {
+// IDAsExternalName returns the TF State ID as external name.
+var IDAsExternalName GetExternalNameFn = func(tfstate map[string]interface{}) string {
 	if id, ok := tfstate["id"].(string); ok {
 		return id
 	}
@@ -69,14 +69,14 @@ type ExternalName struct {
 	// name and assign it to that specific key for that resource type.
 	SetIdentifierArgumentFn SetIdentifierArgumentsFn
 
-	// GetNameFn returns the external name extracted from TF State. In most cases,
+	// GetExternalNameFn returns the external name extracted from TF State. In most cases,
 	// "id" field contains all the information you need. You'll need to extract
 	// the format that is decided for external name annotation to use.
 	// For example the following is an Azure resource ID:
 	// /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/mygroup1
 	// The function should return "mygroup1" so that it can be used to set external
 	// name if it was not set already.
-	GetNameFn GetNameFn
+	GetExternalNameFn GetExternalNameFn
 
 	// GetIDFn returns the string that will be used as "id" key in TF state. In
 	// many cases, external name format is the same as "id" but when it is not
