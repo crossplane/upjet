@@ -77,11 +77,12 @@ func TestWriteTFState(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			fs := afero.NewMemMapFs()
-			fp, err := NewFileProducer(context.TODO(), nil, dir, tc.args.tr, tc.args.s, config.DefaultResource("terrajet_resource", nil), WithFileSystem(fs))
+			ctx := context.TODO()
+			fp, err := NewFileProducer(ctx, nil, dir, tc.args.tr, tc.args.s, config.DefaultResource("terrajet_resource", nil), WithFileSystem(fs))
 			if err != nil {
 				t.Errorf("cannot initialize a file producer: %s", err.Error())
 			}
-			err = fp.WriteTFState()
+			err = fp.WriteTFState(ctx)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nWriteTFState(...): -want error, +got error:\n%s", tc.reason, diff)
 			}

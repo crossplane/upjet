@@ -110,7 +110,7 @@ func (ws *WorkspaceStore) Workspace(ctx context.Context, c resource.SecretClient
 		return nil, errors.Wrap(err, "cannot stat terraform.tfstate file")
 	}
 	if os.IsNotExist(err) {
-		if err := fp.WriteTFState(); err != nil {
+		if err := fp.WriteTFState(ctx); err != nil {
 			return nil, errors.Wrap(err, "cannot reproduce tfstate file")
 		}
 	}

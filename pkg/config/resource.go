@@ -17,6 +17,8 @@ limitations under the License.
 package config
 
 import (
+	"context"
+
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/pkg/errors"
 )
@@ -31,10 +33,10 @@ var NopSetIdentifierArgument SetIdentifierArgumentsFn = func(_ map[string]interf
 
 // GetIDFn returns the ID to be used in TF State file, i.e. "id" field in
 // terraform.tfstate.
-type GetIDFn func(externalName string, parameters map[string]interface{}, providerConfig map[string]interface{}) (string, error)
+type GetIDFn func(ctx context.Context, externalName string, parameters map[string]interface{}, providerConfig map[string]interface{}) (string, error)
 
 // ExternalNameAsID returns the name to be used as ID in TF State file.
-var ExternalNameAsID GetIDFn = func(externalName string, _ map[string]interface{}, _ map[string]interface{}) (string, error) {
+var ExternalNameAsID GetIDFn = func(_ context.Context, externalName string, _ map[string]interface{}, _ map[string]interface{}) (string, error) {
 	return externalName, nil
 }
 

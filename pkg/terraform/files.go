@@ -91,7 +91,7 @@ type FileProducer struct {
 
 // WriteTFState writes the Terraform state that should exist in the filesystem to
 // start any Terraform operation.
-func (fp *FileProducer) WriteTFState() error {
+func (fp *FileProducer) WriteTFState(ctx context.Context) error {
 	base := make(map[string]interface{})
 	// NOTE(muvaf): Since we try to produce the current state, observation
 	// takes precedence over parameters.
@@ -101,7 +101,7 @@ func (fp *FileProducer) WriteTFState() error {
 	for k, v := range fp.observation {
 		base[k] = v
 	}
-	id, err := fp.Config.ExternalName.GetIDFn(meta.GetExternalName(fp.Resource), fp.parameters, fp.Setup.Configuration)
+	id, err := fp.Config.ExternalName.GetIDFn(ctx, meta.GetExternalName(fp.Resource), fp.parameters, fp.Setup.Configuration)
 	if err != nil {
 		return errors.Wrap(err, "cannot get id")
 	}
