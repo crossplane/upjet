@@ -112,14 +112,12 @@ func TestGetConnectionDetails(t *testing.T) {
 				},
 				cfg: config.DefaultResource("terrajet_resource", nil),
 				data: map[string]interface{}{
-					"id":               "secret-id",
 					"top_level_secret": "sensitive-data-top-level-secret",
 				},
 			},
 			want: want{
 				out: map[string][]byte{
 					"attribute.top_level_secret": []byte("sensitive-data-top-level-secret"),
-					"attribute.id":               []byte("secret-id"),
 				},
 			},
 		},
@@ -136,14 +134,12 @@ func TestGetConnectionDetails(t *testing.T) {
 					},
 				},
 				data: map[string]interface{}{
-					"id":               "secret-id",
 					"top_level_secret": "sensitive-data-top-level-secret",
 				},
 			},
 			want: want{
 				out: map[string][]byte{
 					"top_level_secret_custom": []byte("sensitive-data-top-level-secret"),
-					"attribute.id":            []byte("secret-id"),
 				},
 			},
 		},
@@ -235,9 +231,6 @@ func TestGetSensitiveAttributes(t *testing.T) {
 			args: args{
 				paths: map[string]string{"missing_field": ""},
 				data:  testInput,
-			},
-			want: want{
-				out: map[string][]byte{},
 			},
 		},
 		"SingleGettingNumber": {
@@ -345,9 +338,6 @@ func TestGetSensitiveAttributes(t *testing.T) {
 			args: args{
 				paths: map[string]string{"top_level_secret": ""},
 				data:  nil,
-			},
-			want: want{
-				out: map[string][]byte{},
 			},
 		},
 	}

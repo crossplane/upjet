@@ -95,14 +95,6 @@ func GetConnectionDetails(attr map[string]interface{}, tr Terraformed, cfg *conf
 		conn[k] = v
 	}
 
-	// NOTE(muvaf): Having ID in the connection details is not really a must but
-	// just a nice-to-have, hence we don't handle cases where the ID is given
-	// in a field other than "id". cfg.ExternalName.GetNameFn wouldn't really
-	// help because we need the raw ID.
-	if id, ok := attr["id"]; conn != nil && ok {
-		conn[fmt.Sprintf("%sid", prefixAttribute)] = []byte(id.(string))
-	}
-
 	return conn, nil
 }
 
@@ -114,7 +106,7 @@ func GetSensitiveAttributes(from map[string]interface{}, mapping map[string]stri
 		return nil, nil
 	}
 	paved := fieldpath.Pave(from)
-	vals := make(map[string][]byte)
+	var vals map[string][]byte
 	for tf := range mapping {
 		fieldPaths, err := paved.ExpandWildcards(tf)
 		if err != nil {
@@ -134,6 +126,9 @@ func GetSensitiveAttributes(from map[string]interface{}, mapping map[string]stri
 			k, err := fieldPathToSecretKey(fp)
 			if err != nil {
 				return nil, errors.Wrapf(err, "cannot convert fieldpath %q to secret key", fp)
+			}
+			if vals == nil {
+				vals = map[string][]byte{}
 			}
 			vals[fmt.Sprintf("%s%s", prefixAttribute, k)] = []byte(v)
 		}
