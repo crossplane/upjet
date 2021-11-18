@@ -54,17 +54,17 @@ type Provider struct {
 	TerraformResourcePrefix string
 
 	// RootGroup is the root group that all CRDs groups in the provider are based
-	// on, e.g. "aws.tf.crossplane.io".
-	// Defaults to "<TerraformResourcePrefix>.tf.crossplane.io".
+	// on, e.g. "aws.jet.crossplane.io".
+	// Defaults to "<TerraformResourcePrefix>.jet.crossplane.io".
 	RootGroup string
 
 	// ShortName is the short name of the provider. Typically, added as a CRD
-	// category, e.g. "tfaws". Default to "tf<prefix>". For more details on CRD
+	// category, e.g. "awsjet". Default to "<prefix>jet". For more details on CRD
 	// categories, see: https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#categories
 	ShortName string
 
-	// ModulePath is the go module path for the tf based provider repo, e.g.
-	// "github.com/crossplane-contrib/provider-tf-aws"
+	// ModulePath is the go module path for the Crossplane provider repo, e.g.
+	// "github.com/crossplane-contrib/provider-jet-aws"
 	ModulePath string
 
 	// BasePackages keeps lists of base packages that needs to be registered as
@@ -101,8 +101,8 @@ type Provider struct {
 // A ProviderOption configures a Provider.
 type ProviderOption func(*Provider)
 
-// WithGroupSuffix configures RootGroup for resources of this Provider.
-func WithGroupSuffix(s string) ProviderOption {
+// WithRootGroup configures RootGroup for resources of this Provider.
+func WithRootGroup(s string) ProviderOption {
 	return func(p *Provider) {
 		p.RootGroup = s
 	}
@@ -148,8 +148,8 @@ func NewProvider(resourceMap map[string]*schema.Resource, prefix string, moduleP
 	p := &Provider{
 		ModulePath:              modulePath,
 		TerraformResourcePrefix: fmt.Sprintf("%s_", prefix),
-		RootGroup:               fmt.Sprintf("%s.tf.crossplane.io", prefix),
-		ShortName:               fmt.Sprintf("tf%s", prefix),
+		RootGroup:               fmt.Sprintf("%s.jet.crossplane.io", prefix),
+		ShortName:               fmt.Sprintf("%sjet", prefix),
 		BasePackages:            DefaultBasePackages,
 		DefaultResourceFn:       DefaultResource,
 		IncludeList: []string{
