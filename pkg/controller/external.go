@@ -138,19 +138,19 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 
 	// No operation was in progress, our observation completed successfully, and
 	// we have an observation to consume.
-	attr := map[string]interface{}{}
-	if err := json.JSParser.Unmarshal(res.State.GetAttributes(), &attr); err != nil {
+	tfstate := map[string]interface{}{}
+	if err := json.JSParser.Unmarshal(res.State.GetAttributes(), &tfstate); err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot unmarshal state attributes")
 	}
-	if err := tr.SetObservation(attr); err != nil {
+	if err := tr.SetObservation(tfstate); err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot set observation")
 	}
 
-	lateInitedAnn, err := resource.LateInitializeAnnotations(tr, attr, string(res.State.GetPrivateRaw()))
+	lateInitedAnn, err := resource.LateInitializeAnnotations(tr, e.config, tfstate, string(res.State.GetPrivateRaw()))
 	if err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot late initialize annotations")
 	}
-	conn, err := resource.GetConnectionDetails(attr, tr, e.config)
+	conn, err := resource.GetConnectionDetails(tfstate, tr, e.config)
 	if err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot get connection details")
 	}
@@ -199,18 +199,18 @@ func (e *external) Create(ctx context.Context, mg xpresource.Managed) (managed.E
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, errApply)
 	}
-	attr := map[string]interface{}{}
-	if err := json.JSParser.Unmarshal(res.State.GetAttributes(), &attr); err != nil {
+	tfstate := map[string]interface{}{}
+	if err := json.JSParser.Unmarshal(res.State.GetAttributes(), &tfstate); err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, "cannot unmarshal state attributes")
 	}
 
-	conn, err := resource.GetConnectionDetails(attr, tr, e.config)
+	conn, err := resource.GetConnectionDetails(tfstate, tr, e.config)
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, "cannot get connection details")
 	}
 
 	// NOTE(muvaf): Only spec and metadata changes are saved after Create call.
-	_, err = resource.LateInitializeAnnotations(tr, attr, string(res.State.GetPrivateRaw()))
+	_, err = resource.LateInitializeAnnotations(tr, e.config, tfstate, string(res.State.GetPrivateRaw()))
 	return managed.ExternalCreation{ConnectionDetails: conn}, errors.Wrap(err, "cannot late initialize annotations")
 }
 

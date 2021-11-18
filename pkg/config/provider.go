@@ -42,7 +42,7 @@ type BasePackages struct {
 
 // DefaultResourceFn returns a default resource configuration to be used while
 // building resource configurations.
-type DefaultResourceFn func(name string, terraformResource *schema.Resource) *Resource
+type DefaultResourceFn func(name string, terraformResource *schema.Resource, opts ...ResourceOption) *Resource
 
 // Provider holds configuration for a provider to be generated with Terrajet.
 type Provider struct {
@@ -152,13 +152,11 @@ func NewProvider(resourceMap map[string]*schema.Resource, prefix string, moduleP
 		ShortName:               fmt.Sprintf("tf%s", prefix),
 		BasePackages:            DefaultBasePackages,
 		DefaultResourceFn:       DefaultResource,
-
 		IncludeList: []string{
 			// Include all Resources
 			".+",
 		},
-		Resources: map[string]*Resource{},
-
+		Resources:             map[string]*Resource{},
 		resourceConfigurators: map[string]ResourceConfiguratorChain{},
 	}
 

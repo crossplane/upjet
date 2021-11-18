@@ -250,11 +250,7 @@ func TestObserve(t *testing.T) {
 		"TransitionToReady": {
 			reason: "We should mark the resource as ready if the refresh succeeds and there is no ongoing operation",
 			args: args{
-				obj: &fake.Terraformed{
-					MetadataProvider: fake.MetadataProvider{
-						IDField: "id",
-					},
-				},
+				obj: &fake.Terraformed{},
 				w: WorkspaceFns{
 					RefreshFn: func(_ context.Context) (terraform.RefreshResult, error) {
 						return terraform.RefreshResult{
@@ -277,9 +273,6 @@ func TestObserve(t *testing.T) {
 			reason: "Failure of plan should be reported",
 			args: args{
 				obj: &fake.Terraformed{
-					MetadataProvider: fake.MetadataProvider{
-						IDField: "id",
-					},
 					Managed: xpfake.Managed{
 						ConditionedStatus: xpv1.ConditionedStatus{
 							Conditions: []xpv1.Condition{xpv1.Available()},
@@ -305,9 +298,6 @@ func TestObserve(t *testing.T) {
 		"Success": {
 			args: args{
 				obj: &fake.Terraformed{
-					MetadataProvider: fake.MetadataProvider{
-						IDField: "id",
-					},
 					Managed: xpfake.Managed{
 						ConditionedStatus: xpv1.ConditionedStatus{
 							Conditions: []xpv1.Condition{xpv1.Available()},
@@ -337,7 +327,7 @@ func TestObserve(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			e := &external{workspace: tc.w, config: &config.Resource{}}
+			e := &external{workspace: tc.w, config: config.DefaultResource("terrajet_resource", nil)}
 			_, err := e.Observe(context.TODO(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nObserve(...): -want error, +got error:\n%s", tc.reason, diff)

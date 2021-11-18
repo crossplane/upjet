@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	"github.com/golang/mock/gomock"
 	"github.com/google/go-cmp/cmp"
@@ -28,11 +29,14 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 
+	"github.com/crossplane-contrib/terrajet/pkg/config"
+	"github.com/crossplane-contrib/terrajet/pkg/resource/fake"
 	"github.com/crossplane-contrib/terrajet/pkg/resource/fake/mocks"
 	"github.com/crossplane-contrib/terrajet/pkg/resource/json"
 )
 
-var testData = []byte(`
+var (
+	testData = []byte(`
 {
   "top_level_secret": "sensitive-data-top-level-secret",
   "top_config_secretmap": {
@@ -70,6 +74,130 @@ var testData = []byte(`
   ]
 }
 `)
+	errBoom = errors.New("boom")
+)
+
+func TestGetConnectionDetails(t *testing.T) {
+	testInput := map[string]interface{}{}
+	if err := json.JSParser.Unmarshal(testData, &testInput); err != nil {
+		t.Fatalf("cannot unmarshall test data: %v", err)
+	}
+	type args struct {
+		tr   Terraformed
+		cfg  *config.Resource
+		data map[string]interface{}
+	}
+	type want struct {
+		out managed.ConnectionDetails
+		err error
+	}
+	cases := map[string]struct {
+		args
+		want
+	}{
+		"NoConnectionDetails": {
+			args: args{
+				tr:  &fake.Terraformed{},
+				cfg: config.DefaultResource("terrajet_resource", nil),
+			},
+		},
+		"OnlyDefaultConnectionDetails": {
+			args: args{
+				tr: &fake.Terraformed{
+					MetadataProvider: fake.MetadataProvider{
+						ConnectionDetailsMapping: map[string]string{
+							"top_level_secret": "some.field",
+						},
+					},
+				},
+				cfg: config.DefaultResource("terrajet_resource", nil),
+				data: map[string]interface{}{
+					"top_level_secret": "sensitive-data-top-level-secret",
+				},
+			},
+			want: want{
+				out: map[string][]byte{
+					"attribute.top_level_secret": []byte("sensitive-data-top-level-secret"),
+				},
+			},
+		},
+		"OnlyAdditionalConnectionDetails": {
+			args: args{
+				tr: &fake.Terraformed{},
+				cfg: &config.Resource{
+					Sensitive: config.Sensitive{
+						AdditionalConnectionDetailsFn: func(attr map[string]interface{}) (map[string][]byte, error) {
+							return map[string][]byte{
+								"top_level_secret_custom": []byte(attr["top_level_secret"].(string)),
+							}, nil
+						},
+					},
+				},
+				data: map[string]interface{}{
+					"top_level_secret": "sensitive-data-top-level-secret",
+				},
+			},
+			want: want{
+				out: map[string][]byte{
+					"top_level_secret_custom": []byte("sensitive-data-top-level-secret"),
+				},
+			},
+		},
+		"AdditionalConnectionDetailsFailed": {
+			args: args{
+				tr: &fake.Terraformed{},
+				cfg: &config.Resource{
+					Sensitive: config.Sensitive{
+						AdditionalConnectionDetailsFn: func(attr map[string]interface{}) (map[string][]byte, error) {
+							return nil, errBoom
+						},
+					},
+				},
+			},
+			want: want{
+				err: errors.Wrap(errBoom, errGetAdditionalConnectionDetails),
+			},
+		},
+		"CannotOverrideExistingKey": {
+			args: args{
+				tr: &fake.Terraformed{
+					MetadataProvider: fake.MetadataProvider{
+						ConnectionDetailsMapping: map[string]string{
+							"top_level_secret": "some.field",
+						},
+					},
+				},
+				cfg: &config.Resource{
+					Sensitive: config.Sensitive{
+						AdditionalConnectionDetailsFn: func(attr map[string]interface{}) (map[string][]byte, error) {
+							return map[string][]byte{
+								"attribute.top_level_secret": []byte(""),
+							}, nil
+						},
+					},
+				},
+				data: map[string]interface{}{
+					"id":               "secret-id",
+					"top_level_secret": "sensitive-data-top-level-secret",
+				},
+			},
+			want: want{
+				err: errors.Errorf(errFmtCannotOverrideExistingKey, "attribute.top_level_secret"),
+			},
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			got, gotErr := GetConnectionDetails(tc.data, tc.tr, tc.cfg)
+			if diff := cmp.Diff(tc.want.err, gotErr, test.EquateErrors()); diff != "" {
+				t.Fatalf("GetConnectionDetails(...): -want error, +got error: %s", diff)
+			}
+			if diff := cmp.Diff(tc.want.out, got); diff != "" {
+				t.Errorf("\nGetConnectionDetails(...): -want error, +got error:\n%s", diff)
+			}
+		})
+	}
+}
 
 func TestGetSensitiveAttributes(t *testing.T) {
 	testInput := map[string]interface{}{}
@@ -99,28 +227,10 @@ func TestGetSensitiveAttributes(t *testing.T) {
 				},
 			},
 		},
-		"AddsIDIfExists": {
-			args: args{
-				paths: map[string]string{"top_level_secret": ""},
-				data: map[string]interface{}{
-					"id":               "secret-id",
-					"top_level_secret": "sensitive-data-top-level-secret",
-				},
-			},
-			want: want{
-				out: map[string][]byte{
-					prefixAttribute + "top_level_secret": []byte("sensitive-data-top-level-secret"),
-					prefixAttribute + "id":               []byte("secret-id"),
-				},
-			},
-		},
 		"SingleNonExisting": {
 			args: args{
 				paths: map[string]string{"missing_field": ""},
 				data:  testInput,
-			},
-			want: want{
-				out: map[string][]byte{},
 			},
 		},
 		"SingleGettingNumber": {
@@ -229,19 +339,16 @@ func TestGetSensitiveAttributes(t *testing.T) {
 				paths: map[string]string{"top_level_secret": ""},
 				data:  nil,
 			},
-			want: want{
-				out: map[string][]byte{},
-			},
 		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			got, gotErr := GetSensitiveAttributes(tc.data, tc.paths, "id")
+			got, gotErr := GetSensitiveAttributes(tc.data, tc.paths)
 			if diff := cmp.Diff(tc.want.err, gotErr, test.EquateErrors()); diff != "" {
 				t.Fatalf("GetFields(...): -want error, +got error: %s", diff)
 			}
 			if diff := cmp.Diff(tc.want.out, got); diff != "" {
-				t.Errorf("GetFields(...) out = %v, want %v", got, tc.want.out)
+				t.Errorf("\nGetSensitiveAttributes(...): -want error, +got error:\n%s", diff)
 			}
 		})
 	}

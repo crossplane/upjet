@@ -43,6 +43,9 @@ const (
 	// overridden by any custom connection key configured which would break
 	// our ability to build tfstate back.
 	prefixAttribute = "attribute."
+
+	errGetAdditionalConnectionDetails = "cannot get additional connection details"
+	errFmtCannotOverrideExistingKey   = "overriding a reserved connection key (%q) is not allowed"
 )
 
 var reEndsWithIndex *regexp.Regexp
@@ -65,25 +68,16 @@ type SecretClient interface {
 // GetConnectionDetails returns connection details including the sensitive
 // Terraform attributes and additions connection details configured.
 func GetConnectionDetails(attr map[string]interface{}, tr Terraformed, cfg *config.Resource) (managed.ConnectionDetails, error) {
-	conn, err := GetSensitiveAttributes(attr, tr.GetConnectionDetailsMapping(), tr.GetTerraformResourceIDField())
+	conn, err := GetSensitiveAttributes(attr, tr.GetConnectionDetailsMapping())
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot get connection details")
 	}
 
-	var custom map[string][]byte
-	// TODO(turkenh): Once we have automatic defaulting, remove this if check.
-	if cfg.Sensitive.AdditionalConnectionDetailsFn != nil {
-		if custom, err = cfg.Sensitive.AdditionalConnectionDetailsFn(attr); err != nil {
-			return nil, errors.Wrap(err, "cannot get custom connection keys")
-		}
+	add, err := cfg.Sensitive.AdditionalConnectionDetailsFn(attr)
+	if err != nil {
+		return nil, errors.Wrap(err, errGetAdditionalConnectionDetails)
 	}
-
-	if conn == nil {
-		// if there is no sensitive attributes but still some custom connection
-		// keys, e.g. endpoint
-		return custom, nil
-	}
-	for k, v := range custom {
+	for k, v := range add {
 		if _, ok := conn[k]; ok {
 			// We return error if a custom key tries to override an existing
 			// connection key. This is because we use connection keys to rebuild
@@ -93,23 +87,27 @@ func GetConnectionDetails(attr map[string]interface{}, tr Terraformed, cfg *conf
 			// state sensitive keys and connection keys starting with this
 			// prefix are reserved and should not be used as a custom connection
 			// key.
-			return nil, errors.Errorf("custom connection keys cannot start with %q, overriding reserved connection key (%q) is not allowed", k, prefixAttribute)
+			return nil, errors.Errorf(errFmtCannotOverrideExistingKey, k)
+		}
+		if conn == nil {
+			conn = map[string][]byte{}
 		}
 		conn[k] = v
 	}
+
 	return conn, nil
 }
 
 // GetSensitiveAttributes returns strings matching provided field paths in the
 // input data.
 // See the unit tests for examples.
-func GetSensitiveAttributes(from map[string]interface{}, mapping map[string]string, idField string) (map[string][]byte, error) {
+func GetSensitiveAttributes(from map[string]interface{}, mapping map[string]string) (map[string][]byte, error) {
 	if len(mapping) == 0 {
 		return nil, nil
 	}
-	vals := make(map[string][]byte)
+	paved := fieldpath.Pave(from)
+	var vals map[string][]byte
 	for tf := range mapping {
-		paved := fieldpath.Pave(from)
 		fieldPaths, err := paved.ExpandWildcards(tf)
 		if err != nil {
 			return nil, errors.Wrap(err, errCannotExpandWildcards)
@@ -129,13 +127,11 @@ func GetSensitiveAttributes(from map[string]interface{}, mapping map[string]stri
 			if err != nil {
 				return nil, errors.Wrapf(err, "cannot convert fieldpath %q to secret key", fp)
 			}
+			if vals == nil {
+				vals = map[string][]byte{}
+			}
 			vals[fmt.Sprintf("%s%s", prefixAttribute, k)] = []byte(v)
 		}
-	}
-
-	id, ok := from[idField].(string)
-	if ok {
-		vals[fmt.Sprintf("%s%s", prefixAttribute, idField)] = []byte(id)
 	}
 	return vals, nil
 }

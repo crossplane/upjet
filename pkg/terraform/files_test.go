@@ -70,18 +70,19 @@ func TestWriteTFState(t *testing.T) {
 				}},
 			}},
 			want: want{
-				tfstate: `{"version":4,"terraform_version":"","serial":1,"lineage":"","outputs":null,"resources":[{"mode":"managed","type":"","name":"","provider":"provider[\"registry.terraform.io/\"]","instances":[{"schema_version":0,"attributes":{"id":"some-id","obs":"obsval","param":"paramval"},"private":"cHJpdmF0ZXJhdw=="}]}]}`,
+				tfstate: `{"version":4,"terraform_version":"","serial":1,"lineage":"","outputs":null,"resources":[{"mode":"managed","type":"","name":"","provider":"provider[\"registry.terraform.io/\"]","instances":[{"schema_version":0,"attributes":{"id":"some-id","name":"some-id","obs":"obsval","param":"paramval"},"private":"cHJpdmF0ZXJhdw=="}]}]}`,
 			},
 		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			fs := afero.NewMemMapFs()
-			fp, err := NewFileProducer(context.TODO(), nil, dir, tc.args.tr, tc.args.s, &config.Resource{}, WithFileSystem(fs))
+			ctx := context.TODO()
+			fp, err := NewFileProducer(ctx, nil, dir, tc.args.tr, tc.args.s, config.DefaultResource("terrajet_resource", nil), WithFileSystem(fs))
 			if err != nil {
 				t.Errorf("cannot initialize a file producer: %s", err.Error())
 			}
-			err = fp.WriteTFState()
+			err = fp.WriteTFState(ctx)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nWriteTFState(...): -want error, +got error:\n%s", tc.reason, diff)
 			}
@@ -136,14 +137,14 @@ func TestWriteMainTF(t *testing.T) {
 				},
 			},
 			want: want{
-				maintf: `{"provider":{"provider-test":null},"resource":{"":{"":{"lifecycle":{"prevent_destroy":true},"param":"paramval"}}},"terraform":{"required_providers":{"provider-test":{"source":"hashicorp/provider-test","version":"1.2.3"}}}}`,
+				maintf: `{"provider":{"provider-test":null},"resource":{"":{"":{"lifecycle":{"prevent_destroy":true},"name":"some-id","param":"paramval"}}},"terraform":{"required_providers":{"provider-test":{"source":"hashicorp/provider-test","version":"1.2.3"}}}}`,
 			},
 		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			fs := afero.NewMemMapFs()
-			fp, err := NewFileProducer(context.TODO(), nil, dir, tc.args.tr, tc.args.s, &config.Resource{}, WithFileSystem(fs))
+			fp, err := NewFileProducer(context.TODO(), nil, dir, tc.args.tr, tc.args.s, config.DefaultResource("terrajet_resource", nil), WithFileSystem(fs))
 			if err != nil {
 				t.Errorf("cannot initialize a file producer: %s", err.Error())
 			}

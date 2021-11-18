@@ -17,15 +17,39 @@ limitations under the License.
 package config
 
 import (
+	"context"
+
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/pkg/errors"
 )
 
-// SetIdentifierArgumentFn sets the name of the resource in Terraform attributes map.
-type SetIdentifierArgumentFn func(base map[string]interface{}, name string)
+// SetIdentifierArgumentsFn sets the name of the resource in Terraform attributes map,
+// i.e. Main HCL file.
+type SetIdentifierArgumentsFn func(base map[string]interface{}, externalName string)
 
 // NopSetIdentifierArgument does nothing. It's useful for cases where the external
 // name is calculated by provider and doesn't have any effect on spec fields.
-func NopSetIdentifierArgument(_ map[string]interface{}, _ string) {}
+var NopSetIdentifierArgument SetIdentifierArgumentsFn = func(_ map[string]interface{}, _ string) {}
+
+// GetIDFn returns the ID to be used in TF State file, i.e. "id" field in
+// terraform.tfstate.
+type GetIDFn func(ctx context.Context, externalName string, parameters map[string]interface{}, providerConfig map[string]interface{}) (string, error)
+
+// ExternalNameAsID returns the name to be used as ID in TF State file.
+var ExternalNameAsID GetIDFn = func(_ context.Context, externalName string, _ map[string]interface{}, _ map[string]interface{}) (string, error) {
+	return externalName, nil
+}
+
+// GetExternalNameFn returns the external name extracted from the TF State.
+type GetExternalNameFn func(tfstate map[string]interface{}) (string, error)
+
+// IDAsExternalName returns the TF State ID as external name.
+var IDAsExternalName GetExternalNameFn = func(tfstate map[string]interface{}) (string, error) {
+	if id, ok := tfstate["id"].(string); ok && id != "" {
+		return id, nil
+	}
+	return "", errors.New("cannot find id in tfstate")
+}
 
 // AdditionalConnectionDetailsFn functions adds custom keys to connection details
 // secret using input terraform attributes
@@ -33,18 +57,8 @@ type AdditionalConnectionDetailsFn func(attr map[string]interface{}) (map[string
 
 // NopAdditionalConnectionDetails does nothing, when no additional connection
 // details configuration function provided.
-func NopAdditionalConnectionDetails(_ map[string]interface{}) (map[string][]byte, error) {
+var NopAdditionalConnectionDetails AdditionalConnectionDetailsFn = func(_ map[string]interface{}) (map[string][]byte, error) {
 	return nil, nil
-}
-
-// ResourceOption allows setting optional fields of a Resource object.
-type ResourceOption func(*Resource)
-
-// WithTerraformIDFieldName allows you to set IDFieldName.
-func WithTerraformIDFieldName(n string) ResourceOption {
-	return func(c *Resource) {
-		c.IDFieldName = n
-	}
 }
 
 // ExternalName contains all information that is necessary for naming operations,
@@ -52,19 +66,44 @@ func WithTerraformIDFieldName(n string) ResourceOption {
 // to fill attributes with information given in external name.
 type ExternalName struct {
 	// SetIdentifierArgumentFn sets the name of the resource in Terraform argument
-	// map.
-	SetIdentifierArgumentFn SetIdentifierArgumentFn
+	// map. In many cases, there is a field called "name" in the HCL schema, however,
+	// there are cases like RDS DB Cluster where the name field in HCL is called
+	// "cluster_identifier". This function is the place that you can take external
+	// name and assign it to that specific key for that resource type.
+	SetIdentifierArgumentFn SetIdentifierArgumentsFn
+
+	// GetExternalNameFn returns the external name extracted from TF State. In most cases,
+	// "id" field contains all the information you need. You'll need to extract
+	// the format that is decided for external name annotation to use.
+	// For example the following is an Azure resource ID:
+	// /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/mygroup1
+	// The function should return "mygroup1" so that it can be used to set external
+	// name if it was not set already.
+	GetExternalNameFn GetExternalNameFn
+
+	// GetIDFn returns the string that will be used as "id" key in TF state. In
+	// many cases, external name format is the same as "id" but when it is not
+	// we may need information from other places to construct it. For example,
+	// the following is an Azure resource ID:
+	// /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/mygroup1
+	// The function here should use information from supplied arguments to
+	// construct this ID, i.e. "mygroup1" from external name, subscription ID
+	// from providerConfig, and others from parameters map if needed.
+	GetIDFn GetIDFn
 
 	// OmittedFields are the ones you'd like to be removed from the schema since
-	// they are specified via external name. You can omit only the top level fields.
+	// they are specified via external name. For example, if you set
+	// "cluster_identifier" in SetIdentifierArgumentFn, then you need to omit
+	// that field.
+	// You can omit only the top level fields.
 	// No field is omitted by default.
 	OmittedFields []string
 
 	// DisableNameInitializer allows you to specify whether the name initializer
 	// that sets external name to metadata.name if none specified should be disabled.
-	// It needs to be disabled for resources whose external name includes information
-	// more than the actual name of the resource, like subscription ID or region
-	// etc. which is unlikely to be included in metadata.name
+	// It needs to be disabled for resources whose external identifier is randomly
+	// assigned by the provider, like AWS VPC where it gets vpc-21kn123 identifier
+	// and not let you name it.
 	DisableNameInitializer bool
 }
 
@@ -154,11 +193,6 @@ type Resource struct {
 
 	// TerraformResource is the Terraform representation of the resource.
 	TerraformResource *schema.Resource
-
-	// IDFieldName is the name of the ID field in Terraform state of the
-	// resource. Its default is "id" and in almost all cases, you don't need
-	// to overwrite it.
-	IDFieldName string
 
 	// ShortGroup is the short name of the API group of this CRD. The full
 	// CRD API group is calculated by adding the group suffix of the provider.

@@ -17,11 +17,6 @@ func (mg *{{ .CRD.Kind }}) GetTerraformResourceType() string {
 	return "{{ .Terraform.ResourceType }}"
 }
 
-// GetTerraformResourceIDField returns Terraform identifier field for this {{ .CRD.Kind }}
-func (tr *{{ .CRD.Kind }}) GetTerraformResourceIDField() string {
-	return "{{ .Terraform.IdentifierField }}"
-}
-
 // GetConnectionDetailsMapping for this {{ .CRD.Kind }}
 func (tr *{{ .CRD.Kind }}) GetConnectionDetailsMapping() map[string]string {
   {{- if .Sensitive.Fields }}

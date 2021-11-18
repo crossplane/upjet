@@ -61,10 +61,7 @@ func NewFileProducer(ctx context.Context, client resource.SecretClient, dir stri
 	if err = resource.GetSensitiveParameters(ctx, client, tr, params, tr.GetConnectionDetailsMapping()); err != nil {
 		return nil, errors.Wrap(err, "cannot get sensitive parameters")
 	}
-	// TODO(muvaf): Once we have automatic defaulting, remove this if check.
-	if fp.Config.ExternalName.SetIdentifierArgumentFn != nil {
-		fp.Config.ExternalName.SetIdentifierArgumentFn(params, meta.GetExternalName(tr))
-	}
+	fp.Config.ExternalName.SetIdentifierArgumentFn(params, meta.GetExternalName(tr))
 	fp.parameters = params
 
 	obs, err := tr.GetObservation()
@@ -94,7 +91,7 @@ type FileProducer struct {
 
 // WriteTFState writes the Terraform state that should exist in the filesystem to
 // start any Terraform operation.
-func (fp *FileProducer) WriteTFState() error {
+func (fp *FileProducer) WriteTFState(ctx context.Context) error {
 	base := make(map[string]interface{})
 	// NOTE(muvaf): Since we try to produce the current state, observation
 	// takes precedence over parameters.
@@ -104,7 +101,11 @@ func (fp *FileProducer) WriteTFState() error {
 	for k, v := range fp.observation {
 		base[k] = v
 	}
-	base["id"] = meta.GetExternalName(fp.Resource)
+	id, err := fp.Config.ExternalName.GetIDFn(ctx, meta.GetExternalName(fp.Resource), fp.parameters, fp.Setup.Configuration)
+	if err != nil {
+		return errors.Wrap(err, "cannot get id")
+	}
+	base["id"] = id
 	attr, err := json.JSParser.Marshal(base)
 	if err != nil {
 		return errors.Wrap(err, "cannot marshal produced state attributes")

@@ -23,7 +23,7 @@ import (
 	"github.com/iancoleman/strcase"
 )
 
-// Common ExternalName configurations.
+// Commonly used resource configurations.
 var (
 	// NameAsIdentifier uses "name" field in the arguments as the identifier of
 	// the resource.
@@ -31,6 +31,8 @@ var (
 		SetIdentifierArgumentFn: func(base map[string]interface{}, name string) {
 			base["name"] = name
 		},
+		GetExternalNameFn: IDAsExternalName,
+		GetIDFn:           ExternalNameAsID,
 		OmittedFields: []string{
 			"name",
 			"name_prefix",
@@ -42,6 +44,8 @@ var (
 	// vpc-2213das instead of letting user choose a name.
 	IdentifierFromProvider = ExternalName{
 		SetIdentifierArgumentFn: NopSetIdentifierArgument,
+		GetExternalNameFn:       IDAsExternalName,
+		GetIDFn:                 ExternalNameAsID,
 		DisableNameInitializer:  true,
 	}
 
@@ -55,11 +59,19 @@ var (
 			"internal/controller/providerconfig",
 		},
 	}
+
+	// NopSensitive does nothing.
+	NopSensitive = Sensitive{
+		AdditionalConnectionDetailsFn: NopAdditionalConnectionDetails,
+	}
 )
+
+// ResourceOption allows setting optional fields of a Resource object.
+type ResourceOption func(*Resource)
 
 // DefaultResource keeps an initial default configuration for all resources of a
 // provider.
-func DefaultResource(name string, terraformSchema *schema.Resource) *Resource {
+func DefaultResource(name string, terraformSchema *schema.Resource, opts ...ResourceOption) *Resource {
 	words := strings.Split(name, "_")
 	// As group name we default to the second element if resource name
 	// has at least 3 elements, otherwise, we took the first element as
@@ -79,16 +91,18 @@ func DefaultResource(name string, terraformSchema *schema.Resource) *Resource {
 		kind = strcase.ToCamel(words[1])
 	}
 
-	return &Resource{
+	r := &Resource{
 		Name:              name,
 		TerraformResource: terraformSchema,
-
-		ShortGroup: group,
-		Kind:       kind,
-		Version:    "v1alpha1",
-
-		IDFieldName:  "id",
-		ExternalName: NameAsIdentifier,
-		References:   map[string]Reference{},
+		ShortGroup:        group,
+		Kind:              kind,
+		Version:           "v1alpha1",
+		ExternalName:      NameAsIdentifier,
+		References:        map[string]Reference{},
+		Sensitive:         NopSensitive,
 	}
+	for _, f := range opts {
+		f(r)
+	}
+	return r
 }
