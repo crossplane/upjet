@@ -220,8 +220,7 @@ func TestIsPlanFailed(t *testing.T) {
 
 func TestNewApplyFailed(t *testing.T) {
 	type args struct {
-		cause error
-		logs  []byte
+		logs []byte
 	}
 	tests := map[string]struct {
 		args           args
@@ -229,10 +228,9 @@ func TestNewApplyFailed(t *testing.T) {
 	}{
 		"ApplyError": {
 			args: args{
-				cause: errorBoom,
-				logs:  errorLog,
+				logs: errorLog,
 			},
-			wantErrMessage: "apply failed: Missing required argument: The argument \"location\" is required, but no definition was found.\nMissing required argument: The argument \"name\" is required, but no definition was found.",
+			wantErrMessage: "apply failed: Missing required argument: The argument \"location\" is required, but no definition was found.: File name: main.tf.json\nMissing required argument: The argument \"name\" is required, but no definition was found.: File name: main.tf.json",
 		},
 	}
 	for name, tt := range tests {
@@ -261,7 +259,7 @@ func TestNewDestroyFailed(t *testing.T) {
 			args: args{
 				logs: errorLog,
 			},
-			wantErrMessage: "destroy failed: Missing required argument: The argument \"location\" is required, but no definition was found.\nMissing required argument: The argument \"name\" is required, but no definition was found.",
+			wantErrMessage: "destroy failed: Missing required argument: The argument \"location\" is required, but no definition was found.: File name: main.tf.json\nMissing required argument: The argument \"name\" is required, but no definition was found.: File name: main.tf.json",
 		},
 	}
 	for name, tt := range tests {
@@ -280,8 +278,7 @@ func TestNewDestroyFailed(t *testing.T) {
 
 func TestNewRefreshFailed(t *testing.T) {
 	type args struct {
-		cause error
-		logs  []byte
+		logs []byte
 	}
 	tests := map[string]struct {
 		args           args
@@ -289,10 +286,9 @@ func TestNewRefreshFailed(t *testing.T) {
 	}{
 		"RefreshError": {
 			args: args{
-				cause: errorBoom,
-				logs:  errorLog,
+				logs: errorLog,
 			},
-			wantErrMessage: "refresh failed: Missing required argument: The argument \"location\" is required, but no definition was found.\nMissing required argument: The argument \"name\" is required, but no definition was found.",
+			wantErrMessage: "refresh failed: Missing required argument: The argument \"location\" is required, but no definition was found.: File name: main.tf.json\nMissing required argument: The argument \"name\" is required, but no definition was found.: File name: main.tf.json",
 		},
 	}
 	for name, tt := range tests {
@@ -311,8 +307,7 @@ func TestNewRefreshFailed(t *testing.T) {
 
 func TestNewPlanFailed(t *testing.T) {
 	type args struct {
-		cause error
-		logs  []byte
+		logs []byte
 	}
 	tests := map[string]struct {
 		args           args
@@ -320,10 +315,9 @@ func TestNewPlanFailed(t *testing.T) {
 	}{
 		"PlanError": {
 			args: args{
-				cause: errorBoom,
-				logs:  errorLog,
+				logs: errorLog,
 			},
-			wantErrMessage: "plan failed: Missing required argument: The argument \"location\" is required, but no definition was found.\nMissing required argument: The argument \"name\" is required, but no definition was found.",
+			wantErrMessage: "plan failed: Missing required argument: The argument \"location\" is required, but no definition was found.: File name: main.tf.json\nMissing required argument: The argument \"name\" is required, but no definition was found.: File name: main.tf.json",
 		},
 	}
 	for name, tt := range tests {

@@ -49,6 +49,12 @@ type LogDiagnostic struct {
 	Severity string `json:"severity"`
 	Summary  string `json:"summary"`
 	Detail   string `json:"detail"`
+	Range    Range  `json:"range"`
+}
+
+// Range represents a line range in a Terraform workspace file
+type Range struct {
+	FileName string `json:"filename"`
 }
 
 func (t *tfError) Error() string {
@@ -74,6 +80,9 @@ func newTFError(message string, logs []byte) (string, *tfError) {
 		m := l.Message
 		if l.Diagnostic.Severity == levelError && l.Diagnostic.Summary != "" {
 			m = fmt.Sprintf("%s: %s", l.Diagnostic.Summary, l.Diagnostic.Detail)
+			if len(l.Diagnostic.Range.FileName) != 0 {
+				m = m + ": File name: " + l.Diagnostic.Range.FileName
+			}
 		}
 		messages = append(messages, m)
 	}
