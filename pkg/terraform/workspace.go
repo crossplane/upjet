@@ -24,8 +24,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	"github.com/pkg/errors"
+
+	"github.com/crossplane/crossplane-runtime/pkg/logging"
 
 	"github.com/crossplane-contrib/terrajet/pkg/resource/json"
 	tferrors "github.com/crossplane-contrib/terrajet/pkg/terraform/errors"
@@ -94,9 +95,7 @@ func (w *Workspace) ApplyAsync(callback CallbackFn) error {
 			}
 		}()
 		if err != nil {
-			// Only the last line contains the error.
-			l := strings.Split(string(out), "\n")
-			err = tferrors.NewApplyFailed(errors.Wrap(err, l[len(l)-2]).Error())
+			err = tferrors.NewApplyFailed(out)
 		}
 	}()
 	return nil
@@ -117,7 +116,7 @@ func (w *Workspace) Apply(ctx context.Context) (ApplyResult, error) {
 	out, err := cmd.CombinedOutput()
 	w.logger.Debug("apply ended", "out", string(out))
 	if err != nil {
-		return ApplyResult{}, errors.Wrapf(err, "cannot apply: %s", string(out))
+		return ApplyResult{}, tferrors.NewApplyFailed(out)
 	}
 	raw, err := os.ReadFile(filepath.Join(w.dir, "terraform.tfstate"))
 	if err != nil {
@@ -159,9 +158,7 @@ func (w *Workspace) DestroyAsync(callback CallbackFn) error {
 			}
 		}()
 		if err != nil {
-			// Only the last line contains the error.
-			l := strings.Split(string(out), "\n")
-			err = tferrors.NewDestroyFailed(l[len(l)-2])
+			err = tferrors.NewDestroyFailed(out)
 		}
 	}()
 	return nil
@@ -176,7 +173,10 @@ func (w *Workspace) Destroy(ctx context.Context) error {
 	w.configureCmd(cmd)
 	out, err := cmd.CombinedOutput()
 	w.logger.Debug("destroy ended", "out", string(out))
-	return errors.Wrapf(err, "cannot destroy: %s", string(out))
+	if err != nil {
+		return tferrors.NewDestroyFailed(out)
+	}
+	return nil
 }
 
 // RefreshResult contains information about the current state of the resource.
@@ -204,7 +204,7 @@ func (w *Workspace) Refresh(ctx context.Context) (RefreshResult, error) {
 	out, err := cmd.CombinedOutput()
 	w.logger.Debug("refresh ended", "out", string(out))
 	if err != nil {
-		return RefreshResult{}, errors.Wrapf(err, "cannot refresh: %s", string(out))
+		return RefreshResult{}, tferrors.NewRefreshFailed(out)
 	}
 	raw, err := os.ReadFile(filepath.Join(w.dir, "terraform.tfstate"))
 	if err != nil {
@@ -238,7 +238,7 @@ func (w *Workspace) Plan(ctx context.Context) (PlanResult, error) {
 	out, err := cmd.CombinedOutput()
 	w.logger.Debug("plan ended", "out", string(out))
 	if err != nil {
-		return PlanResult{}, errors.Wrapf(err, "cannot plan: %s", string(out))
+		return PlanResult{}, tferrors.NewPlanFailed(out)
 	}
 	line := ""
 	for _, l := range strings.Split(string(out), "\n") {
