@@ -10,8 +10,9 @@ See [design document][design-doc] for more details.
 
 Feel free to test the following Crossplane providers built using Terrajet:
 
-* [Provider TF AWS](https://github.com/crossplane-contrib/provider-tf-aws/releases)
-* [Provider TF Azure](https://github.com/crossplane-contrib/provider-tf-azure/releases)
+* [Provider TF AWS](https://github.com/crossplane-contrib/provider-jet-aws/releases)
+* [Provider TF Azure](https://github.com/crossplane-contrib/provider-jet-azure/releases)
+* [Provider TF GCP](https://github.com/crossplane-contrib/provider-jet-gcp/releases)
 
 **NOTE**: Terrajet is in its very early stages. We expect many breaking changes
 in the coming weeks. Relying on it for production usage is not recommended yet.
