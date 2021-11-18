@@ -63,10 +63,8 @@ func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
 		controllerPkgList = append(controllerPkgList, filepath.Join(pc.ModulePath, p))
 	}
 	count := 0
-	for _, group := range sortedGroups(resourcesGroups) {
-		versions := resourcesGroups[group]
-		for _, version := range sortedVersions(versions) {
-			resources := versions[version]
+	for group, versions := range resourcesGroups {
+		for version, resources := range versions {
 			versionGen := NewVersionGenerator(rootDir, pc.ModulePath, group, version)
 			crdGen := NewCRDGenerator(versionGen.Package(), rootDir, pc.ShortName, group, version)
 			tfGen := NewTerraformedGenerator(versionGen.Package(), rootDir, group, version)
@@ -117,30 +115,6 @@ func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
 	}
 
 	fmt.Printf("\nGenerated %d resources!\n", count)
-}
-
-// We will have generics one day. But until then..
-
-func sortedGroups(m map[string]map[string]map[string]*config.Resource) []string {
-	result := make([]string, len(m))
-	i := 0
-	for g := range m {
-		result[i] = g
-		i++
-	}
-	sort.Strings(result)
-	return result
-}
-
-func sortedVersions(m map[string]map[string]*config.Resource) []string {
-	result := make([]string, len(m))
-	i := 0
-	for g := range m {
-		result[i] = g
-		i++
-	}
-	sort.Strings(result)
-	return result
 }
 
 func sortedResources(m map[string]*config.Resource) []string {
