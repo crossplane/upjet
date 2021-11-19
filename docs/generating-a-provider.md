@@ -163,6 +163,7 @@ be quite similar for any other Terraform provider.
 
    import "github.com/crossplane-contrib/terrajet/pkg/config"
 
+   // Configure configures individual resources by adding custom ResourceConfigurators.
    func Customize(p *config.Provider) {
        p.AddResourceConfigurator("github_repository", func(r *config.Resource) {
    
@@ -237,7 +238,10 @@ be quite similar for any other Terraform provider.
    make generate
    ```
 
-**_To add more resources, please follow the steps between 6-8 for each resource._**
+**_To add more resources, please follow the steps between 6-8 for each resource.
+Alternatively, you can drop the `tjconfig.WithIncludeList` option in provider
+Configuration which would generate all resources, and you can add resource
+configurations as a next step_**
 
 ## Test
 

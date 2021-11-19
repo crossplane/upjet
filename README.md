@@ -17,6 +17,11 @@ Feel free to test the following Crossplane providers built using Terrajet:
 **NOTE**: Terrajet is in its very early stages. We expect many breaking changes
 in the coming weeks. Relying on it for production usage is not recommended yet.
 
+## Generating a New Provider Using Terrajet
+
+Please see [this guide](docs/generating-a-provider.md) for detailed steps on how
+to generate a Crossplane provider based on an existing Terraform provider.
+
 ## Report a Bug
 
 For filing bugs, suggesting improvements, or requesting new features, please

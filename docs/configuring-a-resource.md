@@ -146,7 +146,7 @@ as further examples under `config/<group>/config.go`.
 ### Cross Resource Referencing
 
 Crossplane uses cross resource referencing to [handle dependencies] between
-managed resources. For example, if you have an iam User defined as a Crossplane
+managed resources. For example, if you have an IAM User defined as a Crossplane
 managed resource, and you want to create an Access Key for that user, you would
 need to refer to the User CR from the Access Key resource. This is handled by
 cross resource referencing.
@@ -248,11 +248,11 @@ secret, together with some additional fields that would help consumption of the
 resource, a.k.a. [connection details].
 
 In Terrajet, we already [handle sensitive fields] that are marked as sensitive
-in Terraform schema and no further action required for them. However, we still
-have some custom configuration API that would allow marking additional fields as
-sensitive (e.g. just if we encounter a field that is not marked properly) and
-also to [add additional keys with custom values] no matter they are sensitive or
-not.
+in Terraform schema and no further action required for them. Terrajet will 
+properly hide these fields from CRD spec and status by converting to a secret
+reference or storing in connection details secret respectively. However, we
+still have some custom configuration API that would allow including additional
+fields into connection details secret no matter they are sensitive or not.
 
 As an example, let's use `aws_iam_access_key`. Currently, Terrajet stores all
 sensitive fields in Terraform schema as prefixed with `attribute.`, so without
@@ -402,7 +402,6 @@ during late-initialization.
 [kms key]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ebs_volume#kms_key_id
 [connection details]: https://crossplane.io/docs/v1.4/concepts/managed-resources.html#connection-details
 [handle sensitive fields]: https://github.com/crossplane-contrib/terrajet/pull/77
-[add additional keys with custom values]: https://github.com/crossplane-contrib/terrajet/blob/874bb6ad5cff9741241fb790a3a5d71166900860/pkg/config/resource.go#L99
 [id]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_access_key#id
 [secret]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_access_key#secret
 [`external.Observe`]: https://github.com/crossplane-contrib/terrajet/blob/874bb6ad5cff9741241fb790a3a5d71166900860/pkg/controller/external.go#L149
