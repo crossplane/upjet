@@ -169,7 +169,7 @@ be quite similar for any other Terraform provider.
    
            // we need to override the default group that terrajet generated for
            // this resource, which would be "github"  
-           r.Group = "repository"
+           r.ShortGroup = "repository"
        })
    }
    EOF
@@ -186,7 +186,7 @@ be quite similar for any other Terraform provider.
    
            // we need to override the default group that terrajet generated for
            // this resource, which would be "github" 
-           r.Group = "branch"
+           r.ShortGroup = "branch"
    
            // Identifier for this resource is assigned by the provider. In other
            // words it is not simply the name of the resource.
@@ -304,7 +304,7 @@ Now let's test our generated resources.
 
    ```bash
    cat <<EOF > examples/branch/branch.yaml
-   apiVersion: branch.github.provider-jet.crossplane.io/v1alpha1
+   apiVersion: branch.github.jet.crossplane.io/v1alpha1
    kind: Branch
    metadata:
      name: hello-terrajet
