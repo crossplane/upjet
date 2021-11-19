@@ -49,15 +49,16 @@ type TerraformedGenerator struct {
 }
 
 // Generate writes generated Terraformed interface functions
-func (tg *TerraformedGenerator) Generate(cfg *config.Resource) error {
+func (tg *TerraformedGenerator) Generate(cfg *config.Resource, parametersTypeName string) error {
 	trFile := wrapper.NewFile(tg.pkg.Path(), tg.pkg.Name(), templates.TerraformedTemplate,
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath(tg.LicenseHeaderPath),
 	)
 	vars := map[string]interface{}{
 		"CRD": map[string]string{
-			"APIVersion": cfg.Version,
-			"Kind":       cfg.Kind,
+			"APIVersion":         cfg.Version,
+			"Kind":               cfg.Kind,
+			"ParametersTypeName": parametersTypeName,
 		},
 		"Terraform": map[string]interface{}{
 			"ResourceType":  cfg.Name,

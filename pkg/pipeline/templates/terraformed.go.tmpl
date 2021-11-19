@@ -67,7 +67,7 @@ func (tr *{{ .CRD.Kind }}) SetParameters(params map[string]interface{}) error {
 // LateInitialize this {{ .CRD.Kind }} using its observed tfState.
 // returns True if there are any spec changes for the resource.
 func (tr *{{ .CRD.Kind }}) LateInitialize(attrs []byte) (bool, error) {
-	params := &{{ .CRD.Kind }}Parameters{}
+	params := &{{ .CRD.ParametersTypeName }}{}
 	if err := json.TFParser.Unmarshal(attrs, params); err != nil {
 		return false, errors.Wrap(err, "failed to unmarshal Terraform state parameters for late-initialization")
 	}

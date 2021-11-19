@@ -71,10 +71,11 @@ func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
 			ctrlGen := NewControllerGenerator(rootDir, pc.ModulePath, group)
 
 			for _, name := range sortedResources(resources) {
-				if err := crdGen.Generate(resources[name]); err != nil {
+				paramTypeName, err := crdGen.Generate(resources[name])
+				if err != nil {
 					panic(errors.Wrapf(err, "cannot generate crd for resource %s", name))
 				}
-				if err := tfGen.Generate(resources[name]); err != nil {
+				if err := tfGen.Generate(resources[name], paramTypeName); err != nil {
 					panic(errors.Wrapf(err, "cannot generate terraformed for resource %s", name))
 				}
 				ctrlPkgPath, err := ctrlGen.Generate(resources[name], versionGen.Package().Path())

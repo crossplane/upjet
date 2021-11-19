@@ -58,7 +58,7 @@ type CRDGenerator struct {
 }
 
 // Generate builds and writes a new CRD out of Terraform resource definition.
-func (cg *CRDGenerator) Generate(cfg *config.Resource) error {
+func (cg *CRDGenerator) Generate(cfg *config.Resource) (string, error) {
 	file := wrapper.NewFile(cg.pkg.Path(), cg.pkg.Name(), templates.CRDTypesTemplate,
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath(cg.LicenseHeaderPath),
@@ -68,7 +68,7 @@ func (cg *CRDGenerator) Generate(cfg *config.Resource) error {
 	}
 	gen, err := tjtypes.NewBuilder(cg.pkg).Build(cfg)
 	if err != nil {
-		return errors.Wrapf(err, "cannot build types for %s", cfg.Kind)
+		return "", errors.Wrapf(err, "cannot build types for %s", cfg.Kind)
 	}
 	// TODO(muvaf): TypePrinter uses the given scope to see if the type exists
 	// before printing. We should ideally load the package in file system but
@@ -79,7 +79,7 @@ func (cg *CRDGenerator) Generate(cfg *config.Resource) error {
 	typePrinter := twtypes.NewPrinter(file.Imports, pkg.Scope(), twtypes.WithComments(gen.Comments))
 	typesStr, err := typePrinter.Print(gen.Types)
 	if err != nil {
-		return errors.Wrap(err, "cannot print the type list")
+		return "", errors.Wrap(err, "cannot print the type list")
 	}
 	vars := map[string]interface{}{
 		"Types": typesStr,
@@ -96,5 +96,5 @@ func (cg *CRDGenerator) Generate(cfg *config.Resource) error {
 		"XPCommonAPIsPackageAlias": file.Imports.UsePackage(tjtypes.PackagePathXPCommonAPIs),
 	}
 	filePath := filepath.Join(cg.LocalDirectoryPath, fmt.Sprintf("zz_%s_types.go", strings.ToLower(cfg.Kind)))
-	return errors.Wrap(file.Write(filePath, vars, os.ModePerm), "cannot write crd file")
+	return gen.ForProviderType.Obj().Name(), errors.Wrap(file.Write(filePath, vars, os.ModePerm), "cannot write crd file")
 }
