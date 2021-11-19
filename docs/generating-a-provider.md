@@ -9,7 +9,7 @@ be quite similar for any other Terraform provider.
 ## Generate
 
 1. Generate a GitHub repository for the Crossplane provider by hitting the
-   "**Use this template**" button in [provider-tf-template] repository.
+   "**Use this template**" button in [provider-jet-template] repository.
 2. Clone the repository to your local and `cd` into the repository directory.
 3. Replace `template` with your provider name.
 
@@ -28,9 +28,9 @@ be quite similar for any other Terraform provider.
         # Clean up the .bak files created by sed
         git clean -fd
    
-        mv "internal/clients/template.go" "internal/clients/${ProviderNameLower}.go"
-        mv "cluster/images/provider-tf-template" "cluster/images/provider-tf-${ProviderNameLower}"
-        mv "cluster/images/provider-tf-template-controller" "cluster/images/provider-tf-${ProviderNameLower}-controller"
+        git mv "internal/clients/template.go" "internal/clients/${ProviderNameLower}.go"
+        git mv "cluster/images/provider-jet-template" "cluster/images/provider-jet-${ProviderNameLower}"
+        git mv "cluster/images/provider-jet-template-controller" "cluster/images/provider-jet-${ProviderNameLower}-controller"
         ```
 
 4. Configure your repo for the Terraform provider binary and schema:
@@ -95,7 +95,7 @@ be quite similar for any other Terraform provider.
        go mod tidy
        ```
 
-5. Implement `ProviderConfig` logic. In `provider-tf-template`, there is already
+5. Implement `ProviderConfig` logic. In `provider-jet-template`, there is already
    a boilerplate code in file `internal/clients/${ProviderNameLower}.go` which
    takes care of properly fetching secret data referenced from `ProviderConfig`
    resource.
@@ -196,7 +196,7 @@ be quite similar for any other Terraform provider.
            // object, we can build cross resource referencing. See 
            // repositoryRef in the example in the Testing section below.
            r.References["repository"] = config.Reference{
-               Type: "github.com/crossplane-contrib/provider-tf-github/apis/repository/v1alpha1.Repository",
+               Type: "github.com/crossplane-contrib/provider-jet-github/apis/repository/v1alpha1.Repository",
            }
        })
    }
@@ -212,8 +212,8 @@ be quite similar for any other Terraform provider.
        "github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
        tf "github.com/turkenh/terraform-provider-github/v4/github"
 
-   +   "github.com/crossplane-contrib/provider-tf-github/config/branch"
-   +   "github.com/crossplane-contrib/provider-tf-github/config/repository"
+   +   "github.com/crossplane-contrib/provider-jet-github/config/branch"
+   +   "github.com/crossplane-contrib/provider-jet-github/config/repository"
     )
 
     func GetProvider() *tjconfig.Provider {
@@ -274,12 +274,12 @@ Now let's test our generated resources.
    ```
 
    Create example for `repository` resource, which will use
-   `provider-tf-template` repo as template for the repository
+   `provider-jet-template` repo as template for the repository
    to be created:
 
    ```bash
    cat <<EOF > examples/repository/repository.yaml
-   apiVersion: repository.github.tf.crossplane.io/v1alpha1
+   apiVersion: repository.github.jet.crossplane.io/v1alpha1
    kind: Repository
    metadata:
      name: hello-crossplane
@@ -289,7 +289,7 @@ Now let's test our generated resources.
        visibility: public
        template:
          - owner: crossplane-contrib
-           repository: provider-tf-template
+           repository: provider-jet-template
      providerConfigRef:
        name: default
    EOF
@@ -300,7 +300,7 @@ Now let's test our generated resources.
 
    ```bash
    cat <<EOF > examples/branch/branch.yaml
-   apiVersion: branch.github.tf.crossplane.io/v1alpha1
+   apiVersion: branch.github.provider-jet.crossplane.io/v1alpha1
    kind: Branch
    metadata:
      name: hello-terrajet
@@ -357,10 +357,10 @@ Now let's test our generated resources.
 
    ```bash
    NAME                                                   READY   SYNCED   EXTERNAL-NAME                     AGE
-   branch.branch.github.tf.crossplane.io/hello-terrajet   True    True     hello-crossplane:hello-terrajet   89s
+   branch.branch.github.jet.crossplane.io/hello-terrajet   True    True     hello-crossplane:hello-terrajet   89s
 
    NAME                                                             READY   SYNCED   EXTERNAL-NAME      AGE
-   repository.repository.github.tf.crossplane.io/hello-crossplane   True    True     hello-crossplane   89s
+   repository.repository.github.jet.crossplane.io/hello-crossplane   True    True     hello-crossplane   89s
    ```
 
    Verify that repo `hello-crossplane` and branch `hello-terrajet` created under
@@ -381,11 +381,11 @@ Now let's test our generated resources.
 [comment]: <> (References)
 
 [Terraform GitHub provider]: https://registry.terraform.io/providers/integrations/github/latest/docs
-[provider-tf-template]: https://github.com/crossplane-contrib/provider-tf-template
+[provider-jet-template]: https://github.com/crossplane-contrib/provider-jet-template
 [Terraform documentation for provider configuration]: https://registry.terraform.io/providers/integrations/github/latest/docs#argument-reference
 [`github` directory]: https://github.com/integrations/terraform-provider-github/tree/main/github
-[this line in controller Dockerfile]: https://github.com/crossplane-contrib/provider-tf-template/blob/70f485a3f227d30e7eaac43aaf42348f7e930232/cluster/images/provider-tf-template-controller/Dockerfile#L25
+[this line in controller Dockerfile]: https://github.com/crossplane-contrib/provider-jet-template/blob/70f485a3f227d30e7eaac43aaf42348f7e930232/cluster/images/provider-jet-template-controller/Dockerfile#L25
 [fork]: https://github.com/turkenh/terraform-provider-github
 [terraform-provider-github]: https://github.com/integrations/terraform-provider-github
-[terraform-plugin-sdk]: github.com/hashicorp/terraform-plugin-sdk
+[terraform-plugin-sdk]: https://github.com/hashicorp/terraform-plugin-sdk
 [this issue]: https://github.com/integrations/terraform-provider-github/pull/961
