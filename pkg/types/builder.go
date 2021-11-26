@@ -100,6 +100,7 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 	var paramTags []string       //nolint:prealloc
 	var obsFields []*types.Var   //nolint:prealloc
 	var obsTags []string         //nolint:prealloc
+	rootLevelObject, idObservationAdded := len(names) == 1, false
 	for _, snakeFieldName := range keys {
 		sch := res.Schema[snakeFieldName]
 		fieldName := NewNameFromSnake(snakeFieldName)
@@ -141,6 +142,9 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 		fieldNameCamel := fieldName.Camel
 		if sch.Sensitive {
 			if isObservation(sch) {
+				if rootLevelObject && fieldName.Snake == "id" {
+					return nil, nil, errors.New(`unexpected sensitive field "id"`)
+				}
 				cfg.Sensitive.AddFieldPath(fieldPathWithWildcard(tfPaths), "status.atProvider."+fieldPathWithWildcard(xpPaths))
 				// Drop an observation field from schema if it is sensitive.
 				// Data will be stored in connection details secret
@@ -181,6 +185,12 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 		case isObservation(sch):
 			obsFields = append(obsFields, field)
 			obsTags = append(obsTags, fmt.Sprintf(`json:"%s" tf:"%s"`, jsonTag, tfTag))
+			if rootLevelObject && fieldName.Snake == "id" {
+				if fieldType.String() != "string" {
+					return nil, nil, errors.Errorf("expecting id attribute of type string but got %q", fieldType.String())
+				}
+				idObservationAdded = true
+			}
 		default:
 			if sch.Optional {
 				paramTags = append(paramTags, fmt.Sprintf(`json:"%s" tf:"%s"`, jsonTag, tfTag))
@@ -201,6 +211,12 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 		}
 
 		g.comments.AddFieldComment(paramName, fieldNameCamel, comment.Build())
+	}
+
+	if rootLevelObject && !idObservationAdded {
+		// add "id" field of type string to hold the resource's observed persistent ID
+		obsFields = append(obsFields, types.NewField(token.NoPos, g.Package, "ID", types.Universe.Lookup("string").Type(), false))
+		obsTags = append(obsTags, fmt.Sprintf(`json:"%s" tf:"%s"`, "id,omitempty", "-"))
 	}
 
 	// NOTE(muvaf): Not every struct has both computed and configurable fields,

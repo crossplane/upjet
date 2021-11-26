@@ -38,6 +38,16 @@ func (tr *{{ .CRD.Kind }}) GetObservation() (map[string]interface{}, error) {
 
 // SetObservation for this {{ .CRD.Kind }}
 func (tr *{{ .CRD.Kind }}) SetObservation(obs map[string]interface{}) error {
+    id, ok := obs["id"]
+    if !ok {
+        return errors.New("attribute id not found in observed state")
+    }
+    idStr, ok := id.(string)
+    if !ok {
+        return errors.New("attribute id in observed state is not of type string")
+    }
+    tr.Status.AtProvider.ID = idStr
+
 	p, err := json.TFParser.Marshal(obs)
 	if err != nil {
 		return err
