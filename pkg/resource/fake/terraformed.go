@@ -28,6 +28,7 @@ import (
 type Observable struct {
 	Observation                 map[string]interface{}
 	AdditionalConnectionDetails map[string][]byte
+	ID                          string
 }
 
 // GetObservation is a mock.
@@ -39,6 +40,11 @@ func (o *Observable) GetObservation() (map[string]interface{}, error) {
 func (o *Observable) SetObservation(data map[string]interface{}) error {
 	o.Observation = data
 	return nil
+}
+
+// GetID is a mock.
+func (o *Observable) GetID() string {
+	return o.ID
 }
 
 // GetAdditionalConnectionDetails is a mock
