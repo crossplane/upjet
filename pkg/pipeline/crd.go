@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	twtypes "github.com/muvaf/typewriter/pkg/types"
 	"github.com/muvaf/typewriter/pkg/wrapper"
 	"github.com/pkg/errors"
@@ -66,6 +67,12 @@ func (cg *CRDGenerator) Generate(cfg *config.Resource) (string, error) {
 	for _, omit := range cfg.ExternalName.OmittedFields {
 		delete(cfg.TerraformResource.Schema, omit)
 	}
+
+	cfg.TerraformResource.Schema["id"] = &schema.Schema{
+		Type:     schema.TypeString,
+		Computed: true,
+	}
+
 	gen, err := tjtypes.NewBuilder(cg.pkg).Build(cfg)
 	if err != nil {
 		return "", errors.Wrapf(err, "cannot build types for %s", cfg.Kind)
