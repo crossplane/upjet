@@ -50,18 +50,19 @@ be quite similar for any other Terraform provider.
        variables are used to build the provider plugin binary.
 
     2. Update import path of the Terraform provider schema package in
-       `config/provider.go`. This is typically under the `<provider-name>`
+       `cmd/generator/main.go`. This is typically under the `<provider-name>`
        directory in the GitHub repository of the Terraform provider, e.g.
        in [`github` directory] for the GitHub provider.
 
        ```diff
        import (
-               tjconfig "github.com/crossplane-contrib/terrajet/pkg/config"
+               "os"
+               "path/filepath"
+
        -       tf "github.com/hashicorp/terraform-provider-hashicups/hashicups"
        +       tf "github.com/turkenh/terraform-provider-github/v4/github"
        )
-  
-       const resourcePrefix = "github"
+
        ```
 
        Run:
@@ -72,15 +73,21 @@ be quite similar for any other Terraform provider.
        Please note, we are temporarily using a [fork] of
        [terraform-provider-github] repo as a workaround to [this issue].
 
-    4. If your provider uses an old version (<v2) of [terraform-plugin-sdk],
-       convert resource map to v2 schema as follows (uncomment related section):
+    3. If your provider uses an old version (<v2) of [terraform-plugin-sdk],
+       convert resource map to v2 schema as follows (in `cmd/generator/main.go`,
+       uncomment related section):
 
        ```go
        import (
            "github.com/crossplane-contrib/terrajet/pkg/types/conversion"
        )
        
-       resourceMap := conversion.GetV2ResourceMap(tf.Provider())
+       func main() {
+           ...
+
+           resourceMap := conversion.GetV2ResourceMap(tf.Provider())
+           pipeline.Run(config.GetProvider(resourceMap), absRootDir)
+       }
        ```
 
        And in `go.mod` file, set the following `replace directive`
