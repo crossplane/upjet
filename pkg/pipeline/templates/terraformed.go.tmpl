@@ -45,6 +45,14 @@ func (tr *{{ .CRD.Kind }}) SetObservation(obs map[string]interface{}) error {
 	return json.TFParser.Unmarshal(p, &tr.Status.AtProvider)
 }
 
+// GetObservation of this {{ .CRD.Kind }}
+func (tr *{{ .CRD.Kind }}) GetID() string {
+    if tr.Status.AtProvider.ID == nil {
+        return ""
+    }
+    return *tr.Status.AtProvider.ID
+}
+
 // GetParameters of this {{ .CRD.Kind }}
 func (tr *{{ .CRD.Kind }}) GetParameters() (map[string]interface{}, error) {
 	p, err := json.TFParser.Marshal(tr.Spec.ForProvider)
