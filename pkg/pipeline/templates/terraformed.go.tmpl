@@ -45,7 +45,7 @@ func (tr *{{ .CRD.Kind }}) SetObservation(obs map[string]interface{}) error {
 	return json.TFParser.Unmarshal(p, &tr.Status.AtProvider)
 }
 
-// GetObservation of this {{ .CRD.Kind }}
+// GetID returns ID of underlying Terraform resource of this {{ .CRD.Kind }}
 func (tr *{{ .CRD.Kind }}) GetID() string {
     if tr.Status.AtProvider.ID == nil {
         return ""
