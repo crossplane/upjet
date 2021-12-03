@@ -20,17 +20,11 @@ be quite similar for any other Terraform provider.
         export ProviderNameUpper=GitHub
         ```
 
-    2. Replace all occurrences of `template` with your provider name:
+    2. Run the `./hack/prepare.sh` script from repo root to prepare the repo, e.g., to 
+       replace all occurrences of `template` with your provider name:
 
         ```bash
-        git grep -l 'template' -- './*' ':!build/**' ':!go.sum' | xargs sed -i.bak "s/template/${ProviderNameLower}/g"
-        git grep -l 'Template' -- './*' ':!build/**' ':!go.sum' | xargs sed -i.bak "s/Template/${ProviderNameUpper}/g"
-        # Clean up the .bak files created by sed
-        git clean -fd
-   
-        git mv "internal/clients/template.go" "internal/clients/${ProviderNameLower}.go"
-        git mv "cluster/images/provider-jet-template" "cluster/images/provider-jet-${ProviderNameLower}"
-        git mv "cluster/images/provider-jet-template-controller" "cluster/images/provider-jet-${ProviderNameLower}-controller"
+       ./hack/prepare.sh
         ```
 
 4. Configure your repo for the Terraform provider binary and schema:
