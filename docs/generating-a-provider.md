@@ -43,18 +43,21 @@ be quite similar for any other Terraform provider.
        button. Check [this line in controller Dockerfile] to see how these
        variables are used to build the provider plugin binary.
 
-    2. Update import path of the Terraform provider schema package in
-       `cmd/generator/main.go`. This is typically under the `<provider-name>`
+    2. Update import path of the Terraform provider schema package in the following
+       **two files**: `cmd/generator/main.go` and `cmd/provider/main.go`
+       
+       Provider schema package is typically under the `<provider-name>`
        directory in the GitHub repository of the Terraform provider, e.g.
        in [`github` directory] for the GitHub provider.
 
        ```diff
        import (
-               "os"
-               "path/filepath"
+               ...
 
        -       tf "github.com/hashicorp/terraform-provider-hashicups/hashicups"
        +       tf "github.com/turkenh/terraform-provider-github/v4/github"
+
+               ...
        )
 
        ```
