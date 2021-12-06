@@ -38,6 +38,7 @@ import (
 var (
 	testData = []byte(`
 {
+  "top_level_optional": null,
   "top_level_secret": "sensitive-data-top-level-secret",
   "top_config_secretmap": {
 	"inner_config_secretmap.first": "sensitive-data-inner-first",
@@ -70,6 +71,9 @@ var (
           "bottom_level_secret": "sensitive-data-bottom-level-3b"
         }
       ]
+    },
+    {
+        "inner_optional": null
     }
   ]
 }
@@ -227,6 +231,15 @@ func TestGetSensitiveAttributes(t *testing.T) {
 				},
 			},
 		},
+		"Optional": {
+			args: args{
+				paths: map[string]string{"top_level_optional": ""},
+				data:  testInput,
+			},
+			want: want{
+				out: nil,
+			},
+		},
 		"SingleNonExisting": {
 			args: args{
 				paths: map[string]string{"missing_field": ""},
@@ -239,9 +252,7 @@ func TestGetSensitiveAttributes(t *testing.T) {
 				data:  testInput,
 			},
 			want: want{
-				err: errors.Wrapf(
-					errors.Errorf("%s: not a string", "top_object_with_number.key1"),
-					errFmtCannotGetStringForFieldPath, "top_object_with_number.key1"),
+				err: errors.Errorf(errFmtCannotGetStringForFieldPath, "top_object_with_number.key1"),
 			},
 		},
 		"WildcardMultipleFromMap": {
@@ -317,9 +328,7 @@ func TestGetSensitiveAttributes(t *testing.T) {
 				data:  testInput,
 			},
 			want: want{
-				err: errors.Wrapf(
-					errors.Errorf("%s: not a string", "top_config_secretmap"),
-					errFmtCannotGetStringForFieldPath, "top_config_secretmap"),
+				err: errors.Errorf(errFmtCannotGetStringForFieldPath, "top_config_secretmap"),
 			},
 		},
 		"UnexpectedWildcard": {
@@ -417,13 +426,13 @@ func TestGetSensitiveParameters(t *testing.T) {
 						},
 						Key: "pass",
 					})).Return([]byte("foo"), nil)
-					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
-						SecretReference: xpv1.SecretReference{
-							Name:      "admin-key",
-							Namespace: "crossplane-system",
-						},
-						Key: "key",
-					})).Return([]byte("bar"), nil)
+					/*					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
+										SecretReference: xpv1.SecretReference{
+											Name:      "admin-key",
+											Namespace: "crossplane-system",
+										},
+										Key: "key",
+									})).Return([]byte("bar"), nil)*/
 				},
 				from: &unstructured.Unstructured{
 					Object: map[string]interface{}{
@@ -434,11 +443,11 @@ func TestGetSensitiveParameters(t *testing.T) {
 									"namespace": "crossplane-system",
 									"key":       "pass",
 								},
-								"adminKeySecretRef": map[string]interface{}{
+								/*"adminKeySecretRef": map[string]interface{}{
 									"name":      "admin-key",
 									"namespace": "crossplane-system",
 									"key":       "key",
-								},
+								},*/
 							},
 						},
 					},
@@ -455,7 +464,6 @@ func TestGetSensitiveParameters(t *testing.T) {
 				out: map[string]interface{}{
 					"some_other_key": "some_other_value",
 					"admin_password": "foo",
-					"admin_key":      "bar",
 				},
 			},
 		},
@@ -469,13 +477,6 @@ func TestGetSensitiveParameters(t *testing.T) {
 						},
 						Key: "pass",
 					})).Return([]byte("foo"), nil)
-					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
-						SecretReference: xpv1.SecretReference{
-							Name:      "system-password",
-							Namespace: "crossplane-system",
-						},
-						Key: "pass",
-					})).Return([]byte("bar"), nil)
 					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
 						SecretReference: xpv1.SecretReference{
 							Name:      "maintenance-password",
@@ -500,11 +501,14 @@ func TestGetSensitiveParameters(t *testing.T) {
 									},
 									map[string]interface{}{
 										"name": "system",
-										"passwordSecretRef": map[string]interface{}{
+										// Intentionally skip providing this optional parameter
+										// to test the behaviour when an optional parameter
+										// not provided.
+										/*"passwordSecretRef": map[string]interface{}{
 											"name":      "system-password",
 											"namespace": "crossplane-system",
 											"key":       "pass",
-										},
+										},*/
 										"displayName": "System",
 									},
 									map[string]interface{}{
@@ -553,7 +557,6 @@ func TestGetSensitiveParameters(t *testing.T) {
 						},
 						map[string]interface{}{
 							"name":         "system",
-							"password":     "bar",
 							"display_name": "System",
 						},
 						map[string]interface{}{
