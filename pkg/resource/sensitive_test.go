@@ -426,13 +426,6 @@ func TestGetSensitiveParameters(t *testing.T) {
 						},
 						Key: "pass",
 					})).Return([]byte("foo"), nil)
-					/*					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
-										SecretReference: xpv1.SecretReference{
-											Name:      "admin-key",
-											Namespace: "crossplane-system",
-										},
-										Key: "key",
-									})).Return([]byte("bar"), nil)*/
 				},
 				from: &unstructured.Unstructured{
 					Object: map[string]interface{}{
@@ -443,11 +436,6 @@ func TestGetSensitiveParameters(t *testing.T) {
 									"namespace": "crossplane-system",
 									"key":       "pass",
 								},
-								/*"adminKeySecretRef": map[string]interface{}{
-									"name":      "admin-key",
-									"namespace": "crossplane-system",
-									"key":       "key",
-								},*/
 							},
 						},
 					},
