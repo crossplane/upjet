@@ -34,6 +34,7 @@ import (
 
 const (
 	errCannotExpandWildcards          = "cannot expand wildcards"
+	errFmtCannotGetValueForFieldPath  = "cannot not get a value for fieldpath %q"
 	errFmtCannotGetStringForFieldPath = "cannot not get a string for fieldpath %q"
 )
 
@@ -114,9 +115,18 @@ func GetSensitiveAttributes(from map[string]interface{}, mapping map[string]stri
 		}
 
 		for _, fp := range fieldPaths {
-			v, err := paved.GetString(fp)
+			v, err := paved.GetValue(fp)
 			if err != nil {
-				return nil, errors.Wrapf(err, errFmtCannotGetStringForFieldPath, fp)
+				return nil, errors.Wrapf(err, errFmtCannotGetValueForFieldPath, fp)
+			}
+			// Gracefully skip if v is nil which implies that this field is
+			// optional and not provided.
+			if v == nil {
+				continue
+			}
+			s, ok := v.(string)
+			if !ok {
+				return nil, errors.Errorf(errFmtCannotGetStringForFieldPath, fp)
 			}
 			// Note(turkenh): k8s secrets uses a strict regex to validate secret
 			// keys which does not allow having brackets inside. So, we need to
@@ -130,7 +140,7 @@ func GetSensitiveAttributes(from map[string]interface{}, mapping map[string]stri
 			if vals == nil {
 				vals = map[string][]byte{}
 			}
-			vals[fmt.Sprintf("%s%s", prefixAttribute, k)] = []byte(v)
+			vals[fmt.Sprintf("%s%s", prefixAttribute, k)] = []byte(s)
 		}
 	}
 	return vals, nil
@@ -160,6 +170,17 @@ func GetSensitiveParameters(ctx context.Context, client SecretClient, from runti
 			return errors.Wrapf(err, "cannot expand wildcard for xp resource")
 		}
 		for _, expandedJSONPath := range jsonPathSet {
+			v, err := pavedJSON.GetValue(expandedJSONPath)
+			if err != nil {
+				return errors.Wrapf(err, errFmtCannotGetValueForFieldPath, expandedJSONPath)
+			}
+			// ExpandWildcards call above already skips "nested" optional fields
+			// as they won't be available in the data but added this as an
+			// additional check here. Please note, here all path starts with
+			// spec.forProvider., so, all is "nested" different from GetAttributes
+			if v == nil {
+				continue
+			}
 			sel := &v1.SecretKeySelector{}
 			if err = pavedJSON.GetValueInto(expandedJSONPath, sel); err != nil {
 				return errors.Wrapf(err, "cannot get SecretKeySelector from xp resource for fieldpath %q", expandedJSONPath)
