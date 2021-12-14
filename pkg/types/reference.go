@@ -27,7 +27,7 @@ var typeSelectorField types.Type
 var typeSecretKeySelector types.Type
 var commentOptional *comments.Comment
 
-func (g *Builder) generateReferenceFields(t *types.TypeName, f *types.Var, r config.Reference) (fields []*types.Var, tags []string) {
+func (g *Builder) generateReferenceFields(t *types.TypeName, f *types.Var, r config.Reference) (fields []*types.Var, tags []string, names []name.Name) {
 	_, isSlice := f.Type().(*types.Slice)
 
 	rfn := r.RefFieldName
@@ -59,7 +59,7 @@ func (g *Builder) generateReferenceFields(t *types.TypeName, f *types.Var, r con
 	g.comments.AddFieldComment(t, rfn, commentOptional.Build())
 	g.comments.AddFieldComment(t, sfn, commentOptional.Build())
 
-	return []*types.Var{ref, sel}, []string{refTag, selTag}
+	return []*types.Var{ref, sel}, []string{refTag, selTag}, []name.Name{rn, sn}
 }
 
 func init() {

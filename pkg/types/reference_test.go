@@ -124,7 +124,7 @@ func TestBuilder_generateReferenceFields(t *testing.T) {
 			g := &Builder{
 				comments: twtypes.Comments{},
 			}
-			gotFields, gotTags := g.generateReferenceFields(tc.args.t, tc.args.f, tc.args.r)
+			gotFields, gotTags, _ := g.generateReferenceFields(tc.args.t, tc.args.f, tc.args.r)
 			if diff := cmp.Diff(tc.want.outFields, gotFields, cmp.Comparer(func(a, b *types.Var) bool {
 				return a.String() == b.String()
 			})); diff != "" {

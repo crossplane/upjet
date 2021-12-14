@@ -42,6 +42,7 @@ type CRDGenerator struct {
 	Group              string
 	ProviderShortName  string
 	LicenseHeaderPath  string
+	Generated          *tjtypes.Generated
 
 	pkg *types.Package
 }
@@ -65,6 +66,8 @@ func (cg *CRDGenerator) Generate(cfg *config.Resource) (string, error) {
 	if err != nil {
 		return "", errors.Wrapf(err, "cannot build types for %s", cfg.Kind)
 	}
+	cg.Generated = &gen
+
 	// TODO(muvaf): TypePrinter uses the given scope to see if the type exists
 	// before printing. We should ideally load the package in file system but
 	// loading the local package will result in error if there is

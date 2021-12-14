@@ -1,3 +1,19 @@
+/*
+Copyright 2021 The Crossplane Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package config
 
 import (
@@ -96,6 +112,10 @@ type Provider struct {
 	// resource name.
 	Resources map[string]*Resource
 
+	// ProviderMetadataPath is the scraped provider metadata file path
+	// from Terraform registry
+	ProviderMetadataPath string
+
 	// resourceConfigurators is a map holding resource configurators where key
 	// is Terraform resource name.
 	resourceConfigurators map[string]ResourceConfiguratorChain
@@ -143,6 +163,14 @@ func WithBasePackages(b BasePackages) ProviderOption {
 func WithDefaultResourceFn(f DefaultResourceFn) ProviderOption {
 	return func(p *Provider) {
 		p.DefaultResourceFn = f
+	}
+}
+
+// WithProviderMetadata configures the Terraform metadata file scraped
+// from the Terraform registry
+func WithProviderMetadata(metadataPath string) ProviderOption {
+	return func(p *Provider) {
+		p.ProviderMetadataPath = metadataPath
 	}
 }
 

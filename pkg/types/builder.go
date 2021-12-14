@@ -26,6 +26,15 @@ const (
 	emptyStruct = "struct{}"
 )
 
+// Transformation represents a transformation applied to a
+// Terraform resource attribute. It's used to record any
+// transformations applied by the CRD generation pipeline.
+type Transformation struct {
+	TransformedName string
+	IsRef           bool
+	IsSensitive     bool
+}
+
 // Generated is a struct that holds generated types
 type Generated struct {
 	Types    []*types.Named
@@ -33,6 +42,8 @@ type Generated struct {
 
 	ForProviderType *types.Named
 	AtProviderType  *types.Named
+
+	FieldTransformations map[string]Transformation
 }
 
 // Builder is used to generate Go type equivalence of given Terraform schema.
@@ -53,16 +64,18 @@ func NewBuilder(pkg *types.Package) *Builder {
 
 // Build returns parameters and observation types built out of Terraform schema.
 func (g *Builder) Build(cfg *config.Resource) (Generated, error) {
-	fp, ap, err := g.buildResource(cfg.TerraformResource, cfg, nil, nil, false, cfg.Kind)
+	fieldTransformations := make(map[string]Transformation)
+	fp, ap, err := g.buildResource(cfg.TerraformResource, cfg, nil, nil, false, fieldTransformations, cfg.Kind)
 	return Generated{
-		Types:           g.genTypes,
-		Comments:        g.comments,
-		ForProviderType: fp,
-		AtProviderType:  ap,
+		Types:                g.genTypes,
+		Comments:             g.comments,
+		ForProviderType:      fp,
+		AtProviderType:       ap,
+		FieldTransformations: fieldTransformations,
 	}, errors.Wrapf(err, "cannot build the Types")
 }
 
-func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPath []string, xpPath []string, asBlocksMode bool, names ...string) (*types.Named, *types.Named, error) { //nolint:gocyclo
+func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPath []string, xpPath []string, asBlocksMode bool, t map[string]Transformation, names ...string) (*types.Named, *types.Named, error) { //nolint:gocyclo
 	// NOTE(muvaf): There can be fields in the same CRD with same name but in
 	// different types. Since we generate the type using the field name, there
 	// can be collisions. In order to be able to generate unique names consistently,
@@ -130,7 +143,7 @@ func (g *Builder) AddToBuilder(typeNames *TypeNames, r *resource) (*types.Named,
 	return paramType, obsType
 }
 
-func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, r *resource) (types.Type, error) { // nolint:gocyclo
+func (g *Builder) buildSchema(f *Field, cfg *config.Resource, t map[string]Transformation, names []string, r *resource) (types.Type, error) { // nolint:gocyclo
 	switch f.Schema.Type {
 	case schema.TypeBool:
 		return types.NewPointer(types.Universe.Lookup("bool").Type()), nil
