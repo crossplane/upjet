@@ -97,7 +97,7 @@ func DefaultResource(name string, terraformSchema *schema.Resource, opts ...Reso
 		Name:              name,
 		TerraformResource: terraformSchema,
 		ShortGroup:        group,
-		Kind:              typeName.CapitalizeAcronyms(kind),
+		Kind:              typeName.NewNameFromCamel(kind).Camel,
 		Version:           "v1alpha1",
 		ExternalName:      NameAsIdentifier,
 		References:        map[string]Reference{},
