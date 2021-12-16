@@ -11,6 +11,7 @@ import (
 
 	"github.com/crossplane-contrib/terrajet/pkg/config"
 	"github.com/crossplane-contrib/terrajet/pkg/types/comments"
+	"github.com/crossplane-contrib/terrajet/pkg/types/name"
 )
 
 const (
@@ -42,8 +43,8 @@ func (g *Builder) generateReferenceFields(t *types.TypeName, f *types.Var, r con
 		sfn = f.Name() + "Selector"
 	}
 
-	rn := NewNameFromCamel(rfn)
-	sn := NewNameFromCamel(sfn)
+	rn := name.NewNameFromCamel(rfn)
+	sn := name.NewNameFromCamel(sfn)
 	refTag := fmt.Sprintf(`json:"%s,omitempty" tf:"-"`, rn.LowerCamelComputed)
 	selTag := fmt.Sprintf(`json:"%s,omitempty" tf:"-"`, sn.LowerCamelComputed)
 

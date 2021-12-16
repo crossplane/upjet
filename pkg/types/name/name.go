@@ -14,9 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package types
+package name
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/fatih/camelcase"
@@ -44,6 +45,23 @@ func NewNameFromSnake(s string) Name {
 		LowerCamel:         strings.Join(append([]string{strings.ToLower(camels[0])}, camels[1:]...), ""),
 		LowerCamelComputed: strings.Join(append([]string{strings.ToLower(computedCamels[0])}, computedCamels[1:]...), ""),
 	}
+}
+
+// CapitalizeAcronyms capitalizes prefix and suffix acronyms found in s
+func CapitalizeAcronyms(s string) string {
+	if s == "" {
+		return s
+	}
+	sl := strings.ToLower(s)
+	for lower, camel := range lowerToCamelAcronyms {
+		switch {
+		case strings.HasPrefix(sl, lower):
+			s = fmt.Sprintf("%s%s", camel, strings.Title(s[len(lower):]))
+		case strings.HasSuffix(sl, lower):
+			s = fmt.Sprintf("%s%s", s[0:len(s)-len(lower)], camel)
+		}
+	}
+	return s
 }
 
 // NewNameFromCamel produces a Name, using given camel case string as source of

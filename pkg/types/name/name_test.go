@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package types
+package name
 
 import (
 	"testing"
@@ -153,6 +153,45 @@ func TestNewNameFromCamel(t *testing.T) {
 
 			if diff := cmp.Diff(tc.want, got); diff != "" {
 				t.Errorf("\nNewNameFromSnake(...): -want, +got:\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestCapitalizeAcronyms(t *testing.T) {
+	tests := map[string]struct {
+		arg  string
+		want string
+	}{
+		"NameWithPrefixAcronym": {
+			arg:  "Sqlserver",
+			want: "SQLServer",
+		},
+		"NameWithSuffixAcronym": {
+			arg:  "Serverid",
+			want: "ServerID",
+		},
+		"NameWithMultipleAcronyms": {
+			arg:  "Sqlserverid",
+			want: "SQLServerID",
+		},
+		"NameWithInterimAcronym": {
+			arg:  "Mysqlserver",
+			want: "Mysqlserver",
+		},
+		"NameOnlyAcronyms": {
+			arg:  "Sqlid",
+			want: "SQLID",
+		},
+		"EmptyName": {
+			arg:  "",
+			want: "",
+		},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			if got := CapitalizeAcronyms(tt.arg); got != tt.want {
+				t.Errorf("CapitalizeAcronyms(tt.arg) = %v, want %v", got, tt.want)
 			}
 		})
 	}
