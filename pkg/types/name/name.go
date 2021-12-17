@@ -23,9 +23,9 @@ import (
 	"github.com/iancoleman/strcase"
 )
 
-// NewNameFromSnake produces a Name, using given snake case string as source of
+// NewFromSnake produces a Name, using given snake case string as source of
 // truth.
-func NewNameFromSnake(s string) Name {
+func NewFromSnake(s string) Name {
 	originals := strings.Split(s, "_")
 	camels := make([]string, len(originals))
 	computedCamels := make([]string, len(originals))
@@ -46,15 +46,15 @@ func NewNameFromSnake(s string) Name {
 	}
 }
 
-// NewNameFromCamel produces a Name, using given camel case string as source of
+// NewFromCamel produces a Name, using given camel case string as source of
 // truth.
-func NewNameFromCamel(s string) Name {
+func NewFromCamel(s string) Name {
 	originals := camelcase.Split(s)
 	snakes := make([]string, len(originals))
 	for i, org := range originals {
 		snakes[i] = strings.ToLower(org)
 	}
-	return NewNameFromSnake(strings.Join(snakes, "_"))
+	return NewFromSnake(strings.Join(snakes, "_"))
 }
 
 // Name holds different variants of a name.
