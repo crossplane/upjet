@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package types
+package name
 
 import (
 	"testing"
@@ -81,7 +81,7 @@ func TestNewNameFromSnake(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			got := NewNameFromSnake(tc.in)
+			got := NewFromSnake(tc.in)
 
 			if diff := cmp.Diff(tc.want, got); diff != "" {
 				t.Errorf("\nNewNameFromSnake(...): -want, +got:\n%s", diff)
@@ -149,7 +149,7 @@ func TestNewNameFromCamel(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			got := NewNameFromCamel(tc.in)
+			got := NewFromCamel(tc.in)
 
 			if diff := cmp.Diff(tc.want, got); diff != "" {
 				t.Errorf("\nNewNameFromSnake(...): -want, +got:\n%s", diff)

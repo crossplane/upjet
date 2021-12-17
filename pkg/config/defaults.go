@@ -21,6 +21,8 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/iancoleman/strcase"
+
+	typeName "github.com/crossplane-contrib/terrajet/pkg/types/name"
 )
 
 // Commonly used resource configurations.
@@ -95,7 +97,7 @@ func DefaultResource(name string, terraformSchema *schema.Resource, opts ...Reso
 		Name:              name,
 		TerraformResource: terraformSchema,
 		ShortGroup:        group,
-		Kind:              kind,
+		Kind:              typeName.NewFromCamel(kind).Camel,
 		Version:           "v1alpha1",
 		ExternalName:      NameAsIdentifier,
 		References:        map[string]Reference{},

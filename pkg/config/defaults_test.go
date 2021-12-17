@@ -66,6 +66,51 @@ func TestDefaultResource(t *testing.T) {
 				Sensitive:    NopSensitive,
 			},
 		},
+		"NameWithPrefixAcronym": {
+			reason: "It should return prefix acronym in capital case",
+			args: args{
+				name: "aws_db_sql_server",
+			},
+			want: &Resource{
+				Name:         "aws_db_sql_server",
+				ShortGroup:   "db",
+				Kind:         "SQLServer",
+				Version:      "v1alpha1",
+				ExternalName: NameAsIdentifier,
+				References:   map[string]Reference{},
+				Sensitive:    NopSensitive,
+			},
+		},
+		"NameWithSuffixAcronym": {
+			reason: "It should return suffix acronym in capital case",
+			args: args{
+				name: "aws_db_server_id",
+			},
+			want: &Resource{
+				Name:         "aws_db_server_id",
+				ShortGroup:   "db",
+				Kind:         "ServerID",
+				Version:      "v1alpha1",
+				ExternalName: NameAsIdentifier,
+				References:   map[string]Reference{},
+				Sensitive:    NopSensitive,
+			},
+		},
+		"NameWithMultipleAcronyms": {
+			reason: "It should return both prefix & suffix acronyms in capital case",
+			args: args{
+				name: "aws_db_sql_server_id",
+			},
+			want: &Resource{
+				Name:         "aws_db_sql_server_id",
+				ShortGroup:   "db",
+				Kind:         "SQLServerID",
+				Version:      "v1alpha1",
+				ExternalName: NameAsIdentifier,
+				References:   map[string]Reference{},
+				Sensitive:    NopSensitive,
+			},
+		},
 	}
 
 	// TODO(muvaf): Find a way to compare function pointers.

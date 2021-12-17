@@ -30,6 +30,7 @@ import (
 
 	"github.com/crossplane-contrib/terrajet/pkg/config"
 	"github.com/crossplane-contrib/terrajet/pkg/types/comments"
+	"github.com/crossplane-contrib/terrajet/pkg/types/name"
 )
 
 const (
@@ -102,7 +103,7 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 	var obsTags []string         //nolint:prealloc
 	for _, snakeFieldName := range keys {
 		sch := res.Schema[snakeFieldName]
-		fieldName := NewNameFromSnake(snakeFieldName)
+		fieldName := name.NewFromSnake(snakeFieldName)
 		comment, err := comments.New(sch.Description)
 		if err != nil {
 			return nil, nil, errors.Wrapf(err, "cannot build comment for description: %s", sch.Description)
@@ -159,7 +160,7 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 
 			tfTag = "-"
 			fieldType = typeSecretKeySelector
-			jsonTag = NewNameFromCamel(fieldNameCamel).LowerCamelComputed
+			jsonTag = name.NewFromCamel(fieldNameCamel).LowerCamelComputed
 			if sch.Optional {
 				fieldType = types.NewPointer(typeSecretKeySelector)
 				jsonTag += ",omitempty"
