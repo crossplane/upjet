@@ -19,7 +19,6 @@ package terraform
 import (
 	"context"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sync"
 
@@ -28,6 +27,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/afero"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/exec"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/crossplane-contrib/terrajet/pkg/config"
@@ -69,10 +69,11 @@ func WithFs(fs afero.Fs) WorkspaceStoreOption {
 // NewWorkspaceStore returns a new WorkspaceStore.
 func NewWorkspaceStore(l logging.Logger, opts ...WorkspaceStoreOption) *WorkspaceStore {
 	ws := &WorkspaceStore{
-		store:  map[types.UID]*Workspace{},
-		logger: l,
-		mu:     sync.Mutex{},
-		fs:     afero.Afero{Fs: afero.NewOsFs()},
+		store:    map[types.UID]*Workspace{},
+		logger:   l,
+		mu:       sync.Mutex{},
+		fs:       afero.Afero{Fs: afero.NewOsFs()},
+		executor: exec.New(),
 	}
 	for _, f := range opts {
 		f(ws)
@@ -90,7 +91,9 @@ type WorkspaceStore struct {
 	logger logging.Logger
 
 	mu sync.Mutex
-	fs afero.Afero
+
+	fs       afero.Afero
+	executor exec.Interface
 }
 
 // Workspace makes sure the Terraform workspace for the given resource is ready
@@ -121,7 +124,7 @@ func (ws *WorkspaceStore) Workspace(ctx context.Context, c resource.SecretClient
 	ws.mu.Lock()
 	w, ok := ws.store[tr.GetUID()]
 	if !ok {
-		ws.store[tr.GetUID()] = NewWorkspace(dir, WithLogger(l))
+		ws.store[tr.GetUID()] = NewWorkspace(dir, WithLogger(l), WithExecutor(ws.executor))
 		w = ws.store[tr.GetUID()]
 	}
 	ws.mu.Unlock()
@@ -134,8 +137,8 @@ func (ws *WorkspaceStore) Workspace(ctx context.Context, c resource.SecretClient
 	if !os.IsNotExist(err) {
 		return w, nil
 	}
-	cmd := exec.CommandContext(ctx, "terraform", "init", "-input=false")
-	cmd.Dir = w.dir
+	cmd := w.executor.CommandContext(ctx, "terraform", "init", "-input=false")
+	cmd.SetDir(w.dir)
 	out, err := cmd.CombinedOutput()
 	l.Debug("init ended", "out", string(out))
 	return w, errors.Wrapf(err, "cannot init workspace: %s", string(out))
