@@ -129,6 +129,8 @@ func init() {
 	AddAcronym("ebs", "EBS")
 	AddAcronym("ec2", "EC2")
 	AddAcronym("efs", "EFS")
+	AddAcronym("eip", "EIP")
+	AddAcronym("elb", "ELB")
 	AddAcronym("eof", "EOF")
 	AddAcronym("fhir", "FHIR")
 	AddAcronym("fsx", "FSX")
