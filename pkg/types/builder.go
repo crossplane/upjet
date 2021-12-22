@@ -92,6 +92,11 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 	}
 	obsName := types.NewTypeName(token.NoPos, g.Package, obsTypeName, nil)
 
+	// We insert them to the package scope so that the type name calculations in
+	// recursive calls are checked against their upper level type's name as well.
+	g.Package.Scope().Insert(paramName)
+	g.Package.Scope().Insert(obsName)
+
 	// Note(turkenh): We don't know how many number of fields would be a
 	// parameter or an observation in advance, hence opted for not to
 	// preallocate (//nolint:prealloc). But we know a rough upper bound,
@@ -205,18 +210,16 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 	}
 
 	// NOTE(muvaf): Not every struct has both computed and configurable fields,
-	// so some of the types we generate here are empty and unnecessary. However,
+	// so some types we generate here are empty and unnecessary. However,
 	// there are valid types with zero fields and we don't have the information
 	// to differentiate between valid zero fields and unnecessary one. So we generate
 	// two structs for every complex type.
 	// See usage of wafv2EmptySchema() in aws_wafv2_web_acl here:
 	// https://github.com/hashicorp/terraform-provider-aws/blob/main/aws/wafv2_helper.go#L13
 	paramType := types.NewNamed(paramName, types.NewStruct(paramFields, paramTags), nil)
-	g.Package.Scope().Insert(paramType.Obj())
 	g.genTypes = append(g.genTypes, paramType)
 
 	obsType := types.NewNamed(obsName, types.NewStruct(obsFields, obsTags), nil)
-	g.Package.Scope().Insert(obsType.Obj())
 	g.genTypes = append(g.genTypes, obsType)
 
 	return paramType, obsType, nil
