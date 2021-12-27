@@ -26,11 +26,14 @@ import (
 
 // Condition constants.
 const (
-	TypeAsyncOperation = "AsyncOperation"
+	TypeAsyncOperation         = "AsyncOperation"
+	TypeAsyncOperationFinished = "AsyncOperationFinished"
 
 	ReasonApplyFailure   xpv1.ConditionReason = "ApplyFailure"
 	ReasonDestroyFailure xpv1.ConditionReason = "DestroyFailure"
 	ReasonSuccess        xpv1.ConditionReason = "Success"
+	ReasonOngoing        xpv1.ConditionReason = "Ongoing"
+	ReasonFinished       xpv1.ConditionReason = "Finished"
 )
 
 // AsyncOperationCondition returns the condition depending on the content
@@ -68,5 +71,25 @@ func AsyncOperationCondition(err error) xpv1.Condition {
 			Reason:             "Unknown",
 			Message:            err.Error(),
 		}
+	}
+}
+
+// AsyncOperationFinishedCondition returns the condition TypeAsyncOperationFinished Finished
+func AsyncOperationFinishedCondition() xpv1.Condition {
+	return xpv1.Condition{
+		Type:               TypeAsyncOperationFinished,
+		Status:             corev1.ConditionTrue,
+		LastTransitionTime: metav1.Now(),
+		Reason:             ReasonFinished,
+	}
+}
+
+// AsyncOperationOngoingCondition returns the condition TypeAsyncOperationFinished still running
+func AsyncOperationOngoingCondition() xpv1.Condition {
+	return xpv1.Condition{
+		Type:               TypeAsyncOperationFinished,
+		Status:             corev1.ConditionFalse,
+		LastTransitionTime: metav1.Now(),
+		Reason:             ReasonOngoing,
 	}
 }
