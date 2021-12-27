@@ -20,9 +20,8 @@ import (
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/iancoleman/strcase"
 
-	typeName "github.com/crossplane-contrib/terrajet/pkg/types/name"
+	tjname "github.com/crossplane-contrib/terrajet/pkg/types/name"
 )
 
 // Commonly used resource configurations.
@@ -87,17 +86,17 @@ func DefaultResource(name string, terraformSchema *schema.Resource, opts ...Reso
 	// - aws_rds_cluster => Cluster
 	// - aws_rds_cluster_parameter_group => ClusterParameterGroup
 	// - kafka_topic => Topic
-	kind := strcase.ToCamel(strings.Join(words[2:], "_"))
+	kind := tjname.NewFromSnake(strings.Join(words[2:], "_")).Camel
 	if len(words) < 3 {
 		group = words[0]
-		kind = strcase.ToCamel(words[1])
+		kind = tjname.NewFromSnake(words[1]).Camel
 	}
 
 	r := &Resource{
 		Name:              name,
 		TerraformResource: terraformSchema,
 		ShortGroup:        group,
-		Kind:              typeName.NewFromCamel(kind).Camel,
+		Kind:              kind,
 		Version:           "v1alpha1",
 		ExternalName:      NameAsIdentifier,
 		References:        map[string]Reference{},
