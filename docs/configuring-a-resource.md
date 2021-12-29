@@ -22,126 +22,239 @@ cloud provider; sometimes it could simply be the name of resource
 (e.g. VPC id ). This is something specific to resource, and we need some input
 configuration for terrajet to appropriately generate a resource.
 
-Since Terraform already needs the same identifier to import a resource, most
+Since Terraform already needs a similar [identifier to import a resource], most
 helpful part of resource documentation is the [import section].
 
-This is [the struct that holds the External Name configuration]:
+Terrajet performs some back and forth conversions between Crossplane resource
+model and Terraform configuration. We need a custom, per resource configuration
+to adapt Crossplane `external name` and Terraform `id`.
+
+![external name configuration](images/terrajet-externalname.png)
+
+Here are [the types for the External Name configuration]:
 
 ```go
+// SetIdentifierArgumentsFn sets the name of the resource in Terraform attributes map,
+// i.e. Main HCL file.
+type SetIdentifierArgumentsFn func(base map[string]interface{}, externalName string)
+// GetExternalNameFn returns the external name extracted from the TF State.
+type GetExternalNameFn func(tfstate map[string]interface{}) (string, error)
+// GetIDFn returns the ID to be used in TF State file, i.e. "id" field in
+// terraform.tfstate.
+type GetIDFn func(ctx context.Context, externalName string, parameters map[string]interface{}, providerConfig map[string]interface{}) (string, error)
+
 // ExternalName contains all information that is necessary for naming operations,
 // such as removal of those fields from spec schema and calling Configure function
 // to fill attributes with information given in external name.
 type ExternalName struct {
-    // SetIdentifierArgumentFn sets the name of the resource in Terraform argument
-    // map.
-    SetIdentifierArgumentFn SetIdentifierArgumentFn
-    
-    // OmittedFields are the ones you'd like to be removed from the schema since
-    // they are specified via external name. You can omit only the top level fields.
-    // No field is omitted by default.
-    OmittedFields []string
-    
-    // DisableNameInitializer allows you to specify whether the name initializer
-    // that sets external name to metadata.name if none specified should be disabled.
-    // It needs to be disabled for resources whose external name includes information
-    // more than the actual name of the resource, like subscription ID or region
-    // etc. which is unlikely to be included in metadata.name
-    DisableNameInitializer bool
+  // SetIdentifierArgumentFn sets the name of the resource in Terraform argument
+  // map. In many cases, there is a field called "name" in the HCL schema, however,
+  // there are cases like RDS DB Cluster where the name field in HCL is called
+  // "cluster_identifier". This function is the place that you can take external
+  // name and assign it to that specific key for that resource type.
+  SetIdentifierArgumentFn SetIdentifierArgumentsFn
+  
+  // GetExternalNameFn returns the external name extracted from TF State. In most cases,
+  // "id" field contains all the information you need. You'll need to extract
+  // the format that is decided for external name annotation to use.
+  // For example the following is an Azure resource ID:
+  // /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/mygroup1
+  // The function should return "mygroup1" so that it can be used to set external
+  // name if it was not set already.
+  GetExternalNameFn GetExternalNameFn
+  
+  // GetIDFn returns the string that will be used as "id" key in TF state. In
+  // many cases, external name format is the same as "id" but when it is not
+  // we may need information from other places to construct it. For example,
+  // the following is an Azure resource ID:
+  // /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/mygroup1
+  // The function here should use information from supplied arguments to
+  // construct this ID, i.e. "mygroup1" from external name, subscription ID
+  // from providerConfig, and others from parameters map if needed.
+  GetIDFn GetIDFn
+  
+  // OmittedFields are the ones you'd like to be removed from the schema since
+  // they are specified via external name. For example, if you set
+  // "cluster_identifier" in SetIdentifierArgumentFn, then you need to omit
+  // that field.
+  // You can omit only the top level fields.
+  // No field is omitted by default.
+  OmittedFields []string
+  
+  // DisableNameInitializer allows you to specify whether the name initializer
+  // that sets external name to metadata.name if none specified should be disabled.
+  // It needs to be disabled for resources whose external identifier is randomly
+  // assigned by the provider, like AWS VPC where it gets vpc-21kn123 identifier
+  // and not let you name it.
+  DisableNameInitializer bool
 }
 ```
 
 Comments explain the purpose of each field but let's clarify further with some
-examples.
+example cases.
+
+#### Case 1: Name as External Name and Terraform ID
+
+This is the simplest and most straightforward case with the following
+conditions:
+
+- Terraform resource uses the `name` argument to identify the resources
+- Terraform resource can be imported with `name`, i.e. `id`=`name`
+
+[aws_iam_user] is a good example here. In this case, we can just use the
+[NameAsIdentifier] config of Terrajet as follows:
+
+```go
+import (
+	"github.com/crossplane-contrib/terrajet/pkg/config"
+	...
+)
+
+...
+    p.AddResourceConfigurator("aws_iam_user", func(r *config.Resource) {
+        r.ExternalName = config.NameAsIdentifier
+		...
+    }
+```
+
+There are some resources which fits into this case with an exception by
+expecting an argument other than `name` to name/identify a resource, for
+example, [bucket] for [aws_s3_bucket] and [cluster_identifier] for
+[aws_rds_cluster].
+
+Let's check [aws_s3_bucket] further. Reading the [import section of s3 bucket] 
+we see that bucket is imported with its **name**, however, checking _arguments_
+section we see that this name is provided with the [bucket] argument. We also
+notice, there is also another argument as `bucket_prefix` which conflicts with
+`bucket` argument. We can just use the [NameAsIdentifier] config, however, we
+also need to configure the `bucket` argument with `SetIdentifierArgumentFn` and
+also omit `bucket` and `bucket_prefix` arguments from the spec with
+`OmittedFields`:
+
+```go
+import (
+	"github.com/crossplane-contrib/terrajet/pkg/config"
+	...
+)
+
+...
+    p.AddResourceConfigurator("aws_s3_bucket", func(r *config.Resource) {
+        r.ExternalName = config.NameAsIdentifier
+        r.ExternalName.SetIdentifierArgumentFn = func(base map[string]interface{}, name string) {
+            base["bucket"] = name
+        },
+        r.ExternalName.OmittedFields: []string{
+            "bucket",
+            "bucket_prefix",
+        },
+		...
+    }
+```
+
+#### Case 2: Identifier from Provider
+
+In this case, the (cloud) provider generates an identifier for the resource
+independent of what we provided as arguments.
 
 Checking the [import section of aws_vpc], we see that this resource is being
 imported with `vpc id`. When we check the [arguments list] and provided
-[example usages], it is clear that this **id** is not something that user
-provides, rather generated by AWS API. Hence, we need to disable name
-initializer, which simply sets the external-name annotation to `metadata.name`
-of the resource.
+[example usages], it is clear that this **id** is **not** something that user
+provides, rather generated by AWS API.
+
+Here, we can just use [IdentifierFromProvider] configuration:
 
 ```go
-DisableNameInitializer: true
-```
+import (
+	"github.com/crossplane-contrib/terrajet/pkg/config"
+	...
+)
 
-Since we have no related fields in the [arguments list] that could be used to
-build the external-name, we don't need to omit any fields (`OmittedFields`) or
-need to use external name to set some arguments (`SetIdentifierArgumentFn`).
-Hence, we end up the following external name configuration for `aws_vpc`
-resource:
-
-```go
-func Configure(p *config.Provider) {
-        p.AddResourceConfigurator("aws_vpc", func (r *config.Resource) {
-        r.ExternalName = config.ExternalName{
-            // Set to true explicitly since the value is calculated by AWS.
-            DisableNameInitializer: true,
-        }
-    })
-}
-```
-
-And for this specific case, where Provider assigns identifier of the resource
-independent of resource specification, Terrajet has a default external name
-configuration that is [IdentifierFromProvider] which we can simply use here
-doing the same as above:
-
-```go
-func Configure(p *config.Provider) {
-    p.AddResourceConfigurator("aws_vpc", func (r *config.Resource) {
+...
+    p.AddResourceConfigurator("aws_vpc", func(r *config.Resource) {
         r.ExternalName = config.IdentifierFromProvider
-    })
-}
+		...
+    }
 ```
 
-Let's check another resource, [aws_s3_bucket] which requires some other
-configuration. Reading the [import section of s3 bucket] we see that bucket is
-imported with its **name** which is provided with the [bucket] argument.
-We can just use the CR name as the bucket name, and we don't have to disable
-name initializer as we did above.
+#### Case 3: Terraform ID as a Formatted String
 
-However, since we are using metadata name as `bucket` argument, we need the
-following two:
+For some resources, Terraform uses a formatted string as `id` which include
+resource identifier that Crossplane uses as external name but may also contain
+some other parameters. 
 
-- Fill `bucket` attribute using external-name annotation, so that Terraform
-  knows the value we want to provide:
+Most `azurerm` resources fall into this category. Checking the
+[import section of azurerm_sql_server], we see that can be imported with an `id`
+in the following format: 
 
-    ```go
-    SetIdentifierArgumentFn: func(base map[string]interface{}, name string) {
-    	base["bucket"] = name
-    },
-    ```
+```
+/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/myresourcegroup/providers/Microsoft.Sql/servers/myserver
+```
 
-- Omit `bucket` and `bucket_prefix` from the crd spec, so that we don't have
-  multiple inputs for the same thing (name of the bucket):
-    ```go
-    OmittedFields: []string{
-        "bucket",
-        "bucket_prefix",
-    },
-    ```
-
-Hence, we end up the following external name configuration for `aws_s3_bucket`
-resource:
+To properly set external name for such a resource, we need to configure how to
+extract external name from this string (`GetExternalNameFn`) and how to build
+this id back (`GetIDFn`).
 
 ```go
-func Configure(p *config.Provider) {
-    p.AddResourceConfigurator("aws_s3_bucket", func(r *config.Resource) {
-        r.ExternalName = config.ExternalName{
-            SetIdentifierArgumentFn: func(base map[string]interface{}, name string) {
-                base["bucket"] = name
-            },
-            OmittedFields: []string{
-                "bucket",
-                "bucket_prefix",
-            },
-        }
-    })
+import (
+	"github.com/crossplane-contrib/terrajet/pkg/config"
+	...
+)
+
+func getNameFromFullyQualifiedID(tfstate map[string]interface{}) (string, error) {
+	id, ok := tfstate["id"]
+	if !ok {
+		return "", errors.Errorf(ErrFmtNoAttribute, "id")
+	}
+	idStr, ok := id.(string)
+	if !ok {
+		return "", errors.Errorf(ErrFmtUnexpectedType, "id")
+	}
+	words := strings.Split(idStr, "/")
+	return words[len(words)-1], nil
 }
+
+func getFullyQualifiedIDfunc(ctx context.Context, externalName string, parameters map[string]interface{}, providerConfig map[string]interface{}) (string, error)
+	subID, ok := providerConfig["subscription_id"]
+    if !ok {
+        return "", errors.Errorf(ErrFmtNoAttribute, "subscription_id")
+    }
+    subIDStr, ok := subID.(string)
+    if !ok {
+        return "", errors.Errorf(ErrFmtUnexpectedType, "subscription_id")
+    }
+    rg, ok := parameters["resource_group_name"]
+    if !ok {
+        return "", errors.Errorf(ErrFmtNoAttribute, "resource_group_name")
+    }
+    rgStr, ok := rg.(string)
+    if !ok {
+        return "", errors.Errorf(ErrFmtUnexpectedType, "resource_group_name")
+    }
+    
+	name, ok := parameters["name"]
+    if !ok {
+        return "", errors.Errorf(ErrFmtNoAttribute, "name")
+    }
+    nameStr, ok := rg.(string)
+    if !ok {
+        return "", errors.Errorf(ErrFmtUnexpectedType, "name")
+    }
+
+    return fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Sql/servers/%s", subIDStr, rgStr, nameStr), nil
+}
+
+...
+    p.AddResourceConfigurator("azurerm_sql_server", func(r *config.Resource) {
+        r.ExternalName = config.NameAsIdentifier
+        r.ExternalName.GetExternalNameFn = getNameFromFullyQualifiedID
+        r.ExternalName.GetIDFn = getFullyQualifiedIDfunc
+		...
+    }
 ```
 
-Please note, you can always check resource configurations of existing Providers
-as further examples under `config/<group>/config.go`.
+With this, we have covered most common scenarios for configuring external name.
+You can always check resource configurations of existing jet Providers as
+further examples under `config/<group>/config.go`.
 
 ### Cross Resource Referencing
 
@@ -304,7 +417,7 @@ you will want/need to customize late-initialization behaviour. Thus,
 Terrajet provides an extensible [late-initialization customization API]
 that controls late-initialization behaviour.
 
-The associated resource struct is defined [here](https://github.com/crossplane/terrajet/blob/c9e21387298d8ed59fcd71c7f753ec401a3383a5/pkg/config/resource.go#L91) as follows:
+The associated resource struct is defined [here](https://github.com/crossplane-contrib/terrajet/blob/c9e21387298d8ed59fcd71c7f753ec401a3383a5/pkg/config/resource.go#L91) as follows:
 ```go
 // LateInitializer represents configurations that control
 // late-initialization behaviour
@@ -378,32 +491,39 @@ during late-initialization.
 
 [comment]: <> (References)
 
-[Terrajet]: https://github.com/crossplane/terrajet
+[Terrajet]: https://github.com/crossplane-contrib/terrajet
 [External name]: #external-name
 [Cross Resource Referencing]: #cross-resource-referencing
 [Additional Sensitive Fields and Custom Connection Details]: #additional-sensitive-fields-and-custom-connection-details
 [Late Initialization Behavior]: #late-initialization-behavior
 [the external name documentation]: https://crossplane.io/docs/v1.4/concepts/managed-resources.html#external-name
+[concept to identify a resource]: https://www.terraform.io/docs/glossary#id
 [import section]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_access_key#import
-[the struct that holds the External Name configuration]: https://github.com/crossplane/terrajet/blob/08e5e93f8a93c6628a4302fb520cd4be4b6cab07/pkg/config/resource.go#L50
+[the types for the External Name configuration]: https://github.com/crossplane/terrajet/blob/2299925ea2541e6a8088ede463cd865bd64eba32/pkg/config/resource.go#L67
+[aws_iam_user]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_user
+[NameAsIdentifier]: https://github.com/crossplane/terrajet/blob/2299925ea2541e6a8088ede463cd865bd64eba32/pkg/config/defaults.go#L31
+[aws_s3_bucket]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket
+[import section of s3 bucket]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket#import
+[bucket]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket#bucket
+[cluster_identifier]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/rds_cluster#cluster_identifier
+[aws_rds_cluster]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/rds_cluster.
 [aws_vpc]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc
 [import section of aws_vpc]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc#import
 [arguments list]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc#argument-reference
 [example usages]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc#example-usage
-[IdentifierFromProvider]: https://github.com/crossplane/terrajet/blob/08e5e93f8a93c6628a4302fb520cd4be4b6cab07/pkg/config/defaults.go#L43
-[aws_s3_bucket]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket
-[import section of s3 bucket]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket#import
-[bucket]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket#bucket
+[IdentifierFromProvider]: https://github.com/crossplane/terrajet/blob/2299925ea2541e6a8088ede463cd865bd64eba32/pkg/config/defaults.go#L46
+
+[import section of azurerm_sql_server]: https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/sql_server#import
 [handle dependencies]: https://crossplane.io/docs/v1.4/concepts/managed-resources.html#dependencies
 [user]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_access_key#user
 [generate reference resolution methods]: https://github.com/crossplane/crossplane-tools/pull/35
-[configuration]: https://github.com/crossplane/terrajet/blob/874bb6ad5cff9741241fb790a3a5d71166900860/pkg/config/resource.go#L77
+[configuration]: https://github.com/crossplane-contrib/terrajet/blob/874bb6ad5cff9741241fb790a3a5d71166900860/pkg/config/resource.go#L77
 [iam_access_key]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_access_key#argument-reference
 [kms key]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ebs_volume#kms_key_id
 [connection details]: https://crossplane.io/docs/v1.4/concepts/managed-resources.html#connection-details
-[handle sensitive fields]: https://github.com/crossplane/terrajet/pull/77
+[handle sensitive fields]: https://github.com/crossplane-contrib/terrajet/pull/77
 [id]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_access_key#id
 [secret]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_access_key#secret
-[`external.Observe`]: https://github.com/crossplane/terrajet/blob/874bb6ad5cff9741241fb790a3a5d71166900860/pkg/controller/external.go#L149
-[late-initialization customization API]: https://github.com/crossplane/terrajet/blob/874bb6ad5cff9741241fb790a3a5d71166900860/pkg/resource/lateinit.go#L86
+[`external.Observe`]: https://github.com/crossplane-contrib/terrajet/blob/874bb6ad5cff9741241fb790a3a5d71166900860/pkg/controller/external.go#L149
+[late-initialization customization API]: https://github.com/crossplane-contrib/terrajet/blob/874bb6ad5cff9741241fb790a3a5d71166900860/pkg/resource/lateinit.go#L86
 [`address_prefix`]: https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/subnet#address_prefix
