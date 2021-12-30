@@ -27,7 +27,7 @@ helpful part of resource documentation is the [import section].
 
 Terrajet performs some back and forth conversions between Crossplane resource
 model and Terraform configuration. We need a custom, per resource configuration
-to adapt Crossplane `external name` and Terraform `id`.
+to adapt Crossplane `external name` from Terraform `id`.
 
 ![external name configuration](images/terrajet-externalname.png)
 
@@ -140,8 +140,8 @@ import (
 ...
     p.AddResourceConfigurator("aws_s3_bucket", func(r *config.Resource) {
         r.ExternalName = config.NameAsIdentifier
-        r.ExternalName.SetIdentifierArgumentFn = func(base map[string]interface{}, name string) {
-            base["bucket"] = name
+        r.ExternalName.SetIdentifierArgumentFn = func(base map[string]interface{}, externalName string) {
+            base["bucket"] = externalName
         },
         r.ExternalName.OmittedFields: []string{
             "bucket",
@@ -254,7 +254,7 @@ func getFullyQualifiedIDfunc(ctx context.Context, externalName string, parameter
 
 With this, we have covered most common scenarios for configuring external name.
 You can always check resource configurations of existing jet Providers as
-further examples under `config/<group>/config.go`.
+further examples under `config/<group>/config.go` in their repositories.
 
 ### Cross Resource Referencing
 
@@ -489,6 +489,50 @@ message in its `status.conditions`, we do the `LateInitializer.IgnoreFields`
 custom configuration detailed above to skip one of the mutually exclusive fields
 during late-initialization.
 
+### Overriding Terraform Resource Schema
+
+Terrajet generates Crossplane resource schemas (CR spec/status) using the
+[Terraform schema of the resource]. As of today, Terrajet leverages the
+following attributes in the schema:
+
+- [Type] and [Elem] to identify the type of the field.
+- [Sensitive] to see if we need to keep it in a Secret instead of CR.
+- [Description] to add as a description to the field in CRD.
+- [Optional] and [Computed] to identify whether the fields go under spec or
+status:
+  - Not Optional & Not Computed => Spec (required)
+  - Optional & Not Computed => Spec (optional)
+  - Optional & Computed => Spec (optional, to be late-initialized)
+  - Not Optional & Computed => Status
+
+Usually, we don't need to make any modifications in the resource schema and
+resource schema just works as is. However, there could be some rare edge cases
+like:
+
+- Field contains sensitive information but not marked as `Sensitive` or vice
+versa.
+- An attribute does not make sense to have in CRD schema, like
+[tags_all for jet AWS resources].
+- Field is of a collection type but [Elem] not set properly, e.g.
+[boot_disk.initialize_params.labels] in `google_compute_instance` (which would
+no longer be needed at least to default as `string` after [this PR]).
+
+Schema of a resource could be overridden as follows:
+
+```go
+p.AddResourceConfigurator("aws_autoscaling_group", func(r *config.Resource) {
+    // Managed by Attachment resource.
+    if s, ok := r.TerraformResource.Schema["load_balancers"]; ok {
+        s.Optional = false
+        s.Computed = true
+    }
+    if s, ok := r.TerraformResource.Schema["target_group_arns"]; ok {
+        s.Optional = false
+        s.Computed = true
+    }
+})
+```
+
 [comment]: <> (References)
 
 [Terrajet]: https://github.com/crossplane-contrib/terrajet
@@ -527,3 +571,13 @@ during late-initialization.
 [`external.Observe`]: https://github.com/crossplane-contrib/terrajet/blob/874bb6ad5cff9741241fb790a3a5d71166900860/pkg/controller/external.go#L149
 [late-initialization customization API]: https://github.com/crossplane-contrib/terrajet/blob/874bb6ad5cff9741241fb790a3a5d71166900860/pkg/resource/lateinit.go#L86
 [`address_prefix`]: https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/subnet#address_prefix
+[Terraform schema of the resource]: https://github.com/hashicorp/terraform-plugin-sdk/blob/e3325b095ef501cf551f7935254ce942c44c1af0/helper/schema/schema.go#L34
+[Type]: https://github.com/hashicorp/terraform-plugin-sdk/blob/e3325b095ef501cf551f7935254ce942c44c1af0/helper/schema/schema.go#L52
+[Elem]: https://github.com/hashicorp/terraform-plugin-sdk/blob/e3325b095ef501cf551f7935254ce942c44c1af0/helper/schema/schema.go#L151
+[Sensitive]: https://github.com/hashicorp/terraform-plugin-sdk/blob/e3325b095ef501cf551f7935254ce942c44c1af0/helper/schema/schema.go#L244
+[Description]: https://github.com/hashicorp/terraform-plugin-sdk/blob/e3325b095ef501cf551f7935254ce942c44c1af0/helper/schema/schema.go#L120
+[Optional]: https://github.com/hashicorp/terraform-plugin-sdk/blob/e3325b095ef501cf551f7935254ce942c44c1af0/helper/schema/schema.go#L80
+[Computed]: https://github.com/hashicorp/terraform-plugin-sdk/blob/e3325b095ef501cf551f7935254ce942c44c1af0/helper/schema/schema.go#L139
+[tags_all for jet AWS resources]: https://github.com/crossplane-contrib/provider-jet-aws/blob/c045bae7736da4a9cc80e7fc0fc4cfcd78de60df/config/overrides.go#L86
+[boot_disk.initialize_params.labels]: https://github.com/crossplane-contrib/provider-jet-gcp/blob/f90456c4fc032c021c8179ef061f4803bc01b488/config/compute/config.go#L157
+[this PR]: https://github.com/crossplane/terrajet/pull/182
