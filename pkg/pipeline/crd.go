@@ -28,9 +28,9 @@ import (
 	"github.com/muvaf/typewriter/pkg/wrapper"
 	"github.com/pkg/errors"
 
-	"github.com/crossplane-contrib/terrajet/pkg/config"
-	"github.com/crossplane-contrib/terrajet/pkg/pipeline/templates"
-	tjtypes "github.com/crossplane-contrib/terrajet/pkg/types"
+	"github.com/crossplane/terrajet/pkg/config"
+	"github.com/crossplane/terrajet/pkg/pipeline/templates"
+	tjtypes "github.com/crossplane/terrajet/pkg/types"
 )
 
 // GenStatement is printed on every generated file.

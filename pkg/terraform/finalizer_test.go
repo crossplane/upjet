@@ -26,7 +26,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	"github.com/crossplane-contrib/terrajet/pkg/resource"
+	"github.com/crossplane/terrajet/pkg/resource"
 )
 
 var (

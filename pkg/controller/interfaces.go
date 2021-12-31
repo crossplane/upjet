@@ -19,9 +19,9 @@ package controller
 import (
 	"context"
 
-	"github.com/crossplane-contrib/terrajet/pkg/config"
-	"github.com/crossplane-contrib/terrajet/pkg/resource"
-	"github.com/crossplane-contrib/terrajet/pkg/terraform"
+	"github.com/crossplane/terrajet/pkg/config"
+	"github.com/crossplane/terrajet/pkg/resource"
+	"github.com/crossplane/terrajet/pkg/terraform"
 )
 
 // TODO(muvaf): It's a bit weird that the functions return the struct of a

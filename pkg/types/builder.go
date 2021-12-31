@@ -28,9 +28,9 @@ import (
 	twtypes "github.com/muvaf/typewriter/pkg/types"
 	"github.com/pkg/errors"
 
-	"github.com/crossplane-contrib/terrajet/pkg/config"
-	"github.com/crossplane-contrib/terrajet/pkg/types/comments"
-	"github.com/crossplane-contrib/terrajet/pkg/types/name"
+	"github.com/crossplane/terrajet/pkg/config"
+	"github.com/crossplane/terrajet/pkg/types/comments"
+	"github.com/crossplane/terrajet/pkg/types/name"
 )
 
 const (

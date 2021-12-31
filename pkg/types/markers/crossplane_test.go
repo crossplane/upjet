@@ -5,7 +5,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/crossplane-contrib/terrajet/pkg/config"
+	"github.com/crossplane/terrajet/pkg/config"
 )
 
 func TestCrossplaneOptions_String(t *testing.T) {

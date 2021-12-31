@@ -8,11 +8,11 @@ import (
 	"github.com/google/go-cmp/cmp"
 	twtypes "github.com/muvaf/typewriter/pkg/types"
 
-	"github.com/crossplane-contrib/terrajet/pkg/config"
+	"github.com/crossplane/terrajet/pkg/config"
 )
 
 func TestBuilder_generateReferenceFields(t *testing.T) {
-	tp := types.NewPackage("github.com/crossplane-contrib/terrajet/pkg/types", "tjtypes")
+	tp := types.NewPackage("github.com/crossplane/terrajet/pkg/types", "tjtypes")
 
 	type args struct {
 		t *types.TypeName
@@ -45,8 +45,8 @@ func TestBuilder_generateReferenceFields(t *testing.T) {
 					`json:"testFieldSelector,omitempty" tf:"-"`,
 				},
 				outComments: twtypes.Comments{
-					"github.com/crossplane-contrib/terrajet/pkg/types.Params:TestFieldRef":      "// +kubebuilder:validation:Optional\n",
-					"github.com/crossplane-contrib/terrajet/pkg/types.Params:TestFieldSelector": "// +kubebuilder:validation:Optional\n",
+					"github.com/crossplane/terrajet/pkg/types.Params:TestFieldRef":      "// +kubebuilder:validation:Optional\n",
+					"github.com/crossplane/terrajet/pkg/types.Params:TestFieldSelector": "// +kubebuilder:validation:Optional\n",
 				},
 			},
 		},
@@ -67,8 +67,8 @@ func TestBuilder_generateReferenceFields(t *testing.T) {
 					`json:"testFieldSelector,omitempty" tf:"-"`,
 				},
 				outComments: twtypes.Comments{
-					"github.com/crossplane-contrib/terrajet/pkg/types.Params:TestFieldRefs":     "// +kubebuilder:validation:Optional\n",
-					"github.com/crossplane-contrib/terrajet/pkg/types.Params:TestFieldSelector": "// +kubebuilder:validation:Optional\n",
+					"github.com/crossplane/terrajet/pkg/types.Params:TestFieldRefs":     "// +kubebuilder:validation:Optional\n",
+					"github.com/crossplane/terrajet/pkg/types.Params:TestFieldSelector": "// +kubebuilder:validation:Optional\n",
 				},
 			},
 		},
@@ -90,8 +90,8 @@ func TestBuilder_generateReferenceFields(t *testing.T) {
 					`json:"testFieldSelector,omitempty" tf:"-"`,
 				},
 				outComments: twtypes.Comments{
-					"github.com/crossplane-contrib/terrajet/pkg/types.Params:CustomRef":         "// +kubebuilder:validation:Optional\n",
-					"github.com/crossplane-contrib/terrajet/pkg/types.Params:TestFieldSelector": "// +kubebuilder:validation:Optional\n",
+					"github.com/crossplane/terrajet/pkg/types.Params:CustomRef":         "// +kubebuilder:validation:Optional\n",
+					"github.com/crossplane/terrajet/pkg/types.Params:TestFieldSelector": "// +kubebuilder:validation:Optional\n",
 				},
 			},
 		},
@@ -113,8 +113,8 @@ func TestBuilder_generateReferenceFields(t *testing.T) {
 					`json:"customSelector,omitempty" tf:"-"`,
 				},
 				outComments: twtypes.Comments{
-					"github.com/crossplane-contrib/terrajet/pkg/types.Params:TestFieldRef":   "// +kubebuilder:validation:Optional\n",
-					"github.com/crossplane-contrib/terrajet/pkg/types.Params:CustomSelector": "// +kubebuilder:validation:Optional\n",
+					"github.com/crossplane/terrajet/pkg/types.Params:TestFieldRef":   "// +kubebuilder:validation:Optional\n",
+					"github.com/crossplane/terrajet/pkg/types.Params:CustomSelector": "// +kubebuilder:validation:Optional\n",
 				},
 			},
 		},
