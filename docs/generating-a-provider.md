@@ -76,7 +76,7 @@ be quite similar for any other Terraform provider.
 
        ```go
        import (
-           "github.com/crossplane-contrib/terrajet/pkg/types/conversion"
+           "github.com/crossplane/terrajet/pkg/types/conversion"
        )
        
        func main() {
@@ -165,7 +165,7 @@ be quite similar for any other Terraform provider.
    cat <<EOF > config/repository/config.go
    package repository
 
-   import "github.com/crossplane-contrib/terrajet/pkg/config"
+   import "github.com/crossplane/terrajet/pkg/config"
 
    // Configure configures individual resources by adding custom ResourceConfigurators.
    func Customize(p *config.Provider) {
@@ -183,7 +183,7 @@ be quite similar for any other Terraform provider.
    cat <<EOF > config/branch/config.go
    package branch
 
-   import "github.com/crossplane-contrib/terrajet/pkg/config"
+   import "github.com/crossplane/terrajet/pkg/config"
 
    func Customize(p *config.Provider) {
        p.AddResourceConfigurator("github_branch", func(r *config.Resource) {
@@ -212,8 +212,8 @@ be quite similar for any other Terraform provider.
 
    ```diff
    import (
-       tjconfig "github.com/crossplane-contrib/terrajet/pkg/config"
-       "github.com/crossplane-contrib/terrajet/pkg/types/conversion"
+       tjconfig "github.com/crossplane/terrajet/pkg/config"
+       "github.com/crossplane/terrajet/pkg/types/conversion"
        "github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
        tf "github.com/turkenh/terraform-provider-github/v4/github"
 

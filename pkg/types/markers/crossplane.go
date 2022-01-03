@@ -3,7 +3,7 @@ package markers
 import (
 	"fmt"
 
-	"github.com/crossplane-contrib/terrajet/pkg/config"
+	"github.com/crossplane/terrajet/pkg/config"
 )
 
 const (

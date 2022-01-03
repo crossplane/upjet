@@ -29,10 +29,10 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 
-	"github.com/crossplane-contrib/terrajet/pkg/config"
-	"github.com/crossplane-contrib/terrajet/pkg/resource/fake"
-	"github.com/crossplane-contrib/terrajet/pkg/resource/fake/mocks"
-	"github.com/crossplane-contrib/terrajet/pkg/resource/json"
+	"github.com/crossplane/terrajet/pkg/config"
+	"github.com/crossplane/terrajet/pkg/resource/fake"
+	"github.com/crossplane/terrajet/pkg/resource/fake/mocks"
+	"github.com/crossplane/terrajet/pkg/resource/json"
 )
 
 var (

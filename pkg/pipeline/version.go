@@ -25,7 +25,7 @@ import (
 	"github.com/muvaf/typewriter/pkg/wrapper"
 	"github.com/pkg/errors"
 
-	"github.com/crossplane-contrib/terrajet/pkg/pipeline/templates"
+	"github.com/crossplane/terrajet/pkg/pipeline/templates"
 )
 
 // NewVersionGenerator returns a new VersionGenerator.

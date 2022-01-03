@@ -23,7 +23,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/crossplane-contrib/terrajet/pkg/config"
+	"github.com/crossplane/terrajet/pkg/config"
 
 	"github.com/crossplane/crossplane-runtime/pkg/errors"
 )

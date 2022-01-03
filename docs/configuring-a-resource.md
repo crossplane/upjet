@@ -304,7 +304,7 @@ you will want/need to customize late-initialization behaviour. Thus,
 Terrajet provides an extensible [late-initialization customization API]
 that controls late-initialization behaviour.
 
-The associated resource struct is defined [here](https://github.com/crossplane-contrib/terrajet/blob/c9e21387298d8ed59fcd71c7f753ec401a3383a5/pkg/config/resource.go#L91) as follows:
+The associated resource struct is defined [here](https://github.com/crossplane/terrajet/blob/c9e21387298d8ed59fcd71c7f753ec401a3383a5/pkg/config/resource.go#L91) as follows:
 ```go
 // LateInitializer represents configurations that control
 // late-initialization behaviour
@@ -378,32 +378,32 @@ during late-initialization.
 
 [comment]: <> (References)
 
-[Terrajet]: https://github.com/crossplane-contrib/terrajet
+[Terrajet]: https://github.com/crossplane/terrajet
 [External name]: #external-name
 [Cross Resource Referencing]: #cross-resource-referencing
 [Additional Sensitive Fields and Custom Connection Details]: #additional-sensitive-fields-and-custom-connection-details
 [Late Initialization Behavior]: #late-initialization-behavior
 [the external name documentation]: https://crossplane.io/docs/v1.4/concepts/managed-resources.html#external-name
 [import section]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_access_key#import
-[the struct that holds the External Name configuration]: https://github.com/crossplane-contrib/terrajet/blob/08e5e93f8a93c6628a4302fb520cd4be4b6cab07/pkg/config/resource.go#L50
+[the struct that holds the External Name configuration]: https://github.com/crossplane/terrajet/blob/08e5e93f8a93c6628a4302fb520cd4be4b6cab07/pkg/config/resource.go#L50
 [aws_vpc]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc
 [import section of aws_vpc]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc#import
 [arguments list]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc#argument-reference
 [example usages]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc#example-usage
-[IdentifierFromProvider]: https://github.com/crossplane-contrib/terrajet/blob/08e5e93f8a93c6628a4302fb520cd4be4b6cab07/pkg/config/defaults.go#L43
+[IdentifierFromProvider]: https://github.com/crossplane/terrajet/blob/08e5e93f8a93c6628a4302fb520cd4be4b6cab07/pkg/config/defaults.go#L43
 [aws_s3_bucket]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket
 [import section of s3 bucket]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket#import
 [bucket]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket#bucket
 [handle dependencies]: https://crossplane.io/docs/v1.4/concepts/managed-resources.html#dependencies
 [user]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_access_key#user
 [generate reference resolution methods]: https://github.com/crossplane/crossplane-tools/pull/35
-[configuration]: https://github.com/crossplane-contrib/terrajet/blob/874bb6ad5cff9741241fb790a3a5d71166900860/pkg/config/resource.go#L77
+[configuration]: https://github.com/crossplane/terrajet/blob/874bb6ad5cff9741241fb790a3a5d71166900860/pkg/config/resource.go#L77
 [iam_access_key]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_access_key#argument-reference
 [kms key]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ebs_volume#kms_key_id
 [connection details]: https://crossplane.io/docs/v1.4/concepts/managed-resources.html#connection-details
-[handle sensitive fields]: https://github.com/crossplane-contrib/terrajet/pull/77
+[handle sensitive fields]: https://github.com/crossplane/terrajet/pull/77
 [id]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_access_key#id
 [secret]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_access_key#secret
-[`external.Observe`]: https://github.com/crossplane-contrib/terrajet/blob/874bb6ad5cff9741241fb790a3a5d71166900860/pkg/controller/external.go#L149
-[late-initialization customization API]: https://github.com/crossplane-contrib/terrajet/blob/874bb6ad5cff9741241fb790a3a5d71166900860/pkg/resource/lateinit.go#L86
+[`external.Observe`]: https://github.com/crossplane/terrajet/blob/874bb6ad5cff9741241fb790a3a5d71166900860/pkg/controller/external.go#L149
+[late-initialization customization API]: https://github.com/crossplane/terrajet/blob/874bb6ad5cff9741241fb790a3a5d71166900860/pkg/resource/lateinit.go#L86
 [`address_prefix`]: https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/subnet#address_prefix

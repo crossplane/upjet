@@ -26,7 +26,7 @@ to generate a Crossplane provider based on an existing Terraform provider.
 ## Report a Bug
 
 For filing bugs, suggesting improvements, or requesting new features, please
-open an [issue](https://github.com/crossplane-contrib/terrajet/issues).
+open an [issue](https://github.com/crossplane/terrajet/issues).
 
 ## Contact
 
