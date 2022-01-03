@@ -283,6 +283,10 @@ func (g *Builder) buildSchema(sch *schema.Schema, cfg *config.Resource, tfPath [
 				}
 				elemType = paramType
 			}
+		// if unset
+		// see: https://github.com/crossplane/terrajet/issues/177
+		case nil:
+			elemType = types.Universe.Lookup("string").Type()
 		default:
 			return nil, errors.Errorf("element type of %s should be either schema.Resource or schema.Schema", fieldPath(names))
 		}
