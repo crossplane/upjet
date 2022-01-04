@@ -55,23 +55,21 @@ type GenericLateInitializer struct {
 	nameFilters  []NameFilter
 }
 
-// LateInitializeAnnotations late initializes annotations of the resource
-func LateInitializeAnnotations(tr metav1.Object, cfg *config.Resource, tfstate map[string]interface{}, privateRaw string) (bool, error) {
-	if tr.GetAnnotations()[AnnotationKeyPrivateRawAttribute] == privateRaw &&
-		xpmeta.GetExternalName(tr) != "" {
-		return false, nil
-	}
-	xpmeta.AddAnnotations(tr, map[string]string{
-		AnnotationKeyPrivateRawAttribute: privateRaw,
-	})
-	if xpmeta.GetExternalName(tr) != "" {
-		return true, nil
-	}
+// SetCriticalAnnotations sets the critical annotations of the resource and reports
+// whether there has been a change.
+func SetCriticalAnnotations(tr metav1.Object, cfg *config.Resource, tfstate map[string]interface{}, privateRaw string) (bool, error) {
 	name, err := cfg.ExternalName.GetExternalNameFn(tfstate)
 	if err != nil {
 		return false, errors.Wrap(err, "cannot get external name")
 	}
-	xpmeta.SetExternalName(tr, name)
+	if tr.GetAnnotations()[AnnotationKeyPrivateRawAttribute] == privateRaw &&
+		tr.GetAnnotations()[xpmeta.AnnotationKeyExternalName] == name {
+		return false, nil
+	}
+	xpmeta.AddAnnotations(tr, map[string]string{
+		AnnotationKeyPrivateRawAttribute: privateRaw,
+		xpmeta.AnnotationKeyExternalName: name,
+	})
 	return true, nil
 }
 
