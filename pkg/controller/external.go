@@ -146,9 +146,9 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot set observation")
 	}
 
-	lateInitedAnn, err := resource.LateInitializeAnnotations(tr, e.config, tfstate, string(res.State.GetPrivateRaw()))
+	annotationsUpdated, err := resource.SetCriticalAnnotations(tr, e.config, tfstate, string(res.State.GetPrivateRaw()))
 	if err != nil {
-		return managed.ExternalObservation{}, errors.Wrap(err, "cannot late initialize annotations")
+		return managed.ExternalObservation{}, errors.Wrap(err, "cannot set critical annotations")
 	}
 	conn, err := resource.GetConnectionDetails(tfstate, tr, e.config)
 	if err != nil {
@@ -165,7 +165,7 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 			ResourceExists:          true,
 			ResourceUpToDate:        true,
 			ConnectionDetails:       conn,
-			ResourceLateInitialized: lateInitedAnn,
+			ResourceLateInitialized: annotationsUpdated,
 		}, nil
 	}
 
@@ -182,7 +182,7 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 	return managed.ExternalObservation{
 		ResourceExists:          true,
 		ResourceUpToDate:        plan.UpToDate,
-		ResourceLateInitialized: lateInitedAnn || lateInitedParams,
+		ResourceLateInitialized: annotationsUpdated || lateInitedParams,
 		ConnectionDetails:       conn,
 	}, nil
 }
@@ -210,8 +210,8 @@ func (e *external) Create(ctx context.Context, mg xpresource.Managed) (managed.E
 	}
 
 	// NOTE(muvaf): Only spec and metadata changes are saved after Create call.
-	_, err = resource.LateInitializeAnnotations(tr, e.config, tfstate, string(res.State.GetPrivateRaw()))
-	return managed.ExternalCreation{ConnectionDetails: conn}, errors.Wrap(err, "cannot late initialize annotations")
+	_, err = resource.SetCriticalAnnotations(tr, e.config, tfstate, string(res.State.GetPrivateRaw()))
+	return managed.ExternalCreation{ConnectionDetails: conn}, errors.Wrap(err, "cannot set critical annotations")
 }
 
 func (e *external) Update(ctx context.Context, mg xpresource.Managed) (managed.ExternalUpdate, error) {
