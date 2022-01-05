@@ -18,6 +18,7 @@ package config
 
 import (
 	"context"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/pkg/errors"
@@ -184,6 +185,21 @@ func (s *Sensitive) AddFieldPath(tf, xp string) {
 	s.fieldPaths[tf] = xp
 }
 
+// OperationTimeouts allows configuring resource operation timeouts:
+// https://www.terraform.io/language/resources/syntax#operation-timeouts
+// Please note that, not all resources support configuring timeouts.
+type OperationTimeouts struct {
+	Read   *time.Duration
+	Create *time.Duration
+	Update *time.Duration
+	Delete *time.Duration
+}
+
+// TimeDuration returns a pointer to a given time.Duration.
+func TimeDuration(d time.Duration) *time.Duration {
+	return &d
+}
+
 // Resource is the set of information that you can override at different steps
 // of the code generation pipeline.
 type Resource struct {
@@ -211,6 +227,9 @@ type Resource struct {
 	// takes more than 1 minute to complete such as Kubernetes clusters or
 	// databases.
 	UseAsync bool
+
+	// OperationTimeouts allows configuring resource operation timeouts.
+	OperationTimeouts OperationTimeouts
 
 	// ExternalName allows you to specify a custom ExternalName.
 	ExternalName ExternalName
