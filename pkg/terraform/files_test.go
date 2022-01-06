@@ -20,6 +20,7 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	xpfake "github.com/crossplane/crossplane-runtime/pkg/resource/fake"
@@ -96,8 +97,9 @@ func TestWriteTFState(t *testing.T) {
 
 func TestWriteMainTF(t *testing.T) {
 	type args struct {
-		tr resource.Terraformed
-		s  Setup
+		tr  resource.Terraformed
+		cfg *config.Resource
+		s   Setup
 	}
 	type want struct {
 		maintf string
@@ -108,6 +110,44 @@ func TestWriteMainTF(t *testing.T) {
 		args
 		want
 	}{
+		"TimeoutsConfigured": {
+			reason: "Configured resources should be able to write everything it has into maintf file",
+			args: args{
+				tr: &fake.Terraformed{
+					Managed: xpfake.Managed{
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: map[string]string{
+								resource.AnnotationKeyPrivateRawAttribute: "privateraw",
+								meta.AnnotationKeyExternalName:            "some-id",
+							},
+						},
+					},
+					Parameterizable: fake.Parameterizable{Parameters: map[string]interface{}{
+						"param": "paramval",
+					}},
+					Observable: fake.Observable{Observation: map[string]interface{}{
+						"obs": "obsval",
+					}},
+				},
+				cfg: config.DefaultResource("terrajet_resource", nil, func(r *config.Resource) {
+					r.OperationTimeouts = config.OperationTimeouts{
+						Read:   30 * time.Second,
+						Update: 2 * time.Minute,
+					}
+				}),
+				s: Setup{
+					Requirement: ProviderRequirement{
+						Source:  "hashicorp/provider-test",
+						Version: "1.2.3",
+					},
+					Configuration: nil,
+					Env:           nil,
+				},
+			},
+			want: want{
+				maintf: `{"provider":{"provider-test":null},"resource":{"":{"":{"lifecycle":{"prevent_destroy":true},"name":"some-id","param":"paramval","timeouts":{"read":"30s","update":"2m0s"}}}},"terraform":{"required_providers":{"provider-test":{"source":"hashicorp/provider-test","version":"1.2.3"}}}}`,
+			},
+		},
 		"Success": {
 			reason: "Standard resources should be able to write everything it has into maintf file",
 			args: args{
@@ -127,6 +167,7 @@ func TestWriteMainTF(t *testing.T) {
 						"obs": "obsval",
 					}},
 				},
+				cfg: config.DefaultResource("terrajet_resource", nil),
 				s: Setup{
 					Requirement: ProviderRequirement{
 						Source:  "hashicorp/provider-test",
@@ -144,7 +185,7 @@ func TestWriteMainTF(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			fs := afero.NewMemMapFs()
-			fp, err := NewFileProducer(context.TODO(), nil, dir, tc.args.tr, tc.args.s, config.DefaultResource("terrajet_resource", nil), WithFileSystem(fs))
+			fp, err := NewFileProducer(context.TODO(), nil, dir, tc.args.tr, tc.args.s, tc.args.cfg, WithFileSystem(fs))
 			if err != nil {
 				t.Errorf("cannot initialize a file producer: %s", err.Error())
 			}

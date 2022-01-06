@@ -150,6 +150,25 @@ func (fp *FileProducer) WriteMainTF() error {
 	fp.parameters["lifecycle"] = map[string]bool{
 		"prevent_destroy": !meta.WasDeleted(fp.Resource),
 	}
+
+	// Add operation timeouts if any timeout configured for the resource
+	timeouts := map[string]string{}
+	if t := fp.Config.OperationTimeouts.Read.String(); t != "0s" {
+		timeouts["read"] = t
+	}
+	if t := fp.Config.OperationTimeouts.Create.String(); t != "0s" {
+		timeouts["create"] = t
+	}
+	if t := fp.Config.OperationTimeouts.Update.String(); t != "0s" {
+		timeouts["update"] = t
+	}
+	if t := fp.Config.OperationTimeouts.Delete.String(); t != "0s" {
+		timeouts["delete"] = t
+	}
+	if len(timeouts) != 0 {
+		fp.parameters["timeouts"] = timeouts
+	}
+
 	// Note(turkenh): To use third party providers, we need to configure
 	// provider name in required_providers.
 	providerSource := strings.Split(fp.Setup.Requirement.Source, "/")
