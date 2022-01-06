@@ -114,13 +114,29 @@ func (eg *ExampleGenerator) StoreExamples() error {
 		b := bytes.Buffer{}
 		b.WriteString("# This example manifest is auto-generated, and has not been tested.\n")
 		b.WriteString("# Please make the necessary adjustments before using it.\n")
-		b.Write(buff)
+		b.Write(commentOut(buff))
 		// no sensitive info in the example manifest
 		if err := ioutil.WriteFile(pm.manifestPath, b.Bytes(), 0644); err != nil { // nolint:gosec
 			return errors.Wrapf(err, "cannot write example manifest file %s for resource %s", pm.manifestPath, n)
 		}
 	}
 	return nil
+}
+
+func commentOut(buff []byte) []byte {
+	lines := strings.Split(string(buff), "\n")
+	commentedOutLines := make([]string, 0, len(lines))
+	for _, l := range lines {
+		trimmed := strings.TrimSpace(l)
+		if len(trimmed) == 0 {
+			continue
+		}
+		if !strings.HasPrefix(trimmed, "#") {
+			l = "#" + l
+		}
+		commentedOutLines = append(commentedOutLines, l)
+	}
+	return []byte(strings.Join(commentedOutLines, "\n"))
 }
 
 func (eg *ExampleGenerator) resolveReferences(params map[string]interface{}) error { // nolint:gocyclo
