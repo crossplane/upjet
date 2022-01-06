@@ -56,8 +56,8 @@ func TestAPICallbacks_Apply(t *testing.T) {
 					Client: &test.MockClient{
 						MockGet: test.NewMockGetFn(nil),
 						MockStatusUpdate: func(_ context.Context, obj client.Object, _ ...client.UpdateOption) error {
-							got := obj.(resource.Terraformed).GetCondition(resource.TypeAsyncOperation)
-							if diff := cmp.Diff(resource.AsyncOperationCondition(tjerrors.NewApplyFailed(nil)), got); diff != "" {
+							got := obj.(resource.Terraformed).GetCondition(resource.TypeLastAsyncOperation)
+							if diff := cmp.Diff(resource.LastAsyncOperationCondition(tjerrors.NewApplyFailed(nil)), got); diff != "" {
 								t.Errorf("\nApply(...): -want error, +got error:\n%s", diff)
 							}
 							return nil
@@ -76,8 +76,8 @@ func TestAPICallbacks_Apply(t *testing.T) {
 					Client: &test.MockClient{
 						MockGet: test.NewMockGetFn(nil),
 						MockStatusUpdate: func(_ context.Context, obj client.Object, _ ...client.UpdateOption) error {
-							got := obj.(resource.Terraformed).GetCondition(resource.TypeAsyncOperation)
-							if diff := cmp.Diff(resource.AsyncOperationCondition(nil), got); diff != "" {
+							got := obj.(resource.Terraformed).GetCondition(resource.TypeLastAsyncOperation)
+							if diff := cmp.Diff(resource.LastAsyncOperationCondition(nil), got); diff != "" {
 								t.Errorf("\nApply(...): -want error, +got error:\n%s", diff)
 							}
 							return nil
@@ -138,8 +138,8 @@ func TestAPICallbacks_Destroy(t *testing.T) {
 					Client: &test.MockClient{
 						MockGet: test.NewMockGetFn(nil),
 						MockStatusUpdate: func(_ context.Context, obj client.Object, _ ...client.UpdateOption) error {
-							got := obj.(resource.Terraformed).GetCondition(resource.TypeAsyncOperation)
-							if diff := cmp.Diff(resource.AsyncOperationCondition(tjerrors.NewDestroyFailed(nil)), got); diff != "" {
+							got := obj.(resource.Terraformed).GetCondition(resource.TypeLastAsyncOperation)
+							if diff := cmp.Diff(resource.LastAsyncOperationCondition(tjerrors.NewDestroyFailed(nil)), got); diff != "" {
 								t.Errorf("\nApply(...): -want error, +got error:\n%s", diff)
 							}
 							return nil
@@ -158,8 +158,8 @@ func TestAPICallbacks_Destroy(t *testing.T) {
 					Client: &test.MockClient{
 						MockGet: test.NewMockGetFn(nil),
 						MockStatusUpdate: func(_ context.Context, obj client.Object, _ ...client.UpdateOption) error {
-							got := obj.(resource.Terraformed).GetCondition(resource.TypeAsyncOperation)
-							if diff := cmp.Diff(resource.AsyncOperationCondition(nil), got); diff != "" {
+							got := obj.(resource.Terraformed).GetCondition(resource.TypeLastAsyncOperation)
+							if diff := cmp.Diff(resource.LastAsyncOperationCondition(nil), got); diff != "" {
 								t.Errorf("\nApply(...): -want error, +got error:\n%s", diff)
 							}
 							return nil

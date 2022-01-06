@@ -84,7 +84,7 @@ func (ac *APICallbacks) Apply(name string) terraform.CallbackFn {
 		if kErr := ac.kube.Get(ctx, nn, tr); kErr != nil {
 			return errors.Wrap(kErr, errGet)
 		}
-		tr.SetConditions(resource.AsyncOperationCondition(err))
+		tr.SetConditions(resource.LastAsyncOperationCondition(err))
 		tr.SetConditions(resource.AsyncOperationFinishedCondition())
 		return errors.Wrap(ac.kube.Status().Update(ctx, tr), errStatusUpdate)
 	}
@@ -98,7 +98,7 @@ func (ac *APICallbacks) Destroy(name string) terraform.CallbackFn {
 		if kErr := ac.kube.Get(ctx, nn, tr); kErr != nil {
 			return errors.Wrap(kErr, errGet)
 		}
-		tr.SetConditions(resource.AsyncOperationCondition(err))
+		tr.SetConditions(resource.LastAsyncOperationCondition(err))
 		tr.SetConditions(resource.AsyncOperationFinishedCondition())
 		return errors.Wrap(ac.kube.Status().Update(ctx, tr), errStatusUpdate)
 	}
