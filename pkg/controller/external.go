@@ -189,6 +189,7 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 
 func (e *external) Create(ctx context.Context, mg xpresource.Managed) (managed.ExternalCreation, error) {
 	if e.config.UseAsync {
+		mg.SetConditions(resource.AsyncOperationOngoingCondition())
 		return managed.ExternalCreation{}, errors.Wrap(e.workspace.ApplyAsync(e.callback.Apply(mg.GetName())), errStartAsyncApply)
 	}
 	tr, ok := mg.(resource.Terraformed)
@@ -216,6 +217,7 @@ func (e *external) Create(ctx context.Context, mg xpresource.Managed) (managed.E
 
 func (e *external) Update(ctx context.Context, mg xpresource.Managed) (managed.ExternalUpdate, error) {
 	if e.config.UseAsync {
+		mg.SetConditions(resource.AsyncOperationOngoingCondition())
 		return managed.ExternalUpdate{}, errors.Wrap(e.workspace.ApplyAsync(e.callback.Apply(mg.GetName())), errStartAsyncApply)
 	}
 	tr, ok := mg.(resource.Terraformed)
