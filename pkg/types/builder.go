@@ -155,8 +155,9 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 			sfx := "SecretRef"
 			cfg.Sensitive.AddFieldPath(fieldPathWithWildcard(tfPaths), "spec.forProvider."+fieldPathWithWildcard(xpPaths)+sfx)
 			// todo(turkenh): do we need to support other field types as sensitive?
-			if fieldType.String() != "string" && fieldType.String() != "*string" {
-				return nil, nil, fmt.Errorf(`got type %q for field %q, only types "string" and "*string" supported as sensitive`, fieldType.String(), fieldNameCamel)
+			if fieldType.String() != "string" && fieldType.String() != "*string" && fieldType.String() != "[]string" &&
+				fieldType.String() != "[]*string" {
+				return nil, nil, fmt.Errorf(`got type %q for field %q, only types "string", "*string", []string and []*string supported as sensitive`, fieldType.String(), fieldNameCamel)
 			}
 			// Replace a parameter field with secretKeyRef if it is sensitive.
 			// If it is an observation field, it will be dropped.
@@ -164,10 +165,15 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 			fieldNameCamel += sfx
 
 			tfTag = "-"
-			fieldType = typeSecretKeySelector
+			switch fieldType.String() {
+			case "string", "*string":
+				fieldType = typeSecretKeySelector
+			case "[]string", "[]*string":
+				fieldType = types.NewSlice(typeSecretKeySelector)
+			}
 			jsonTag = name.NewFromCamel(fieldNameCamel).LowerCamelComputed
 			if sch.Optional {
-				fieldType = types.NewPointer(typeSecretKeySelector)
+				fieldType = types.NewPointer(fieldType)
 				jsonTag += ",omitempty"
 			}
 		}
