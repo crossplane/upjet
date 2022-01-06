@@ -153,24 +153,19 @@ func (fp *FileProducer) WriteMainTF() error {
 
 	// Add operation timeouts if any timeout configured for the resource
 	timeouts := map[string]string{}
-	timeoutsConfigured := false
-	if fp.Config.OperationTimeouts.Read != nil {
-		timeouts["read"] = fp.Config.OperationTimeouts.Read.String()
-		timeoutsConfigured = true
+	if t := fp.Config.OperationTimeouts.Read.String(); t != "0s" {
+		timeouts["read"] = t
 	}
-	if fp.Config.OperationTimeouts.Create != nil {
-		timeouts["create"] = fp.Config.OperationTimeouts.Create.String()
-		timeoutsConfigured = true
+	if t := fp.Config.OperationTimeouts.Create.String(); t != "0s" {
+		timeouts["create"] = t
 	}
-	if fp.Config.OperationTimeouts.Update != nil {
-		timeouts["update"] = fp.Config.OperationTimeouts.Update.String()
-		timeoutsConfigured = true
+	if t := fp.Config.OperationTimeouts.Update.String(); t != "0s" {
+		timeouts["update"] = t
 	}
-	if fp.Config.OperationTimeouts.Delete != nil {
-		timeouts["delete"] = fp.Config.OperationTimeouts.Delete.String()
-		timeoutsConfigured = true
+	if t := fp.Config.OperationTimeouts.Delete.String(); t != "0s" {
+		timeouts["delete"] = t
 	}
-	if timeoutsConfigured {
+	if len(timeouts) != 0 {
 		fp.parameters["timeouts"] = timeouts
 	}
 

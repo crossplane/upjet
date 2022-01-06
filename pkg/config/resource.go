@@ -189,15 +189,10 @@ func (s *Sensitive) AddFieldPath(tf, xp string) {
 // https://www.terraform.io/language/resources/syntax#operation-timeouts
 // Please note that, not all resources support configuring timeouts.
 type OperationTimeouts struct {
-	Read   *time.Duration
-	Create *time.Duration
-	Update *time.Duration
-	Delete *time.Duration
-}
-
-// TimeDuration returns a pointer to a given time.Duration.
-func TimeDuration(d time.Duration) *time.Duration {
-	return &d
+	Read   time.Duration
+	Create time.Duration
+	Update time.Duration
+	Delete time.Duration
 }
 
 // Resource is the set of information that you can override at different steps

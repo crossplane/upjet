@@ -131,8 +131,8 @@ func TestWriteMainTF(t *testing.T) {
 				},
 				cfg: config.DefaultResource("terrajet_resource", nil, func(r *config.Resource) {
 					r.OperationTimeouts = config.OperationTimeouts{
-						Read:   config.TimeDuration(30 * time.Second),
-						Update: config.TimeDuration(2 * time.Minute),
+						Read:   30 * time.Second,
+						Update: 2 * time.Minute,
 					}
 				}),
 				s: Setup{
