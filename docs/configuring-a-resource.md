@@ -22,14 +22,12 @@ cloud provider; sometimes it could simply be the name of resource
 (e.g. VPC id ). This is something specific to resource, and we need some input
 configuration for terrajet to appropriately generate a resource.
 
-Since Terraform already needs a similar [identifier to import a resource], most
+Since Terraform already needs [a similar identifier] to import a resource, most
 helpful part of resource documentation is the [import section].
 
 Terrajet performs some back and forth conversions between Crossplane resource
 model and Terraform configuration. We need a custom, per resource configuration
 to adapt Crossplane `external name` from Terraform `id`.
-
-![external name configuration](images/terrajet-externalname.png)
 
 Here are [the types for the External Name configuration]:
 
@@ -106,7 +104,7 @@ conditions:
 
 ```go
 import (
-	"github.com/crossplane-contrib/terrajet/pkg/config"
+	"github.com/crossplane/terrajet/pkg/config"
 	...
 )
 
@@ -133,7 +131,7 @@ also omit `bucket` and `bucket_prefix` arguments from the spec with
 
 ```go
 import (
-	"github.com/crossplane-contrib/terrajet/pkg/config"
+	"github.com/crossplane/terrajet/pkg/config"
 	...
 )
 
@@ -165,7 +163,7 @@ Here, we can just use [IdentifierFromProvider] configuration:
 
 ```go
 import (
-	"github.com/crossplane-contrib/terrajet/pkg/config"
+	"github.com/crossplane/terrajet/pkg/config"
 	...
 )
 
@@ -196,7 +194,7 @@ this id back (`GetIDFn`).
 
 ```go
 import (
-	"github.com/crossplane-contrib/terrajet/pkg/config"
+	"github.com/crossplane/terrajet/pkg/config"
 	...
 )
 
@@ -255,6 +253,9 @@ func getFullyQualifiedIDfunc(ctx context.Context, externalName string, parameter
 With this, we have covered most common scenarios for configuring external name.
 You can always check resource configurations of existing jet Providers as
 further examples under `config/<group>/config.go` in their repositories.
+
+_Please see [this figure] to understand why we really need 3 different
+functions to configure external names and, it visualizes which is used how._
 
 ### Cross Resource Referencing
 
@@ -406,7 +407,40 @@ data:
 kind: Secret
 ```
 
-### Late Initialization Behavior
+### Late Initialization Configuration
+
+Late initialization configuration is only required if there are conflicting
+arguments in terraform resource configuration.
+Unfortunately, there is _no easy way_ to figure that out without testing the
+resource, _so feel free to skip this configuration_ at the first place and
+revisit _only if_ you have errors like below while testing the resource.
+
+```
+observe failed: cannot run refresh: refresh failed: Invalid combination of arguments:
+  "address_prefix": only one of `address_prefix,address_prefixes` can be specified, but `address_prefix,address_prefixes` were specified.: File name: main.tf.json
+```
+
+If you would like to have the late-initialization library *not* to process the
+[`address_prefix`] parameter field, then the following configuration where we
+specify the parameter field path is sufficient:
+
+```go
+func Configure(p *config.Provider) {
+	p.AddResourceConfigurator("azurerm_subnet", func(r *config.Resource) {
+		r.LateInitializer = config.LateInitializer{
+			IgnoredFields: []string{"address_prefix"},
+		}
+	})
+}
+```
+
+_Please note that, there could be errors looking slightly different from above,
+so please consider configuring late initialization behaviour whenever you got
+some unexpected error starting with `observe failed:`, once you are sure that
+you provided all necessary parameters to your resource._
+
+#### Further details on Late Initialization
+
 Terrajet runtime automatically performs late-initialization during
 an [`external.Observe`] call with means of runtime reflection.
 State of the world observed by Terraform CLI is used to initialize
@@ -417,7 +451,8 @@ you will want/need to customize late-initialization behaviour. Thus,
 Terrajet provides an extensible [late-initialization customization API]
 that controls late-initialization behaviour.
 
-The associated resource struct is defined [here](https://github.com/crossplane-contrib/terrajet/blob/c9e21387298d8ed59fcd71c7f753ec401a3383a5/pkg/config/resource.go#L91) as follows:
+The associated resource struct is defined [here](https://github.com/crossplane/terrajet/blob/c9e21387298d8ed59fcd71c7f753ec401a3383a5/pkg/config/resource.go#L91) as follows:
+
 ```go
 // LateInitializer represents configurations that control
 // late-initialization behaviour
@@ -427,11 +462,13 @@ type LateInitializer struct {
     IgnoredFields []string
 }
 ```
+
 Currently, it only involves a configuration option to specify
 certain `spec` parameters to be ignored during late-initialization.
 Each element of the `LateInitializer.IgnoredFields` slice represents
 the canonical path relative to the parameters struct for the managed resource's `Spec`
 using `Go` type names as path elements. As an example, with the following type definitions:
+
 ```go
 type Subnet struct {
     metav1.TypeMeta   `json:",inline"`
@@ -457,19 +494,6 @@ type SubnetParameters struct {
     // +kubebuilder:validation:Optional
     Delegation []DelegationParameters `json:"delegation,omitempty" tf:"delegation,omitempty"`
     ...
-}
-```
-If you would like to have the late-initialization library *not* to process the
-[`address_prefix`] parameter field, then the following configuration where we
-specify the parameter field path is sufficient:
-
-```go
-func Configure(p *config.Provider) {
-	p.AddResourceConfigurator("azurerm_subnet", func(r *config.Resource) {
-		r.LateInitializer = config.LateInitializer{
-			IgnoredFields: []string{"address_prefix"},
-		}
-	})
 }
 ```
 
@@ -513,9 +537,9 @@ like:
 versa.
 - An attribute does not make sense to have in CRD schema, like
 [tags_all for jet AWS resources].
-- Field is of a collection type but [Elem] not set properly, e.g.
-[boot_disk.initialize_params.labels] in `google_compute_instance` (which would
-no longer be needed at least to default as `string` after [this PR]).
+- Moving parameters from Terraform provider config to resources schema to
+fit Crossplane model, e.g. [AWS region] parameter is part of provider config
+in Terraform but Crossplane expects it in CR spec.
 
 Schema of a resource could be overridden as follows:
 
@@ -535,7 +559,7 @@ p.AddResourceConfigurator("aws_autoscaling_group", func(r *config.Resource) {
 
 [comment]: <> (References)
 
-[Terrajet]: https://github.com/crossplane-contrib/terrajet
+[Terrajet]: https://github.com/crossplane/terrajet
 [External name]: #external-name
 [Cross Resource Referencing]: #cross-resource-referencing
 [Additional Sensitive Fields and Custom Connection Details]: #additional-sensitive-fields-and-custom-connection-details
@@ -556,20 +580,20 @@ p.AddResourceConfigurator("aws_autoscaling_group", func(r *config.Resource) {
 [arguments list]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc#argument-reference
 [example usages]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc#example-usage
 [IdentifierFromProvider]: https://github.com/crossplane/terrajet/blob/2299925ea2541e6a8088ede463cd865bd64eba32/pkg/config/defaults.go#L46
-
+[a similar identifier]: https://www.terraform.io/docs/glossary#id
 [import section of azurerm_sql_server]: https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/sql_server#import
 [handle dependencies]: https://crossplane.io/docs/v1.4/concepts/managed-resources.html#dependencies
 [user]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_access_key#user
 [generate reference resolution methods]: https://github.com/crossplane/crossplane-tools/pull/35
-[configuration]: https://github.com/crossplane-contrib/terrajet/blob/874bb6ad5cff9741241fb790a3a5d71166900860/pkg/config/resource.go#L77
+[configuration]: https://github.com/crossplane/terrajet/blob/874bb6ad5cff9741241fb790a3a5d71166900860/pkg/config/resource.go#L77
 [iam_access_key]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_access_key#argument-reference
 [kms key]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ebs_volume#kms_key_id
 [connection details]: https://crossplane.io/docs/v1.4/concepts/managed-resources.html#connection-details
-[handle sensitive fields]: https://github.com/crossplane-contrib/terrajet/pull/77
+[handle sensitive fields]: https://github.com/crossplane/terrajet/pull/77
 [id]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_access_key#id
 [secret]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_access_key#secret
-[`external.Observe`]: https://github.com/crossplane-contrib/terrajet/blob/874bb6ad5cff9741241fb790a3a5d71166900860/pkg/controller/external.go#L149
-[late-initialization customization API]: https://github.com/crossplane-contrib/terrajet/blob/874bb6ad5cff9741241fb790a3a5d71166900860/pkg/resource/lateinit.go#L86
+[`external.Observe`]: https://github.com/crossplane/terrajet/blob/874bb6ad5cff9741241fb790a3a5d71166900860/pkg/controller/external.go#L149
+[late-initialization customization API]: https://github.com/crossplane/terrajet/blob/874bb6ad5cff9741241fb790a3a5d71166900860/pkg/resource/lateinit.go#L86
 [`address_prefix`]: https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/subnet#address_prefix
 [Terraform schema of the resource]: https://github.com/hashicorp/terraform-plugin-sdk/blob/e3325b095ef501cf551f7935254ce942c44c1af0/helper/schema/schema.go#L34
 [Type]: https://github.com/hashicorp/terraform-plugin-sdk/blob/e3325b095ef501cf551f7935254ce942c44c1af0/helper/schema/schema.go#L52
@@ -580,4 +604,5 @@ p.AddResourceConfigurator("aws_autoscaling_group", func(r *config.Resource) {
 [Computed]: https://github.com/hashicorp/terraform-plugin-sdk/blob/e3325b095ef501cf551f7935254ce942c44c1af0/helper/schema/schema.go#L139
 [tags_all for jet AWS resources]: https://github.com/crossplane-contrib/provider-jet-aws/blob/c045bae7736da4a9cc80e7fc0fc4cfcd78de60df/config/overrides.go#L86
 [boot_disk.initialize_params.labels]: https://github.com/crossplane-contrib/provider-jet-gcp/blob/f90456c4fc032c021c8179ef061f4803bc01b488/config/compute/config.go#L157
-[this PR]: https://github.com/crossplane/terrajet/pull/182
+[AWS region]: https://github.com/crossplane-contrib/provider-jet-aws/blob/a5b6a6fea65634c475a84583e1e1776a048a0df9/config/overrides.go#L325
+[this figure]: images/terrajet-externalname.png
