@@ -242,10 +242,13 @@ be quite similar for any other Terraform provider.
    make generate
    ```
 
-**_To add more resources, please follow the steps between 6-8 for each resource.
+### Adding New Resources
+
+To add more resources, please **follow the steps between 6-8 for each resource**.
+
 Alternatively, you can drop the `tjconfig.WithIncludeList` option in provider
 Configuration which would generate all resources, and you can add resource
-configurations as a next step_**
+configurations as a next step.
 
 ## Test
 
