@@ -126,6 +126,7 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 	}
 	switch {
 	case res.IsApplying, res.IsDestroying:
+		mg.SetConditions(resource.AsyncOperationOngoingCondition())
 		return managed.ExternalObservation{
 			ResourceExists:   true,
 			ResourceUpToDate: true,
@@ -135,6 +136,10 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 			ResourceExists: false,
 		}, nil
 	}
+	// There might be a case where async operation is finished and the status
+	// update marking it as finished didn't go through. At this point, we are
+	// sure that there is no ongoing operation.
+	tr.SetConditions(resource.AsyncOperationFinishedCondition())
 
 	// No operation was in progress, our observation completed successfully, and
 	// we have an observation to consume.
@@ -189,7 +194,6 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 
 func (e *external) Create(ctx context.Context, mg xpresource.Managed) (managed.ExternalCreation, error) {
 	if e.config.UseAsync {
-		mg.SetConditions(resource.AsyncOperationOngoingCondition())
 		return managed.ExternalCreation{}, errors.Wrap(e.workspace.ApplyAsync(e.callback.Apply(mg.GetName())), errStartAsyncApply)
 	}
 	tr, ok := mg.(resource.Terraformed)
@@ -217,7 +221,6 @@ func (e *external) Create(ctx context.Context, mg xpresource.Managed) (managed.E
 
 func (e *external) Update(ctx context.Context, mg xpresource.Managed) (managed.ExternalUpdate, error) {
 	if e.config.UseAsync {
-		mg.SetConditions(resource.AsyncOperationOngoingCondition())
 		return managed.ExternalUpdate{}, errors.Wrap(e.workspace.ApplyAsync(e.callback.Apply(mg.GetName())), errStartAsyncApply)
 	}
 	tr, ok := mg.(resource.Terraformed)
