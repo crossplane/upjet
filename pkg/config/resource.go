@@ -22,6 +22,9 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/pkg/errors"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 )
 
 // SetIdentifierArgumentsFn sets the name of the resource in Terraform attributes map,
@@ -195,6 +198,9 @@ type OperationTimeouts struct {
 	Delete time.Duration
 }
 
+// InitializerFn returns the Initializer with a client.
+type InitializerFn func(client client.Client) managed.Initializer
+
 // Resource is the set of information that you can override at different steps
 // of the code generation pipeline.
 type Resource struct {
@@ -222,6 +228,8 @@ type Resource struct {
 	// takes more than 1 minute to complete such as Kubernetes clusters or
 	// databases.
 	UseAsync bool
+
+	Initializers []InitializerFn
 
 	// OperationTimeouts allows configuring resource operation timeouts.
 	OperationTimeouts OperationTimeouts
