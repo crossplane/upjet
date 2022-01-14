@@ -85,7 +85,9 @@ func toV2Schema(v1sch *schema.Schema) *schemav2.Schema {
 		case *schema.Resource:
 			v2sch.Elem = toV2Resource(et)
 		default:
-			panic("element type should be either schema.Resource or schema.Schema")
+			// Note(turkenh): We are defaulting to "String" as element type when
+			// it is not explicitly provided as element type of a collection.
+			v2sch.Elem = schemav2.TypeString
 		}
 	case schema.TypeInvalid:
 		panic(errors.Errorf("invalid schema type %s", v1sch.Type.String()))
