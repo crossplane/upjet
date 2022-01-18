@@ -211,7 +211,7 @@ func getNameFromFullyQualifiedID(tfstate map[string]interface{}) (string, error)
 	return words[len(words)-1], nil
 }
 
-func getFullyQualifiedIDfunc(ctx context.Context, externalName string, parameters map[string]interface{}, providerConfig map[string]interface{}) (string, error)
+func getFullyQualifiedIDfunc(ctx context.Context, externalName string, parameters map[string]interface{}, providerConfig map[string]interface{}) (string, error) {
 	subID, ok := providerConfig["subscription_id"]
     if !ok {
         return "", errors.Errorf(ErrFmtNoAttribute, "subscription_id")
