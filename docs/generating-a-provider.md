@@ -168,7 +168,7 @@ be quite similar for any other Terraform provider.
    import "github.com/crossplane/terrajet/pkg/config"
 
    // Configure configures individual resources by adding custom ResourceConfigurators.
-   func Customize(p *config.Provider) {
+   func Configure(p *config.Provider) {
        p.AddResourceConfigurator("github_repository", func(r *config.Resource) {
    
            // we need to override the default group that terrajet generated for
@@ -185,7 +185,7 @@ be quite similar for any other Terraform provider.
 
    import "github.com/crossplane/terrajet/pkg/config"
 
-   func Customize(p *config.Provider) {
+   func Configure(p *config.Provider) {
        p.AddResourceConfigurator("github_branch", func(r *config.Resource) {
    
            // we need to override the default group that terrajet generated for
@@ -225,8 +225,8 @@ be quite similar for any other Terraform provider.
        ...
        for _, configure := range []func(provider *tjconfig.Provider){
            add custom config functions
-   +           repository.Customize,
-   +           branch.Customize,
+   +           repository.Configure,
+   +           branch.Configure,
        } {
                configure(pc)
        }
