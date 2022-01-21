@@ -4,7 +4,6 @@ go 1.17
 
 require (
 	github.com/crossplane/crossplane-runtime v0.16.0
-	github.com/crossplane/terrajet v0.4.2
 	github.com/fatih/camelcase v1.0.0
 	github.com/golang/mock v1.6.0
 	github.com/google/go-cmp v0.5.8

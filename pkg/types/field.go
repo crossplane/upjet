@@ -28,7 +28,7 @@ type Field struct {
 }
 
 // NewField returns a constructed Field object.
-func NewField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema, snakeFieldName string, tfPath, xpPath, names []string, asBlocksMode bool) (*Field, error) {
+func NewField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema, snakeFieldName string, tfPath, xpPath, names []string, asBlocksMode bool, t map[string]Transformation) (*Field, error) {
 	f := &Field{
 		Schema:         sch,
 		Name:           name.NewFromSnake(snakeFieldName),
@@ -62,7 +62,7 @@ func NewField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema,
 		}
 	}
 
-	fieldType, err := g.buildSchema(f, cfg, names, r)
+	fieldType, err := g.buildSchema(f, cfg, t, names, r)
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot infer type from schema of field %s", f.Name.Snake)
 	}
@@ -72,8 +72,8 @@ func NewField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema,
 }
 
 // NewSensitiveField returns a constructed sensitive Field object.
-func NewSensitiveField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema, snakeFieldName string, tfPath, xpPath, names []string, asBlocksMode bool) (*Field, bool, error) { //nolint:gocyclo
-	f, err := NewField(g, cfg, r, sch, snakeFieldName, tfPath, xpPath, names, asBlocksMode)
+func NewSensitiveField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema, snakeFieldName string, tfPath, xpPath, names []string, asBlocksMode bool, t map[string]Transformation) (*Field, bool, error) { //nolint:gocyclo
+	f, err := NewField(g, cfg, r, sch, snakeFieldName, tfPath, xpPath, names, asBlocksMode, t)
 	if err != nil {
 		return nil, false, err
 	}
@@ -114,8 +114,8 @@ func NewSensitiveField(g *Builder, cfg *config.Resource, r *resource, sch *schem
 }
 
 // NewReferenceField returns a constructed reference Field object.
-func NewReferenceField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema, ref *config.Reference, snakeFieldName string, tfPath, xpPath, names []string, asBlocksMode bool) (*Field, error) {
-	f, err := NewField(g, cfg, r, sch, snakeFieldName, tfPath, xpPath, names, asBlocksMode)
+func NewReferenceField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema, ref *config.Reference, snakeFieldName string, tfPath, xpPath, names []string, asBlocksMode bool, t map[string]Transformation) (*Field, error) {
+	f, err := NewField(g, cfg, r, sch, snakeFieldName, tfPath, xpPath, names, asBlocksMode, t)
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +128,7 @@ func NewReferenceField(g *Builder, cfg *config.Resource, r *resource, sch *schem
 }
 
 // AddToResource adds built field to the resource.
-func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames) {
+func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames, t map[string]Transformation) {
 	if f.Comment.TerrajetOptions.FieldTFTag != nil {
 		f.TFTag = *f.Comment.TerrajetOptions.FieldTFTag
 	}
@@ -148,7 +148,7 @@ func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames) {
 	}
 
 	if f.Reference != nil {
-		r.addReferenceFields(g, typeNames.ParameterTypeName, field, *f.Reference)
+		r.addReferenceFields(g, typeNames.ParameterTypeName, field, *f.Reference, t, fieldPath(f.TerraformPaths))
 	}
 
 	g.comments.AddFieldComment(typeNames.ParameterTypeName, f.FieldNameCamel, f.Comment.Build())

@@ -29,9 +29,9 @@ import (
 	"github.com/pkg/errors"
 	"sigs.k8s.io/yaml"
 
-	"github.com/crossplane/terrajet/pkg/config"
-	"github.com/crossplane/terrajet/pkg/resource/json"
-	tjtypes "github.com/crossplane/terrajet/pkg/types"
+	"github.com/upbound/upjet/pkg/config"
+	"github.com/upbound/upjet/pkg/resource/json"
+	tjtypes "github.com/upbound/upjet/pkg/types"
 )
 
 var (
@@ -102,7 +102,9 @@ func (eg *ExampleGenerator) StoreExamples() error {
 		if err := eg.resolveReferences(pm.paved.UnstructuredContent()); err != nil {
 			return errors.Wrapf(err, "cannot resolve references for resource: %s", n)
 		}
-		buff, err := yaml.Marshal(pm.paved.UnstructuredContent())
+		u := pm.paved.UnstructuredContent()
+		delete(u["spec"].(map[string]interface{})["forProvider"].(map[string]interface{}), "depends_on")
+		buff, err := yaml.Marshal(u)
 		if err != nil {
 			return errors.Wrapf(err, "cannot marshal example manifest for resource: %s", n)
 		}

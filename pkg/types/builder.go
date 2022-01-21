@@ -96,29 +96,33 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 		}
 
 		var f *Field
+		tr := Transformation{}
 		switch {
 		case res.Schema[snakeFieldName].Sensitive:
 			var drop bool
-			f, drop, err = NewSensitiveField(g, cfg, r, res.Schema[snakeFieldName], snakeFieldName, tfPath, xpPath, names, asBlocksMode)
+			f, drop, err = NewSensitiveField(g, cfg, r, res.Schema[snakeFieldName], snakeFieldName, tfPath, xpPath, names, asBlocksMode, t)
 			if err != nil {
 				return nil, nil, err
 			}
 			if drop {
 				continue
 			}
+			tr.IsSensitive = true
 		case reference != nil:
-			f, err = NewReferenceField(g, cfg, r, res.Schema[snakeFieldName], reference, snakeFieldName, tfPath, xpPath, names, asBlocksMode)
+			f, err = NewReferenceField(g, cfg, r, res.Schema[snakeFieldName], reference, snakeFieldName, tfPath, xpPath, names, asBlocksMode, t)
 			if err != nil {
 				return nil, nil, err
 			}
+			tr.IsRef = true
 		default:
-			f, err = NewField(g, cfg, r, res.Schema[snakeFieldName], snakeFieldName, tfPath, xpPath, names, asBlocksMode)
+			f, err = NewField(g, cfg, r, res.Schema[snakeFieldName], snakeFieldName, tfPath, xpPath, names, asBlocksMode, t)
 			if err != nil {
 				return nil, nil, err
 			}
 		}
-
-		f.AddToResource(g, r, typeNames)
+		tr.TransformedName = f.Name.LowerCamelComputed
+		t[fieldPath(f.TerraformPaths)] = tr
+		f.AddToResource(g, r, typeNames, t)
 	}
 
 	paramType, obsType := g.AddToBuilder(typeNames, r)
@@ -173,7 +177,7 @@ func (g *Builder) buildSchema(f *Field, cfg *config.Resource, t map[string]Trans
 				return nil, errors.Errorf("element type of %s is basic but not one of known basic types", fieldPath(names))
 			}
 		case *schema.Schema:
-			newf, err := NewField(g, cfg, r, et, f.Name.Snake, f.TerraformPaths, f.CRDPaths, names, false)
+			newf, err := NewField(g, cfg, r, et, f.Name.Snake, f.TerraformPaths, f.CRDPaths, names, false, t)
 			if err != nil {
 				return nil, err
 			}
@@ -185,7 +189,7 @@ func (g *Builder) buildSchema(f *Field, cfg *config.Resource, t map[string]Trans
 			if f.Schema.ConfigMode == schema.SchemaConfigModeAttr {
 				asBlocksMode = true
 			}
-			paramType, obsType, err := g.buildResource(et, cfg, f.TerraformPaths, f.CRDPaths, asBlocksMode, names...)
+			paramType, obsType, err := g.buildResource(et, cfg, f.TerraformPaths, f.CRDPaths, asBlocksMode, t, names...)
 			if err != nil {
 				return nil, errors.Wrapf(err, "cannot infer type from resource schema of element type of %s", fieldPath(names))
 			}
@@ -289,10 +293,14 @@ func (r *resource) addObservationField(f *Field, field *types.Var) {
 	r.obsTags = append(r.obsTags, fmt.Sprintf(`json:"%s" tf:"%s"`, f.JSONTag, f.TFTag))
 }
 
-func (r *resource) addReferenceFields(g *Builder, paramName *types.TypeName, field *types.Var, ref config.Reference) {
-	refFields, refTags := g.generateReferenceFields(paramName, field, ref)
+func (r *resource) addReferenceFields(g *Builder, paramName *types.TypeName, field *types.Var, ref config.Reference, t map[string]Transformation, fPath string) {
+	refFields, refTags, names := g.generateReferenceFields(paramName, field, ref)
 	r.paramTags = append(r.paramTags, refTags...)
 	r.paramFields = append(r.paramFields, refFields...)
+	t[fPath] = Transformation{
+		TransformedName: names[0].LowerCamelComputed,
+		IsRef:           true,
+	}
 }
 
 // generateTypeName generates a unique name for the type if its original name
