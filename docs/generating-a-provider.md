@@ -20,7 +20,7 @@ be quite similar for any other Terraform provider.
         export ProviderNameUpper=GitHub
         ```
 
-    2. Run the `./hack/prepare.sh` script from repo root to prepare the repo, e.g., to 
+    2. Run the `./hack/prepare.sh` script from repo root to prepare the repo, e.g., to
        replace all occurrences of `template` with your provider name:
 
         ```bash
@@ -39,13 +39,13 @@ be quite similar for any other Terraform provider.
         ```
 
        You could find `TERRAFORM_PROVIDER_SOURCE` and `TERRAFORM_PROVIDER_VERSION` in
-       Terraform documentation of the provider by hitting the "**USE PROVIDER**"
+       [Terraform GitHub provider] documentation by hitting the "**USE PROVIDER**"
        button. Check [this line in controller Dockerfile] to see how these
        variables are used to build the provider plugin binary.
 
     2. Update import path of the Terraform provider schema package in the following
        **two files**: `cmd/generator/main.go` and `cmd/provider/main.go`
-       
+
        Provider schema package is typically under the `<provider-name>`
        directory in the GitHub repository of the Terraform provider, e.g.
        in [`github` directory] for the GitHub provider.
@@ -78,12 +78,28 @@ be quite similar for any other Terraform provider.
        import (
            "github.com/crossplane/terrajet/pkg/types/conversion"
        )
-       
+
        func main() {
            ...
 
            resourceMap := conversion.GetV2ResourceMap(tf.Provider())
            pipeline.Run(config.GetProvider(resourceMap), absRootDir)
+       }
+       ```
+
+       In a similar way in `cmd/provider/main.go`:
+
+       ```go
+       import (
+           "github.com/crossplane/terrajet/pkg/types/conversion"
+       )
+
+       func main() {
+           ...
+
+           resourceMap := conversion.GetV2ResourceMap(tf.Provider())
+           kingpin.FatalIfError(controller.Setup(mgr, log, rl, setup, ws, pconfig.GetProvider(resourceMap), 1), "Cannot setup Template controllers")
+           kingpin.FatalIfError(mgr.Start(ctrl.SetupSignalHandler()), "Cannot start controller manager")
        }
        ```
 
@@ -395,7 +411,7 @@ Now let's test our generated resources.
 [provider-jet-template]: https://github.com/crossplane-contrib/provider-jet-template
 [Terraform documentation for provider configuration]: https://registry.terraform.io/providers/integrations/github/latest/docs#argument-reference
 [`github` directory]: https://github.com/integrations/terraform-provider-github/tree/main/github
-[this line in controller Dockerfile]: https://github.com/crossplane-contrib/provider-jet-template/blob/70f485a3f227d30e7eaac43aaf42348f7e930232/cluster/images/provider-jet-template-controller/Dockerfile#L25
+[this line in controller Dockerfile]: https://github.com/crossplane-contrib/provider-jet-template/blob/d9a793dd8a304f09bb2e9694c47c1bade1b6b057/cluster/images/provider-jet-template-controller/Dockerfile#L18-L25
 [fork]: https://github.com/turkenh/terraform-provider-github
 [terraform-provider-github]: https://github.com/integrations/terraform-provider-github
 [terraform-plugin-sdk]: https://github.com/hashicorp/terraform-plugin-sdk
