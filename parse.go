@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"io/ioutil"
 
-	"github.com/crossplane-contrib/terrajet/pkg/types/conversion"
+	"github.com/crossplane/terrajet/pkg/types/conversion"
 
 	tfjson "github.com/hashicorp/terraform-json"
 )

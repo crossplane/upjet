@@ -1,5 +1,5 @@
 /*
- Copyright 2021 The Crossplane Authors.
+ Copyright 2022 The Crossplane Authors.
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -14,11 +14,9 @@
  limitations under the License.
 */
 
-package conversion
+package cli
 
 import (
-	"fmt"
-
 	tfjson "github.com/hashicorp/terraform-json"
 	schemav2 "github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/pkg/errors"
@@ -56,6 +54,14 @@ func v2ResourceFromTFJSONSchema(s *tfjson.Schema) *schemav2.Resource {
 		toSchemaMap[k] = tfJSONAttributeToV2Schema(v)
 	}
 	for k, v := range s.Block.NestedBlocks {
+		// Note(turkenh): We see resource timeouts here as NestingModeSingle.
+		// However, in plugin SDK resource timeouts is not part of resource
+		// schema map but set as a separate field. So, we just need to ignore
+		// here.
+		// https://github.com/hashicorp/terraform-plugin-sdk/blob/6461ac6e9044a44157c4e2c8aec0f1ab7efc2055/helper/schema/core_schema.go#L315
+		if v.NestingMode == tfjson.SchemaNestingModeSingle {
+			continue
+		}
 		toSchemaMap[k] = tfJSONBlockTypeToV2Schema(v)
 	}
 
@@ -86,6 +92,19 @@ func tfJSONBlockTypeToV2Schema(nb *tfjson.SchemaBlockType) *schemav2.Schema {
 		MaxItems: int(nb.MaxItems),
 	}
 
+	// Note(turkenh): Schema representation returned by the cli for block types
+	// does not have optional or computed fields. So, we are trying to infer
+	// those fields by doing the opposite of what is done here:
+	// https://github.com/hashicorp/terraform-plugin-sdk/blob/6461ac6e9044a44157c4e2c8aec0f1ab7efc2055/helper/schema/core_schema.go#L204
+	v2sch.Computed = false
+	v2sch.Optional = false
+	if nb.MinItems == 0 {
+		v2sch.Optional = true
+	}
+	if nb.MinItems == 0 && nb.MaxItems == 0 {
+		v2sch.Computed = true
+	}
+
 	switch nb.NestingMode {
 	case tfjson.SchemaNestingModeSet:
 		v2sch.Type = schemav2.TypeSet
@@ -94,13 +113,7 @@ func tfJSONBlockTypeToV2Schema(nb *tfjson.SchemaBlockType) *schemav2.Schema {
 	case tfjson.SchemaNestingModeMap:
 		v2sch.Type = schemav2.TypeMap
 	default:
-		// Note(turkenh): We see resource timeouts here as NestingModeSingle.
-		// However, in plugin SDK resource timeouts is not part of resource
-		// schema map but set as a separate field. So, I believe it is safe
-		// just to ignore this case here but keeping it for now until I could
-		// validate my assumption end to end.
-		fmt.Println("TODO: Handle this nesting mode " + nb.NestingMode)
-		return v2sch
+		panic("unknown nesting mode: " + nb.NestingMode)
 	}
 
 	if nb.Block == nil {
@@ -110,12 +123,20 @@ func tfJSONBlockTypeToV2Schema(nb *tfjson.SchemaBlockType) *schemav2.Schema {
 	v2sch.Description = nb.Block.Description
 	v2sch.Deprecated = deprecatedMessage(nb.Block.Deprecated)
 
-	res := schemav2.Resource{}
+	res := &schemav2.Resource{}
 	res.Schema = make(map[string]*schemav2.Schema, len(nb.Block.Attributes)+len(nb.Block.NestedBlocks))
 	for key, attr := range nb.Block.Attributes {
 		res.Schema[key] = tfJSONAttributeToV2Schema(attr)
 	}
 	for key, block := range nb.Block.NestedBlocks {
+		// Note(turkenh): We see resource timeouts here as NestingModeSingle.
+		// However, in plugin SDK resource timeouts is not part of resource
+		// schema map but set as a separate field. So, we just need to ignore
+		// here.
+		// https://github.com/hashicorp/terraform-plugin-sdk/blob/6461ac6e9044a44157c4e2c8aec0f1ab7efc2055/helper/schema/core_schema.go#L315
+		if block.NestingMode == tfjson.SchemaNestingModeSingle {
+			continue
+		}
 		res.Schema[key] = tfJSONBlockTypeToV2Schema(block)
 	}
 	v2sch.Elem = res
