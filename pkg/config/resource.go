@@ -18,13 +18,18 @@ package config
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/pkg/errors"
+	"k8s.io/apimachinery/pkg/util/json"
+	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
+	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 )
 
 // SetIdentifierArgumentsFn sets the name of the resource in Terraform attributes map,
@@ -198,8 +203,60 @@ type OperationTimeouts struct {
 	Delete time.Duration
 }
 
-// InitializerFn returns the Initializer with a client.
-type InitializerFn func(client client.Client) managed.Initializer
+// NewInitializerFn returns the Initializer with a client.
+type NewInitializerFn func(client client.Client) managed.Initializer
+
+// TagInitializer returns a tagger to use default tag initializer.
+var TagInitializer NewInitializerFn = func(client client.Client) managed.Initializer {
+	return NewTagger(client, "tags")
+}
+
+// Tagger implements the Initialize function to set external tags
+type Tagger struct {
+	kube      client.Client
+	fieldName string
+}
+
+// NewTagger returns a Tagger object.
+func NewTagger(kube client.Client, fieldName string) *Tagger {
+	return &Tagger{kube: kube, fieldName: fieldName}
+}
+
+// Initialize is a custom initializer for setting external tags
+func (t *Tagger) Initialize(ctx context.Context, mg xpresource.Managed) error {
+	paved, err := fieldpath.PaveObject(mg)
+	if err != nil {
+		return err
+	}
+	pavedByte, err := setExternalTagsWithPaved(xpresource.GetExternalTags(mg), paved, t.fieldName)
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(pavedByte, mg); err != nil {
+		return err
+	}
+	if err := t.kube.Update(ctx, mg); err != nil {
+		return err
+	}
+	return nil
+}
+
+func setExternalTagsWithPaved(externalTags map[string]string, paved *fieldpath.Paved, fieldName string) ([]byte, error) {
+	tags := map[string]*string{
+		xpresource.ExternalResourceTagKeyKind:     pointer.String(externalTags[xpresource.ExternalResourceTagKeyKind]),
+		xpresource.ExternalResourceTagKeyName:     pointer.String(externalTags[xpresource.ExternalResourceTagKeyName]),
+		xpresource.ExternalResourceTagKeyProvider: pointer.String(externalTags[xpresource.ExternalResourceTagKeyProvider]),
+	}
+
+	if err := paved.SetValue(fmt.Sprintf("spec.forProvider.%s", fieldName), tags); err != nil {
+		return nil, err
+	}
+	pavedByte, err := paved.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	return pavedByte, nil
+}
 
 // Resource is the set of information that you can override at different steps
 // of the code generation pipeline.
@@ -229,7 +286,7 @@ type Resource struct {
 	// databases.
 	UseAsync bool
 
-	Initializers []InitializerFn
+	InitializerFns []NewInitializerFn
 
 	// OperationTimeouts allows configuring resource operation timeouts.
 	OperationTimeouts OperationTimeouts
