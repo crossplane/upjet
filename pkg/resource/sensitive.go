@@ -36,6 +36,8 @@ const (
 	errCannotExpandWildcards          = "cannot expand wildcards"
 	errFmtCannotGetValueForFieldPath  = "cannot not get a value for fieldpath %q"
 	errFmtCannotGetStringForFieldPath = "cannot not get a string for fieldpath %q"
+	errFmtCannotGetSecretKeySelector  = "cannot get SecretKeySelector from xp resource for fieldpath %q"
+	errFmtCannotGetSecretValue        = "cannot get secret value for %v"
 )
 
 const (
@@ -44,6 +46,8 @@ const (
 	// overridden by any custom connection key configured which would break
 	// our ability to build tfstate back.
 	prefixAttribute = "attribute."
+
+	pluralSuffix = "s"
 
 	errGetAdditionalConnectionDetails = "cannot get additional connection details"
 	errFmtCannotOverrideExistingKey   = "overriding a reserved connection key (%q) is not allowed"
@@ -102,7 +106,7 @@ func GetConnectionDetails(attr map[string]interface{}, tr Terraformed, cfg *conf
 // GetSensitiveAttributes returns strings matching provided field paths in the
 // input data.
 // See the unit tests for examples.
-func GetSensitiveAttributes(from map[string]interface{}, mapping map[string]string) (map[string][]byte, error) {
+func GetSensitiveAttributes(from map[string]interface{}, mapping map[string]string) (map[string][]byte, error) { //nolint: gocyclo
 	if len(mapping) == 0 {
 		return nil, nil
 	}
@@ -124,10 +128,7 @@ func GetSensitiveAttributes(from map[string]interface{}, mapping map[string]stri
 			if v == nil {
 				continue
 			}
-			s, ok := v.(string)
-			if !ok {
-				return nil, errors.Errorf(errFmtCannotGetStringForFieldPath, fp)
-			}
+
 			// Note(turkenh): k8s secrets uses a strict regex to validate secret
 			// keys which does not allow having brackets inside. So, we need to
 			// do a conversion to be able to store as connection secret keys.
@@ -140,7 +141,21 @@ func GetSensitiveAttributes(from map[string]interface{}, mapping map[string]stri
 			if vals == nil {
 				vals = map[string][]byte{}
 			}
-			vals[fmt.Sprintf("%s%s", prefixAttribute, k)] = []byte(s)
+			switch s := v.(type) {
+			case []interface{}:
+				for i, e := range s {
+					value, ok := e.(string)
+					if !ok {
+						return nil, errors.Errorf(errFmtCannotGetStringForFieldPath, fp)
+					}
+					k = strings.TrimSuffix(k, pluralSuffix)
+					vals[fmt.Sprintf("%s%s.%v", prefixAttribute, k, i)] = []byte(value)
+				}
+			case string:
+				vals[fmt.Sprintf("%s%s", prefixAttribute, k)] = []byte(s)
+			default:
+				return nil, errors.Errorf(errFmtCannotGetStringForFieldPath, fp)
+			}
 		}
 	}
 	return vals, nil
@@ -181,20 +196,38 @@ func GetSensitiveParameters(ctx context.Context, client SecretClient, from runti
 			if v == nil {
 				continue
 			}
-			sel := &v1.SecretKeySelector{}
-			if err = pavedJSON.GetValueInto(expandedJSONPath, sel); err != nil {
-				return errors.Wrapf(err, "cannot get SecretKeySelector from xp resource for fieldpath %q", expandedJSONPath)
-			}
-			sensitive, err = client.GetSecretValue(ctx, *sel)
-			if err != nil {
-				return errors.Wrapf(err, "cannot get secret value for %v", sel)
-			}
-			expTF, err := expandedTFPath(expandedJSONPath, mapping)
-			if err != nil {
-				return err
-			}
-			if err = pavedTF.SetString(expTF, string(sensitive)); err != nil {
-				return errors.Wrapf(err, "cannot set string as terraform attribute for fieldpath %q", tfPath)
+
+			switch v.(type) {
+			case []map[string]interface{}, []interface{}:
+				sel := &[]v1.SecretKeySelector{}
+				if err = pavedJSON.GetValueInto(expandedJSONPath, sel); err != nil {
+					return errors.Wrapf(err, errFmtCannotGetSecretKeySelector, expandedJSONPath)
+				}
+				var sensitives []interface{}
+				for _, s := range *sel {
+					sensitive, err = client.GetSecretValue(ctx, s)
+					if err != nil {
+						return errors.Wrapf(err, errFmtCannotGetSecretValue, sel)
+					}
+					sensitives = append(sensitives, string(sensitive))
+				}
+				if err := setSensitiveParametersWithPaved(pavedTF, expandedJSONPath, tfPath, mapping, sensitives); err != nil {
+					return err
+				}
+			case map[string]interface{}, interface{}:
+				sel := &v1.SecretKeySelector{}
+				if err = pavedJSON.GetValueInto(expandedJSONPath, sel); err != nil {
+					return errors.Wrapf(err, errFmtCannotGetSecretKeySelector, expandedJSONPath)
+				}
+				sensitive, err = client.GetSecretValue(ctx, *sel)
+				if err != nil {
+					return errors.Wrapf(err, errFmtCannotGetSecretValue, sel)
+				}
+				if err := setSensitiveParametersWithPaved(pavedTF, expandedJSONPath, tfPath, mapping, string(sensitive)); err != nil {
+					return err
+				}
+			default:
+				return errors.Wrapf(err, errFmtCannotGetSecretKeySelector, expandedJSONPath)
 			}
 		}
 	}
@@ -326,4 +359,15 @@ func fieldPathToSecretKey(s string) (string, error) {
 	}
 
 	return strings.TrimPrefix(b.String(), "."), nil
+}
+
+func setSensitiveParametersWithPaved(pavedTF *fieldpath.Paved, expandedJSONPath, tfPath string, mapping map[string]string, sensitives interface{}) error {
+	expTF, err := expandedTFPath(expandedJSONPath, mapping)
+	if err != nil {
+		return err
+	}
+	if err = pavedTF.SetValue(expTF, sensitives); err != nil {
+		return errors.Wrapf(err, "cannot set string as terraform attribute for fieldpath %q", tfPath)
+	}
+	return nil
 }

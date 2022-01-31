@@ -82,10 +82,6 @@ var (
 )
 
 func TestGetConnectionDetails(t *testing.T) {
-	testInput := map[string]interface{}{}
-	if err := json.JSParser.Unmarshal(testData, &testInput); err != nil {
-		t.Fatalf("cannot unmarshall test data: %v", err)
-	}
 	type args struct {
 		tr   Terraformed
 		cfg  *config.Resource
@@ -122,6 +118,32 @@ func TestGetConnectionDetails(t *testing.T) {
 			want: want{
 				out: map[string][]byte{
 					"attribute.top_level_secret": []byte("sensitive-data-top-level-secret"),
+				},
+			},
+		},
+		"SecretList": {
+			args: args{
+				tr: &fake.Terraformed{
+					MetadataProvider: fake.MetadataProvider{
+						ConnectionDetailsMapping: map[string]string{
+							"top_level_secrets": "status.atProvider.topLevelSecrets",
+						},
+					},
+				},
+				cfg: config.DefaultResource("terrajet_resource", nil),
+				data: map[string]interface{}{
+					"top_level_secrets": []interface{}{
+						"val1",
+						"val2",
+						"val3",
+					},
+				},
+			},
+			want: want{
+				out: map[string][]byte{
+					"attribute.top_level_secret.0": []byte("val1"),
+					"attribute.top_level_secret.1": []byte("val2"),
+					"attribute.top_level_secret.2": []byte("val3"),
 				},
 			},
 		},
@@ -413,6 +435,61 @@ func TestGetSensitiveParameters(t *testing.T) {
 				out: map[string]interface{}{
 					"some_other_key": "some_other_value",
 					"admin_password": "foo",
+				},
+			},
+		},
+		"SingleNoWildcardWithSlice": {
+			args: args{
+				clientFn: func(client *mocks.MockSecretClient) {
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
+						SecretReference: xpv1.SecretReference{
+							Name:      "db-passwords",
+							Namespace: "crossplane-system",
+						},
+						Key: "admin",
+					})).Return([]byte("admin_pwd"), nil)
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
+						SecretReference: xpv1.SecretReference{
+							Name:      "db-passwords",
+							Namespace: "crossplane-system",
+						},
+						Key: "system",
+					})).Return([]byte("system_pwd"), nil)
+				},
+				from: &unstructured.Unstructured{
+					Object: map[string]interface{}{
+						"spec": map[string]interface{}{
+							"forProvider": map[string]interface{}{
+								"passwordsSecretRef": []map[string]interface{}{
+									{
+										"name":      "db-passwords",
+										"namespace": "crossplane-system",
+										"key":       "admin",
+									},
+									{
+										"name":      "db-passwords",
+										"namespace": "crossplane-system",
+										"key":       "system",
+									},
+								},
+							},
+						},
+					},
+				},
+				into: map[string]interface{}{
+					"some_other_key": "some_other_value",
+				},
+				mapping: map[string]string{
+					"db_passwords": "spec.forProvider.passwordsSecretRef",
+				},
+			},
+			want: want{
+				out: map[string]interface{}{
+					"some_other_key": "some_other_value",
+					"db_passwords": []interface{}{
+						"admin_pwd",
+						"system_pwd",
+					},
 				},
 			},
 		},
