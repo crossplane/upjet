@@ -8,3 +8,4 @@ In alphabetical order:
 * Alper Rifat Uluçınar <alper@upbound.io> ([ulucinar](https://github.com/ulucinar))
 * Hasan Türken <hasan@upbound.io> ([turkenh](https://github.com/turkenh))
 * Muvaffak Onuş <monus@upbound.io> ([muvaf](https://github.com/muvaf))
+* Sergen Yalçın <sergen@upbound.io> ([sergenyalcin](https://github.com/sergenyalcin))
