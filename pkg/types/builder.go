@@ -156,8 +156,8 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 			cfg.Sensitive.AddFieldPath(fieldPathWithWildcard(tfPaths), "spec.forProvider."+fieldPathWithWildcard(xpPaths)+sfx)
 			// todo(turkenh): do we need to support other field types as sensitive?
 			if fieldType.String() != "string" && fieldType.String() != "*string" && fieldType.String() != "[]string" &&
-				fieldType.String() != "[]*string" {
-				return nil, nil, fmt.Errorf(`got type %q for field %q, only types "string", "*string", []string and []*string supported as sensitive`, fieldType.String(), fieldNameCamel)
+				fieldType.String() != "[]*string" && fieldType.String() != "map[string]string" && fieldType.String() != "map[string]*string" {
+				return nil, nil, fmt.Errorf(`got type %q for field %q, only types "string", "*string", []string, []*string, "map[string]string" and "map[string]*string" supported as sensitive`, fieldType.String(), fieldNameCamel)
 			}
 			// Replace a parameter field with secretKeyRef if it is sensitive.
 			// If it is an observation field, it will be dropped.
@@ -170,9 +170,12 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 				fieldType = typeSecretKeySelector
 			case "[]string", "[]*string":
 				fieldType = types.NewSlice(typeSecretKeySelector)
+			case "map[string]string", "map[string]*string":
+				fieldType = types.NewMap(types.Universe.Lookup("string").Type(), typeSecretKeySelector)
 			}
 			jsonTag = name.NewFromCamel(fieldNameCamel).LowerCamelComputed
-			if sch.Optional {
+			// Maps and slices are already pointers, so we don't need to wrap them even if they are optional.
+			if sch.Optional && sch.Type != schema.TypeMap && sch.Type != schema.TypeList {
 				fieldType = types.NewPointer(fieldType)
 				jsonTag += ",omitempty"
 			}

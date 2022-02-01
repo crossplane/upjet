@@ -11,7 +11,7 @@ require (
 	github.com/hashicorp/terraform-plugin-sdk/v2 v2.7.0
 	github.com/iancoleman/strcase v0.2.0
 	github.com/json-iterator/go v1.1.11
-	github.com/muvaf/typewriter v0.0.0-20210910160850-80e49fe1eb32
+	github.com/muvaf/typewriter v0.0.0-20220131201631-921e94e8e8d7
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/afero v1.6.0
 	golang.org/x/tools v0.1.5
