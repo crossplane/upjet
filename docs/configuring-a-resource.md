@@ -11,6 +11,8 @@ documentation of the resource:
 - [Cross Resource Referencing]
 - [Additional Sensitive Fields and Custom Connection Details]
 - [Late Initialization Behavior]
+- [Overriding Terraform Resource Schema]
+- [Initializers]
 
 ### External Name
 
@@ -557,13 +559,66 @@ p.AddResourceConfigurator("aws_autoscaling_group", func(r *config.Resource) {
 })
 ```
 
+### Initializers
+
+Initializers establish ownership of the supplied Managed resources in Crossplane.
+This typically involves the operations that are run before calling any
+ExternalClient methods.
+
+This configuration option will provide that setting custom initializers for per 
+resource and is set by using the [InitializerFns] field that is a list of [NewInitializerFn]:
+
+```go
+// NewInitializerFn returns the Initializer with a client.
+type NewInitializerFn func(client client.Client) managed.Initializer
+```
+
+Initializer is an interface in [crossplane-runtime]:
+
+```go
+type Initializer interface {
+	Initialize(ctx context.Context, mg resource.Managed) error
+}
+```
+
+So, an interface must be passed to the related configuration field for adding initializers for a resource.
+Let's check an example about how can this configuration be used.
+
+`tags` is very common schema field for aws resources. Also, setting [some external labels] is a very common
+use case in Crossplane. Therefore, an initializer that sets the crossplane related labels for resources
+can be added in config file of the related resource:
+
+```go
+// Tagger implements the Initialize function to set external tags
+type Tagger struct {
+    kube      client.Client
+}
+
+// TagInitializer returns a tagger to use default tag initializer.
+var TagInitializer NewInitializerFn = func(kube client.Client) managed.Initializer {
+    return &Tagger{kube: kube}
+}
+
+func (t *Tagger) Initialize(ctx context.Context, mg xpresource.Managed) error {
+	// ...
+}
+p.AddResourceConfigurator("aws_s3_bucket", func(r *config.Resource) {
+    r.InitializerFns = append(r.InitializerFns, TagInitializer)
+}
+```
+
+In above example, `Tagger` struct implements the `Initialize` function, and so a `Tagger` instance
+can be used as an initializer. The custom logic of the initializer will be implemented in `Initialize`
+function.
+
 [comment]: <> (References)
 
 [Terrajet]: https://github.com/crossplane/terrajet
 [External name]: #external-name
 [Cross Resource Referencing]: #cross-resource-referencing
 [Additional Sensitive Fields and Custom Connection Details]: #additional-sensitive-fields-and-custom-connection-details
-[Late Initialization Behavior]: #late-initialization-behavior
+[Late Initialization Behavior]: #late-initialization-configuration
+[Overriding Terraform Resource Schema]: #overriding-terraform-resource-schema
 [the external name documentation]: https://crossplane.io/docs/v1.4/concepts/managed-resources.html#external-name
 [concept to identify a resource]: https://www.terraform.io/docs/glossary#id
 [import section]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_access_key#import
@@ -606,3 +661,8 @@ p.AddResourceConfigurator("aws_autoscaling_group", func(r *config.Resource) {
 [boot_disk.initialize_params.labels]: https://github.com/crossplane-contrib/provider-jet-gcp/blob/f90456c4fc032c021c8179ef061f4803bc01b488/config/compute/config.go#L157
 [AWS region]: https://github.com/crossplane-contrib/provider-jet-aws/blob/a5b6a6fea65634c475a84583e1e1776a048a0df9/config/overrides.go#L325
 [this figure]: images/terrajet-externalname.png
+[Initializers]: #initializers
+[InitializerFns]: https://github.com/crossplane/terrajet/blob/ae78a0a4c438f01717002e00fac761524aa6e951/pkg/config/resource.go#L289
+[NewInitializerFn]: https://github.com/crossplane/terrajet/blob/ae78a0a4c438f01717002e00fac761524aa6e951/pkg/config/resource.go#L207
+[crossplane-runtime]: https://github.com/crossplane/crossplane-runtime/blob/428b7c3903756bb0dcf5330f40298e1fa0c34301/pkg/reconciler/managed/reconciler.go#L138
+[some external labels]: https://github.com/crossplane/crossplane-runtime/blob/428b7c3903756bb0dcf5330f40298e1fa0c34301/pkg/resource/resource.go#L397
