@@ -14,7 +14,7 @@
  limitations under the License.
 */
 
-package cli
+package tfjson
 
 import (
 	tfjson "github.com/hashicorp/terraform-json"
@@ -23,7 +23,11 @@ import (
 	"github.com/zclconf/go-cty/cty"
 )
 
-// Note(turkenh): What we are trying to achieve here is to convert a lower level
+// GetV2ResourceMap converts input resource schemas with
+// "terraform-json" representation to terraform-plugin-sdk representation which
+// is what Terrajet expects today.
+//
+// What we are trying to achieve here is to convert a lower level
 // representation of resource schema map, e.g. output of `terraform providers schema -json`
 // to plugin sdk representation. This is mostly the opposite of what the
 // following method is doing: https://github.com/hashicorp/terraform-plugin-sdk/blob/7e0a333644f1971a936995677b7a106140a0659f/helper/schema/core_schema.go#L43
@@ -33,8 +37,7 @@ import (
 // there exactly for this purpose, an external representation of Terraform
 // schemas. This conversion aims to be an intermediate step for that ultimate
 // goal.
-
-func GetV2ResourceMapFromTFJSONSchemaMap(resourceSchemas map[string]*tfjson.Schema) map[string]*schemav2.Resource {
+func GetV2ResourceMap(resourceSchemas map[string]*tfjson.Schema) map[string]*schemav2.Resource {
 	v2map := make(map[string]*schemav2.Resource, len(resourceSchemas))
 	for k, v := range resourceSchemas {
 		v2map[k] = v2ResourceFromTFJSONSchema(v)
@@ -86,12 +89,11 @@ func tfJSONAttributeToV2Schema(attr *tfjson.SchemaAttribute) *schemav2.Schema {
 	return v2sch
 }
 
-func tfJSONBlockTypeToV2Schema(nb *tfjson.SchemaBlockType) *schemav2.Schema {
+func tfJSONBlockTypeToV2Schema(nb *tfjson.SchemaBlockType) *schemav2.Schema { //nolint:gocyclo
 	v2sch := &schemav2.Schema{
 		MinItems: int(nb.MinItems),
 		MaxItems: int(nb.MaxItems),
 	}
-
 	// Note(turkenh): Schema representation returned by the cli for block types
 	// does not have optional or computed fields. So, we are trying to infer
 	// those fields by doing the opposite of what is done here:
@@ -112,6 +114,8 @@ func tfJSONBlockTypeToV2Schema(nb *tfjson.SchemaBlockType) *schemav2.Schema {
 		v2sch.Type = schemav2.TypeList
 	case tfjson.SchemaNestingModeMap:
 		v2sch.Type = schemav2.TypeMap
+	case tfjson.SchemaNestingModeSingle, tfjson.SchemaNestingModeGroup:
+		panic("unexpected nesting mode: " + nb.NestingMode)
 	default:
 		panic("unknown nesting mode: " + nb.NestingMode)
 	}
@@ -143,7 +147,7 @@ func tfJSONBlockTypeToV2Schema(nb *tfjson.SchemaBlockType) *schemav2.Schema {
 	return v2sch
 }
 
-func schemaV2TypeFromCtyType(typ cty.Type, schema *schemav2.Schema) error {
+func schemaV2TypeFromCtyType(typ cty.Type, schema *schemav2.Schema) error { //nolint:gocyclo
 	switch {
 	case typ.IsPrimitiveType():
 		schema.Type = primitiveToV2SchemaType(typ)
