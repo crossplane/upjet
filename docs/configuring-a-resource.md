@@ -561,12 +561,88 @@ p.AddResourceConfigurator("aws_autoscaling_group", func(r *config.Resource) {
 
 ### Initializers
 
-Initializers establish ownership of the supplied Managed resources in Crossplane.
-This typically involves the operations that are run before calling any
-ExternalClient methods.
+Initializers involve the operations that run before beginning of reconciliation. This configuration option will 
+provide that setting initializers for per resource.
 
-This configuration option will provide that setting custom initializers for per 
-resource and is set by using the [InitializerFns] field that is a list of [NewInitializerFn]:
+Many resources in aws have `tags` field in their schema. Also, in Crossplane there is a [tagging convention]. 
+To implement the tagging convention for jet-aws provider, this initializer configuration support was provided.
+
+There is a common struct (`Tagger`) in terrajet to use the tagging convention:
+
+```go
+// Tagger implements the Initialize function to set external tags
+type Tagger struct {
+	kube      client.Client
+	fieldName string
+}
+
+// NewTagger returns a Tagger object.
+func NewTagger(kube client.Client, fieldName string) *Tagger {
+	return &Tagger{kube: kube, fieldName: fieldName}
+}
+
+// Initialize is a custom initializer for setting external tags
+func (t *Tagger) Initialize(ctx context.Context, mg xpresource.Managed) error {
+	paved, err := fieldpath.PaveObject(mg)
+	if err != nil {
+		return err
+	}
+	pavedByte, err := setExternalTagsWithPaved(xpresource.GetExternalTags(mg), paved, t.fieldName)
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(pavedByte, mg); err != nil {
+		return err
+	}
+	if err := t.kube.Update(ctx, mg); err != nil {
+		return err
+	}
+	return nil
+}
+```
+
+As seen above, the `Tagger` struct accepts a `fieldName`. This `fieldName` specifies which value of field to set in the 
+resource's spec. You can use the common `Initializer` by specifying the field name that points to the external tags 
+in the configured resource.
+
+There is also a default initializer for tagging convention, `TagInitializer`. It sets the value of `fieldName` to `tags` 
+as default:
+
+```go
+// TagInitializer returns a tagger to use default tag initializer.
+var TagInitializer NewInitializerFn = func(client client.Client) managed.Initializer {
+	return NewTagger(client, "tags")
+}
+```
+
+In jet-aws provider, as a default process, if a resource has `tags` field in its schema, then the default initializer
+(`TagInitializer`) is added to Initializer list of resource:
+
+```go
+// AddExternalTagsField adds ExternalTagsFieldName configuration for resources that have tags field.
+func AddExternalTagsField() tjconfig.ResourceOption {
+	return func(r *tjconfig.Resource) {
+		if s, ok := r.TerraformResource.Schema["tags"]; ok && s.Type == schema.TypeMap {
+			r.InitializerFns = append(r.InitializerFns, tjconfig.TagInitializer)
+		}
+	}
+}
+```
+
+However, if the field name that used for the external label is different from the `tags`, the `NewTagger` function can be
+called and the specific `fieldName` can be passed to this:
+
+```go
+r.InitializerFns = append(r.InitializerFns, func(client client.Client) managed.Initializer {
+	return tjconfig.NewTagger(client, "example_tags_name")
+})
+```
+
+If the above tagging convention logic does not work for you, and you want to use this configuration option for a reason 
+other than tagging convention (for another custom initializer operation), you need to write your own struct in provider 
+and have this struct implement the `Initializer` function with a custom logic.
+
+This configuration option is set by using the [InitializerFns] field that is a list of [NewInitializerFn]:
 
 ```go
 // NewInitializerFn returns the Initializer with a client.
@@ -582,34 +658,6 @@ type Initializer interface {
 ```
 
 So, an interface must be passed to the related configuration field for adding initializers for a resource.
-Let's check an example about how can this configuration be used.
-
-`tags` is very common schema field for aws resources. Also, setting [some external labels] is a very common
-use case in Crossplane. Therefore, an initializer that sets the crossplane related labels for resources
-can be added in config file of the related resource:
-
-```go
-// Tagger implements the Initialize function to set external tags
-type Tagger struct {
-    kube      client.Client
-}
-
-// TagInitializer returns a tagger to use default tag initializer.
-var TagInitializer NewInitializerFn = func(kube client.Client) managed.Initializer {
-    return &Tagger{kube: kube}
-}
-
-func (t *Tagger) Initialize(ctx context.Context, mg xpresource.Managed) error {
-	// ...
-}
-p.AddResourceConfigurator("aws_s3_bucket", func(r *config.Resource) {
-    r.InitializerFns = append(r.InitializerFns, TagInitializer)
-}
-```
-
-In above example, `Tagger` struct implements the `Initialize` function, and so a `Tagger` instance
-can be used as an initializer. The custom logic of the initializer will be implemented in `Initialize`
-function.
 
 [comment]: <> (References)
 
@@ -666,3 +714,4 @@ function.
 [NewInitializerFn]: https://github.com/crossplane/terrajet/blob/ae78a0a4c438f01717002e00fac761524aa6e951/pkg/config/resource.go#L207
 [crossplane-runtime]: https://github.com/crossplane/crossplane-runtime/blob/428b7c3903756bb0dcf5330f40298e1fa0c34301/pkg/reconciler/managed/reconciler.go#L138
 [some external labels]: https://github.com/crossplane/crossplane-runtime/blob/428b7c3903756bb0dcf5330f40298e1fa0c34301/pkg/resource/resource.go#L397
+[tagging convention]: https://github.com/crossplane/crossplane/blob/master/design/one-pager-managed-resource-api-design.md#external-resource-labeling
