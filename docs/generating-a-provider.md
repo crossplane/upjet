@@ -80,14 +80,14 @@ be quite similar for any other Terraform provider.
    ```
 
 6. Before generating all resources that the provider has, let's go step by step
-   and only start with generating `github_repository` and `github_branch`
-   resources.
+   and only start with generating CRDs for [github_repository] and
+   [github_branch] Terraform resources.
 
    To limit the resources to be generated, we need to provide an include list
    option with `tjconfig.WithIncludeList` in file `config/provider.go`:
 
    ```go
-   pc := tjconfig.NewProvider(resourceMap, resourcePrefix, modulePath,
+   pc := tjconfig.NewProviderWithSchema([]byte(providerSchema), resourcePrefix, modulePath,
        tjconfig.WithDefaultResourceFn(defaultResourceFn),
        tjconfig.WithIncludeList([]string{
            "github_repository$",
@@ -339,5 +339,7 @@ Now let's test our generated resources.
 [Terraform GitHub provider]: https://registry.terraform.io/providers/integrations/github/latest/docs
 [provider-jet-template]: https://github.com/crossplane-contrib/provider-jet-template
 [Terraform documentation for provider configuration]: https://registry.terraform.io/providers/integrations/github/latest/docs#argument-reference
+[github_repository]: https://registry.terraform.io/providers/integrations/github/latest/docs/resources/repository
+[github_branch]: https://registry.terraform.io/providers/integrations/github/latest/docs/resources/branch
 [this line in controller Dockerfile]: https://github.com/crossplane-contrib/provider-jet-template/blob/d9a793dd8a304f09bb2e9694c47c1bade1b6b057/cluster/images/provider-jet-template-controller/Dockerfile#L18-L25
 [terraform-plugin-sdk]: https://github.com/hashicorp/terraform-plugin-sdk
