@@ -25,6 +25,8 @@ import (
 
 // GetV2ResourceMap returns a Terraform provider SDK v2 resource map for an
 // input SDK v1 Terraform Resource Provider.
+// Deprecated: This functionality will be removed soon, please use
+// tfjson.GetV2ResourceMap instead.
 func GetV2ResourceMap(p terraform.ResourceProvider) map[string]*schemav2.Resource {
 	v1map := p.(*schema.Provider).ResourcesMap
 	v2map := make(map[string]*schemav2.Resource, len(v1map))
