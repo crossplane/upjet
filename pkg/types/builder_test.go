@@ -327,7 +327,7 @@ func TestBuild(t *testing.T) {
 				},
 			},
 			want: want{
-				err: errors.Wrapf(fmt.Errorf(`got type %q for field %q, only types "string", "*string", []string and []*string supported as sensitive`, "*float64", "Key1"), "cannot build the Types"),
+				err: errors.Wrapf(fmt.Errorf(`got type %q for field %q, only types "string", "*string", []string, []*string, "map[string]string" and "map[string]*string" supported as sensitive`, "*float64", "Key1"), "cannot build the Types"),
 			},
 		},
 		"References": {

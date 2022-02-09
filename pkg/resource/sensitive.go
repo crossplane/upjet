@@ -33,11 +33,13 @@ import (
 )
 
 const (
-	errCannotExpandWildcards          = "cannot expand wildcards"
-	errFmtCannotGetValueForFieldPath  = "cannot not get a value for fieldpath %q"
-	errFmtCannotGetStringForFieldPath = "cannot not get a string for fieldpath %q"
-	errFmtCannotGetSecretKeySelector  = "cannot get SecretKeySelector from xp resource for fieldpath %q"
-	errFmtCannotGetSecretValue        = "cannot get secret value for %v"
+	errCannotExpandWildcards               = "cannot expand wildcards"
+	errFmtCannotGetValueForFieldPath       = "cannot not get a value for fieldpath %q"
+	errFmtCannotGetStringForFieldPath      = "cannot not get a string for fieldpath %q"
+	errFmtCannotGetSecretKeySelector       = "cannot get SecretKeySelector from xp resource for fieldpath %q"
+	errFmtCannotGetSecretKeySelectorAsList = "cannot get SecretKeySelector list from xp resource for fieldpath %q"
+	errFmtCannotGetSecretKeySelectorAsMap  = "cannot get SecretKeySelector map from xp resource for fieldpath %q"
+	errFmtCannotGetSecretValue             = "cannot get secret value for %v"
 )
 
 const (
@@ -204,7 +206,7 @@ func GetSensitiveParameters(ctx context.Context, client SecretClient, from runti
 			case map[string]interface{}:
 				sel := &map[string]v1.SecretKeySelector{}
 				if err = pavedJSON.GetValueInto(expandedJSONPath, sel); err != nil {
-					return errors.Wrapf(err, errFmtCannotGetSecretKeySelector, expandedJSONPath)
+					return errors.Wrapf(err, errFmtCannotGetSecretKeySelectorAsMap, expandedJSONPath)
 				}
 				sensitives := make(map[string]interface{})
 				for key, value := range *sel {
@@ -220,7 +222,7 @@ func GetSensitiveParameters(ctx context.Context, client SecretClient, from runti
 			case []interface{}:
 				sel := &[]v1.SecretKeySelector{}
 				if err = pavedJSON.GetValueInto(expandedJSONPath, sel); err != nil {
-					return errors.Wrapf(err, errFmtCannotGetSecretKeySelector, expandedJSONPath)
+					return errors.Wrapf(err, errFmtCannotGetSecretKeySelectorAsList, expandedJSONPath)
 				}
 				var sensitives []interface{}
 				for _, s := range *sel {
