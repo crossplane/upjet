@@ -81,6 +81,28 @@ var (
 	errBoom = errors.New("boom")
 )
 
+type secretKeySelectorModifier func(s *xpv1.SecretKeySelector)
+
+func secretKeySelectorWithKey(v string) secretKeySelectorModifier {
+	return func(s *xpv1.SecretKeySelector) {
+		s.Key = v
+	}
+}
+
+func secretKeySelectorWithSecretReference(v xpv1.SecretReference) secretKeySelectorModifier {
+	return func(s *xpv1.SecretKeySelector) {
+		s.SecretReference = v
+	}
+}
+
+func secretKeySelector(sm ...secretKeySelectorModifier) *xpv1.SecretKeySelector {
+	s := &xpv1.SecretKeySelector{}
+	for _, m := range sm {
+		m(s)
+	}
+	return s
+}
+
 func TestGetConnectionDetails(t *testing.T) {
 	type args struct {
 		tr   Terraformed
@@ -144,6 +166,32 @@ func TestGetConnectionDetails(t *testing.T) {
 					"attribute.top_level_secret.0": []byte("val1"),
 					"attribute.top_level_secret.1": []byte("val2"),
 					"attribute.top_level_secret.2": []byte("val3"),
+				},
+			},
+		},
+		"Map": {
+			args: args{
+				tr: &fake.Terraformed{
+					MetadataProvider: fake.MetadataProvider{
+						ConnectionDetailsMapping: map[string]string{
+							"top_level_secrets": "status.atProvider.topLevelSecrets",
+						},
+					},
+				},
+				cfg: config.DefaultResource("terrajet_resource", nil),
+				data: map[string]interface{}{
+					"top_level_secrets": map[string]interface{}{
+						"key1": "val1",
+						"key2": "val2",
+						"key3": "val3",
+					},
+				},
+			},
+			want: want{
+				out: map[string][]byte{
+					"attribute.top_level_secret.key1": []byte("val1"),
+					"attribute.top_level_secret.key2": []byte("val2"),
+					"attribute.top_level_secret.key3": []byte("val3"),
 				},
 			},
 		},
@@ -346,11 +394,11 @@ func TestGetSensitiveAttributes(t *testing.T) {
 		},
 		"NotAValue": {
 			args: args{
-				paths: map[string]string{"top_config_secretmap": ""},
+				paths: map[string]string{"inner_optional": ""},
 				data:  testInput,
 			},
 			want: want{
-				err: errors.Errorf(errFmtCannotGetStringForFieldPath, "top_config_secretmap"),
+				out: nil,
 			},
 		},
 		"UnexpectedWildcard": {
@@ -415,11 +463,13 @@ func TestGetSensitiveParameters(t *testing.T) {
 					Object: map[string]interface{}{
 						"spec": map[string]interface{}{
 							"forProvider": map[string]interface{}{
-								"adminPasswordSecretRef": map[string]interface{}{
-									"name":      "admin-password",
-									"namespace": "crossplane-system",
-									"key":       "pass",
-								},
+								"adminPasswordSecretRef": secretKeySelector(
+									secretKeySelectorWithKey("pass"),
+									secretKeySelectorWithSecretReference(xpv1.SecretReference{
+										Name:      "admin-password",
+										Namespace: "crossplane-system",
+									}),
+								),
 							},
 						},
 					},
@@ -460,17 +510,21 @@ func TestGetSensitiveParameters(t *testing.T) {
 					Object: map[string]interface{}{
 						"spec": map[string]interface{}{
 							"forProvider": map[string]interface{}{
-								"passwordsSecretRef": []map[string]interface{}{
-									{
-										"name":      "db-passwords",
-										"namespace": "crossplane-system",
-										"key":       "admin",
-									},
-									{
-										"name":      "db-passwords",
-										"namespace": "crossplane-system",
-										"key":       "system",
-									},
+								"passwordsSecretRef": []interface{}{
+									secretKeySelector(
+										secretKeySelectorWithKey("admin"),
+										secretKeySelectorWithSecretReference(xpv1.SecretReference{
+											Name:      "db-passwords",
+											Namespace: "crossplane-system",
+										}),
+									),
+									secretKeySelector(
+										secretKeySelectorWithKey("system"),
+										secretKeySelectorWithSecretReference(xpv1.SecretReference{
+											Name:      "db-passwords",
+											Namespace: "crossplane-system",
+										}),
+									),
 								},
 							},
 						},
@@ -493,6 +547,65 @@ func TestGetSensitiveParameters(t *testing.T) {
 				},
 			},
 		},
+		"SingleNoWildcardWithMap": {
+			args: args{
+				clientFn: func(client *mocks.MockSecretClient) {
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
+						SecretReference: xpv1.SecretReference{
+							Name:      "db-passwords",
+							Namespace: "crossplane-system",
+						},
+						Key: "admin",
+					})).Return([]byte("admin_pwd"), nil)
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
+						SecretReference: xpv1.SecretReference{
+							Name:      "db-passwords",
+							Namespace: "crossplane-system",
+						},
+						Key: "system",
+					})).Return([]byte("system_pwd"), nil)
+				},
+				from: &unstructured.Unstructured{
+					Object: map[string]interface{}{
+						"spec": map[string]interface{}{
+							"forProvider": map[string]interface{}{
+								"passwordsSecretRef": map[string]interface{}{
+									"pwd1": secretKeySelector(
+										secretKeySelectorWithKey("admin"),
+										secretKeySelectorWithSecretReference(xpv1.SecretReference{
+											Name:      "db-passwords",
+											Namespace: "crossplane-system",
+										}),
+									),
+									"pwd2": secretKeySelector(
+										secretKeySelectorWithKey("system"),
+										secretKeySelectorWithSecretReference(xpv1.SecretReference{
+											Name:      "db-passwords",
+											Namespace: "crossplane-system",
+										}),
+									),
+								},
+							},
+						},
+					},
+				},
+				into: map[string]interface{}{
+					"some_other_key": "some_other_value",
+				},
+				mapping: map[string]string{
+					"db_passwords": "spec.forProvider.passwordsSecretRef",
+				},
+			},
+			want: want{
+				out: map[string]interface{}{
+					"some_other_key": "some_other_value",
+					"db_passwords": map[string]interface{}{
+						"pwd1": "admin_pwd",
+						"pwd2": "system_pwd",
+					},
+				},
+			},
+		},
 		"MultipleNoWildcard": {
 			args: args{
 				clientFn: func(client *mocks.MockSecretClient) {
@@ -508,11 +621,13 @@ func TestGetSensitiveParameters(t *testing.T) {
 					Object: map[string]interface{}{
 						"spec": map[string]interface{}{
 							"forProvider": map[string]interface{}{
-								"adminPasswordSecretRef": map[string]interface{}{
-									"name":      "admin-password",
-									"namespace": "crossplane-system",
-									"key":       "pass",
-								},
+								"adminPasswordSecretRef": secretKeySelector(
+									secretKeySelectorWithKey("pass"),
+									secretKeySelectorWithSecretReference(xpv1.SecretReference{
+										Name:      "admin-password",
+										Namespace: "crossplane-system",
+									}),
+								),
 							},
 						},
 					},
@@ -557,11 +672,13 @@ func TestGetSensitiveParameters(t *testing.T) {
 								"databaseUsers": []interface{}{
 									map[string]interface{}{
 										"name": "admin",
-										"passwordSecretRef": map[string]interface{}{
-											"name":      "admin-password",
-											"namespace": "crossplane-system",
-											"key":       "pass",
-										},
+										"passwordSecretRef": secretKeySelector(
+											secretKeySelectorWithKey("pass"),
+											secretKeySelectorWithSecretReference(xpv1.SecretReference{
+												Name:      "admin-password",
+												Namespace: "crossplane-system",
+											}),
+										),
 										"displayName": "Administrator",
 									},
 									map[string]interface{}{
@@ -578,11 +695,13 @@ func TestGetSensitiveParameters(t *testing.T) {
 									},
 									map[string]interface{}{
 										"name": "maintenance",
-										"passwordSecretRef": map[string]interface{}{
-											"name":      "maintenance-password",
-											"namespace": "crossplane-system",
-											"key":       "pass",
-										},
+										"passwordSecretRef": secretKeySelector(
+											secretKeySelectorWithKey("pass"),
+											secretKeySelectorWithSecretReference(xpv1.SecretReference{
+												Name:      "maintenance-password",
+												Namespace: "crossplane-system",
+											}),
+										),
 										"displayName": "Maintenance",
 									},
 								},

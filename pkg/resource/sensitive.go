@@ -33,11 +33,13 @@ import (
 )
 
 const (
-	errCannotExpandWildcards          = "cannot expand wildcards"
-	errFmtCannotGetValueForFieldPath  = "cannot not get a value for fieldpath %q"
-	errFmtCannotGetStringForFieldPath = "cannot not get a string for fieldpath %q"
-	errFmtCannotGetSecretKeySelector  = "cannot get SecretKeySelector from xp resource for fieldpath %q"
-	errFmtCannotGetSecretValue        = "cannot get secret value for %v"
+	errCannotExpandWildcards               = "cannot expand wildcards"
+	errFmtCannotGetValueForFieldPath       = "cannot not get a value for fieldpath %q"
+	errFmtCannotGetStringForFieldPath      = "cannot not get a string for fieldpath %q"
+	errFmtCannotGetSecretKeySelector       = "cannot get SecretKeySelector from xp resource for fieldpath %q"
+	errFmtCannotGetSecretKeySelectorAsList = "cannot get SecretKeySelector list from xp resource for fieldpath %q"
+	errFmtCannotGetSecretKeySelectorAsMap  = "cannot get SecretKeySelector map from xp resource for fieldpath %q"
+	errFmtCannotGetSecretValue             = "cannot get secret value for %v"
 )
 
 const (
@@ -142,14 +144,17 @@ func GetSensitiveAttributes(from map[string]interface{}, mapping map[string]stri
 				vals = map[string][]byte{}
 			}
 			switch s := v.(type) {
+			case map[string]interface{}:
+				for i, e := range s {
+					if err := setSensitiveAttributesToValuesMap(e, i, k, fp, vals); err != nil {
+						return nil, err
+					}
+				}
 			case []interface{}:
 				for i, e := range s {
-					value, ok := e.(string)
-					if !ok {
-						return nil, errors.Errorf(errFmtCannotGetStringForFieldPath, fp)
+					if err := setSensitiveAttributesToValuesMap(e, i, k, fp, vals); err != nil {
+						return nil, err
 					}
-					k = strings.TrimSuffix(k, pluralSuffix)
-					vals[fmt.Sprintf("%s%s.%v", prefixAttribute, k, i)] = []byte(value)
 				}
 			case string:
 				vals[fmt.Sprintf("%s%s", prefixAttribute, k)] = []byte(s)
@@ -198,10 +203,26 @@ func GetSensitiveParameters(ctx context.Context, client SecretClient, from runti
 			}
 
 			switch v.(type) {
-			case []map[string]interface{}, []interface{}:
+			case map[string]interface{}:
+				sel := &map[string]v1.SecretKeySelector{}
+				if err = pavedJSON.GetValueInto(expandedJSONPath, sel); err != nil {
+					return errors.Wrapf(err, errFmtCannotGetSecretKeySelectorAsMap, expandedJSONPath)
+				}
+				sensitives := make(map[string]interface{})
+				for key, value := range *sel {
+					sensitive, err = client.GetSecretValue(ctx, value)
+					if err != nil {
+						return errors.Wrapf(err, errFmtCannotGetSecretValue, sel)
+					}
+					sensitives[key] = string(sensitive)
+				}
+				if err := setSensitiveParametersWithPaved(pavedTF, expandedJSONPath, tfPath, mapping, sensitives); err != nil {
+					return err
+				}
+			case []interface{}:
 				sel := &[]v1.SecretKeySelector{}
 				if err = pavedJSON.GetValueInto(expandedJSONPath, sel); err != nil {
-					return errors.Wrapf(err, errFmtCannotGetSecretKeySelector, expandedJSONPath)
+					return errors.Wrapf(err, errFmtCannotGetSecretKeySelectorAsList, expandedJSONPath)
 				}
 				var sensitives []interface{}
 				for _, s := range *sel {
@@ -214,7 +235,7 @@ func GetSensitiveParameters(ctx context.Context, client SecretClient, from runti
 				if err := setSensitiveParametersWithPaved(pavedTF, expandedJSONPath, tfPath, mapping, sensitives); err != nil {
 					return err
 				}
-			case map[string]interface{}, interface{}:
+			case interface{}:
 				sel := &v1.SecretKeySelector{}
 				if err = pavedJSON.GetValueInto(expandedJSONPath, sel); err != nil {
 					return errors.Wrapf(err, errFmtCannotGetSecretKeySelector, expandedJSONPath)
@@ -369,5 +390,15 @@ func setSensitiveParametersWithPaved(pavedTF *fieldpath.Paved, expandedJSONPath,
 	if err = pavedTF.SetValue(expTF, sensitives); err != nil {
 		return errors.Wrapf(err, "cannot set string as terraform attribute for fieldpath %q", tfPath)
 	}
+	return nil
+}
+
+func setSensitiveAttributesToValuesMap(e, i interface{}, k, fp string, vals map[string][]byte) error {
+	k = strings.TrimSuffix(k, pluralSuffix)
+	value, ok := e.(string)
+	if !ok {
+		return errors.Errorf(errFmtCannotGetStringForFieldPath, fp)
+	}
+	vals[fmt.Sprintf("%s%s.%v", prefixAttribute, k, i)] = []byte(value)
 	return nil
 }
