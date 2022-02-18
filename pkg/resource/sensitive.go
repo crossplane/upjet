@@ -202,22 +202,36 @@ func GetSensitiveParameters(ctx context.Context, client SecretClient, from runti
 				continue
 			}
 
-			switch v.(type) {
+			switch k := v.(type) {
 			case map[string]interface{}:
-				sel := &map[string]v1.SecretKeySelector{}
-				if err = pavedJSON.GetValueInto(expandedJSONPath, sel); err != nil {
-					return errors.Wrapf(err, errFmtCannotGetSecretKeySelectorAsMap, expandedJSONPath)
-				}
-				sensitives := make(map[string]interface{})
-				for key, value := range *sel {
-					sensitive, err = client.GetSecretValue(ctx, value)
+				if hasMapValue(k) {
+					sel := &map[string]v1.SecretKeySelector{}
+					if err = pavedJSON.GetValueInto(expandedJSONPath, sel); err != nil {
+						return errors.Wrapf(err, errFmtCannotGetSecretKeySelectorAsMap, expandedJSONPath)
+					}
+					sensitives := make(map[string]interface{})
+					for key, value := range *sel {
+						sensitive, err = client.GetSecretValue(ctx, value)
+						if err != nil {
+							return errors.Wrapf(err, errFmtCannotGetSecretValue, sel)
+						}
+						sensitives[key] = string(sensitive)
+					}
+					if err := setSensitiveParametersWithPaved(pavedTF, expandedJSONPath, tfPath, mapping, sensitives); err != nil {
+						return err
+					}
+				} else {
+					sel := &v1.SecretKeySelector{}
+					if err = pavedJSON.GetValueInto(expandedJSONPath, sel); err != nil {
+						return errors.Wrapf(err, errFmtCannotGetSecretKeySelector, expandedJSONPath)
+					}
+					sensitive, err = client.GetSecretValue(ctx, *sel)
 					if err != nil {
 						return errors.Wrapf(err, errFmtCannotGetSecretValue, sel)
 					}
-					sensitives[key] = string(sensitive)
-				}
-				if err := setSensitiveParametersWithPaved(pavedTF, expandedJSONPath, tfPath, mapping, sensitives); err != nil {
-					return err
+					if err := setSensitiveParametersWithPaved(pavedTF, expandedJSONPath, tfPath, mapping, string(sensitive)); err != nil {
+						return err
+					}
 				}
 			case []interface{}:
 				sel := &[]v1.SecretKeySelector{}
@@ -233,18 +247,6 @@ func GetSensitiveParameters(ctx context.Context, client SecretClient, from runti
 					sensitives = append(sensitives, string(sensitive))
 				}
 				if err := setSensitiveParametersWithPaved(pavedTF, expandedJSONPath, tfPath, mapping, sensitives); err != nil {
-					return err
-				}
-			case interface{}:
-				sel := &v1.SecretKeySelector{}
-				if err = pavedJSON.GetValueInto(expandedJSONPath, sel); err != nil {
-					return errors.Wrapf(err, errFmtCannotGetSecretKeySelector, expandedJSONPath)
-				}
-				sensitive, err = client.GetSecretValue(ctx, *sel)
-				if err != nil {
-					return errors.Wrapf(err, errFmtCannotGetSecretValue, sel)
-				}
-				if err := setSensitiveParametersWithPaved(pavedTF, expandedJSONPath, tfPath, mapping, string(sensitive)); err != nil {
 					return err
 				}
 			default:
@@ -401,4 +403,18 @@ func setSensitiveAttributesToValuesMap(e, i interface{}, k, fp string, vals map[
 	}
 	vals[fmt.Sprintf("%s%s.%v", prefixAttribute, k, i)] = []byte(value)
 	return nil
+}
+
+// This for loop accesses the first value of selectorMap to determine the map's value type.
+func hasMapValue(selectorMap map[string]interface{}) bool {
+	for _, v := range selectorMap {
+		switch v.(type) {
+		case map[string]interface{}:
+			return true
+		case string:
+			return false
+		}
+	}
+
+	return false
 }
