@@ -25,6 +25,7 @@ import (
 	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
+	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/pkg/errors"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -212,8 +213,14 @@ func GetSensitiveParameters(ctx context.Context, client SecretClient, from runti
 					sensitives := make(map[string]interface{})
 					for key, value := range *sel {
 						sensitive, err = client.GetSecretValue(ctx, value)
-						if err != nil {
+						if resource.IgnoreNotFound(err) != nil {
 							return errors.Wrapf(err, errFmtCannotGetSecretValue, sel)
+						}
+
+						// If referenced k8s secret is deleted before the MR, we pass empty string for the sensitive
+						// field to be able to destroy the resource.
+						if kerrors.IsNotFound(err) {
+							sensitive = []byte("")
 						}
 						sensitives[key] = string(sensitive)
 					}
@@ -226,7 +233,7 @@ func GetSensitiveParameters(ctx context.Context, client SecretClient, from runti
 						return errors.Wrapf(err, errFmtCannotGetSecretKeySelector, expandedJSONPath)
 					}
 					sensitive, err = client.GetSecretValue(ctx, *sel)
-					if err != nil {
+					if resource.IgnoreNotFound(err) != nil {
 						return errors.Wrapf(err, errFmtCannotGetSecretValue, sel)
 					}
 					if err := setSensitiveParametersWithPaved(pavedTF, expandedJSONPath, tfPath, mapping, string(sensitive)); err != nil {
@@ -241,8 +248,14 @@ func GetSensitiveParameters(ctx context.Context, client SecretClient, from runti
 				var sensitives []interface{}
 				for _, s := range *sel {
 					sensitive, err = client.GetSecretValue(ctx, s)
-					if err != nil {
+					if resource.IgnoreNotFound(err) != nil {
 						return errors.Wrapf(err, errFmtCannotGetSecretValue, sel)
+					}
+
+					// If referenced k8s secret is deleted before the MR, we pass empty string for the sensitive
+					// field to be able to destroy the resource.
+					if kerrors.IsNotFound(err) {
+						sensitive = []byte("")
 					}
 					sensitives = append(sensitives, string(sensitive))
 				}

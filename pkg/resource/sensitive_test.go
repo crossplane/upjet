@@ -26,6 +26,8 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+	v1 "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 
@@ -508,6 +510,44 @@ func TestGetSensitiveParameters(t *testing.T) {
 				out: map[string]interface{}{
 					"some_other_key": "some_other_value",
 					"admin_password": "foo",
+				},
+			},
+		},
+		"SingleNoWildcardWithNoSecret": {
+			args: args{
+				clientFn: func(client *mocks.MockSecretClient) {
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
+						SecretReference: xpv1.SecretReference{
+							Name:      "admin-password",
+							Namespace: "crossplane-system",
+						},
+						Key: "pass",
+					})).Return([]byte(""), kerrors.NewNotFound(v1.Resource("secret"), "admin-password"))
+				},
+				from: &unstructured.Unstructured{
+					Object: map[string]interface{}{
+						"spec": map[string]interface{}{
+							"forProvider": map[string]interface{}{
+								"adminPasswordSecretRef": map[string]interface{}{
+									"key":       "pass",
+									"name":      "admin-password",
+									"namespace": "crossplane-system",
+								},
+							},
+						},
+					},
+				},
+				into: map[string]interface{}{
+					"some_other_key": "some_other_value",
+				},
+				mapping: map[string]string{
+					"admin_password": "spec.forProvider.adminPasswordSecretRef",
+				},
+			},
+			want: want{
+				out: map[string]interface{}{
+					"some_other_key": "some_other_value",
+					"admin_password": "",
 				},
 			},
 		},
