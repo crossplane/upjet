@@ -27,93 +27,21 @@ be quite similar for any other Terraform provider.
        ./hack/prepare.sh
         ```
 
-4. Configure your repo for the Terraform provider binary and schema:
+4. To configure the Terraform provider to generate from, update the following
+   variables in `Makefile`:
 
-    1. Update the following variables in `Makefile` for Terraform Provider:
+    ```makefile
+    export TERRAFORM_PROVIDER_SOURCE := integrations/github
+    export TERRAFORM_PROVIDER_VERSION := 4.19.2
+    export TERRAFORM_PROVIDER_DOWNLOAD_NAME := terraform-provider-github
+    export TERRAFORM_PROVIDER_DOWNLOAD_URL_PREFIX := https://releases.hashicorp.com/terraform-provider-github/4.19.2
+    ```
 
-        ```makefile
-        export TERRAFORM_PROVIDER_SOURCE := integrations/github
-        export TERRAFORM_PROVIDER_VERSION := 4.17.0
-        export TERRAFORM_PROVIDER_DOWNLOAD_NAME := terraform-provider-github
-        export TERRAFORM_PROVIDER_DOWNLOAD_URL_PREFIX := https://releases.hashicorp.com/terraform-provider-github/4.17.0
-        ```
+   You can find `TERRAFORM_PROVIDER_SOURCE` and `TERRAFORM_PROVIDER_VERSION` in
+   [Terraform GitHub provider] documentation by hitting the "**USE PROVIDER**"
+   button. Check [this line in controller Dockerfile] to see how these
+   variables are used to build the provider plugin binary.
 
-       You could find `TERRAFORM_PROVIDER_SOURCE` and `TERRAFORM_PROVIDER_VERSION` in
-       [Terraform GitHub provider] documentation by hitting the "**USE PROVIDER**"
-       button. Check [this line in controller Dockerfile] to see how these
-       variables are used to build the provider plugin binary.
-
-    2. Update import path of the Terraform provider schema package in the following
-       **two files**: `cmd/generator/main.go` and `cmd/provider/main.go`
-
-       Provider schema package is typically under the `<provider-name>`
-       directory in the GitHub repository of the Terraform provider, e.g.
-       in [`github` directory] for the GitHub provider.
-
-       ```diff
-       import (
-               ...
-
-       -       tf "github.com/hashicorp/terraform-provider-hashicups/hashicups"
-       +       tf "github.com/turkenh/terraform-provider-github/v4/github"
-
-               ...
-       )
-
-       ```
-
-       Run:
-       ```bash
-       go mod tidy
-       ```
-
-       Please note, we are temporarily using a [fork] of
-       [terraform-provider-github] repo as a workaround to [this issue].
-
-    3. If your provider uses an old version (<v2) of [terraform-plugin-sdk],
-       convert resource map to v2 schema as follows (in `cmd/generator/main.go`,
-       uncomment related section):
-
-       ```go
-       import (
-           "github.com/crossplane/terrajet/pkg/types/conversion"
-       )
-
-       func main() {
-           ...
-
-           resourceMap := conversion.GetV2ResourceMap(tf.Provider())
-           pipeline.Run(config.GetProvider(resourceMap), absRootDir)
-       }
-       ```
-
-       In a similar way in `cmd/provider/main.go`:
-
-       ```go
-       import (
-           "github.com/crossplane/terrajet/pkg/types/conversion"
-       )
-
-       func main() {
-           ...
-
-           resourceMap := conversion.GetV2ResourceMap(tf.Provider())
-           kingpin.FatalIfError(controller.Setup(mgr, log, rl, setup, ws, pconfig.GetProvider(resourceMap), 1), "Cannot setup Template controllers")
-           kingpin.FatalIfError(mgr.Start(ctrl.SetupSignalHandler()), "Cannot start controller manager")
-       }
-       ```
-
-       And in `go.mod` file, set the following `replace directive`
-       (uncomment related section):
-
-       ```
-       github.com/hashicorp/terraform-plugin-sdk => github.com/turkenh/terraform-plugin-sdk v1.17.2-patch1
-       ```
-
-       Run:
-       ```bash
-       go mod tidy
-       ```
 
 5. Implement `ProviderConfig` logic. In `provider-jet-template`, there is already
    a boilerplate code in file `internal/clients/${ProviderNameLower}.go` which
@@ -152,14 +80,14 @@ be quite similar for any other Terraform provider.
    ```
 
 6. Before generating all resources that the provider has, let's go step by step
-   and only start with generating `github_repository` and `github_branch`
-   resources.
+   and only start with generating CRDs for [github_repository] and
+   [github_branch] Terraform resources.
 
    To limit the resources to be generated, we need to provide an include list
    option with `tjconfig.WithIncludeList` in file `config/provider.go`:
 
    ```go
-   pc := tjconfig.NewProvider(resourceMap, resourcePrefix, modulePath,
+   pc := tjconfig.NewProviderWithSchema([]byte(providerSchema), resourcePrefix, modulePath,
        tjconfig.WithDefaultResourceFn(defaultResourceFn),
        tjconfig.WithIncludeList([]string{
            "github_repository$",
@@ -228,10 +156,11 @@ be quite similar for any other Terraform provider.
 
    ```diff
    import (
+       ...
+
        tjconfig "github.com/crossplane/terrajet/pkg/config"
-       "github.com/crossplane/terrajet/pkg/types/conversion"
+       "github.com/crossplane/terrajet/pkg/types/conversion/cli"
        "github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-       tf "github.com/turkenh/terraform-provider-github/v4/github"
 
    +   "github.com/crossplane-contrib/provider-jet-github/config/branch"
    +   "github.com/crossplane-contrib/provider-jet-github/config/repository"
@@ -240,7 +169,7 @@ be quite similar for any other Terraform provider.
     func GetProvider() *tjconfig.Provider {
        ...
        for _, configure := range []func(provider *tjconfig.Provider){
-           add custom config functions
+               // add custom config functions
    +           repository.Configure,
    +           branch.Configure,
        } {
@@ -410,9 +339,7 @@ Now let's test our generated resources.
 [Terraform GitHub provider]: https://registry.terraform.io/providers/integrations/github/latest/docs
 [provider-jet-template]: https://github.com/crossplane-contrib/provider-jet-template
 [Terraform documentation for provider configuration]: https://registry.terraform.io/providers/integrations/github/latest/docs#argument-reference
-[`github` directory]: https://github.com/integrations/terraform-provider-github/tree/main/github
+[github_repository]: https://registry.terraform.io/providers/integrations/github/latest/docs/resources/repository
+[github_branch]: https://registry.terraform.io/providers/integrations/github/latest/docs/resources/branch
 [this line in controller Dockerfile]: https://github.com/crossplane-contrib/provider-jet-template/blob/d9a793dd8a304f09bb2e9694c47c1bade1b6b057/cluster/images/provider-jet-template-controller/Dockerfile#L18-L25
-[fork]: https://github.com/turkenh/terraform-provider-github
-[terraform-provider-github]: https://github.com/integrations/terraform-provider-github
 [terraform-plugin-sdk]: https://github.com/hashicorp/terraform-plugin-sdk
-[this issue]: https://github.com/integrations/terraform-provider-github/pull/961

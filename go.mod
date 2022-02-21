@@ -7,6 +7,7 @@ require (
 	github.com/fatih/camelcase v1.0.0
 	github.com/golang/mock v1.6.0
 	github.com/google/go-cmp v0.5.6
+	github.com/hashicorp/terraform-json v0.13.0
 	github.com/hashicorp/terraform-plugin-sdk v1.17.2
 	github.com/hashicorp/terraform-plugin-sdk/v2 v2.7.0
 	github.com/iancoleman/strcase v0.2.0
@@ -14,6 +15,7 @@ require (
 	github.com/muvaf/typewriter v0.0.0-20220131201631-921e94e8e8d7
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/afero v1.6.0
+	github.com/zclconf/go-cty v1.9.1
 	golang.org/x/tools v0.1.5
 	k8s.io/api v0.21.3
 	k8s.io/apimachinery v0.21.3

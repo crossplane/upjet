@@ -4,8 +4,11 @@ import (
 	"fmt"
 	"regexp"
 
+	tfjson "github.com/hashicorp/terraform-json"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/pkg/errors"
+
+	conversiontfjson "github.com/crossplane/terrajet/pkg/types/conversion/tfjson"
 )
 
 // ResourceConfiguratorFn is a function that implements the ResourceConfigurator
@@ -143,7 +146,28 @@ func WithDefaultResourceFn(f DefaultResourceFn) ProviderOption {
 	}
 }
 
+// NewProviderWithSchema builds and returns a new Provider from provider
+// tfjson schema, that is generated using Terraform CLI with:
+// `terraform providers schema --json`
+func NewProviderWithSchema(schema []byte, prefix string, modulePath string, opts ...ProviderOption) *Provider {
+	ps := tfjson.ProviderSchemas{}
+	if err := ps.UnmarshalJSON(schema); err != nil {
+		panic(err)
+	}
+	if len(ps.Schemas) != 1 {
+		panic(fmt.Sprintf("there should exactly be 1 provider schema but there are %d", len(ps.Schemas)))
+	}
+	var rs map[string]*tfjson.Schema
+	for _, v := range ps.Schemas {
+		rs = v.ResourceSchemas
+		break
+	}
+	return NewProvider(conversiontfjson.GetV2ResourceMap(rs), prefix, modulePath, opts...)
+}
+
 // NewProvider builds and returns a new Provider.
+// Deprecated: This function will be removed soon, please use
+// NewProviderWithSchema instead.
 func NewProvider(resourceMap map[string]*schema.Resource, prefix string, modulePath string, opts ...ProviderOption) *Provider {
 	p := &Provider{
 		ModulePath:              modulePath,

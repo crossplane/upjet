@@ -1,5 +1,5 @@
 /*
- Copyright 2021 The Crossplane Authors.
+ Copyright 2022 The Crossplane Authors.
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  limitations under the License.
 */
 
-package conversion
+package sdkv1
 
 import (
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
@@ -25,6 +25,8 @@ import (
 
 // GetV2ResourceMap returns a Terraform provider SDK v2 resource map for an
 // input SDK v1 Terraform Resource Provider.
+// Deprecated: This functionality will be removed soon, please use
+// tfjson.GetV2ResourceMap instead.
 func GetV2ResourceMap(p terraform.ResourceProvider) map[string]*schemav2.Resource {
 	v1map := p.(*schema.Provider).ResourcesMap
 	v2map := make(map[string]*schemav2.Resource, len(v1map))
