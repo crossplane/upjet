@@ -448,6 +448,31 @@ func TestGetSensitiveParameters(t *testing.T) {
 		args
 		want
 	}{
+		"NoSensitiveData": {
+			args: args{
+				clientFn: func(client *mocks.MockSecretClient) {},
+				from: &unstructured.Unstructured{
+					Object: map[string]interface{}{
+						"spec": map[string]interface{}{
+							"forProvider": map[string]interface{}{
+								"adminPasswordSecretRef": nil,
+							},
+						},
+					},
+				},
+				into: map[string]interface{}{
+					"some_other_key": "some_other_value",
+				},
+				mapping: map[string]string{
+					"admin_password": "spec.forProvider.adminPasswordSecretRef",
+				},
+			},
+			want: want{
+				out: map[string]interface{}{
+					"some_other_key": "some_other_value",
+				},
+			},
+		},
 		"SingleNoWildcard": {
 			args: args{
 				clientFn: func(client *mocks.MockSecretClient) {
@@ -463,13 +488,11 @@ func TestGetSensitiveParameters(t *testing.T) {
 					Object: map[string]interface{}{
 						"spec": map[string]interface{}{
 							"forProvider": map[string]interface{}{
-								"adminPasswordSecretRef": secretKeySelector(
-									secretKeySelectorWithKey("pass"),
-									secretKeySelectorWithSecretReference(xpv1.SecretReference{
-										Name:      "admin-password",
-										Namespace: "crossplane-system",
-									}),
-								),
+								"adminPasswordSecretRef": map[string]interface{}{
+									"key":       "pass",
+									"name":      "admin-password",
+									"namespace": "crossplane-system",
+								},
 							},
 						},
 					},
@@ -570,20 +593,16 @@ func TestGetSensitiveParameters(t *testing.T) {
 						"spec": map[string]interface{}{
 							"forProvider": map[string]interface{}{
 								"passwordsSecretRef": map[string]interface{}{
-									"pwd1": secretKeySelector(
-										secretKeySelectorWithKey("admin"),
-										secretKeySelectorWithSecretReference(xpv1.SecretReference{
-											Name:      "db-passwords",
-											Namespace: "crossplane-system",
-										}),
-									),
-									"pwd2": secretKeySelector(
-										secretKeySelectorWithKey("system"),
-										secretKeySelectorWithSecretReference(xpv1.SecretReference{
-											Name:      "db-passwords",
-											Namespace: "crossplane-system",
-										}),
-									),
+									"pwd1": map[string]interface{}{
+										"key":       "admin",
+										"name":      "db-passwords",
+										"namespace": "crossplane-system",
+									},
+									"pwd2": map[string]interface{}{
+										"key":       "system",
+										"name":      "db-passwords",
+										"namespace": "crossplane-system",
+									},
 								},
 							},
 						},
@@ -621,13 +640,11 @@ func TestGetSensitiveParameters(t *testing.T) {
 					Object: map[string]interface{}{
 						"spec": map[string]interface{}{
 							"forProvider": map[string]interface{}{
-								"adminPasswordSecretRef": secretKeySelector(
-									secretKeySelectorWithKey("pass"),
-									secretKeySelectorWithSecretReference(xpv1.SecretReference{
-										Name:      "admin-password",
-										Namespace: "crossplane-system",
-									}),
-								),
+								"adminPasswordSecretRef": map[string]interface{}{
+									"key":       "pass",
+									"name":      "admin-password",
+									"namespace": "crossplane-system",
+								},
 							},
 						},
 					},
@@ -672,13 +689,11 @@ func TestGetSensitiveParameters(t *testing.T) {
 								"databaseUsers": []interface{}{
 									map[string]interface{}{
 										"name": "admin",
-										"passwordSecretRef": secretKeySelector(
-											secretKeySelectorWithKey("pass"),
-											secretKeySelectorWithSecretReference(xpv1.SecretReference{
-												Name:      "admin-password",
-												Namespace: "crossplane-system",
-											}),
-										),
+										"passwordSecretRef": map[string]interface{}{
+											"key":       "pass",
+											"name":      "admin-password",
+											"namespace": "crossplane-system",
+										},
 										"displayName": "Administrator",
 									},
 									map[string]interface{}{
@@ -695,13 +710,11 @@ func TestGetSensitiveParameters(t *testing.T) {
 									},
 									map[string]interface{}{
 										"name": "maintenance",
-										"passwordSecretRef": secretKeySelector(
-											secretKeySelectorWithKey("pass"),
-											secretKeySelectorWithSecretReference(xpv1.SecretReference{
-												Name:      "maintenance-password",
-												Namespace: "crossplane-system",
-											}),
-										),
+										"passwordSecretRef": map[string]interface{}{
+											"key":       "pass",
+											"name":      "maintenance-password",
+											"namespace": "crossplane-system",
+										},
 										"displayName": "Maintenance",
 									},
 								},
