@@ -101,36 +101,36 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 
 	r := &resource{}
 	for _, snakeFieldName := range keys {
-		s, err := prepareSchema(res, snakeFieldName, tfPath, xpPath, names)
+		f, err := prepareField(res, snakeFieldName, tfPath, xpPath, names)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		for _, f := range cfg.LateInitializer.IgnoredFields {
+		for _, ignoreField := range cfg.LateInitializer.IgnoredFields {
 			// Convert configuration input from Terraform path to canonical path
 			// Todo(turkenh/muvaf): Replace with a simple string conversion
 			//  like GetIgnoredCanonicalFields where we just make each word
 			//  between points camel case using names.go utilities. If the path
 			//  doesn't match anything, it's no-op in late-init logic anyway.
-			if f == fieldPath(s.tfPaths) {
-				cfg.LateInitializer.AddIgnoredCanonicalFields(fieldPath(s.cnPaths))
+			if ignoreField == fieldPath(f.tfPaths) {
+				cfg.LateInitializer.AddIgnoredCanonicalFields(fieldPath(f.cnPaths))
 			}
 		}
 
-		fieldType, err := g.buildSchema(s.sch, cfg, s.tfPaths, s.xpPaths, append(names, s.fieldName.Camel))
+		fieldType, err := g.buildSchema(f.sch, cfg, f.tfPaths, f.xpPaths, append(names, f.fieldName.Camel), f, r)
 		if err != nil {
-			return nil, nil, errors.Wrapf(err, "cannot infer type from schema of field %s", s.fieldName.Snake)
+			return nil, nil, errors.Wrapf(err, "cannot infer type from schema of field %s", f.fieldName.Snake)
 		}
-		s.fieldType = fieldType
+		f.fieldType = fieldType
 
-		if ref, ok := cfg.References[fieldPath(s.tfPaths)]; ok {
-			s.comment.Reference = ref
-			s.sch.Optional = true
+		if ref, ok := cfg.References[fieldPath(f.tfPaths)]; ok {
+			f.comment.Reference = ref
+			f.sch.Optional = true
 		}
 
-		s.fieldNameCamel = s.fieldName.Camel
-		if s.sch.Sensitive {
-			drop, err := s.handleSensitiveField(cfg)
+		f.fieldNameCamel = f.fieldName.Camel
+		if f.sch.Sensitive {
+			drop, err := f.handleSensitiveField(cfg)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -139,16 +139,25 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 			}
 		}
 
-		s.setTags()
+		f.setTags()
 
-		field := types.NewField(token.NoPos, g.Package, s.fieldNameCamel, s.fieldType, false)
-		s.addParameterAndObservationFields(r, field)
+		field := types.NewField(token.NoPos, g.Package, f.fieldNameCamel, f.fieldType, false)
+		// NOTE(muvaf): If a field is not optional but computed, then it's
+		// definitely an observation field.
+		// If it's optional but also computed, then it means the field has a server
+		// side default but user can change it, so it needs to go to parameters.
+		switch {
+		case isObservation(f.sch):
+			r.addObservationField(f, field)
+		default:
+			r.addParameterField(f, field)
+		}
 
-		if ref, ok := cfg.References[fieldPath(s.tfPaths)]; ok {
+		if ref, ok := cfg.References[fieldPath(f.tfPaths)]; ok {
 			g.addReferenceFields(r, paramName, field, ref)
 		}
 
-		g.comments.AddFieldComment(paramName, s.fieldNameCamel, s.comment.Build())
+		g.comments.AddFieldComment(paramName, f.fieldNameCamel, f.comment.Build())
 	}
 
 	// NOTE(muvaf): Not every struct has both computed and configurable fields,
@@ -188,31 +197,31 @@ func (g *Builder) getParameterAndObservationName(names []string) (*types.TypeNam
 	return paramName, obsName, nil
 }
 
-func prepareSchema(res *schema.Resource, snakeFieldName string, tfPath, xpPath, names []string) (*field, error) {
-	s := &field{
+func prepareField(res *schema.Resource, snakeFieldName string, tfPath, xpPath, names []string) (*field, error) {
+	f := &field{
 		sch:       res.Schema[snakeFieldName],
 		fieldName: name.NewFromSnake(snakeFieldName),
 	}
 
-	comment, err := comments.New(s.sch.Description)
+	comment, err := comments.New(f.sch.Description)
 	if err != nil {
-		return nil, errors.Wrapf(err, "cannot build comment for description: %s", s.sch.Description)
+		return nil, errors.Wrapf(err, "cannot build comment for description: %s", f.sch.Description)
 	}
-	s.comment = comment
-	s.tfTag = fmt.Sprintf("%s,omitempty", s.fieldName.Snake)
-	s.jsonTag = fmt.Sprintf("%s,omitempty", s.fieldName.LowerCamelComputed)
+	f.comment = comment
+	f.tfTag = fmt.Sprintf("%s,omitempty", f.fieldName.Snake)
+	f.jsonTag = fmt.Sprintf("%s,omitempty", f.fieldName.LowerCamelComputed)
 
 	// Terraform paths, e.g. { "lifecycle_rule", "*", "transition", "*", "days" } for https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket#lifecycle_rule
-	s.tfPaths = append(tfPath, s.fieldName.Snake) // nolint:gocritic
+	f.tfPaths = append(tfPath, f.fieldName.Snake) // nolint:gocritic
 	// Crossplane paths, e.g. {"lifecycleRule", "*", "transition", "*", "days"}
-	s.xpPaths = append(xpPath, s.fieldName.LowerCamel) // nolint:gocritic
+	f.xpPaths = append(xpPath, f.fieldName.LowerCamel) // nolint:gocritic
 	// Canonical paths, e.g. {"LifecycleRule", "Transition", "Days"}
-	s.cnPaths = append(names[1:], s.fieldName.Camel) // nolint:gocritic
+	f.cnPaths = append(names[1:], f.fieldName.Camel) // nolint:gocritic
 
-	return s, nil
+	return f, nil
 }
 
-func (f *field) handleSensitiveField(cfg *config.Resource) (bool, error) {
+func (f *field) handleSensitiveField(cfg *config.Resource) (bool, error) { // nolint:gocyclo
 	if isObservation(f.sch) {
 		cfg.Sensitive.AddFieldPath(fieldPathWithWildcard(f.tfPaths), "status.atProvider."+fieldPathWithWildcard(f.xpPaths))
 		// Drop an observation field from schema if it is sensitive.
@@ -223,8 +232,8 @@ func (f *field) handleSensitiveField(cfg *config.Resource) (bool, error) {
 	cfg.Sensitive.AddFieldPath(fieldPathWithWildcard(f.tfPaths), "spec.forProvider."+fieldPathWithWildcard(f.xpPaths)+sfx)
 	// todo(turkenh): do we need to support other field types as sensitive?
 	if f.fieldType.String() != "string" && f.fieldType.String() != "*string" && f.fieldType.String() != "[]string" &&
-		f.fieldType.String() != "[]*string" {
-		return false, fmt.Errorf(`got type %q for field %q, only types "string", "*string", []string and []*string supported as sensitive`, f.fieldType.String(), f.fieldNameCamel)
+		f.fieldType.String() != "[]*string" && f.fieldType.String() != "map[string]string" && f.fieldType.String() != "map[string]*string" {
+		return false, fmt.Errorf(`got type %q for field %q, only types "string", "*string", []string, []*string, "map[string]string" and "map[string]*string" supported as sensitive`, f.fieldType.String(), f.fieldNameCamel)
 	}
 	// Replace a parameter field with secretKeyRef if it is sensitive.
 	// If it is an observation field, it will be dropped.
@@ -237,6 +246,8 @@ func (f *field) handleSensitiveField(cfg *config.Resource) (bool, error) {
 		f.fieldType = typeSecretKeySelector
 	case "[]string", "[]*string":
 		f.fieldType = types.NewSlice(typeSecretKeySelector)
+	case "map[string]string", "map[string]*string":
+		f.fieldType = types.NewMap(types.Universe.Lookup("string").Type(), typeSecretKeySelector)
 	}
 	f.jsonTag = name.NewFromCamel(f.fieldNameCamel).LowerCamelComputed
 	if f.sch.Optional {
@@ -244,30 +255,6 @@ func (f *field) handleSensitiveField(cfg *config.Resource) (bool, error) {
 		f.jsonTag += ",omitempty"
 	}
 	return false, nil
-}
-
-func (f *field) addParameterAndObservationFields(r *resource, field *types.Var) {
-	// NOTE(muvaf): If a field is not optional but computed, then it's
-	// definitely an observation field.
-	// If it's optional but also computed, then it means the field has a server
-	// side default but user can change it, so it needs to go to parameters.
-	switch {
-	case isObservation(f.sch):
-		r.obsFields = append(r.obsFields, field)
-		r.obsTags = append(r.obsTags, fmt.Sprintf(`json:"%s" tf:"%s"`, f.jsonTag, f.tfTag))
-	default:
-		if f.sch.Optional {
-			r.paramTags = append(r.paramTags, fmt.Sprintf(`json:"%s" tf:"%s"`, f.jsonTag, f.tfTag))
-		} else {
-			// Required fields should not have omitempty tag in json tag.
-			// TODO(muvaf): This overrides user intent if they provided custom
-			// JSON tag.
-			r.paramTags = append(r.paramTags, fmt.Sprintf(`json:"%s" tf:"%s"`, strings.TrimSuffix(f.jsonTag, ",omitempty"), f.tfTag))
-		}
-		req := !f.sch.Optional
-		f.comment.Required = &req
-		r.paramFields = append(r.paramFields, field)
-	}
 }
 
 func (f *field) setTags() {
@@ -279,13 +266,32 @@ func (f *field) setTags() {
 	}
 }
 
+func (r *resource) addObservationField(f *field, field *types.Var) {
+	r.obsFields = append(r.obsFields, field)
+	r.obsTags = append(r.obsTags, fmt.Sprintf(`json:"%s" tf:"%s"`, f.jsonTag, f.tfTag))
+}
+
+func (r *resource) addParameterField(f *field, field *types.Var) {
+	if f.sch.Optional {
+		r.paramTags = append(r.paramTags, fmt.Sprintf(`json:"%s" tf:"%s"`, f.jsonTag, f.tfTag))
+	} else {
+		// Required fields should not have omitempty tag in json tag.
+		// TODO(muvaf): This overrides user intent if they provided custom
+		// JSON tag.
+		r.paramTags = append(r.paramTags, fmt.Sprintf(`json:"%s" tf:"%s"`, strings.TrimSuffix(f.jsonTag, ",omitempty"), f.tfTag))
+	}
+	req := !f.sch.Optional
+	f.comment.Required = &req
+	r.paramFields = append(r.paramFields, field)
+}
+
 func (g *Builder) addReferenceFields(r *resource, paramName *types.TypeName, field *types.Var, ref config.Reference) {
 	refFields, refTags := g.generateReferenceFields(paramName, field, ref)
 	r.paramTags = append(r.paramTags, refTags...)
 	r.paramFields = append(r.paramFields, refFields...)
 }
 
-func (g *Builder) buildSchema(sch *schema.Schema, cfg *config.Resource, tfPath []string, xpPath []string, names []string) (types.Type, error) { // nolint:gocyclo
+func (g *Builder) buildSchema(sch *schema.Schema, cfg *config.Resource, tfPath []string, xpPath []string, names []string, rootField *field, r *resource) (types.Type, error) { // nolint:gocyclo
 	switch sch.Type {
 	case schema.TypeBool:
 		return types.NewPointer(types.Universe.Lookup("bool").Type()), nil
@@ -315,7 +321,7 @@ func (g *Builder) buildSchema(sch *schema.Schema, cfg *config.Resource, tfPath [
 				return nil, errors.Errorf("element type of %s is basic but not one of known basic types", fieldPath(names))
 			}
 		case *schema.Schema:
-			elemType, err = g.buildSchema(et, cfg, tfPath, xpPath, names)
+			elemType, err = g.buildSchema(et, cfg, tfPath, xpPath, names, rootField, r)
 			if err != nil {
 				return nil, errors.Wrapf(err, "cannot infer type from schema of element type of %s", fieldPath(names))
 			}
@@ -337,11 +343,19 @@ func (g *Builder) buildSchema(sch *schema.Schema, cfg *config.Resource, tfPath [
 					return nil, errors.Errorf("element type of %s is computed but the underlying schema does not return observation type", fieldPath(names))
 				}
 				elemType = obsType
+				if paramType.Underlying().String() != "struct{}" {
+					field := types.NewField(token.NoPos, g.Package, rootField.fieldName.Camel, paramType, false)
+					r.addParameterField(rootField, field)
+				}
 			default:
 				if paramType == nil {
 					return nil, errors.Errorf("element type of %s is configurable but the underlying schema does not return a parameter type", fieldPath(names))
 				}
 				elemType = paramType
+				if obsType.Underlying().String() != "struct{}" {
+					field := types.NewField(token.NoPos, g.Package, rootField.fieldName.Camel, obsType, false)
+					r.addObservationField(rootField, field)
+				}
 			}
 		// if unset
 		// see: https://github.com/crossplane/terrajet/issues/177
