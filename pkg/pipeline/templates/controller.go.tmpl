@@ -7,8 +7,8 @@ package {{ .Package }}
 import (
 	"time"
 
-	"github.com/crossplane/crossplane-runtime/pkg/controller"
 	"github.com/crossplane/crossplane-runtime/pkg/event"
+	"github.com/crossplane/crossplane-runtime/pkg/ratelimiter"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	tjcontroller "github.com/crossplane/terrajet/pkg/controller"
@@ -39,7 +39,7 @@ func Setup(mgr ctrl.Manager, o tjcontroller.Options) error {
 		)),
 		managed.WithLogger(o.Logger.WithValues("controller", name)),
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
-		managed.WithFinalizer(terraform.NewWorkspaceFinalizer(ws, xpresource.NewAPIFinalizer(mgr.GetClient(), managed.FinalizerName))),
+		managed.WithFinalizer(terraform.NewWorkspaceFinalizer(o.WorkspaceStore, xpresource.NewAPIFinalizer(mgr.GetClient(), managed.FinalizerName))),
 		managed.WithTimeout(3*time.Minute),
 		managed.WithInitializers(initializers),
 		)
@@ -48,5 +48,5 @@ func Setup(mgr ctrl.Manager, o tjcontroller.Options) error {
 		Named(name).
 		WithOptions(o.ForControllerRuntime()).
 		For(&{{ .TypePackageAlias }}{{ .CRD.Kind }}{}).
-		Complete(r)
+		Complete(ratelimiter.NewReconciler(name, r, o.GlobalRateLimiter))
 }
