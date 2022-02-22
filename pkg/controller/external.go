@@ -139,7 +139,9 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 	// There might be a case where async operation is finished and the status
 	// update marking it as finished didn't go through. At this point, we are
 	// sure that there is no ongoing operation.
-	tr.SetConditions(resource.AsyncOperationFinishedCondition())
+	if e.config.UseAsync {
+		tr.SetConditions(resource.AsyncOperationFinishedCondition())
+	}
 
 	// No operation was in progress, our observation completed successfully, and
 	// we have an observation to consume.
