@@ -23,7 +23,7 @@ func Setup(mgr ctrl.Manager, o tjcontroller.Options) error {
 	name := managed.ControllerName({{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind.String())
 	var initializers managed.InitializerChain
 	{{- if .Initializers }}
-	for _, i := range cfg.Resources["{{ .ResourceType }}"].InitializerFns {
+	for _, i := range o.Provider.Resources["{{ .ResourceType }}"].InitializerFns {
 	    initializers = append(initializers,i(mgr.GetClient()))
 	}
 	{{- end}}
