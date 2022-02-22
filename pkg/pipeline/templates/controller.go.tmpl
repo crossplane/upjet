@@ -11,7 +11,6 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/event"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
-	tjconfig "github.com/crossplane/terrajet/pkg/config"
 	tjcontroller "github.com/crossplane/terrajet/pkg/controller"
 	"github.com/crossplane/terrajet/pkg/terraform"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -20,7 +19,7 @@ import (
 )
 
 // Setup adds a controller that reconciles {{ .CRD.Kind }} managed resources.
-func Setup(mgr ctrl.Manager, o controller.Options, s terraform.SetupFn, ws *terraform.WorkspaceStore, cfg *tjconfig.Provider) error {
+func Setup(mgr ctrl.Manager, o tjcontroller.Options) error {
 	name := managed.ControllerName({{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind.String())
 	var initializers managed.InitializerChain
 	{{- if .Initializers }}
@@ -33,7 +32,7 @@ func Setup(mgr ctrl.Manager, o controller.Options, s terraform.SetupFn, ws *terr
 	{{- end}}
 	r := managed.NewReconciler(mgr,
 		xpresource.ManagedKind({{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind),
-		managed.WithExternalConnecter(tjcontroller.NewConnector(mgr.GetClient(), ws, s, cfg.Resources["{{ .ResourceType }}"],
+		managed.WithExternalConnecter(tjcontroller.NewConnector(mgr.GetClient(), o.WorkspaceStore, o.SetupFn, o.Provider.Resources["{{ .ResourceType }}"],
 			{{- if .UseAsync }}
 			tjcontroller.WithCallbackProvider(tjcontroller.NewAPICallbacks(mgr, xpresource.ManagedKind({{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind))),
 			{{- end}}
