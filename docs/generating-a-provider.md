@@ -11,6 +11,12 @@ be quite similar for any other Terraform provider.
 1. Generate a GitHub repository for the Crossplane provider by hitting the
    "**Use this template**" button in [provider-jet-template] repository.
 2. Clone the repository to your local and `cd` into the repository directory.
+   Fetch the [upbound/build] submodule by running the following:
+
+    ```bash
+    make submodules
+    ```
+
 3. Replace `template` with your provider name.
 
     1. Export `ProviderName`:
@@ -338,6 +344,7 @@ Now let's test our generated resources.
 
 [Terraform GitHub provider]: https://registry.terraform.io/providers/integrations/github/latest/docs
 [provider-jet-template]: https://github.com/crossplane-contrib/provider-jet-template
+[upbound/build]: https://github.com/upbound/build
 [Terraform documentation for provider configuration]: https://registry.terraform.io/providers/integrations/github/latest/docs#argument-reference
 [github_repository]: https://registry.terraform.io/providers/integrations/github/latest/docs/resources/repository
 [github_branch]: https://registry.terraform.io/providers/integrations/github/latest/docs/resources/branch
