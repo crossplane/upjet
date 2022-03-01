@@ -86,7 +86,7 @@ type Provider struct {
 	SkipList []string
 
 	// IncludeList is a list of regex for the Terraform resources to be
-	// skipped. For example, to include "aws_shield_protection_group" into
+	// included. For example, to include "aws_shield_protection_group" into
 	// the generated resources, one can add "aws_shield_protection_group$".
 	// To include whole aws waf group, one can add "aws_waf.*" to the list.
 	// Defaults to []string{".+"} which would include all resources.
