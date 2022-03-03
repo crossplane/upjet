@@ -156,9 +156,17 @@ func schemaV2TypeFromCtyType(typ cty.Type, schema *schemav2.Schema) error { //no
 		et := typ.ElementType()
 		switch {
 		case et.IsPrimitiveType():
-			elemType = &schemav2.Schema{Type: primitiveToV2SchemaType(et)}
+			elemType = &schemav2.Schema{
+				Type:     primitiveToV2SchemaType(et),
+				Computed: schema.Computed,
+				Optional: schema.Optional,
+			}
 		case et.IsCollectionType():
-			elemType = &schemav2.Schema{Type: collectionToV2SchemaType(et)}
+			elemType = &schemav2.Schema{
+				Type:     collectionToV2SchemaType(et),
+				Computed: schema.Computed,
+				Optional: schema.Optional,
+			}
 			if err := schemaV2TypeFromCtyType(et, elemType.(*schemav2.Schema)); err != nil {
 				return err
 			}
@@ -166,12 +174,16 @@ func schemaV2TypeFromCtyType(typ cty.Type, schema *schemav2.Schema) error { //no
 			res := &schemav2.Resource{}
 			res.Schema = make(map[string]*schemav2.Schema, len(et.AttributeTypes()))
 			for key, attrTyp := range et.AttributeTypes() {
-				sch := &schemav2.Schema{}
-				if err := schemaV2TypeFromCtyType(attrTyp, sch); err != nil {
-					return err
+				sch := &schemav2.Schema{
+					Computed: schema.Computed,
+					Optional: schema.Optional,
 				}
 				if et.AttributeOptional(key) {
 					sch.Optional = true
+				}
+
+				if err := schemaV2TypeFromCtyType(attrTyp, sch); err != nil {
+					return err
 				}
 				res.Schema[key] = sch
 			}
