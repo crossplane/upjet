@@ -158,7 +158,10 @@ func schemaV2TypeFromCtyType(typ cty.Type, schema *schemav2.Schema) error { //no
 		case et.IsPrimitiveType():
 			elemType = &schemav2.Schema{Type: primitiveToV2SchemaType(et)}
 		case et.IsCollectionType():
-			elemType = collectionToV2SchemaType(et)
+			elemType = &schemav2.Schema{Type: collectionToV2SchemaType(et)}
+			if err := schemaV2TypeFromCtyType(et, elemType.(*schemav2.Schema)); err != nil {
+				return err
+			}
 		case et.IsObjectType():
 			res := &schemav2.Resource{}
 			res.Schema = make(map[string]*schemav2.Schema, len(et.AttributeTypes()))
