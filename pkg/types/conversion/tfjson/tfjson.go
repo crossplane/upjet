@@ -148,6 +148,8 @@ func tfJSONBlockTypeToV2Schema(nb *tfjson.SchemaBlockType) *schemav2.Schema { //
 }
 
 func schemaV2TypeFromCtyType(typ cty.Type, schema *schemav2.Schema) error { //nolint:gocyclo
+	configMode := schemav2.SchemaConfigModeAuto
+
 	switch {
 	case typ.IsPrimitiveType():
 		schema.Type = primitiveToV2SchemaType(typ)
@@ -171,6 +173,7 @@ func schemaV2TypeFromCtyType(typ cty.Type, schema *schemav2.Schema) error { //no
 				return err
 			}
 		case et.IsObjectType():
+			configMode = schemav2.SchemaConfigModeAttr
 			res := &schemav2.Resource{}
 			res.Schema = make(map[string]*schemav2.Schema, len(et.AttributeTypes()))
 			for key, attrTyp := range et.AttributeTypes() {
@@ -191,6 +194,7 @@ func schemaV2TypeFromCtyType(typ cty.Type, schema *schemav2.Schema) error { //no
 		default:
 			return errors.Errorf("unexpected cty.Type %s", typ.GoString())
 		}
+		schema.ConfigMode = configMode
 		schema.Type = collectionToV2SchemaType(typ)
 		schema.Elem = elemType
 	case typ.IsTupleType():
