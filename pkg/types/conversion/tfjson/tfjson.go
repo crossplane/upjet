@@ -148,6 +148,8 @@ func tfJSONBlockTypeToV2Schema(nb *tfjson.SchemaBlockType) *schemav2.Schema { //
 }
 
 func schemaV2TypeFromCtyType(typ cty.Type, schema *schemav2.Schema) error { //nolint:gocyclo
+	configMode := schemav2.SchemaConfigModeAuto
+
 	switch {
 	case typ.IsPrimitiveType():
 		schema.Type = primitiveToV2SchemaType(typ)
@@ -156,19 +158,35 @@ func schemaV2TypeFromCtyType(typ cty.Type, schema *schemav2.Schema) error { //no
 		et := typ.ElementType()
 		switch {
 		case et.IsPrimitiveType():
-			elemType = &schemav2.Schema{Type: primitiveToV2SchemaType(et)}
+			elemType = &schemav2.Schema{
+				Type:     primitiveToV2SchemaType(et),
+				Computed: schema.Computed,
+				Optional: schema.Optional,
+			}
 		case et.IsCollectionType():
-			elemType = collectionToV2SchemaType(et)
+			elemType = &schemav2.Schema{
+				Type:     collectionToV2SchemaType(et),
+				Computed: schema.Computed,
+				Optional: schema.Optional,
+			}
+			if err := schemaV2TypeFromCtyType(et, elemType.(*schemav2.Schema)); err != nil {
+				return err
+			}
 		case et.IsObjectType():
+			configMode = schemav2.SchemaConfigModeAttr
 			res := &schemav2.Resource{}
 			res.Schema = make(map[string]*schemav2.Schema, len(et.AttributeTypes()))
 			for key, attrTyp := range et.AttributeTypes() {
-				sch := &schemav2.Schema{}
-				if err := schemaV2TypeFromCtyType(attrTyp, sch); err != nil {
-					return err
+				sch := &schemav2.Schema{
+					Computed: schema.Computed,
+					Optional: schema.Optional,
 				}
 				if et.AttributeOptional(key) {
 					sch.Optional = true
+				}
+
+				if err := schemaV2TypeFromCtyType(attrTyp, sch); err != nil {
+					return err
 				}
 				res.Schema[key] = sch
 			}
@@ -176,6 +194,7 @@ func schemaV2TypeFromCtyType(typ cty.Type, schema *schemav2.Schema) error { //no
 		default:
 			return errors.Errorf("unexpected cty.Type %s", typ.GoString())
 		}
+		schema.ConfigMode = configMode
 		schema.Type = collectionToV2SchemaType(typ)
 		schema.Elem = elemType
 	case typ.IsTupleType():
