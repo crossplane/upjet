@@ -64,7 +64,7 @@ type Builder struct {
 
 // Build returns parameters and observation types built out of Terraform schema.
 func (g *Builder) Build(cfg *config.Resource) (Generated, error) {
-	fp, ap, err := g.buildResource(cfg.TerraformResource, cfg, nil, nil, cfg.Kind)
+	fp, ap, err := g.buildResource(cfg.TerraformResource, cfg, nil, nil, false, cfg.Kind)
 	return Generated{
 		Types:           g.genTypes,
 		Comments:        g.comments,
@@ -73,7 +73,7 @@ func (g *Builder) Build(cfg *config.Resource) (Generated, error) {
 	}, errors.Wrapf(err, "cannot build the Types")
 }
 
-func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPath []string, xpPath []string, names ...string) (*types.Named, *types.Named, error) { //nolint:gocyclo
+func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPath []string, xpPath []string, asBlocksMode bool, names ...string) (*types.Named, *types.Named, error) { //nolint:gocyclo
 	// NOTE(muvaf): There can be fields in the same CRD with same name but in
 	// different types. Since we generate the type using the field name, there
 	// can be collisions. In order to be able to generate unique names consistently,
@@ -197,6 +197,9 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 			obsFields = append(obsFields, field)
 			obsTags = append(obsTags, fmt.Sprintf(`json:"%s" tf:"%s"`, jsonTag, tfTag))
 		default:
+			if asBlocksMode {
+				tfTag = strings.TrimSuffix(tfTag, ",omitempty")
+			}
 			if sch.Optional {
 				paramTags = append(paramTags, fmt.Sprintf(`json:"%s" tf:"%s"`, jsonTag, tfTag))
 			} else {
@@ -269,9 +272,13 @@ func (g *Builder) buildSchema(sch *schema.Schema, cfg *config.Resource, tfPath [
 				return nil, errors.Wrapf(err, "cannot infer type from schema of element type of %s", fieldPath(names))
 			}
 		case *schema.Resource:
+			var asBlocksMode bool
 			// TODO(muvaf): We skip the other type once we choose one of param
 			// or obs types. This might cause some fields to be completely omitted.
-			paramType, obsType, err := g.buildResource(et, cfg, tfPath, xpPath, names...)
+			if sch.ConfigMode == schema.SchemaConfigModeAttr {
+				asBlocksMode = true
+			}
+			paramType, obsType, err := g.buildResource(et, cfg, tfPath, xpPath, asBlocksMode, names...)
 			if err != nil {
 				return nil, errors.Wrapf(err, "cannot infer type from resource schema of element type of %s", fieldPath(names))
 			}
