@@ -119,7 +119,7 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 		// Terraform paths, e.g. { "lifecycle_rule", "*", "transition", "*", "days" } for https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket#lifecycle_rule
 		tfPaths := append(tfPath, fieldName.Snake)
 		// Crossplane paths, e.g. {"lifecycleRule", "*", "transition", "*", "days"}
-		xpPaths := append(xpPath, fieldName.LowerCamel)
+		xpPaths := append(xpPath, fieldName.LowerCamelComputed)
 		// Canonical paths, e.g. {"LifecycleRule", "Transition", "Days"}
 		cnPaths := append(names[1:], fieldName.Camel)
 
