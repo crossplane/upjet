@@ -28,6 +28,11 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/errors"
 )
 
+type terraformedInput struct {
+	*config.Resource
+	ParametersTypeName string
+}
+
 // Run runs the Terrajet code generation pipelines.
 func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
 	// Note(turkenh): nolint reasoning - this is the main function of the code
@@ -65,7 +70,7 @@ func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
 	count := 0
 	for group, versions := range resourcesGroups {
 		for version, resources := range versions {
-			tfResources := make(map[*config.Resource]string)
+			var tfResources []*terraformedInput
 			versionGen := NewVersionGenerator(rootDir, pc.ModulePath, group, version)
 			crdGen := NewCRDGenerator(versionGen.Package(), rootDir, pc.ShortName, group, version)
 			tfGen := NewTerraformedGenerator(versionGen.Package(), rootDir, group, version)
@@ -76,7 +81,10 @@ func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
 				if err != nil {
 					panic(errors.Wrapf(err, "cannot generate crd for resource %s", name))
 				}
-				tfResources[resources[name]] = paramTypeName
+				tfResources = append(tfResources, &terraformedInput{
+					Resource:           resources[name],
+					ParametersTypeName: paramTypeName,
+				})
 				ctrlPkgPath, err := ctrlGen.Generate(resources[name], versionGen.Package().Path())
 				if err != nil {
 					panic(errors.Wrapf(err, "cannot generate controller for resource %s", name))

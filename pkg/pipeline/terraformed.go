@@ -25,7 +25,6 @@ import (
 	"github.com/muvaf/typewriter/pkg/wrapper"
 	"github.com/pkg/errors"
 
-	"github.com/crossplane/terrajet/pkg/config"
 	"github.com/crossplane/terrajet/pkg/pipeline/templates"
 )
 
@@ -48,7 +47,7 @@ type TerraformedGenerator struct {
 }
 
 // Generate writes generated Terraformed interface functions
-func (tg *TerraformedGenerator) Generate(cfgs map[*config.Resource]string, apiVersion string) error {
+func (tg *TerraformedGenerator) Generate(cfgs []*terraformedInput, apiVersion string) error {
 	trFile := wrapper.NewFile(tg.pkg.Path(), tg.pkg.Name(), templates.TerraformedTemplate,
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath(tg.LicenseHeaderPath),
@@ -57,12 +56,13 @@ func (tg *TerraformedGenerator) Generate(cfgs map[*config.Resource]string, apiVe
 	vars := map[string]interface{}{
 		"APIVersion": apiVersion,
 	}
-	var resources []map[string]interface{} //nolint:prealloc
-	for cfg, parametersTypeName := range cfgs {
-		resources = append(resources, map[string]interface{}{
+	resources := make([]map[string]interface{}, len(cfgs))
+	index := 0
+	for _, cfg := range cfgs {
+		resources[index] = map[string]interface{}{
 			"CRD": map[string]string{
 				"Kind":               cfg.Kind,
-				"ParametersTypeName": parametersTypeName,
+				"ParametersTypeName": cfg.ParametersTypeName,
 			},
 			"Terraform": map[string]interface{}{
 				"ResourceType":  cfg.Name,
@@ -74,7 +74,8 @@ func (tg *TerraformedGenerator) Generate(cfgs map[*config.Resource]string, apiVe
 			"LateInitializer": map[string]interface{}{
 				"IgnoredFields": cfg.LateInitializer.GetIgnoredCanonicalFields(),
 			},
-		})
+		}
+		index++
 	}
 	vars["Resources"] = resources
 	return errors.Wrap(
