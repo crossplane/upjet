@@ -17,7 +17,6 @@ limitations under the License.
 package pipeline
 
 import (
-	"fmt"
 	"go/types"
 	"os"
 	"path/filepath"
@@ -26,7 +25,6 @@ import (
 	"github.com/muvaf/typewriter/pkg/wrapper"
 	"github.com/pkg/errors"
 
-	"github.com/crossplane/terrajet/pkg/config"
 	"github.com/crossplane/terrajet/pkg/pipeline/templates"
 )
 
@@ -49,30 +47,37 @@ type TerraformedGenerator struct {
 }
 
 // Generate writes generated Terraformed interface functions
-func (tg *TerraformedGenerator) Generate(cfg *config.Resource, parametersTypeName string) error {
+func (tg *TerraformedGenerator) Generate(cfgs []*terraformedInput, apiVersion string) error {
 	trFile := wrapper.NewFile(tg.pkg.Path(), tg.pkg.Name(), templates.TerraformedTemplate,
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath(tg.LicenseHeaderPath),
 	)
+	filePath := filepath.Join(tg.LocalDirectoryPath, "zz_generated_terraformed.go")
 	vars := map[string]interface{}{
-		"CRD": map[string]string{
-			"APIVersion":         cfg.Version,
-			"Kind":               cfg.Kind,
-			"ParametersTypeName": parametersTypeName,
-		},
-		"Terraform": map[string]interface{}{
-			"ResourceType":  cfg.Name,
-			"SchemaVersion": cfg.TerraformResource.SchemaVersion,
-		},
-		"Sensitive": map[string]interface{}{
-			"Fields": cfg.Sensitive.GetFieldPaths(),
-		},
-		"LateInitializer": map[string]interface{}{
-			"IgnoredFields": cfg.LateInitializer.GetIgnoredCanonicalFields(),
-		},
+		"APIVersion": apiVersion,
 	}
-
-	filePath := filepath.Join(tg.LocalDirectoryPath, fmt.Sprintf("zz_%s_terraformed.go", strings.ToLower(cfg.Kind)))
+	resources := make([]map[string]interface{}, len(cfgs))
+	index := 0
+	for _, cfg := range cfgs {
+		resources[index] = map[string]interface{}{
+			"CRD": map[string]string{
+				"Kind":               cfg.Kind,
+				"ParametersTypeName": cfg.ParametersTypeName,
+			},
+			"Terraform": map[string]interface{}{
+				"ResourceType":  cfg.Name,
+				"SchemaVersion": cfg.TerraformResource.SchemaVersion,
+			},
+			"Sensitive": map[string]interface{}{
+				"Fields": cfg.Sensitive.GetFieldPaths(),
+			},
+			"LateInitializer": map[string]interface{}{
+				"IgnoredFields": cfg.LateInitializer.GetIgnoredCanonicalFields(),
+			},
+		}
+		index++
+	}
+	vars["Resources"] = resources
 	return errors.Wrap(
 		trFile.Write(filePath, vars, os.ModePerm),
 		"cannot write terraformed conversion methods file",

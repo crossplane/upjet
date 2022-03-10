@@ -2,7 +2,7 @@
 
 {{ .GenStatement }}
 
-package {{ .CRD.APIVersion }}
+package {{ .APIVersion }}
 
 import (
 	"github.com/pkg/errors"
@@ -11,84 +11,85 @@ import (
 	"github.com/crossplane/terrajet/pkg/resource/json"
 	{{ .Imports }}
 )
-
-// GetTerraformResourceType returns Terraform resource type for this {{ .CRD.Kind }}
-func (mg *{{ .CRD.Kind }}) GetTerraformResourceType() string {
-	return "{{ .Terraform.ResourceType }}"
-}
-
-// GetConnectionDetailsMapping for this {{ .CRD.Kind }}
-func (tr *{{ .CRD.Kind }}) GetConnectionDetailsMapping() map[string]string {
-  {{- if .Sensitive.Fields }}
-  return map[string]string{ {{range $k, $v := .Sensitive.Fields}}"{{ $k }}": "{{ $v}}", {{end}} }
-  {{- else }}
-  return nil
-  {{- end }}
-}
-
-// GetObservation of this {{ .CRD.Kind }}
-func (tr *{{ .CRD.Kind }}) GetObservation() (map[string]interface{}, error) {
-	o, err := json.TFParser.Marshal(tr.Status.AtProvider)
-	if err != nil {
-		return nil, err
-	}
-	base := map[string]interface{}{}
-	return base, json.TFParser.Unmarshal(o, &base)
-}
-
-// SetObservation for this {{ .CRD.Kind }}
-func (tr *{{ .CRD.Kind }}) SetObservation(obs map[string]interface{}) error {
-	p, err := json.TFParser.Marshal(obs)
-	if err != nil {
-		return err
-	}
-	return json.TFParser.Unmarshal(p, &tr.Status.AtProvider)
-}
-
-// GetID returns ID of underlying Terraform resource of this {{ .CRD.Kind }}
-func (tr *{{ .CRD.Kind }}) GetID() string {
-    if tr.Status.AtProvider.ID == nil {
-        return ""
+{{ range .Resources }}
+    // GetTerraformResourceType returns Terraform resource type for this {{ .CRD.Kind }}
+    func (mg *{{ .CRD.Kind }}) GetTerraformResourceType() string {
+        return "{{ .Terraform.ResourceType }}"
     }
-    return *tr.Status.AtProvider.ID
-}
 
-// GetParameters of this {{ .CRD.Kind }}
-func (tr *{{ .CRD.Kind }}) GetParameters() (map[string]interface{}, error) {
-	p, err := json.TFParser.Marshal(tr.Spec.ForProvider)
-	if err != nil {
-		return nil, err
-	}
-	base := map[string]interface{}{}
-	return base, json.TFParser.Unmarshal(p, &base)
-}
+    // GetConnectionDetailsMapping for this {{ .CRD.Kind }}
+    func (tr *{{ .CRD.Kind }}) GetConnectionDetailsMapping() map[string]string {
+      {{- if .Sensitive.Fields }}
+      return map[string]string{ {{range $k, $v := .Sensitive.Fields}}"{{ $k }}": "{{ $v}}", {{end}} }
+      {{- else }}
+      return nil
+      {{- end }}
+    }
 
-// SetParameters for this {{ .CRD.Kind }}
-func (tr *{{ .CRD.Kind }}) SetParameters(params map[string]interface{}) error {
-	p, err := json.TFParser.Marshal(params)
-	if err != nil {
-		return err
-	}
-	return json.TFParser.Unmarshal(p, &tr.Spec.ForProvider)
-}
+    // GetObservation of this {{ .CRD.Kind }}
+    func (tr *{{ .CRD.Kind }}) GetObservation() (map[string]interface{}, error) {
+        o, err := json.TFParser.Marshal(tr.Status.AtProvider)
+        if err != nil {
+            return nil, err
+        }
+        base := map[string]interface{}{}
+        return base, json.TFParser.Unmarshal(o, &base)
+    }
 
-// LateInitialize this {{ .CRD.Kind }} using its observed tfState.
-// returns True if there are any spec changes for the resource.
-func (tr *{{ .CRD.Kind }}) LateInitialize(attrs []byte) (bool, error) {
-	params := &{{ .CRD.ParametersTypeName }}{}
-	if err := json.TFParser.Unmarshal(attrs, params); err != nil {
-		return false, errors.Wrap(err, "failed to unmarshal Terraform state parameters for late-initialization")
-	}
-	opts := []resource.GenericLateInitializerOption{resource.WithZeroValueJSONOmitEmptyFilter(resource.CNameWildcard)}
-	{{ range .LateInitializer.IgnoredFields -}}
-	    opts = append(opts, resource.WithNameFilter("{{ . }}"))
-	{{ end }}
+    // SetObservation for this {{ .CRD.Kind }}
+    func (tr *{{ .CRD.Kind }}) SetObservation(obs map[string]interface{}) error {
+        p, err := json.TFParser.Marshal(obs)
+        if err != nil {
+            return err
+        }
+        return json.TFParser.Unmarshal(p, &tr.Status.AtProvider)
+    }
 
-	li := resource.NewGenericLateInitializer(opts...)
-	return li.LateInitialize(&tr.Spec.ForProvider, params)
-}
+    // GetID returns ID of underlying Terraform resource of this {{ .CRD.Kind }}
+    func (tr *{{ .CRD.Kind }}) GetID() string {
+        if tr.Status.AtProvider.ID == nil {
+            return ""
+        }
+        return *tr.Status.AtProvider.ID
+    }
 
-// GetTerraformSchemaVersion returns the associated Terraform schema version
-func (tr *{{ .CRD.Kind }}) GetTerraformSchemaVersion() int {
-    return {{ .Terraform.SchemaVersion }}
-}
+    // GetParameters of this {{ .CRD.Kind }}
+    func (tr *{{ .CRD.Kind }}) GetParameters() (map[string]interface{}, error) {
+        p, err := json.TFParser.Marshal(tr.Spec.ForProvider)
+        if err != nil {
+            return nil, err
+        }
+        base := map[string]interface{}{}
+        return base, json.TFParser.Unmarshal(p, &base)
+    }
+
+    // SetParameters for this {{ .CRD.Kind }}
+    func (tr *{{ .CRD.Kind }}) SetParameters(params map[string]interface{}) error {
+        p, err := json.TFParser.Marshal(params)
+        if err != nil {
+            return err
+        }
+        return json.TFParser.Unmarshal(p, &tr.Spec.ForProvider)
+    }
+
+    // LateInitialize this {{ .CRD.Kind }} using its observed tfState.
+    // returns True if there are any spec changes for the resource.
+    func (tr *{{ .CRD.Kind }}) LateInitialize(attrs []byte) (bool, error) {
+        params := &{{ .CRD.ParametersTypeName }}{}
+        if err := json.TFParser.Unmarshal(attrs, params); err != nil {
+            return false, errors.Wrap(err, "failed to unmarshal Terraform state parameters for late-initialization")
+        }
+        opts := []resource.GenericLateInitializerOption{resource.WithZeroValueJSONOmitEmptyFilter(resource.CNameWildcard)}
+        {{ range .LateInitializer.IgnoredFields -}}
+            opts = append(opts, resource.WithNameFilter("{{ . }}"))
+        {{ end }}
+
+        li := resource.NewGenericLateInitializer(opts...)
+        return li.LateInitialize(&tr.Spec.ForProvider, params)
+    }
+
+    // GetTerraformSchemaVersion returns the associated Terraform schema version
+    func (tr *{{ .CRD.Kind }}) GetTerraformSchemaVersion() int {
+        return {{ .Terraform.SchemaVersion }}
+    }
+{{ end }}
