@@ -21,12 +21,14 @@ import (
 	"testing"
 
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	xpmeta "github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	xpfake "github.com/crossplane/crossplane-runtime/pkg/resource/fake"
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/crossplane/terrajet/pkg/config"
@@ -274,6 +276,11 @@ func TestObserve(t *testing.T) {
 			args: args{
 				obj: &fake.Terraformed{
 					Managed: xpfake.Managed{
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: map[string]string{
+								xpmeta.AnnotationKeyExternalName: "some-id",
+							},
+						},
 						ConditionedStatus: xpv1.ConditionedStatus{
 							Conditions: []xpv1.Condition{xpv1.Available()},
 						},
