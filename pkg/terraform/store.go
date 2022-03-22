@@ -66,6 +66,22 @@ func WithFs(fs afero.Fs) WorkspaceStoreOption {
 	}
 }
 
+// WithNativeProviderPath enables shared gRPC mode and configures the path
+// of the Terraform native provider. When set, Terraform CLI does not fork
+// the native plugin for each request but a shared server is used instead.
+func WithNativeProviderPath(path string) WorkspaceStoreOption {
+	return func(ws *WorkspaceStore) {
+		ws.nativeProviderPath = path
+	}
+}
+
+// WithNativeProviderArgs are the arguments to be passed to the native provider
+func WithNativeProviderArgs(args []string) WorkspaceStoreOption {
+	return func(ws *WorkspaceStore) {
+		ws.nativeProviderArgs = args
+	}
+}
+
 // NewWorkspaceStore returns a new WorkspaceStore.
 func NewWorkspaceStore(l logging.Logger, opts ...WorkspaceStoreOption) *WorkspaceStore {
 	ws := &WorkspaceStore{
@@ -87,8 +103,11 @@ type WorkspaceStore struct {
 	// Since there can be multiple calls that add/remove values from the map at
 	// the same time, it has to be safe for concurrency since those operations
 	// cause rehashing in some cases.
-	store  map[types.UID]*Workspace
-	logger logging.Logger
+	store              map[types.UID]*Workspace
+	logger             logging.Logger
+	nativeProviderPath string
+	nativeProviderArgs []string
+	reattachConfig     string
 
 	mu sync.Mutex
 
@@ -99,7 +118,7 @@ type WorkspaceStore struct {
 // Workspace makes sure the Terraform workspace for the given resource is ready
 // to be used and returns the Workspace object configured to work in that
 // workspace folder in the filesystem.
-func (ws *WorkspaceStore) Workspace(ctx context.Context, c resource.SecretClient, tr resource.Terraformed, ts Setup, cfg *config.Resource) (*Workspace, error) {
+func (ws *WorkspaceStore) Workspace(ctx context.Context, c resource.SecretClient, tr resource.Terraformed, ts Setup, cfg *config.Resource) (*Workspace, error) { //nolint:gocyclo
 	dir := filepath.Join(ws.fs.GetTempDir(""), string(tr.GetUID()))
 	if err := ws.fs.MkdirAll(dir, os.ModePerm); err != nil {
 		return nil, errors.Wrap(err, "cannot create directory for workspace")
@@ -122,6 +141,9 @@ func (ws *WorkspaceStore) Workspace(ctx context.Context, c resource.SecretClient
 	}
 	l := ws.logger.WithValues("workspace", dir)
 	ws.mu.Lock()
+	if err := ws.startSharedServer(); err != nil {
+		return nil, err
+	}
 	w, ok := ws.store[tr.GetUID()]
 	if !ok {
 		ws.store[tr.GetUID()] = NewWorkspace(dir, WithLogger(l), WithExecutor(ws.executor))

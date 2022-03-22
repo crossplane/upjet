@@ -96,12 +96,6 @@ type Provider struct {
 	// resource name.
 	Resources map[string]*Resource
 
-	// SharedGRPC set to `true` to run the native Terraform plugin in
-	// shared gRPC mode. In shared gRPC mode, the Terraform CLI does not fork
-	// the binary plugin at each request but rather send requests to a shared
-	// instance forked once.
-	SharedGRPC bool
-
 	// resourceConfigurators is a map holding resource configurators where key
 	// is Terraform resource name.
 	resourceConfigurators map[string]ResourceConfiguratorChain
@@ -149,13 +143,6 @@ func WithBasePackages(b BasePackages) ProviderOption {
 func WithDefaultResourceFn(f DefaultResourceFn) ProviderOption {
 	return func(p *Provider) {
 		p.DefaultResourceFn = f
-	}
-}
-
-// WithSharedGRPC configures SharedGRPC for this Provider
-func WithSharedGRPC(sharedGRPC bool) ProviderOption {
-	return func(p *Provider) {
-		p.SharedGRPC = sharedGRPC
 	}
 }
 

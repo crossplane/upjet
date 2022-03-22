@@ -19,7 +19,6 @@ package terraform
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -139,7 +138,7 @@ func (fp *FileProducer) WriteTFState(ctx context.Context) error {
 	if err != nil {
 		return errors.Wrap(err, "cannot marshal state object")
 	}
-	return errors.Wrap(fp.fs.WriteFile(filepath.Join(fp.Dir, "terraform.tfstate"), rawState, os.ModePerm), "cannot write tfstate file")
+	return errors.Wrap(fp.fs.WriteFile(filepath.Join(fp.Dir, "terraform.tfstate"), rawState, 0600), "cannot write tfstate file")
 }
 
 // WriteMainTF writes the content main configuration file that has the desired
@@ -194,5 +193,5 @@ func (fp *FileProducer) WriteMainTF() error {
 	if err != nil {
 		return errors.Wrap(err, "cannot marshal main hcl object")
 	}
-	return errors.Wrap(fp.fs.WriteFile(filepath.Join(fp.Dir, "main.tf.json"), rawMainTF, os.ModePerm), "cannot write tfstate file")
+	return errors.Wrap(fp.fs.WriteFile(filepath.Join(fp.Dir, "main.tf.json"), rawMainTF, 0600), "cannot write tfstate file")
 }
