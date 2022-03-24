@@ -18,6 +18,7 @@ package controller
 
 import (
 	"github.com/crossplane/crossplane-runtime/pkg/controller"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/crossplane/terrajet/pkg/config"
 	"github.com/crossplane/terrajet/pkg/terraform"
@@ -39,4 +40,9 @@ type Options struct {
 	// SetupFn contains the provider-specific initialization logic, such as
 	// preparing the auth token for Terraform CLI.
 	SetupFn terraform.SetupFn
+
+	// SecretStoreConfigGVK is the GroupVersionKind for the Secret StoreConfig
+	// resource. Setting this enables External Secret Stores for the controller
+	// by adding connection.DetailsManager as a ConnectionPublisher.
+	SecretStoreConfigGVK *schema.GroupVersionKind
 }
