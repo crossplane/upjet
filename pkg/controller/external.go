@@ -173,31 +173,41 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 	// "Plan" takes a few seconds. We assume that a successful state refresh
 	// with state info available for the remote infrastructure in the output
 	// terraform.tfstate indicates readiness.
-	if !markedAvailable || annotationsUpdated || lateInitedParams {
+	switch {
+	// we prioritize critical annotation updates over status updates
+	case annotationsUpdated:
+		return managed.ExternalObservation{
+			ResourceExists:          true,
+			ResourceUpToDate:        true,
+			ConnectionDetails:       conn,
+			ResourceLateInitialized: true,
+		}, nil
+	// we prioritize status updates over late-init'ed spec updates
+	case !markedAvailable:
 		tr.SetConditions(xpv1.Available())
 		return managed.ExternalObservation{
 			ResourceExists:    true,
 			ResourceUpToDate:  true,
 			ConnectionDetails: conn,
-			// we prioritize status updates (e.g. by setting
-			// ResourceLateInitialized to False) over spec
-			// updates unless critical annotations have been
-			// updated.
-			ResourceLateInitialized: annotationsUpdated || (markedAvailable && lateInitedParams),
 		}, nil
+	// with the least priority wrt critical annotation updates and status updates
+	// we allow a late-initialization before the Workspace.Plan call
+	case lateInitedParams:
+		return managed.ExternalObservation{
+			ResourceExists:          true,
+			ResourceUpToDate:        true,
+			ConnectionDetails:       conn,
+			ResourceLateInitialized: true,
+		}, nil
+	// now we do a Workspace.Refresh
+	default:
+		plan, err := e.workspace.Plan(ctx)
+		return managed.ExternalObservation{
+			ResourceExists:    true,
+			ResourceUpToDate:  plan.UpToDate,
+			ConnectionDetails: conn,
+		}, errors.Wrap(err, errPlan)
 	}
-
-	plan, err := e.workspace.Plan(ctx)
-	if err != nil {
-		return managed.ExternalObservation{}, errors.Wrap(err, errPlan)
-	}
-
-	return managed.ExternalObservation{
-		ResourceExists:          true,
-		ResourceUpToDate:        plan.UpToDate,
-		ResourceLateInitialized: annotationsUpdated || lateInitedParams,
-		ConnectionDetails:       conn,
-	}, nil
 }
 
 func (e *external) Create(ctx context.Context, mg xpresource.Managed) (managed.ExternalCreation, error) {
