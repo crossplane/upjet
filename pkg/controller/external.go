@@ -166,21 +166,24 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 	if err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot late initialize parameters")
 	}
-	lateInitialized := annotationsUpdated || lateInitedParams
-	resourceReady := tr.GetCondition(xpv1.TypeReady).Equal(xpv1.Available())
+	markedAvailable := tr.GetCondition(xpv1.TypeReady).Equal(xpv1.Available())
 	// We try to mark the resource ready before the spec late initialization
 	// and a call for "Plan" because those operations are costly, i.e. late-init
 	// causes a spec update which defers status update to the next reconcile and
 	// "Plan" takes a few seconds. We assume that a successful state refresh
 	// with state info available for the remote infrastructure in the output
 	// terraform.tfstate indicates readiness.
-	if !resourceReady || lateInitialized {
+	if !markedAvailable || annotationsUpdated || lateInitedParams {
 		tr.SetConditions(xpv1.Available())
 		return managed.ExternalObservation{
-			ResourceExists:          true,
-			ResourceUpToDate:        true,
-			ConnectionDetails:       conn,
-			ResourceLateInitialized: lateInitialized && resourceReady,
+			ResourceExists:    true,
+			ResourceUpToDate:  true,
+			ConnectionDetails: conn,
+			// we prioritize status updates (e.g. by setting
+			// ResourceLateInitialized to False) over spec
+			// updates unless critical annotations have been
+			// updated.
+			ResourceLateInitialized: annotationsUpdated || (markedAvailable && lateInitedParams),
 		}, nil
 	}
 
@@ -192,7 +195,7 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 	return managed.ExternalObservation{
 		ResourceExists:          true,
 		ResourceUpToDate:        plan.UpToDate,
-		ResourceLateInitialized: lateInitialized,
+		ResourceLateInitialized: annotationsUpdated || lateInitedParams,
 		ConnectionDetails:       conn,
 	}, nil
 }
