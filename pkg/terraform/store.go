@@ -34,6 +34,10 @@ import (
 	"github.com/crossplane/terrajet/pkg/resource"
 )
 
+const (
+	fmtErrSharedServerEnv = "could not set reattach config env variable %q to value: %s"
+)
+
 // SetupFn is a function that returns Terraform setup which contains
 // provider requirement, configuration and Terraform version.
 type SetupFn func(ctx context.Context, client client.Client, mg xpresource.Managed) (Setup, error)
@@ -66,22 +70,6 @@ func WithFs(fs afero.Fs) WorkspaceStoreOption {
 	}
 }
 
-// WithNativeProviderPath enables shared gRPC mode and configures the path
-// of the Terraform native provider. When set, Terraform CLI does not fork
-// the native plugin for each request but a shared server is used instead.
-func WithNativeProviderPath(path string) WorkspaceStoreOption {
-	return func(ws *WorkspaceStore) {
-		ws.nativeProviderPath = path
-	}
-}
-
-// WithNativeProviderArgs are the arguments to be passed to the native provider
-func WithNativeProviderArgs(args []string) WorkspaceStoreOption {
-	return func(ws *WorkspaceStore) {
-		ws.nativeProviderArgs = args
-	}
-}
-
 // NewWorkspaceStore returns a new WorkspaceStore.
 func NewWorkspaceStore(l logging.Logger, opts ...WorkspaceStoreOption) *WorkspaceStore {
 	ws := &WorkspaceStore{
@@ -103,13 +91,10 @@ type WorkspaceStore struct {
 	// Since there can be multiple calls that add/remove values from the map at
 	// the same time, it has to be safe for concurrency since those operations
 	// cause rehashing in some cases.
-	store              map[types.UID]*Workspace
-	logger             logging.Logger
-	nativeProviderPath string
-	nativeProviderArgs []string
-	reattachConfig     string
-
-	mu sync.Mutex
+	store          map[types.UID]*Workspace
+	logger         logging.Logger
+	providerRunner NativeProviderRunner
+	mu             sync.Mutex
 
 	fs       afero.Afero
 	executor exec.Interface
@@ -140,10 +125,14 @@ func (ws *WorkspaceStore) Workspace(ctx context.Context, c resource.SecretClient
 		return nil, errors.Wrap(err, "cannot write main tf file")
 	}
 	l := ws.logger.WithValues("workspace", dir)
-	ws.mu.Lock()
-	if err := ws.startSharedServer(); err != nil {
+	reattachConfig, err := ws.providerRunner.StartSharedServer()
+	if err != nil {
 		return nil, err
 	}
+	if err := os.Setenv(envReattachConfig, reattachConfig); err != nil {
+		return nil, errors.Wrapf(err, fmtErrSharedServerEnv, envReattachConfig, reattachConfig)
+	}
+	ws.mu.Lock()
 	w, ok := ws.store[tr.GetUID()]
 	if !ok {
 		ws.store[tr.GetUID()] = NewWorkspace(dir, WithLogger(l), WithExecutor(ws.executor))
