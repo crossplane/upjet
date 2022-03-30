@@ -40,7 +40,7 @@ func TestStartSharedServer(t *testing.T) {
 	testReattachConfig2 := `TF_REATTACH_PROVIDERS='test2'`
 	testErr := errors.New("boom")
 	type args struct {
-		runner NativeProviderRunner
+		runner ProviderRunner
 	}
 	type want struct {
 		reattachConfig string
@@ -52,12 +52,12 @@ func TestStartSharedServer(t *testing.T) {
 	}{
 		"NotConfiguredNoOp": {
 			args: args{
-				runner: NoOpProviderRunner{},
+				runner: NewNoOpProviderRunner(),
 			},
 		},
 		"NotConfiguredSharedGRPC": {
 			args: args{
-				runner: NewSharedGRPCRunner(logging.NewNopLogger()),
+				runner: NewSharedProvider(logging.NewNopLogger()),
 			},
 			want: want{
 				err: errors.New(errNativeProviderPath),
@@ -65,7 +65,7 @@ func TestStartSharedServer(t *testing.T) {
 		},
 		"SuccessfullyStarted": {
 			args: args{
-				runner: NewSharedGRPCRunner(logging.NewNopLogger(), WithNativeProviderPath(testPath), WithNativeProviderArgs(testArgs...),
+				runner: NewSharedProvider(logging.NewNopLogger(), WithNativeProviderPath(testPath), WithNativeProviderArgs(testArgs...),
 					WithNativeProviderExecutor(newExecutorWithStoutPipe(testReattachConfig1, nil))),
 			},
 			want: want{
@@ -74,7 +74,7 @@ func TestStartSharedServer(t *testing.T) {
 		},
 		"AlreadyRunning": {
 			args: args{
-				runner: &SharedGRPCRunner{
+				runner: &SharedProvider{
 					nativeProviderPath: testPath,
 					reattachConfig:     "test1",
 					logger:             logging.NewNopLogger(),
@@ -88,7 +88,7 @@ func TestStartSharedServer(t *testing.T) {
 		},
 		"NativeProviderError": {
 			args: args{
-				runner: NewSharedGRPCRunner(logging.NewNopLogger(), WithNativeProviderPath(testPath),
+				runner: NewSharedProvider(logging.NewNopLogger(), WithNativeProviderPath(testPath),
 					WithNativeProviderExecutor(newExecutorWithStoutPipe(testReattachConfig1, testErr))),
 			},
 			want: want{
@@ -97,7 +97,7 @@ func TestStartSharedServer(t *testing.T) {
 		},
 		"NativeProviderTimeout": {
 			args: args{
-				runner: &SharedGRPCRunner{
+				runner: &SharedProvider{
 					nativeProviderPath: testPath,
 					logger:             logging.NewNopLogger(),
 					executor:           newExecutorWithStoutPipe("invalid", nil),
@@ -112,7 +112,7 @@ func TestStartSharedServer(t *testing.T) {
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			reattachConfig, err := tt.args.runner.StartSharedServer()
+			reattachConfig, err := tt.args.runner.Start()
 			if diff := cmp.Diff(tt.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nStartSharedServer(): -want error, +got error:\n%s", name, diff)
 			}
@@ -168,7 +168,7 @@ func TestWithNativeProviderPath(t *testing.T) {
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			sr := &SharedGRPCRunner{}
+			sr := &SharedProvider{}
 			WithNativeProviderPath(tt.path)(sr)
 			if !reflect.DeepEqual(sr.nativeProviderPath, tt.want) {
 				t.Errorf("WithNativeProviderPath(tt.path) = %v, want %v", sr.nativeProviderArgs, tt.want)
@@ -190,7 +190,7 @@ func TestWithNativeProviderArgs(t *testing.T) {
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			sr := &SharedGRPCRunner{}
+			sr := &SharedProvider{}
 			WithNativeProviderArgs(tt.args...)(sr)
 			if !reflect.DeepEqual(sr.nativeProviderArgs, tt.want) {
 				t.Errorf("WithNativeProviderArgs(tt.args) = %v, want %v", sr.nativeProviderArgs, tt.want)
@@ -212,7 +212,7 @@ func TestWithNativeProviderExecutor(t *testing.T) {
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			sr := &SharedGRPCRunner{}
+			sr := &SharedProvider{}
 			WithNativeProviderExecutor(tt.executor)(sr)
 			if !reflect.DeepEqual(sr.executor, tt.want) {
 				t.Errorf("WithNativeProviderExecutor(tt.executor) = %v, want %v", sr.executor, tt.want)

@@ -70,8 +70,8 @@ func WithFs(fs afero.Fs) WorkspaceStoreOption {
 	}
 }
 
-// WithNativeProviderRunner sets the NativeProviderRunner to be used.
-func WithNativeProviderRunner(pr NativeProviderRunner) WorkspaceStoreOption {
+// WithProviderRunner sets the ProviderRunner to be used.
+func WithProviderRunner(pr ProviderRunner) WorkspaceStoreOption {
 	return func(ws *WorkspaceStore) {
 		ws.providerRunner = pr
 	}
@@ -85,7 +85,7 @@ func NewWorkspaceStore(l logging.Logger, opts ...WorkspaceStoreOption) *Workspac
 		mu:             sync.Mutex{},
 		fs:             afero.Afero{Fs: afero.NewOsFs()},
 		executor:       exec.New(),
-		providerRunner: NoOpProviderRunner{},
+		providerRunner: NewNoOpProviderRunner(),
 	}
 	for _, f := range opts {
 		f(ws)
@@ -101,7 +101,7 @@ type WorkspaceStore struct {
 	// cause rehashing in some cases.
 	store          map[types.UID]*Workspace
 	logger         logging.Logger
-	providerRunner NativeProviderRunner
+	providerRunner ProviderRunner
 	mu             sync.Mutex
 
 	fs       afero.Afero
@@ -133,12 +133,12 @@ func (ws *WorkspaceStore) Workspace(ctx context.Context, c resource.SecretClient
 		return nil, errors.Wrap(err, "cannot write main tf file")
 	}
 	l := ws.logger.WithValues("workspace", dir)
-	reattachConfig, err := ws.providerRunner.StartSharedServer()
+	attachmentConfig, err := ws.providerRunner.Start()
 	if err != nil {
 		return nil, err
 	}
-	if err := os.Setenv(envReattachConfig, reattachConfig); err != nil {
-		return nil, errors.Wrapf(err, fmtErrSharedServerEnv, envReattachConfig, reattachConfig)
+	if err := os.Setenv(envReattachConfig, attachmentConfig); err != nil {
+		return nil, errors.Wrapf(err, fmtErrSharedServerEnv, envReattachConfig, attachmentConfig)
 	}
 	ws.mu.Lock()
 	w, ok := ws.store[tr.GetUID()]
