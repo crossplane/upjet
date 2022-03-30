@@ -55,17 +55,9 @@ func TestStartSharedServer(t *testing.T) {
 				runner: NewNoOpProviderRunner(),
 			},
 		},
-		"NotConfiguredSharedGRPC": {
-			args: args{
-				runner: NewSharedProvider(logging.NewNopLogger()),
-			},
-			want: want{
-				err: errors.New(errNativeProviderPath),
-			},
-		},
 		"SuccessfullyStarted": {
 			args: args{
-				runner: NewSharedProvider(logging.NewNopLogger(), WithNativeProviderPath(testPath), WithNativeProviderArgs(testArgs...),
+				runner: NewSharedProvider(logging.NewNopLogger(), testPath, WithNativeProviderArgs(testArgs...),
 					WithNativeProviderExecutor(newExecutorWithStoutPipe(testReattachConfig1, nil))),
 			},
 			want: want{
@@ -88,7 +80,7 @@ func TestStartSharedServer(t *testing.T) {
 		},
 		"NativeProviderError": {
 			args: args{
-				runner: NewSharedProvider(logging.NewNopLogger(), WithNativeProviderPath(testPath),
+				runner: NewSharedProvider(logging.NewNopLogger(), testPath,
 					WithNativeProviderExecutor(newExecutorWithStoutPipe(testReattachConfig1, testErr))),
 			},
 			want: want{
@@ -149,31 +141,6 @@ func newExecutorWithStoutPipe(reattachConfig string, err error) exec.Interface {
 				}
 			},
 		},
-	}
-}
-
-func TestWithNativeProviderPath(t *testing.T) {
-	tests := map[string]struct {
-		path string
-		want string
-	}{
-		"NotConfigured": {
-			path: "",
-			want: "",
-		},
-		"Configured": {
-			path: "a/b/c",
-			want: "a/b/c",
-		},
-	}
-	for name, tt := range tests {
-		t.Run(name, func(t *testing.T) {
-			sr := &SharedProvider{}
-			WithNativeProviderPath(tt.path)(sr)
-			if !reflect.DeepEqual(sr.nativeProviderPath, tt.want) {
-				t.Errorf("WithNativeProviderPath(tt.path) = %v, want %v", sr.nativeProviderArgs, tt.want)
-			}
-		})
 	}
 }
 

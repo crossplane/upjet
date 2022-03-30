@@ -30,8 +30,7 @@ import (
 
 const (
 	// error messages
-	errNativeProviderPath = "native provider path is not configured"
-	errFmtTimeout         = "timed out after %v while waiting for the reattach configuration string"
+	errFmtTimeout = "timed out after %v while waiting for the reattach configuration string"
 
 	// an example value would be: '{"registry.terraform.io/hashicorp/aws": {"Protocol": "grpc", "ProtocolVersion":5, "Pid":... "Addr":{"Network": "unix","String": "..."}}}'
 	envReattachConfig = "TF_REATTACH_PROVIDERS"
@@ -49,6 +48,7 @@ type ProviderRunner interface {
 // NoOpProviderRunner is a no-op ProviderRunner
 type NoOpProviderRunner struct{}
 
+// NewNoOpProviderRunner constructs a new NoOpProviderRunner
 func NewNoOpProviderRunner() NoOpProviderRunner {
 	return NoOpProviderRunner{}
 }
@@ -73,15 +73,6 @@ type SharedProvider struct {
 // SharedGRPCRunnerOption lets you configure the shared gRPC runner.
 type SharedGRPCRunnerOption func(runner *SharedProvider)
 
-// WithNativeProviderPath enables shared gRPC mode and configures the path
-// of the Terraform native provider. When set, Terraform CLI does not fork
-// the native plugin for each request but a shared server is used instead.
-func WithNativeProviderPath(path string) SharedGRPCRunnerOption {
-	return func(sr *SharedProvider) {
-		sr.nativeProviderPath = path
-	}
-}
-
 // WithNativeProviderArgs are the arguments to be passed to the native provider
 func WithNativeProviderArgs(args ...string) SharedGRPCRunnerOption {
 	return func(sr *SharedProvider) {
@@ -98,12 +89,13 @@ func WithNativeProviderExecutor(e exec.Interface) SharedGRPCRunnerOption {
 
 // NewSharedProvider instantiates a SharedProvider with an
 // OS executor using the supplied logger
-func NewSharedProvider(l logging.Logger, opts ...SharedGRPCRunnerOption) *SharedProvider {
+func NewSharedProvider(l logging.Logger, nativeProviderPath string, opts ...SharedGRPCRunnerOption) *SharedProvider {
 	sr := &SharedProvider{
-		logger:   l,
-		executor: exec.New(),
-		clock:    clock.RealClock{},
-		mu:       &sync.Mutex{},
+		logger:             l,
+		nativeProviderPath: nativeProviderPath,
+		executor:           exec.New(),
+		clock:              clock.RealClock{},
+		mu:                 &sync.Mutex{},
 	}
 	for _, o := range opts {
 		o(sr)
@@ -119,9 +111,6 @@ func NewSharedProvider(l logging.Logger, opts ...SharedGRPCRunnerOption) *Shared
 func (sr *SharedProvider) Start() (string, error) { //nolint:gocyclo
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
-	if len(sr.nativeProviderPath) == 0 {
-		return "", errors.New(errNativeProviderPath)
-	}
 	log := sr.logger.WithValues("nativeProviderPath", sr.nativeProviderPath, "nativeProviderArgs", sr.nativeProviderArgs)
 	if sr.reattachConfig != "" {
 		log.Debug("Shared gRPC server is running...", "reattachConfig", sr.reattachConfig)

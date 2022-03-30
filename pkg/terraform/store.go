@@ -18,6 +18,7 @@ package terraform
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -35,7 +36,7 @@ import (
 )
 
 const (
-	fmtErrSharedServerEnv = "could not set reattach config env variable %q to value: %s"
+	fmtEnv = "%s=%s"
 )
 
 // SetupFn is a function that returns Terraform setup which contains
@@ -137,9 +138,6 @@ func (ws *WorkspaceStore) Workspace(ctx context.Context, c resource.SecretClient
 	if err != nil {
 		return nil, err
 	}
-	if err := os.Setenv(envReattachConfig, attachmentConfig); err != nil {
-		return nil, errors.Wrapf(err, fmtErrSharedServerEnv, envReattachConfig, attachmentConfig)
-	}
 	ws.mu.Lock()
 	w, ok := ws.store[tr.GetUID()]
 	if !ok {
@@ -152,6 +150,7 @@ func (ws *WorkspaceStore) Workspace(ctx context.Context, c resource.SecretClient
 		return nil, errors.Wrap(err, "cannot stat init lock file")
 	}
 	w.env = ts.Env
+	w.env = append(w.env, fmt.Sprintf(fmtEnv, envReattachConfig, attachmentConfig))
 	// We need to initialize only if the workspace hasn't been initialized yet.
 	if !os.IsNotExist(err) {
 		return w, nil
