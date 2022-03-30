@@ -70,14 +70,22 @@ func WithFs(fs afero.Fs) WorkspaceStoreOption {
 	}
 }
 
+// WithNativeProviderRunner sets the NativeProviderRunner to be used.
+func WithNativeProviderRunner(pr NativeProviderRunner) WorkspaceStoreOption {
+	return func(ws *WorkspaceStore) {
+		ws.providerRunner = pr
+	}
+}
+
 // NewWorkspaceStore returns a new WorkspaceStore.
 func NewWorkspaceStore(l logging.Logger, opts ...WorkspaceStoreOption) *WorkspaceStore {
 	ws := &WorkspaceStore{
-		store:    map[types.UID]*Workspace{},
-		logger:   l,
-		mu:       sync.Mutex{},
-		fs:       afero.Afero{Fs: afero.NewOsFs()},
-		executor: exec.New(),
+		store:          map[types.UID]*Workspace{},
+		logger:         l,
+		mu:             sync.Mutex{},
+		fs:             afero.Afero{Fs: afero.NewOsFs()},
+		executor:       exec.New(),
+		providerRunner: NoOpProviderRunner{},
 	}
 	for _, f := range opts {
 		f(ws)
