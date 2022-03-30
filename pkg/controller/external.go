@@ -167,12 +167,18 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot late initialize parameters")
 	}
 	markedAvailable := tr.GetCondition(xpv1.TypeReady).Equal(xpv1.Available())
-	// We try to mark the resource ready before the spec late initialization
-	// and a call for "Plan" because those operations are costly, i.e. late-init
-	// causes a spec update which defers status update to the next reconcile and
-	// "Plan" takes a few seconds. We assume that a successful state refresh
-	// with state info available for the remote infrastructure in the output
-	// terraform.tfstate indicates readiness.
+	// In the following switch block, before running a relatively costly
+	// Terraform apply and that may fail before critical annotations are
+	// updated, or late-initialized configuration is written to main.tf.json,
+	// we try to perform the following in the given order:
+	// 1. Update critical annotations if they have changed
+	// 2. Update status
+	// 3. Update spec with late-initialized fields
+	// We prioritize critical annotation updates most not to lose certain info
+	// (like the Cloud provider generated ID) before anything else. Then we
+	// prioritize status updates over late-initialization spec updates to
+	// mark the resource as available as soon as possible because a spec
+	// update due to late-initialized fields will void the status update.
 	switch {
 	// we prioritize critical annotation updates over status updates
 	case annotationsUpdated:
