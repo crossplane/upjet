@@ -18,6 +18,7 @@ package terraform
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -32,6 +33,10 @@ import (
 
 	"github.com/crossplane/terrajet/pkg/config"
 	"github.com/crossplane/terrajet/pkg/resource"
+)
+
+const (
+	fmtEnv = "%s=%s"
 )
 
 // SetupFn is a function that returns Terraform setup which contains
@@ -66,14 +71,22 @@ func WithFs(fs afero.Fs) WorkspaceStoreOption {
 	}
 }
 
+// WithProviderRunner sets the ProviderRunner to be used.
+func WithProviderRunner(pr ProviderRunner) WorkspaceStoreOption {
+	return func(ws *WorkspaceStore) {
+		ws.providerRunner = pr
+	}
+}
+
 // NewWorkspaceStore returns a new WorkspaceStore.
 func NewWorkspaceStore(l logging.Logger, opts ...WorkspaceStoreOption) *WorkspaceStore {
 	ws := &WorkspaceStore{
-		store:    map[types.UID]*Workspace{},
-		logger:   l,
-		mu:       sync.Mutex{},
-		fs:       afero.Afero{Fs: afero.NewOsFs()},
-		executor: exec.New(),
+		store:          map[types.UID]*Workspace{},
+		logger:         l,
+		mu:             sync.Mutex{},
+		fs:             afero.Afero{Fs: afero.NewOsFs()},
+		executor:       exec.New(),
+		providerRunner: NewNoOpProviderRunner(),
 	}
 	for _, f := range opts {
 		f(ws)
@@ -87,10 +100,10 @@ type WorkspaceStore struct {
 	// Since there can be multiple calls that add/remove values from the map at
 	// the same time, it has to be safe for concurrency since those operations
 	// cause rehashing in some cases.
-	store  map[types.UID]*Workspace
-	logger logging.Logger
-
-	mu sync.Mutex
+	store          map[types.UID]*Workspace
+	logger         logging.Logger
+	providerRunner ProviderRunner
+	mu             sync.Mutex
 
 	fs       afero.Afero
 	executor exec.Interface
@@ -99,7 +112,7 @@ type WorkspaceStore struct {
 // Workspace makes sure the Terraform workspace for the given resource is ready
 // to be used and returns the Workspace object configured to work in that
 // workspace folder in the filesystem.
-func (ws *WorkspaceStore) Workspace(ctx context.Context, c resource.SecretClient, tr resource.Terraformed, ts Setup, cfg *config.Resource) (*Workspace, error) {
+func (ws *WorkspaceStore) Workspace(ctx context.Context, c resource.SecretClient, tr resource.Terraformed, ts Setup, cfg *config.Resource) (*Workspace, error) { //nolint:gocyclo
 	dir := filepath.Join(ws.fs.GetTempDir(""), string(tr.GetUID()))
 	if err := ws.fs.MkdirAll(dir, os.ModePerm); err != nil {
 		return nil, errors.Wrap(err, "cannot create directory for workspace")
@@ -121,6 +134,10 @@ func (ws *WorkspaceStore) Workspace(ctx context.Context, c resource.SecretClient
 		return nil, errors.Wrap(err, "cannot write main tf file")
 	}
 	l := ws.logger.WithValues("workspace", dir)
+	attachmentConfig, err := ws.providerRunner.Start()
+	if err != nil {
+		return nil, err
+	}
 	ws.mu.Lock()
 	w, ok := ws.store[tr.GetUID()]
 	if !ok {
@@ -133,6 +150,7 @@ func (ws *WorkspaceStore) Workspace(ctx context.Context, c resource.SecretClient
 		return nil, errors.Wrap(err, "cannot stat init lock file")
 	}
 	w.env = ts.Env
+	w.env = append(w.env, fmt.Sprintf(fmtEnv, envReattachConfig, attachmentConfig))
 	// We need to initialize only if the workspace hasn't been initialized yet.
 	if !os.IsNotExist(err) {
 		return w, nil
