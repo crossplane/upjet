@@ -181,6 +181,39 @@ func TestWriteMainTF(t *testing.T) {
 				maintf: `{"provider":{"provider-test":null},"resource":{"":{"":{"lifecycle":{"prevent_destroy":true},"name":"some-id","param":"paramval"}}},"terraform":{"required_providers":{"provider-test":{"source":"hashicorp/provider-test","version":"1.2.3"}}}}`,
 			},
 		},
+		"Custom Source": {
+			reason: "Custom source like my-company/namespace/provider-test resources should be able to write everything it has into maintf file",
+			args: args{
+				tr: &fake.Terraformed{
+					Managed: xpfake.Managed{
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: map[string]string{
+								resource.AnnotationKeyPrivateRawAttribute: "privateraw",
+								meta.AnnotationKeyExternalName:            "some-id",
+							},
+						},
+					},
+					Parameterizable: fake.Parameterizable{Parameters: map[string]interface{}{
+						"param": "paramval",
+					}},
+					Observable: fake.Observable{Observation: map[string]interface{}{
+						"obs": "obsval",
+					}},
+				},
+				cfg: config.DefaultResource("terrajet_resource", nil),
+				s: Setup{
+					Requirement: ProviderRequirement{
+						Source:  "my-company/namespace/provider-test",
+						Version: "1.2.3",
+					},
+					Configuration: nil,
+					Env:           nil,
+				},
+			},
+			want: want{
+				maintf: `{"provider":{"provider-test":null},"resource":{"":{"":{"lifecycle":{"prevent_destroy":true},"name":"some-id","param":"paramval"}}},"terraform":{"required_providers":{"provider-test":{"source":"my-company/namespace/provider-test","version":"1.2.3"}}}}`,
+			},
+		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {

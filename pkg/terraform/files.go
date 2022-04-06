@@ -174,14 +174,14 @@ func (fp *FileProducer) WriteMainTF() error {
 	m := map[string]interface{}{
 		"terraform": map[string]interface{}{
 			"required_providers": map[string]interface{}{
-				providerSource[1]: map[string]string{
+				providerSource[len(providerSource)-1]: map[string]string{
 					"source":  fp.Setup.Requirement.Source,
 					"version": fp.Setup.Requirement.Version,
 				},
 			},
 		},
 		"provider": map[string]interface{}{
-			providerSource[1]: fp.Setup.Configuration,
+			providerSource[len(providerSource)-1]: fp.Setup.Configuration,
 		},
 		"resource": map[string]interface{}{
 			fp.Resource.GetTerraformResourceType(): map[string]interface{}{
