@@ -192,7 +192,7 @@ func TestBuilder_generateTypeName(t *testing.T) {
 			g := &Builder{
 				Package: p,
 			}
-			got, gotErr := g.generateTypeName(tc.args.suffix, tc.args.names...)
+			got, gotErr := generateTypeName(tc.args.suffix, g.Package, tc.args.names...)
 			if diff := cmp.Diff(tc.want.err, gotErr, test.EquateErrors()); diff != "" {
 				t.Fatalf("generateTypeName(...): -want error, +got error: %s", diff)
 			}
