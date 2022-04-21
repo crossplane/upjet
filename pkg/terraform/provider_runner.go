@@ -35,13 +35,17 @@ const (
 	errFmtTimeout = "timed out after %v while waiting for the reattach configuration string"
 
 	// an example value would be: '{"registry.terraform.io/hashicorp/aws": {"Protocol": "grpc", "ProtocolVersion":5, "Pid":... "Addr":{"Network": "unix","String": "..."}}}'
-	fmtReattachEnv     = `{"%s":{"Protocol":"grpc","ProtocolVersion":%d,"Pid":%d,"Test": true,"Addr":{"Network": "unix","String": "%s"}}}`
-	fmtSetEnv          = "%s=%s"
-	envReattachConfig  = "TF_REATTACH_PROVIDERS"
-	envMagicCookie     = "TF_PLUGIN_MAGIC_COOKIE"
-	defaultMagicCookie = "d602bf8f470bc67ca7faa0386276bbdd4330efaf76d1a219cb4d6991ca9872b2"
-	regexReattachLine  = `.*unix\|(.*)\|grpc.*`
-	reattachTimeout    = 1 * time.Minute
+	fmtReattachEnv    = `{"%s":{"Protocol":"grpc","ProtocolVersion":%d,"Pid":%d,"Test": true,"Addr":{"Network": "unix","String": "%s"}}}`
+	fmtSetEnv         = "%s=%s"
+	envReattachConfig = "TF_REATTACH_PROVIDERS"
+	envMagicCookie    = "TF_PLUGIN_MAGIC_COOKIE"
+	// Terraform provider plugin expects this magic cookie in its environment
+	// (as the value of key TF_PLUGIN_MAGIC_COOKIE):
+	// https://github.com/hashicorp/terraform/blob/d35bc0531255b496beb5d932f185cbcdb2d61a99/internal/plugin/serve.go#L33
+	valMagicCookie         = "d602bf8f470bc67ca7faa0386276bbdd4330efaf76d1a219cb4d6991ca9872b2"
+	defaultProtocolVersion = 5
+	regexReattachLine      = `.*unix\|(.*)\|grpc.*`
+	reattachTimeout        = 1 * time.Minute
 )
 
 // ProviderRunner is the interface for running
@@ -72,7 +76,6 @@ type SharedProvider struct {
 	reattachConfig     string
 	nativeProviderName string
 	protocolVersion    int
-	pluginMagicCookie  string
 	logger             logging.Logger
 	executor           exec.Interface
 	clock              clock.Clock
@@ -96,23 +99,22 @@ func WithNativeProviderExecutor(e exec.Interface) SharedGRPCRunnerOption {
 	}
 }
 
-// WithNativeProviderMagicCookie sets the magic cookie for
-// the native provider plugin to run.
-func WithNativeProviderMagicCookie(cookie string) SharedGRPCRunnerOption {
+// WithProtocolVersion sets the gRPC protocol version in use between
+// the Terraform CLI and the native provider.
+func WithProtocolVersion(protocolVersion int) SharedGRPCRunnerOption {
 	return func(sr *SharedProvider) {
-		sr.pluginMagicCookie = cookie
+		sr.protocolVersion = protocolVersion
 	}
 }
 
 // NewSharedProvider instantiates a SharedProvider with an
 // OS executor using the supplied logger
-func NewSharedProvider(l logging.Logger, nativeProviderPath, nativeProviderName string, protocolVersion int, opts ...SharedGRPCRunnerOption) *SharedProvider {
+func NewSharedProvider(l logging.Logger, nativeProviderPath, nativeProviderName string, opts ...SharedGRPCRunnerOption) *SharedProvider {
 	sr := &SharedProvider{
 		logger:             l,
 		nativeProviderPath: nativeProviderPath,
 		nativeProviderName: nativeProviderName,
-		protocolVersion:    protocolVersion,
-		pluginMagicCookie:  defaultMagicCookie,
+		protocolVersion:    defaultProtocolVersion,
 		executor:           exec.New(),
 		clock:              clock.RealClock{},
 		mu:                 &sync.Mutex{},
@@ -153,7 +155,7 @@ func (sr *SharedProvider) Start() (string, error) { //nolint:gocyclo
 		}()
 		//#nosec G204 no user input
 		cmd := sr.executor.Command(sr.nativeProviderPath, sr.nativeProviderArgs...)
-		cmd.SetEnv(append(os.Environ(), fmt.Sprintf(fmtSetEnv, envMagicCookie, sr.pluginMagicCookie)))
+		cmd.SetEnv(append(os.Environ(), fmt.Sprintf(fmtSetEnv, envMagicCookie, valMagicCookie)))
 		stdout, err := cmd.StdoutPipe()
 		if err != nil {
 			errCh <- err

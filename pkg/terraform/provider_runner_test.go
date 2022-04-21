@@ -38,7 +38,6 @@ import (
 func TestStartSharedServer(t *testing.T) {
 	testPath := "path"
 	testName := "provider-test"
-	testProtocol := 5
 	testArgs := []string{"arg1", "arg2"}
 	testReattachConfig1 := `1|5|unix|test1|grpc|`
 	testReattachConfig2 := `1|5|unix|test2|grpc|`
@@ -61,7 +60,7 @@ func TestStartSharedServer(t *testing.T) {
 		},
 		"SuccessfullyStarted": {
 			args: args{
-				runner: NewSharedProvider(logging.NewNopLogger(), testPath, testName, testProtocol, WithNativeProviderArgs(testArgs...),
+				runner: NewSharedProvider(logging.NewNopLogger(), testPath, testName, WithNativeProviderArgs(testArgs...),
 					WithNativeProviderExecutor(newExecutorWithStoutPipe(testReattachConfig1, nil))),
 			},
 			want: want{
@@ -84,7 +83,7 @@ func TestStartSharedServer(t *testing.T) {
 		},
 		"NativeProviderError": {
 			args: args{
-				runner: NewSharedProvider(logging.NewNopLogger(), testPath, testName, testProtocol,
+				runner: NewSharedProvider(logging.NewNopLogger(), testPath, testName,
 					WithNativeProviderExecutor(newExecutorWithStoutPipe(testReattachConfig1, testErr))),
 			},
 			want: want{
