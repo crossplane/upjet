@@ -114,9 +114,8 @@ func (fp *FileProducer) WriteTFState(ctx context.Context) error {
 	if pr, ok := fp.Resource.GetAnnotations()[resource.AnnotationKeyPrivateRawAttribute]; ok {
 		privateRaw = []byte(pr)
 	}
-	privateRawWithTimeout, err := insertTimeoutsMeta(privateRaw, fp.Config.OperationTimeouts)
-	if err != nil {
-		return errors.Wrap(err, "cannot insert timeouts meta")
+	if privateRaw, err = insertTimeoutsMeta(privateRaw, timeouts(fp.Config.OperationTimeouts)); err != nil {
+		return errors.Wrap(err, "cannot insert timeouts metadata to private raw")
 	}
 	s := json.NewStateV4()
 	s.TerraformVersion = fp.Setup.Version
@@ -132,7 +131,7 @@ func (fp *FileProducer) WriteTFState(ctx context.Context) error {
 			Instances: []json.InstanceObjectStateV4{
 				{
 					SchemaVersion: uint64(fp.Resource.GetTerraformSchemaVersion()),
-					PrivateRaw:    privateRawWithTimeout,
+					PrivateRaw:    privateRaw,
 					AttributesRaw: attr,
 				},
 			},
@@ -156,7 +155,7 @@ func (fp *FileProducer) WriteMainTF() error {
 	}
 
 	// Add operation timeouts if any timeout configured for the resource
-	tp := timeoutsAsParameter(fp.Config.OperationTimeouts)
+	tp := timeouts(fp.Config.OperationTimeouts).asParameter()
 	if len(tp) != 0 {
 		fp.parameters["timeouts"] = tp
 	}
@@ -187,55 +186,4 @@ func (fp *FileProducer) WriteMainTF() error {
 		return errors.Wrap(err, "cannot marshal main hcl object")
 	}
 	return errors.Wrap(fp.fs.WriteFile(filepath.Join(fp.Dir, "main.tf.json"), rawMainTF, os.ModePerm), "cannot write tfstate file")
-}
-
-func timeoutsAsParameter(ot config.OperationTimeouts) map[string]string {
-	timeouts := make(map[string]string)
-	if t := ot.Read.String(); t != "0s" {
-		timeouts["read"] = t
-	}
-	if t := ot.Create.String(); t != "0s" {
-		timeouts["create"] = t
-	}
-	if t := ot.Update.String(); t != "0s" {
-		timeouts["update"] = t
-	}
-	if t := ot.Delete.String(); t != "0s" {
-		timeouts["delete"] = t
-	}
-	return timeouts
-}
-
-// "e2bfb730-ecaa-11e6-8f88-34363bc7c4c0" is the TimeoutKey:
-// https://github.com/hashicorp/terraform-plugin-sdk/blob/112e2164c381d80e8ada3170dac9a8a5db01079a/helper/schema/resource_timeout.go#L14
-const tfMetaTimeoutKey = "e2bfb730-ecaa-11e6-8f88-34363bc7c4c0"
-
-func insertTimeoutsMeta(rawMeta []byte, ot config.OperationTimeouts) ([]byte, error) {
-	m := make(map[string]interface{})
-	if t := ot.Read.String(); t != "0s" {
-		m["read"] = ot.Read.Nanoseconds()
-	}
-	if t := ot.Create.String(); t != "0s" {
-		m["create"] = ot.Create.Nanoseconds()
-	}
-	if t := ot.Update.String(); t != "0s" {
-		m["update"] = ot.Update.Nanoseconds()
-	}
-	if t := ot.Delete.String(); t != "0s" {
-		m["delete"] = ot.Delete.Nanoseconds()
-	}
-	if len(m) == 0 {
-		// no timeout configured
-		return rawMeta, nil
-	}
-	meta := make(map[string]interface{})
-	if len(rawMeta) == 0 {
-		meta[tfMetaTimeoutKey] = m
-		return json.JSParser.Marshal(meta)
-	}
-	if err := json.JSParser.Unmarshal(rawMeta, &meta); err != nil {
-		return rawMeta, errors.Wrap(err, "cannot unmarshall private raw meta")
-	}
-	meta[tfMetaTimeoutKey] = m
-	return json.JSParser.Marshal(meta)
 }
