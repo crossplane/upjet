@@ -17,7 +17,9 @@ limitations under the License.
 package terraform
 
 import (
+	"fmt"
 	"io"
+	"os"
 	"reflect"
 	"strings"
 	"sync"
@@ -35,9 +37,10 @@ import (
 
 func TestStartSharedServer(t *testing.T) {
 	testPath := "path"
+	testName := "provider-test"
 	testArgs := []string{"arg1", "arg2"}
-	testReattachConfig1 := `TF_REATTACH_PROVIDERS='test1'`
-	testReattachConfig2 := `TF_REATTACH_PROVIDERS='test2'`
+	testReattachConfig1 := `1|5|unix|test1|grpc|`
+	testReattachConfig2 := `1|5|unix|test2|grpc|`
 	testErr := errors.New("boom")
 	type args struct {
 		runner ProviderRunner
@@ -57,11 +60,11 @@ func TestStartSharedServer(t *testing.T) {
 		},
 		"SuccessfullyStarted": {
 			args: args{
-				runner: NewSharedProvider(logging.NewNopLogger(), testPath, WithNativeProviderArgs(testArgs...),
+				runner: NewSharedProvider(logging.NewNopLogger(), testPath, testName, WithNativeProviderArgs(testArgs...),
 					WithNativeProviderExecutor(newExecutorWithStoutPipe(testReattachConfig1, nil))),
 			},
 			want: want{
-				reattachConfig: "test1",
+				reattachConfig: fmt.Sprintf(`{"provider-test":{"Protocol":"grpc","ProtocolVersion":5,"Pid":%d,"Test": true,"Addr":{"Network": "unix","String": "test1"}}}`, os.Getpid()),
 			},
 		},
 		"AlreadyRunning": {
@@ -80,7 +83,7 @@ func TestStartSharedServer(t *testing.T) {
 		},
 		"NativeProviderError": {
 			args: args{
-				runner: NewSharedProvider(logging.NewNopLogger(), testPath,
+				runner: NewSharedProvider(logging.NewNopLogger(), testPath, testName,
 					WithNativeProviderExecutor(newExecutorWithStoutPipe(testReattachConfig1, testErr))),
 			},
 			want: want{
