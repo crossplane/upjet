@@ -142,11 +142,11 @@ import (
         r.ExternalName = config.NameAsIdentifier
         r.ExternalName.SetIdentifierArgumentFn = func(base map[string]interface{}, externalName string) {
             base["bucket"] = externalName
-        },
-        r.ExternalName.OmittedFields: []string{
+        }
+        r.ExternalName.OmittedFields = []string{
             "bucket",
             "bucket_prefix",
-        },
+        }
 		...
     }
 ```
