@@ -155,8 +155,7 @@ func (fp *FileProducer) WriteMainTF() error {
 	}
 
 	// Add operation timeouts if any timeout configured for the resource
-	tp := timeouts(fp.Config.OperationTimeouts).asParameter()
-	if len(tp) != 0 {
+	if tp := timeouts(fp.Config.OperationTimeouts).asParameter(); len(tp) != 0 {
 		fp.parameters["timeouts"] = tp
 	}
 
