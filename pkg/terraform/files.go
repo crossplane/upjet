@@ -113,6 +113,9 @@ func (fp *FileProducer) WriteTFState(ctx context.Context) error {
 	if pr, ok := fp.Resource.GetAnnotations()[resource.AnnotationKeyPrivateRawAttribute]; ok {
 		privateRaw = []byte(pr)
 	}
+	if privateRaw, err = insertTimeoutsMeta(privateRaw, timeouts(fp.Config.OperationTimeouts)); err != nil {
+		return errors.Wrap(err, "cannot insert timeouts metadata to private raw")
+	}
 	s := json.NewStateV4()
 	s.TerraformVersion = fp.Setup.Version
 	s.Lineage = string(fp.Resource.GetUID())
@@ -151,21 +154,8 @@ func (fp *FileProducer) WriteMainTF() error {
 	}
 
 	// Add operation timeouts if any timeout configured for the resource
-	timeouts := map[string]string{}
-	if t := fp.Config.OperationTimeouts.Read.String(); t != "0s" {
-		timeouts["read"] = t
-	}
-	if t := fp.Config.OperationTimeouts.Create.String(); t != "0s" {
-		timeouts["create"] = t
-	}
-	if t := fp.Config.OperationTimeouts.Update.String(); t != "0s" {
-		timeouts["update"] = t
-	}
-	if t := fp.Config.OperationTimeouts.Delete.String(); t != "0s" {
-		timeouts["delete"] = t
-	}
-	if len(timeouts) != 0 {
-		fp.parameters["timeouts"] = timeouts
+	if tp := timeouts(fp.Config.OperationTimeouts).asParameter(); len(tp) != 0 {
+		fp.parameters["timeouts"] = tp
 	}
 
 	// Note(turkenh): To use third party providers, we need to configure

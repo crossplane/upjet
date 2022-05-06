@@ -40,8 +40,9 @@ const (
 
 func TestWriteTFState(t *testing.T) {
 	type args struct {
-		tr resource.Terraformed
-		s  Setup
+		tr  resource.Terraformed
+		cfg *config.Resource
+		s   Setup
 	}
 	type want struct {
 		tfstate string
@@ -53,25 +54,55 @@ func TestWriteTFState(t *testing.T) {
 		want
 	}{
 		"Success": {
-			reason: "Standard resources should be able to write everything it has into maintf file",
-			args: args{tr: &fake.Terraformed{
-				Managed: xpfake.Managed{
-					ObjectMeta: metav1.ObjectMeta{
-						Annotations: map[string]string{
-							resource.AnnotationKeyPrivateRawAttribute: "privateraw",
-							meta.AnnotationKeyExternalName:            "some-id",
+			reason: "Standard resources should be able to write everything it has into tfstate file",
+			args: args{
+				tr: &fake.Terraformed{
+					Managed: xpfake.Managed{
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: map[string]string{
+								resource.AnnotationKeyPrivateRawAttribute: "privateraw",
+								meta.AnnotationKeyExternalName:            "some-id",
+							},
 						},
 					},
+					Parameterizable: fake.Parameterizable{Parameters: map[string]interface{}{
+						"param": "paramval",
+					}},
+					Observable: fake.Observable{Observation: map[string]interface{}{
+						"obs": "obsval",
+					}},
 				},
-				Parameterizable: fake.Parameterizable{Parameters: map[string]interface{}{
-					"param": "paramval",
-				}},
-				Observable: fake.Observable{Observation: map[string]interface{}{
-					"obs": "obsval",
-				}},
-			}},
+				cfg: config.DefaultResource("terrajet_resource", nil),
+			},
 			want: want{
 				tfstate: `{"version":4,"terraform_version":"","serial":1,"lineage":"","outputs":null,"resources":[{"mode":"managed","type":"","name":"","provider":"provider[\"registry.terraform.io/\"]","instances":[{"schema_version":0,"attributes":{"id":"some-id","name":"some-id","obs":"obsval","param":"paramval"},"private":"cHJpdmF0ZXJhdw=="}]}]}`,
+			},
+		},
+		"SuccessWithTimeout": {
+			reason: "Configured timeouts should be reflected tfstate as private meta",
+			args: args{
+				tr: &fake.Terraformed{
+					Managed: xpfake.Managed{
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: map[string]string{
+								resource.AnnotationKeyPrivateRawAttribute: "{}",
+								meta.AnnotationKeyExternalName:            "some-id",
+							},
+						},
+					},
+					Parameterizable: fake.Parameterizable{Parameters: map[string]interface{}{
+						"param": "paramval",
+					}},
+					Observable: fake.Observable{Observation: map[string]interface{}{
+						"obs": "obsval",
+					}},
+				},
+				cfg: config.DefaultResource("terrajet_resource", nil, func(r *config.Resource) {
+					r.OperationTimeouts.Read = 2 * time.Minute
+				}),
+			},
+			want: want{
+				tfstate: `{"version":4,"terraform_version":"","serial":1,"lineage":"","outputs":null,"resources":[{"mode":"managed","type":"","name":"","provider":"provider[\"registry.terraform.io/\"]","instances":[{"schema_version":0,"attributes":{"id":"some-id","name":"some-id","obs":"obsval","param":"paramval"},"private":"eyJlMmJmYjczMC1lY2FhLTExZTYtOGY4OC0zNDM2M2JjN2M0YzAiOnsicmVhZCI6MTIwMDAwMDAwMDAwfX0="}]}]}`,
 			},
 		},
 	}
@@ -79,7 +110,7 @@ func TestWriteTFState(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			fs := afero.NewMemMapFs()
 			ctx := context.TODO()
-			fp, err := NewFileProducer(ctx, nil, dir, tc.args.tr, tc.args.s, config.DefaultResource("terrajet_resource", nil), WithFileSystem(fs))
+			fp, err := NewFileProducer(ctx, nil, dir, tc.args.tr, tc.args.s, tc.args.cfg, WithFileSystem(fs))
 			if err != nil {
 				t.Errorf("cannot initialize a file producer: %s", err.Error())
 			}
