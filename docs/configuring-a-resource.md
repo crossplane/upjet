@@ -665,7 +665,7 @@ So, an interface must be passed to the related configuration field for adding in
 [Additional Sensitive Fields and Custom Connection Details]: #additional-sensitive-fields-and-custom-connection-details
 [Late Initialization Behavior]: #late-initialization-configuration
 [Overriding Terraform Resource Schema]: #overriding-terraform-resource-schema
-[the external name documentation]: https://crossplane.io/docs/v1.4/concepts/managed-resources.html#external-name
+[the external name documentation]: https://crossplane.io/docs/v1.7/concepts/managed-resources.html#external-name
 [concept to identify a resource]: https://www.terraform.io/docs/glossary#id
 [import section]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_access_key#import
 [the types for the External Name configuration]: https://github.com/crossplane/terrajet/blob/2299925ea2541e6a8088ede463cd865bd64eba32/pkg/config/resource.go#L67
@@ -683,13 +683,13 @@ So, an interface must be passed to the related configuration field for adding in
 [IdentifierFromProvider]: https://github.com/crossplane/terrajet/blob/2299925ea2541e6a8088ede463cd865bd64eba32/pkg/config/defaults.go#L46
 [a similar identifier]: https://www.terraform.io/docs/glossary#id
 [import section of azurerm_sql_server]: https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/sql_server#import
-[handle dependencies]: https://crossplane.io/docs/v1.4/concepts/managed-resources.html#dependencies
+[handle dependencies]: https://crossplane.io/docs/v1.7/concepts/managed-resources.html#dependencies
 [user]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_access_key#user
 [generate reference resolution methods]: https://github.com/crossplane/crossplane-tools/pull/35
 [configuration]: https://github.com/crossplane/terrajet/blob/874bb6ad5cff9741241fb790a3a5d71166900860/pkg/config/resource.go#L77
 [iam_access_key]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_access_key#argument-reference
 [kms key]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ebs_volume#kms_key_id
-[connection details]: https://crossplane.io/docs/v1.4/concepts/managed-resources.html#connection-details
+[connection details]: https://crossplane.io/docs/v1.7/concepts/managed-resources.html#connection-details
 [handle sensitive fields]: https://github.com/crossplane/terrajet/pull/77
 [id]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_access_key#id
 [secret]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_access_key#secret
