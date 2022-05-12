@@ -142,11 +142,11 @@ import (
         r.ExternalName = config.NameAsIdentifier
         r.ExternalName.SetIdentifierArgumentFn = func(base map[string]interface{}, externalName string) {
             base["bucket"] = externalName
-        },
-        r.ExternalName.OmittedFields: []string{
+        }
+        r.ExternalName.OmittedFields = []string{
             "bucket",
             "bucket_prefix",
-        },
+        }
 		...
     }
 ```
@@ -712,4 +712,4 @@ So, an interface must be passed to the related configuration field for adding in
 [NewInitializerFn]: https://github.com/crossplane/terrajet/blob/ae78a0a4c438f01717002e00fac761524aa6e951/pkg/config/resource.go#L207
 [crossplane-runtime]: https://github.com/crossplane/crossplane-runtime/blob/428b7c3903756bb0dcf5330f40298e1fa0c34301/pkg/reconciler/managed/reconciler.go#L138
 [some external labels]: https://github.com/crossplane/crossplane-runtime/blob/428b7c3903756bb0dcf5330f40298e1fa0c34301/pkg/resource/resource.go#L397
-[tagging convention]: https://github.com/crossplane/crossplane/blob/master/design/one-pager-managed-resource-api-design.md#external-resource-labeling
+[tagging convention]: https://github.com/crossplane/crossplane/blob/60c7df9/design/one-pager-managed-resource-api-design.md#external-resource-labeling
