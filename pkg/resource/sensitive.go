@@ -30,7 +30,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 
-	"github.com/crossplane/terrajet/pkg/config"
+	"github.com/upbound/upjet/pkg/config"
 )
 
 const (
@@ -67,7 +67,7 @@ func init() {
 }
 
 // SecretClient is the client to get sensitive data from kubernetes secrets
-//go:generate go run github.com/golang/mock/mockgen -copyright_file ../../hack/boilerplate.txt -destination ./fake/mocks/mock.go -package mocks github.com/crossplane/terrajet/pkg/resource SecretClient
+//go:generate go run github.com/golang/mock/mockgen -copyright_file ../../hack/boilerplate.txt -destination ./fake/mocks/mock.go -package mocks github.com/upbound/upjet/pkg/resource SecretClient
 type SecretClient interface {
 	GetSecretData(ctx context.Context, ref *v1.SecretReference) (map[string][]byte, error)
 	GetSecretValue(ctx context.Context, sel v1.SecretKeySelector) ([]byte, error)
@@ -135,7 +135,7 @@ func GetSensitiveAttributes(from map[string]interface{}, mapping map[string]stri
 			// Note(turkenh): k8s secrets uses a strict regex to validate secret
 			// keys which does not allow having brackets inside. So, we need to
 			// do a conversion to be able to store as connection secret keys.
-			// See https://github.com/crossplane/terrajet/pull/94 for
+			// See https://github.com/upbound/upjet/pull/94 for
 			// more details.
 			k, err := fieldPathToSecretKey(fp)
 			if err != nil {

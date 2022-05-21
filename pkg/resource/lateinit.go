@@ -26,14 +26,14 @@ import (
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/crossplane/terrajet/pkg/config"
+	"github.com/upbound/upjet/pkg/config"
 )
 
 const (
 	// AnnotationKeyPrivateRawAttribute is the key that points to private attribute
 	// of the Terraform State. It's non-sensitive and used by provider to store
 	// arbitrary metadata, usually details about schema version.
-	AnnotationKeyPrivateRawAttribute = "terrajet.crossplane.io/provider-meta"
+	AnnotationKeyPrivateRawAttribute = "upjet.crossplane.io/provider-meta"
 
 	// CNameWildcard can be used as the canonical name of a value filter option
 	// that will apply to all fields of a struct

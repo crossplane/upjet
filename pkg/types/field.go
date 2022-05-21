@@ -9,9 +9,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/pkg/errors"
 
-	"github.com/crossplane/terrajet/pkg/config"
-	"github.com/crossplane/terrajet/pkg/types/comments"
-	"github.com/crossplane/terrajet/pkg/types/name"
+	"github.com/upbound/upjet/pkg/config"
+	"github.com/upbound/upjet/pkg/types/comments"
+	"github.com/upbound/upjet/pkg/types/name"
 )
 
 // Field represents a field that is built from the Terraform schema.

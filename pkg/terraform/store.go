@@ -31,8 +31,8 @@ import (
 	"k8s.io/utils/exec"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/crossplane/terrajet/pkg/config"
-	"github.com/crossplane/terrajet/pkg/resource"
+	"github.com/upbound/upjet/pkg/config"
+	"github.com/upbound/upjet/pkg/resource"
 )
 
 const (

@@ -7,8 +7,8 @@ package {{ .APIVersion }}
 import (
 	"github.com/pkg/errors"
 
-	"github.com/crossplane/terrajet/pkg/resource"
-	"github.com/crossplane/terrajet/pkg/resource/json"
+	"github.com/upbound/upjet/pkg/resource"
+	"github.com/upbound/upjet/pkg/resource/json"
 	{{ .Imports }}
 )
 {{ range .Resources }}

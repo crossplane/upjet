@@ -9,9 +9,9 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/tools/go/packages"
 
-	"github.com/crossplane/terrajet/pkg/config"
-	"github.com/crossplane/terrajet/pkg/types/comments"
-	"github.com/crossplane/terrajet/pkg/types/name"
+	"github.com/upbound/upjet/pkg/config"
+	"github.com/upbound/upjet/pkg/types/comments"
+	"github.com/upbound/upjet/pkg/types/name"
 )
 
 const (

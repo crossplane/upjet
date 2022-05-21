@@ -24,8 +24,8 @@ import (
 	"github.com/muvaf/typewriter/pkg/wrapper"
 	"github.com/pkg/errors"
 
-	"github.com/crossplane/terrajet/pkg/config"
-	"github.com/crossplane/terrajet/pkg/pipeline/templates"
+	"github.com/upbound/upjet/pkg/config"
+	"github.com/upbound/upjet/pkg/pipeline/templates"
 )
 
 // NewControllerGenerator returns a new ControllerGenerator.

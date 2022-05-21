@@ -20,8 +20,8 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/controller"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	"github.com/crossplane/terrajet/pkg/config"
-	"github.com/crossplane/terrajet/pkg/terraform"
+	"github.com/upbound/upjet/pkg/config"
+	"github.com/upbound/upjet/pkg/terraform"
 )
 
 // Options contains incriminating options for a given Terrajet controller instance.

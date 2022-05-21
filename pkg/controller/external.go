@@ -25,10 +25,10 @@ import (
 	"github.com/pkg/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/crossplane/terrajet/pkg/config"
-	"github.com/crossplane/terrajet/pkg/resource"
-	"github.com/crossplane/terrajet/pkg/resource/json"
-	"github.com/crossplane/terrajet/pkg/terraform"
+	"github.com/upbound/upjet/pkg/config"
+	"github.com/upbound/upjet/pkg/resource"
+	"github.com/upbound/upjet/pkg/resource/json"
+	"github.com/upbound/upjet/pkg/terraform"
 )
 
 const (

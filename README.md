@@ -26,7 +26,7 @@ to generate a Crossplane provider based on an existing Terraform provider.
 ## Report a Bug
 
 For filing bugs, suggesting improvements, or requesting new features, please
-open an [issue](https://github.com/crossplane/terrajet/issues).
+open an [issue](https://github.com/upbound/upjet/issues).
 
 ## Contact
 
@@ -40,10 +40,7 @@ Please use the following to reach members of the community:
 
 ## Governance and Owners
 
-terrajet is run according to the same
-[Governance](https://github.com/crossplane/crossplane/blob/master/GOVERNANCE.md)
-and [Ownership](https://github.com/crossplane/crossplane/blob/master/OWNERS.md)
-structure as the core Crossplane project.
+upjet is governed solely by Upbound Inc.
 
 ## Prior Art
 
@@ -61,13 +58,13 @@ license restrictions.
 
 ## Code of Conduct
 
-terrajet adheres to the same [Code of
+terrajet adheres to the [Code of
 Conduct](https://github.com/crossplane/crossplane/blob/master/CODE_OF_CONDUCT.md)
 as the core Crossplane project.
 
 ## Licensing
 
-terrajet is under the Apache 2.0 license.
+All rights of upjet belongs to Upbound Inc.
 
 [![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fcrossplane%2Fterrajet.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2Fcrossplane%2Fterrajet?ref=badge_large)
 

@@ -29,9 +29,9 @@ import (
 	xpfake "github.com/crossplane/crossplane-runtime/pkg/resource/fake"
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 
-	"github.com/crossplane/terrajet/pkg/resource"
-	"github.com/crossplane/terrajet/pkg/resource/fake"
-	tjerrors "github.com/crossplane/terrajet/pkg/terraform/errors"
+	"github.com/upbound/upjet/pkg/resource"
+	"github.com/upbound/upjet/pkg/resource/fake"
+	tjerrors "github.com/upbound/upjet/pkg/terraform/errors"
 )
 
 func TestAPICallbacks_Apply(t *testing.T) {

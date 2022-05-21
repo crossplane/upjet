@@ -21,7 +21,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 
-	tjname "github.com/crossplane/terrajet/pkg/types/name"
+	tjname "github.com/upbound/upjet/pkg/types/name"
 )
 
 // Commonly used resource configurations.

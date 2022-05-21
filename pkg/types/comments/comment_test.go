@@ -8,8 +8,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	"github.com/crossplane/terrajet/pkg/config"
-	"github.com/crossplane/terrajet/pkg/types/markers"
+	"github.com/upbound/upjet/pkg/config"
+	"github.com/upbound/upjet/pkg/types/markers"
 )
 
 func TestComment_Build(t *testing.T) {
@@ -54,12 +54,12 @@ yes, this is a test`,
 		"TextWithTerrajetMarker": {
 			args: args{
 				text: `hello world!
-+terrajet:crd:field:TFTag=-
++upjet:crd:field:TFTag=-
 `,
 			},
 			want: want{
 				out: `// hello world!
-// +terrajet:crd:field:TFTag=-
+// +upjet:crd:field:TFTag=-
 `,
 				mopts: markers.Options{
 					TerrajetOptions: markers.TerrajetOptions{
@@ -90,7 +90,7 @@ yes, this is a test`,
 			},
 			want: want{
 				out: `// hello world!
-// +terrajet:crd:field:TFTag=-
+// +upjet:crd:field:TFTag=-
 `,
 				mopts: markers.Options{
 					TerrajetOptions: markers.TerrajetOptions{
@@ -111,7 +111,7 @@ yes, this is a test`,
 			},
 			want: want{
 				out: `// hello world!
-// +terrajet:crd:field:TFTag=-
+// +upjet:crd:field:TFTag=-
 // +crossplane:generate:reference:type=comments.Comment
 `,
 				mopts: markers.Options{
@@ -129,12 +129,12 @@ yes, this is a test`,
 		"CommentWithUnsupportedTerrajetMarker": {
 			args: args{
 				text: `hello world!
-+terrajet:crd:field:TFTag=-
-+terrajet:unsupported:key=value
++upjet:crd:field:TFTag=-
++upjet:unsupported:key=value
 `,
 			},
 			want: want{
-				err: errors.New("cannot parse as a terrajet prefix: +terrajet:unsupported:key=value"),
+				err: errors.New("cannot parse as a upjet prefix: +upjet:unsupported:key=value"),
 			},
 		},
 	}

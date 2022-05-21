@@ -1,4 +1,4 @@
-module github.com/crossplane/terrajet
+module github.com/upbound/upjet
 
 go 1.17
 
@@ -119,7 +119,7 @@ require (
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
 
-// This is a temporary workaround until https://github.com/crossplane/terrajet/issues/131
+// This is a temporary workaround until https://github.com/upbound/upjet/issues/131
 // is resolved. We basically need this just to be able to import both v1 and v2
 // versions of terraform plugin sdk in order to do a schema conversion for
 // Terraform providers still using v1 sdk.

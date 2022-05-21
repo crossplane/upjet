@@ -115,13 +115,13 @@ be quite similar for any other Terraform provider.
    cat <<EOF > config/repository/config.go
    package repository
 
-   import "github.com/crossplane/terrajet/pkg/config"
+   import "github.com/upbound/upjet/pkg/config"
 
    // Configure configures individual resources by adding custom ResourceConfigurators.
    func Configure(p *config.Provider) {
        p.AddResourceConfigurator("github_repository", func(r *config.Resource) {
    
-           // we need to override the default group that terrajet generated for
+           // we need to override the default group that upjet generated for
            // this resource, which would be "github"  
            r.ShortGroup = "repository"
        })
@@ -133,12 +133,12 @@ be quite similar for any other Terraform provider.
    cat <<EOF > config/branch/config.go
    package branch
 
-   import "github.com/crossplane/terrajet/pkg/config"
+   import "github.com/upbound/upjet/pkg/config"
 
    func Configure(p *config.Provider) {
        p.AddResourceConfigurator("github_branch", func(r *config.Resource) {
    
-           // we need to override the default group that terrajet generated for
+           // we need to override the default group that upjet generated for
            // this resource, which would be "github" 
            r.ShortGroup = "branch"
    
@@ -164,8 +164,8 @@ be quite similar for any other Terraform provider.
    import (
        ...
 
-       tjconfig "github.com/crossplane/terrajet/pkg/config"
-       "github.com/crossplane/terrajet/pkg/types/conversion/cli"
+       tjconfig "github.com/upbound/upjet/pkg/config"
+       "github.com/upbound/upjet/pkg/types/conversion/cli"
        "github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 
    +   "github.com/crossplane-contrib/provider-jet-github/config/branch"
@@ -265,10 +265,10 @@ Now let's test our generated resources.
    apiVersion: branch.github.jet.crossplane.io/v1alpha1
    kind: Branch
    metadata:
-     name: hello-terrajet
+     name: hello-upjet
    spec:
      forProvider:
-       branch: hello-terrajet
+       branch: hello-upjet
        repositoryRef:
          name: hello-crossplane
      providerConfigRef:
@@ -319,13 +319,13 @@ Now let's test our generated resources.
 
    ```bash
    NAME                                                   READY   SYNCED   EXTERNAL-NAME                     AGE
-   branch.branch.github.jet.crossplane.io/hello-terrajet   True    True     hello-crossplane:hello-terrajet   89s
+   branch.branch.github.jet.crossplane.io/hello-upjet   True    True     hello-crossplane:hello-upjet   89s
 
    NAME                                                             READY   SYNCED   EXTERNAL-NAME      AGE
    repository.repository.github.jet.crossplane.io/hello-crossplane   True    True     hello-crossplane   89s
    ```
 
-   Verify that repo `hello-crossplane` and branch `hello-terrajet` created under
+   Verify that repo `hello-crossplane` and branch `hello-upjet` created under
    your GitHub account.
 
 

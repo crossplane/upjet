@@ -29,7 +29,7 @@ import (
 
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 
-	"github.com/crossplane/terrajet/pkg/config"
+	"github.com/upbound/upjet/pkg/config"
 )
 
 const (
@@ -216,7 +216,7 @@ func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, r 
 				}
 			}
 		// if unset
-		// see: https://github.com/crossplane/terrajet/issues/177
+		// see: https://github.com/upbound/upjet/issues/177
 		case nil:
 			elemType = types.Universe.Lookup("string").Type()
 		default:

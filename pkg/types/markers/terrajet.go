@@ -8,9 +8,9 @@ import (
 )
 
 const (
-	markerPrefixTerrajet = "+terrajet:"
+	markerPrefixTerrajet = "+upjet:"
 
-	errFmtCannotParseAsTerrajet = "cannot parse as a terrajet prefix: %s"
+	errFmtCannotParseAsTerrajet = "cannot parse as a upjet prefix: %s"
 )
 
 var (
@@ -18,7 +18,7 @@ var (
 	markerPrefixCRDJSONTag = fmt.Sprintf("%scrd:field:JSONTag=", markerPrefixTerrajet)
 )
 
-// TerrajetOptions represents the whole terrajet options that could be
+// TerrajetOptions represents the whole upjet options that could be
 // controlled with markers.
 type TerrajetOptions struct {
 	FieldTFTag   *string
@@ -38,7 +38,7 @@ func (o TerrajetOptions) String() string {
 	return m
 }
 
-// ParseAsTerrajetOption parses input line as a terrajet option, if it is a
+// ParseAsTerrajetOption parses input line as a upjet option, if it is a
 // valid Terrajet Option. Returns whether it is parsed or not.
 func ParseAsTerrajetOption(opts *TerrajetOptions, line string) (bool, error) {
 	if !strings.HasPrefix(line, markerPrefixTerrajet) {

@@ -29,8 +29,8 @@ import (
 
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 
-	"github.com/crossplane/terrajet/pkg/resource/json"
-	tferrors "github.com/crossplane/terrajet/pkg/terraform/errors"
+	"github.com/upbound/upjet/pkg/resource/json"
+	tferrors "github.com/upbound/upjet/pkg/terraform/errors"
 )
 
 var (

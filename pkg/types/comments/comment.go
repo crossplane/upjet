@@ -3,8 +3,8 @@ package comments
 import (
 	"strings"
 
-	"github.com/crossplane/terrajet/pkg/config"
-	"github.com/crossplane/terrajet/pkg/types/markers"
+	"github.com/upbound/upjet/pkg/config"
+	"github.com/upbound/upjet/pkg/types/markers"
 )
 
 // Option is a comment option
