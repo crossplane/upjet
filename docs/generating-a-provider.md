@@ -1,7 +1,7 @@
 # Generating a Crossplane Provider
 
 In this guide, we will generate a Crossplane provider based on an existing
-Terraform provider using Terrajet.
+Terraform provider using Upjet.
 
 We have chosen [Terraform GitHub provider] as an example, but the process will
 be quite similar for any other Terraform provider.
@@ -187,7 +187,7 @@ be quite similar for any other Terraform provider.
    the [Configuring a Resource](/docs/configuring-a-resource.md) document._**
 
 
-8. Now we can generate our Terrajet Provider:
+8. Now we can generate our Upjet Provider:
 
    ```bash
    make generate
@@ -247,7 +247,7 @@ Now let's test our generated resources.
      name: hello-crossplane
    spec:
      forProvider:
-       description: "Managed with Crossplane Github Provider (generated with Terrajet)"
+       description: "Managed with Crossplane Github Provider (generated with Upjet)"
        visibility: public
        template:
          - owner: crossplane-contrib

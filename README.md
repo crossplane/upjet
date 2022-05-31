@@ -1,24 +1,24 @@
-# Terrajet - Generate Crossplane Providers from any Terraform Provider
+# Upjet - Generate Crossplane Providers from any Terraform Provider
 
-Terrajet is a code generator framework that allows developers to build code
+Upjet is a code generator framework that allows developers to build code
 generation pipelines that can generate Crossplane controllers. Developers can
 start building their code generation pipeline targeting specific Terraform Providers
-by importing Terrajet and wiring all generators together, customizing the whole
+by importing Upjet and wiring all generators together, customizing the whole
 pipeline in the process.
 
 See [design document][design-doc] for more details.
 
-Feel free to test the following Crossplane providers built using Terrajet:
+Feel free to test the following Crossplane providers built using Upjet:
 
 * [Provider Jet AWS](https://github.com/crossplane-contrib/provider-jet-aws/releases)
 * [Provider Jet Azure](https://github.com/crossplane-contrib/provider-jet-azure/releases)
 * [Provider Jet GCP](https://github.com/crossplane-contrib/provider-jet-gcp/releases)
 
-**NOTE**: Terrajet is in its very early stages and we're making many changes that
+**NOTE**: Upjet is in its very early stages and we're making many changes that
 can affect the output and the runtime. Please check the generated code before
 running in production.
 
-## Generating a New Provider Using Terrajet
+## Generating a New Provider Using Upjet
 
 Please see [this guide](docs/generating-a-provider.md) for detailed steps on how
 to generate a Crossplane provider based on an existing Terraform provider.

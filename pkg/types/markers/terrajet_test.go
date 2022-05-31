@@ -67,12 +67,12 @@ func Test_parseAsTerrajetOption(t *testing.T) {
 		"CannotParse": {
 			args: args{
 				opts: &TerrajetOptions{},
-				line: "+upjet:unknownmarker:key=value",
+				line: "+terrajet:unknownmarker:key=value",
 			},
 			want: want{
 				opts:   &TerrajetOptions{},
 				parsed: false,
-				err:    errors.Errorf(errFmtCannotParseAsTerrajet, "+upjet:unknownmarker:key=value"),
+				err:    errors.Errorf(errFmtCannotParseAsTerrajet, "+terrajet:unknownmarker:key=value"),
 			},
 		},
 	}

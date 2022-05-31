@@ -1,4 +1,4 @@
-# Terrajet Maintainers
+# Upjet Maintainers
 
 Please see [GOVERNANCE.md](https://github.com/crossplane/crossplane/blob/master/GOVERNANCE.md) for governance guidelines and responsibilities for the
 steering committee and maintainers of repositories under Crossplane organization.

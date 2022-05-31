@@ -8,9 +8,9 @@ import (
 )
 
 const (
-	markerPrefixTerrajet = "+upjet:"
+	markerPrefixTerrajet = "+terrajet:"
 
-	errFmtCannotParseAsTerrajet = "cannot parse as a upjet prefix: %s"
+	errFmtCannotParseAsTerrajet = "cannot parse as a terrajet prefix: %s"
 )
 
 var (

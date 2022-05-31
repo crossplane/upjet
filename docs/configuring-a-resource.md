@@ -1,6 +1,6 @@
 ## Configuring a Resource
 
-[Terrajet] generates as much as it could using the available information in the
+[Upjet] generates as much as it could using the available information in the
 Terraform resource schema. This includes an XRM-conformant schema of the
 resource, controller logic, late initialization, sensitive data handling etc.
 However, there are still couple of information that requires some input
@@ -27,7 +27,7 @@ configuration for upjet to appropriately generate a resource.
 Since Terraform already needs [a similar identifier] to import a resource, most
 helpful part of resource documentation is the [import section].
 
-Terrajet performs some back and forth conversions between Crossplane resource
+Upjet performs some back and forth conversions between Crossplane resource
 model and Terraform configuration. We need a custom, per resource configuration
 to adapt Crossplane `external name` from Terraform `id`.
 
@@ -102,7 +102,7 @@ conditions:
 - Terraform resource can be imported with `name`, i.e. `id`=`name`
 
 [aws_iam_user] is a good example here. In this case, we can just use the
-[NameAsIdentifier] config of Terrajet as follows:
+[NameAsIdentifier] config of Upjet as follows:
 
 ```go
 import (
@@ -298,7 +298,7 @@ marker on the fields. Now, the only manual step for generating cross resource
 references is to provide which field of a resource depends on which information
 (e.g. `id`, `name`, `arn` etc.) from the other.
 
-In Terrajet, we have a [configuration] to provide this information for a field:
+In Upjet, we have a [configuration] to provide this information for a field:
 
 ```go
 // Reference represents the Crossplane options used to generate
@@ -363,14 +363,14 @@ Crossplane stores sensitive information of a managed resource in a Kubernetes
 secret, together with some additional fields that would help consumption of the
 resource, a.k.a. [connection details].
 
-In Terrajet, we already [handle sensitive fields] that are marked as sensitive
-in Terraform schema and no further action required for them. Terrajet will 
+In Upjet, we already [handle sensitive fields] that are marked as sensitive
+in Terraform schema and no further action required for them. Upjet will 
 properly hide these fields from CRD spec and status by converting to a secret
 reference or storing in connection details secret respectively. However, we
 still have some custom configuration API that would allow including additional
 fields into connection details secret no matter they are sensitive or not.
 
-As an example, let's use `aws_iam_access_key`. Currently, Terrajet stores all
+As an example, let's use `aws_iam_access_key`. Currently, Upjet stores all
 sensitive fields in Terraform schema as prefixed with `attribute.`, so without
 any `AdditionalConnectionDetailsFn`, connection resource will have
 `attribute.id` and `attribute.secret` corresponding to [id] and [secret] fields
@@ -441,14 +441,14 @@ you provided all necessary parameters to your resource._
 
 #### Further details on Late Initialization
 
-Terrajet runtime automatically performs late-initialization during
+Upjet runtime automatically performs late-initialization during
 an [`external.Observe`] call with means of runtime reflection.
 State of the world observed by Terraform CLI is used to initialize
 any `nil`-valued pointer parameters in the managed resource's `spec`.
 In most of the cases no custom configuration should be necessary for
 late-initialization to work. However, there are certain cases where
 you will want/need to customize late-initialization behaviour. Thus,
-Terrajet provides an extensible [late-initialization customization API]
+Upjet provides an extensible [late-initialization customization API]
 that controls late-initialization behaviour.
 
 The associated resource struct is defined [here](https://github.com/upbound/upjet/blob/c9e21387298d8ed59fcd71c7f753ec401a3383a5/pkg/config/resource.go#L91) as follows:
@@ -515,8 +515,8 @@ during late-initialization.
 
 ### Overriding Terraform Resource Schema
 
-Terrajet generates Crossplane resource schemas (CR spec/status) using the
-[Terraform schema of the resource]. As of today, Terrajet leverages the
+Upjet generates Crossplane resource schemas (CR spec/status) using the
+[Terraform schema of the resource]. As of today, Upjet leverages the
 following attributes in the schema:
 
 - [Type] and [Elem] to identify the type of the field.
@@ -659,7 +659,7 @@ So, an interface must be passed to the related configuration field for adding in
 
 [comment]: <> (References)
 
-[Terrajet]: https://github.com/upbound/upjet
+[Upjet]: https://github.com/upbound/upjet
 [External name]: #external-name
 [Cross Resource Referencing]: #cross-resource-referencing
 [Additional Sensitive Fields and Custom Connection Details]: #additional-sensitive-fields-and-custom-connection-details
