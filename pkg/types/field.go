@@ -25,6 +25,7 @@ type Field struct {
 	FieldType                                types.Type
 	AsBlocksMode                             bool
 	Reference                                *config.Reference
+	TransformedName                          string
 }
 
 // NewField returns a constructed Field object.
@@ -43,6 +44,7 @@ func NewField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema,
 	f.Comment = comment
 	f.TFTag = fmt.Sprintf("%s,omitempty", f.Name.Snake)
 	f.JSONTag = fmt.Sprintf("%s,omitempty", f.Name.LowerCamelComputed)
+	f.TransformedName = f.Name.LowerCamelComputed
 
 	// Terraform paths, e.g. { "lifecycle_rule", "*", "transition", "*", "days" } for https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket#lifecycle_rule
 	f.TerraformPaths = append(tfPath, f.Name.Snake) // nolint:gocritic
@@ -105,7 +107,8 @@ func NewSensitiveField(g *Builder, cfg *config.Resource, r *resource, sch *schem
 	case "map[string]string", "map[string]*string":
 		f.FieldType = types.NewMap(types.Universe.Lookup("string").Type(), typeSecretKeySelector)
 	}
-	f.JSONTag = name.NewFromCamel(f.FieldNameCamel).LowerCamelComputed
+	f.TransformedName = name.NewFromCamel(f.FieldNameCamel).LowerCamelComputed
+	f.JSONTag = f.TransformedName
 	if f.Schema.Optional {
 		f.FieldType = types.NewPointer(f.FieldType)
 		f.JSONTag += ",omitempty"
@@ -128,7 +131,7 @@ func NewReferenceField(g *Builder, cfg *config.Resource, r *resource, sch *schem
 }
 
 // AddToResource adds built field to the resource.
-func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames, t map[string]Transformation) {
+func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames) {
 	if f.Comment.TerrajetOptions.FieldTFTag != nil {
 		f.TFTag = *f.Comment.TerrajetOptions.FieldTFTag
 	}
@@ -148,7 +151,7 @@ func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames, t m
 	}
 
 	if f.Reference != nil {
-		r.addReferenceFields(g, typeNames.ParameterTypeName, field, *f.Reference, t, fieldPath(f.TerraformPaths))
+		r.addReferenceFields(g, typeNames.ParameterTypeName, field, f)
 	}
 
 	g.comments.AddFieldComment(typeNames.ParameterTypeName, f.FieldNameCamel, f.Comment.Build())

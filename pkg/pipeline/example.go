@@ -17,7 +17,6 @@ limitations under the License.
 package pipeline
 
 import (
-	"bytes"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -35,12 +34,14 @@ import (
 )
 
 var (
-	reRef = regexp.MustCompile(`\${(.+)}`)
+	reRef  = regexp.MustCompile(`\${(.+)}`)
+	reFile = regexp.MustCompile(`file\("(.+)"\)`)
 )
 
 type pavedWithManifest struct {
 	manifestPath string
 	paved        *fieldpath.Paved
+	refsResolved bool
 }
 
 // ResourceExample represents the scraped example HCL configuration
@@ -99,7 +100,7 @@ func NewExampleGenerator(rootDir string, resourceMeta map[string]*Resource) *Exa
 // their respective API groups.
 func (eg *ExampleGenerator) StoreExamples() error {
 	for n, pm := range eg.resources {
-		if err := eg.resolveReferences(pm.paved.UnstructuredContent()); err != nil {
+		if err := eg.resolveReferencesOfPaved(pm); err != nil {
 			return errors.Wrapf(err, "cannot resolve references for resource: %s", n)
 		}
 		u := pm.paved.UnstructuredContent()
@@ -112,33 +113,20 @@ func (eg *ExampleGenerator) StoreExamples() error {
 		if err := os.MkdirAll(manifestDir, 0750); err != nil {
 			return errors.Wrapf(err, "cannot mkdir %s", manifestDir)
 		}
-
-		b := bytes.Buffer{}
-		b.WriteString("# This example manifest is auto-generated, and has not been tested.\n")
-		b.WriteString("# Please make the necessary adjustments before using it.\n")
-		b.Write(commentOut(buff))
 		// no sensitive info in the example manifest
-		if err := ioutil.WriteFile(pm.manifestPath, b.Bytes(), 0644); err != nil { // nolint:gosec
+		if err := ioutil.WriteFile(pm.manifestPath, buff, 0644); err != nil { // nolint:gosec
 			return errors.Wrapf(err, "cannot write example manifest file %s for resource %s", pm.manifestPath, n)
 		}
 	}
 	return nil
 }
 
-func commentOut(buff []byte) []byte {
-	lines := strings.Split(string(buff), "\n")
-	commentedOutLines := make([]string, 0, len(lines))
-	for _, l := range lines {
-		trimmed := strings.TrimSpace(l)
-		if len(trimmed) == 0 {
-			continue
-		}
-		if !strings.HasPrefix(trimmed, "#") {
-			l = "#" + l
-		}
-		commentedOutLines = append(commentedOutLines, l)
+func (eg *ExampleGenerator) resolveReferencesOfPaved(pm *pavedWithManifest) error {
+	if pm.refsResolved {
+		return nil
 	}
-	return []byte(strings.Join(commentedOutLines, "\n"))
+	pm.refsResolved = true
+	return errors.Wrap(eg.resolveReferences(pm.paved.UnstructuredContent()), "failed to resolve references of paved")
 }
 
 func (eg *ExampleGenerator) resolveReferences(params map[string]interface{}) error { // nolint:gocyclo
@@ -173,6 +161,9 @@ func (eg *ExampleGenerator) resolveReferences(params map[string]interface{}) err
 			pm := eg.resources[path[0]]
 			if pm == nil || pm.paved == nil {
 				continue
+			}
+			if err := eg.resolveReferencesOfPaved(pm); err != nil {
+				return errors.Wrapf(err, "cannot recursively resolve references for %q", path[0])
 			}
 			pathStr := strings.Join(append([]string{"spec", "forProvider"}, path[2:]...), ".")
 			s, err := pm.paved.GetString(pathStr)
@@ -305,11 +296,18 @@ func getSecretRef(v interface{}) (string, string) {
 	if len(g) != 2 {
 		return secretName, secretKey
 	}
-	parts := strings.Split(g[1], ".")
-	if len(parts) < 3 {
-		return secretName, secretKey
+	f := reFile.FindStringSubmatch(g[1])
+	switch {
+	case len(f) == 2: // then a file reference
+		_, file := filepath.Split(f[1])
+		secretKey = fmt.Sprintf("attribute.%s", file)
+	default:
+		parts := strings.Split(g[1], ".")
+		if len(parts) < 3 {
+			return secretName, secretKey
+		}
+		secretName = fmt.Sprintf("example-%s", strings.Join(strings.Split(parts[0], "_")[1:], "-"))
+		secretKey = fmt.Sprintf("attribute.%s", strings.Join(parts[2:], "."))
 	}
-	secretName = fmt.Sprintf("example-%s", strings.Join(strings.Split(parts[0], "_")[1:], "-"))
-	secretKey = fmt.Sprintf("attribute.%s", strings.Join(parts[2:], "."))
 	return secretName, secretKey
 }

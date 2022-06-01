@@ -108,6 +108,7 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 				continue
 			}
 			tr.IsSensitive = true
+			tr.IsRef = true
 		case reference != nil:
 			f, err = NewReferenceField(g, cfg, r, res.Schema[snakeFieldName], reference, snakeFieldName, tfPath, xpPath, names, asBlocksMode, t)
 			if err != nil {
@@ -120,9 +121,9 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 				return nil, nil, err
 			}
 		}
-		tr.TransformedName = f.Name.LowerCamelComputed
+		f.AddToResource(g, r, typeNames)
+		tr.TransformedName = f.TransformedName
 		t[fieldPath(f.TerraformPaths)] = tr
-		f.AddToResource(g, r, typeNames, t)
 	}
 
 	paramType, obsType := g.AddToBuilder(typeNames, r)
@@ -293,14 +294,10 @@ func (r *resource) addObservationField(f *Field, field *types.Var) {
 	r.obsTags = append(r.obsTags, fmt.Sprintf(`json:"%s" tf:"%s"`, f.JSONTag, f.TFTag))
 }
 
-func (r *resource) addReferenceFields(g *Builder, paramName *types.TypeName, field *types.Var, ref config.Reference, t map[string]Transformation, fPath string) {
-	refFields, refTags, names := g.generateReferenceFields(paramName, field, ref)
+func (r *resource) addReferenceFields(g *Builder, paramName *types.TypeName, field *types.Var, f *Field) {
+	refFields, refTags := g.generateReferenceFields(paramName, field, f)
 	r.paramTags = append(r.paramTags, refTags...)
 	r.paramFields = append(r.paramFields, refFields...)
-	t[fPath] = Transformation{
-		TransformedName: names[0].LowerCamelComputed,
-		IsRef:           true,
-	}
 }
 
 // generateTypeName generates a unique name for the type if its original name
