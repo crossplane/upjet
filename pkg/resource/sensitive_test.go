@@ -1,5 +1,5 @@
 /*
- Copyright 2021 The Crossplane Authors.
+ Copyright 2021 Upbound Inc.
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -31,10 +31,10 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 
-	"github.com/crossplane/terrajet/pkg/config"
-	"github.com/crossplane/terrajet/pkg/resource/fake"
-	"github.com/crossplane/terrajet/pkg/resource/fake/mocks"
-	"github.com/crossplane/terrajet/pkg/resource/json"
+	"github.com/upbound/upjet/pkg/config"
+	"github.com/upbound/upjet/pkg/resource/fake"
+	"github.com/upbound/upjet/pkg/resource/fake/mocks"
+	"github.com/upbound/upjet/pkg/resource/json"
 )
 
 var (
@@ -122,7 +122,7 @@ func TestGetConnectionDetails(t *testing.T) {
 		"NoConnectionDetails": {
 			args: args{
 				tr:  &fake.Terraformed{},
-				cfg: config.DefaultResource("terrajet_resource", nil),
+				cfg: config.DefaultResource("upjet_resource", nil),
 			},
 		},
 		"OnlyDefaultConnectionDetails": {
@@ -134,7 +134,7 @@ func TestGetConnectionDetails(t *testing.T) {
 						},
 					},
 				},
-				cfg: config.DefaultResource("terrajet_resource", nil),
+				cfg: config.DefaultResource("upjet_resource", nil),
 				data: map[string]interface{}{
 					"top_level_secret": "sensitive-data-top-level-secret",
 				},
@@ -154,7 +154,7 @@ func TestGetConnectionDetails(t *testing.T) {
 						},
 					},
 				},
-				cfg: config.DefaultResource("terrajet_resource", nil),
+				cfg: config.DefaultResource("upjet_resource", nil),
 				data: map[string]interface{}{
 					"top_level_secrets": []interface{}{
 						"val1",
@@ -180,7 +180,7 @@ func TestGetConnectionDetails(t *testing.T) {
 						},
 					},
 				},
-				cfg: config.DefaultResource("terrajet_resource", nil),
+				cfg: config.DefaultResource("upjet_resource", nil),
 				data: map[string]interface{}{
 					"top_level_secrets": map[string]interface{}{
 						"key1": "val1",

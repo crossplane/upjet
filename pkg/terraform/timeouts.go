@@ -1,5 +1,5 @@
 /*
- Copyright 2022 The Crossplane Authors.
+ Copyright 2022 Upbound Inc.
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -19,8 +19,8 @@ package terraform
 import (
 	"github.com/crossplane/crossplane-runtime/pkg/errors"
 
-	"github.com/crossplane/terrajet/pkg/config"
-	"github.com/crossplane/terrajet/pkg/resource/json"
+	"github.com/upbound/upjet/pkg/config"
+	"github.com/upbound/upjet/pkg/resource/json"
 )
 
 // "e2bfb730-ecaa-11e6-8f88-34363bc7c4c0" is a hardcoded string for Terraform

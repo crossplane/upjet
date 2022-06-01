@@ -1,6 +1,6 @@
 ## Configuring a Resource
 
-[Terrajet] generates as much as it could using the available information in the
+[Upjet] generates as much as it could using the available information in the
 Terraform resource schema. This includes an XRM-conformant schema of the
 resource, controller logic, late initialization, sensitive data handling etc.
 However, there are still couple of information that requires some input
@@ -22,12 +22,12 @@ for more details. The format and source of the external name depends on the
 cloud provider; sometimes it could simply be the name of resource
 (e.g. S3 Bucket), and sometimes it is an auto-generated id by cloud API
 (e.g. VPC id ). This is something specific to resource, and we need some input
-configuration for terrajet to appropriately generate a resource.
+configuration for upjet to appropriately generate a resource.
 
 Since Terraform already needs [a similar identifier] to import a resource, most
 helpful part of resource documentation is the [import section].
 
-Terrajet performs some back and forth conversions between Crossplane resource
+Upjet performs some back and forth conversions between Crossplane resource
 model and Terraform configuration. We need a custom, per resource configuration
 to adapt Crossplane `external name` from Terraform `id`.
 
@@ -102,11 +102,11 @@ conditions:
 - Terraform resource can be imported with `name`, i.e. `id`=`name`
 
 [aws_iam_user] is a good example here. In this case, we can just use the
-[NameAsIdentifier] config of Terrajet as follows:
+[NameAsIdentifier] config of Upjet as follows:
 
 ```go
 import (
-	"github.com/crossplane/terrajet/pkg/config"
+	"github.com/upbound/upjet/pkg/config"
 	...
 )
 
@@ -133,7 +133,7 @@ also omit `bucket` and `bucket_prefix` arguments from the spec with
 
 ```go
 import (
-	"github.com/crossplane/terrajet/pkg/config"
+	"github.com/upbound/upjet/pkg/config"
 	...
 )
 
@@ -165,7 +165,7 @@ Here, we can just use [IdentifierFromProvider] configuration:
 
 ```go
 import (
-	"github.com/crossplane/terrajet/pkg/config"
+	"github.com/upbound/upjet/pkg/config"
 	...
 )
 
@@ -196,7 +196,7 @@ this id back (`GetIDFn`).
 
 ```go
 import (
-	"github.com/crossplane/terrajet/pkg/config"
+	"github.com/upbound/upjet/pkg/config"
 	...
 )
 
@@ -298,7 +298,7 @@ marker on the fields. Now, the only manual step for generating cross resource
 references is to provide which field of a resource depends on which information
 (e.g. `id`, `name`, `arn` etc.) from the other.
 
-In Terrajet, we have a [configuration] to provide this information for a field:
+In Upjet, we have a [configuration] to provide this information for a field:
 
 ```go
 // Reference represents the Crossplane options used to generate
@@ -363,14 +363,14 @@ Crossplane stores sensitive information of a managed resource in a Kubernetes
 secret, together with some additional fields that would help consumption of the
 resource, a.k.a. [connection details].
 
-In Terrajet, we already [handle sensitive fields] that are marked as sensitive
-in Terraform schema and no further action required for them. Terrajet will 
+In Upjet, we already [handle sensitive fields] that are marked as sensitive
+in Terraform schema and no further action required for them. Upjet will 
 properly hide these fields from CRD spec and status by converting to a secret
 reference or storing in connection details secret respectively. However, we
 still have some custom configuration API that would allow including additional
 fields into connection details secret no matter they are sensitive or not.
 
-As an example, let's use `aws_iam_access_key`. Currently, Terrajet stores all
+As an example, let's use `aws_iam_access_key`. Currently, Upjet stores all
 sensitive fields in Terraform schema as prefixed with `attribute.`, so without
 any `AdditionalConnectionDetailsFn`, connection resource will have
 `attribute.id` and `attribute.secret` corresponding to [id] and [secret] fields
@@ -441,17 +441,17 @@ you provided all necessary parameters to your resource._
 
 #### Further details on Late Initialization
 
-Terrajet runtime automatically performs late-initialization during
+Upjet runtime automatically performs late-initialization during
 an [`external.Observe`] call with means of runtime reflection.
 State of the world observed by Terraform CLI is used to initialize
 any `nil`-valued pointer parameters in the managed resource's `spec`.
 In most of the cases no custom configuration should be necessary for
 late-initialization to work. However, there are certain cases where
 you will want/need to customize late-initialization behaviour. Thus,
-Terrajet provides an extensible [late-initialization customization API]
+Upjet provides an extensible [late-initialization customization API]
 that controls late-initialization behaviour.
 
-The associated resource struct is defined [here](https://github.com/crossplane/terrajet/blob/c9e21387298d8ed59fcd71c7f753ec401a3383a5/pkg/config/resource.go#L91) as follows:
+The associated resource struct is defined [here](https://github.com/upbound/upjet/blob/c9e21387298d8ed59fcd71c7f753ec401a3383a5/pkg/config/resource.go#L91) as follows:
 
 ```go
 // LateInitializer represents configurations that control
@@ -515,8 +515,8 @@ during late-initialization.
 
 ### Overriding Terraform Resource Schema
 
-Terrajet generates Crossplane resource schemas (CR spec/status) using the
-[Terraform schema of the resource]. As of today, Terrajet leverages the
+Upjet generates Crossplane resource schemas (CR spec/status) using the
+[Terraform schema of the resource]. As of today, Upjet leverages the
 following attributes in the schema:
 
 - [Type] and [Elem] to identify the type of the field.
@@ -565,7 +565,7 @@ provide that setting initializers for per resource.
 Many resources in aws have `tags` field in their schema. Also, in Crossplane there is a [tagging convention]. 
 To implement the tagging convention for jet-aws provider, this initializer configuration support was provided.
 
-There is a common struct (`Tagger`) in terrajet to use the tagging convention:
+There is a common struct (`Tagger`) in upjet to use the tagging convention:
 
 ```go
 // Tagger implements the Initialize function to set external tags
@@ -659,7 +659,7 @@ So, an interface must be passed to the related configuration field for adding in
 
 [comment]: <> (References)
 
-[Terrajet]: https://github.com/crossplane/terrajet
+[Upjet]: https://github.com/upbound/upjet
 [External name]: #external-name
 [Cross Resource Referencing]: #cross-resource-referencing
 [Additional Sensitive Fields and Custom Connection Details]: #additional-sensitive-fields-and-custom-connection-details
@@ -668,9 +668,9 @@ So, an interface must be passed to the related configuration field for adding in
 [the external name documentation]: https://crossplane.io/docs/v1.7/concepts/managed-resources.html#external-name
 [concept to identify a resource]: https://www.terraform.io/docs/glossary#id
 [import section]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_access_key#import
-[the types for the External Name configuration]: https://github.com/crossplane/terrajet/blob/2299925ea2541e6a8088ede463cd865bd64eba32/pkg/config/resource.go#L67
+[the types for the External Name configuration]: https://github.com/upbound/upjet/blob/2299925ea2541e6a8088ede463cd865bd64eba32/pkg/config/resource.go#L67
 [aws_iam_user]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_user
-[NameAsIdentifier]: https://github.com/crossplane/terrajet/blob/2299925ea2541e6a8088ede463cd865bd64eba32/pkg/config/defaults.go#L31
+[NameAsIdentifier]: https://github.com/upbound/upjet/blob/2299925ea2541e6a8088ede463cd865bd64eba32/pkg/config/defaults.go#L31
 [aws_s3_bucket]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket
 [import section of s3 bucket]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket#import
 [bucket]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket#bucket
@@ -680,21 +680,21 @@ So, an interface must be passed to the related configuration field for adding in
 [import section of aws_vpc]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc#import
 [arguments list]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc#argument-reference
 [example usages]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc#example-usage
-[IdentifierFromProvider]: https://github.com/crossplane/terrajet/blob/2299925ea2541e6a8088ede463cd865bd64eba32/pkg/config/defaults.go#L46
+[IdentifierFromProvider]: https://github.com/upbound/upjet/blob/2299925ea2541e6a8088ede463cd865bd64eba32/pkg/config/defaults.go#L46
 [a similar identifier]: https://www.terraform.io/docs/glossary#id
 [import section of azurerm_sql_server]: https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/sql_server#import
 [handle dependencies]: https://crossplane.io/docs/v1.7/concepts/managed-resources.html#dependencies
 [user]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_access_key#user
 [generate reference resolution methods]: https://github.com/crossplane/crossplane-tools/pull/35
-[configuration]: https://github.com/crossplane/terrajet/blob/874bb6ad5cff9741241fb790a3a5d71166900860/pkg/config/resource.go#L77
+[configuration]: https://github.com/upbound/upjet/blob/874bb6ad5cff9741241fb790a3a5d71166900860/pkg/config/resource.go#L77
 [iam_access_key]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_access_key#argument-reference
 [kms key]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ebs_volume#kms_key_id
 [connection details]: https://crossplane.io/docs/v1.7/concepts/managed-resources.html#connection-details
-[handle sensitive fields]: https://github.com/crossplane/terrajet/pull/77
+[handle sensitive fields]: https://github.com/upbound/upjet/pull/77
 [id]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_access_key#id
 [secret]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_access_key#secret
-[`external.Observe`]: https://github.com/crossplane/terrajet/blob/874bb6ad5cff9741241fb790a3a5d71166900860/pkg/controller/external.go#L149
-[late-initialization customization API]: https://github.com/crossplane/terrajet/blob/874bb6ad5cff9741241fb790a3a5d71166900860/pkg/resource/lateinit.go#L86
+[`external.Observe`]: https://github.com/upbound/upjet/blob/874bb6ad5cff9741241fb790a3a5d71166900860/pkg/controller/external.go#L149
+[late-initialization customization API]: https://github.com/upbound/upjet/blob/874bb6ad5cff9741241fb790a3a5d71166900860/pkg/resource/lateinit.go#L86
 [`address_prefix`]: https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/subnet#address_prefix
 [Terraform schema of the resource]: https://github.com/hashicorp/terraform-plugin-sdk/blob/e3325b095ef501cf551f7935254ce942c44c1af0/helper/schema/schema.go#L34
 [Type]: https://github.com/hashicorp/terraform-plugin-sdk/blob/e3325b095ef501cf551f7935254ce942c44c1af0/helper/schema/schema.go#L52
@@ -708,8 +708,8 @@ So, an interface must be passed to the related configuration field for adding in
 [AWS region]: https://github.com/crossplane-contrib/provider-jet-aws/blob/a5b6a6fea65634c475a84583e1e1776a048a0df9/config/overrides.go#L325
 [this figure]: images/terrajet-externalname.png
 [Initializers]: #initializers
-[InitializerFns]: https://github.com/crossplane/terrajet/blob/ae78a0a4c438f01717002e00fac761524aa6e951/pkg/config/resource.go#L289
-[NewInitializerFn]: https://github.com/crossplane/terrajet/blob/ae78a0a4c438f01717002e00fac761524aa6e951/pkg/config/resource.go#L207
+[InitializerFns]: https://github.com/upbound/upjet/blob/ae78a0a4c438f01717002e00fac761524aa6e951/pkg/config/resource.go#L289
+[NewInitializerFn]: https://github.com/upbound/upjet/blob/ae78a0a4c438f01717002e00fac761524aa6e951/pkg/config/resource.go#L207
 [crossplane-runtime]: https://github.com/crossplane/crossplane-runtime/blob/428b7c3903756bb0dcf5330f40298e1fa0c34301/pkg/reconciler/managed/reconciler.go#L138
 [some external labels]: https://github.com/crossplane/crossplane-runtime/blob/428b7c3903756bb0dcf5330f40298e1fa0c34301/pkg/resource/resource.go#L397
 [tagging convention]: https://github.com/crossplane/crossplane/blob/60c7df9/design/one-pager-managed-resource-api-design.md#external-resource-labeling

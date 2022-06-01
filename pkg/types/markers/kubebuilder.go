@@ -2,7 +2,7 @@ package markers
 
 import "fmt"
 
-// KubebuilderOptions represents the kubebuilder options that terrajet would
+// KubebuilderOptions represents the kubebuilder options that upjet would
 // need to control
 type KubebuilderOptions struct {
 	Required *bool

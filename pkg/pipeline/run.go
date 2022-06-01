@@ -1,5 +1,5 @@
 /*
- Copyright 2021 The Crossplane Authors.
+ Copyright 2021 Upbound Inc.
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/crossplane/terrajet/pkg/config"
+	"github.com/upbound/upjet/pkg/config"
 
 	"github.com/crossplane/crossplane-runtime/pkg/errors"
 )

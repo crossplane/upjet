@@ -3,7 +3,7 @@ package markers
 import (
 	"fmt"
 
-	"github.com/crossplane/terrajet/pkg/config"
+	"github.com/upbound/upjet/pkg/config"
 )
 
 const (
@@ -17,7 +17,7 @@ var (
 	markerPrefixRefSelectorName = fmt.Sprintf("%sgenerate:reference:selectorFieldName=", markerPrefixCrossplane)
 )
 
-// CrossplaneOptions represents the Crossplane marker options that terrajet
+// CrossplaneOptions represents the Crossplane marker options that upjet
 // would need to interact
 type CrossplaneOptions struct {
 	config.Reference

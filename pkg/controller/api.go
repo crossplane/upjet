@@ -1,5 +1,5 @@
 /*
- Copyright 2021 The Crossplane Authors.
+ Copyright 2021 Upbound Inc.
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -28,8 +28,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrl "sigs.k8s.io/controller-runtime/pkg/manager"
 
-	"github.com/crossplane/terrajet/pkg/resource"
-	"github.com/crossplane/terrajet/pkg/terraform"
+	"github.com/upbound/upjet/pkg/resource"
+	"github.com/upbound/upjet/pkg/terraform"
 )
 
 const (

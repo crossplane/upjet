@@ -1,24 +1,24 @@
-# Terrajet - Generate Crossplane Providers from any Terraform Provider
+# Upjet - Generate Crossplane Providers from any Terraform Provider
 
-Terrajet is a code generator framework that allows developers to build code
+Upjet is a code generator framework that allows developers to build code
 generation pipelines that can generate Crossplane controllers. Developers can
 start building their code generation pipeline targeting specific Terraform Providers
-by importing Terrajet and wiring all generators together, customizing the whole
+by importing Upjet and wiring all generators together, customizing the whole
 pipeline in the process.
 
 See [design document][design-doc] for more details.
 
-Feel free to test the following Crossplane providers built using Terrajet:
+Feel free to test the following Crossplane providers built using Upjet:
 
 * [Provider Jet AWS](https://github.com/crossplane-contrib/provider-jet-aws/releases)
 * [Provider Jet Azure](https://github.com/crossplane-contrib/provider-jet-azure/releases)
 * [Provider Jet GCP](https://github.com/crossplane-contrib/provider-jet-gcp/releases)
 
-**NOTE**: Terrajet is in its very early stages and we're making many changes that
+**NOTE**: Upjet is in its very early stages and we're making many changes that
 can affect the output and the runtime. Please check the generated code before
 running in production.
 
-## Generating a New Provider Using Terrajet
+## Generating a New Provider Using Upjet
 
 Please see [this guide](docs/generating-a-provider.md) for detailed steps on how
 to generate a Crossplane provider based on an existing Terraform provider.
@@ -26,7 +26,7 @@ to generate a Crossplane provider based on an existing Terraform provider.
 ## Report a Bug
 
 For filing bugs, suggesting improvements, or requesting new features, please
-open an [issue](https://github.com/crossplane/terrajet/issues).
+open an [issue](https://github.com/upbound/upjet/issues).
 
 ## Contact
 
@@ -40,10 +40,7 @@ Please use the following to reach members of the community:
 
 ## Governance and Owners
 
-terrajet is run according to the same
-[Governance](https://github.com/crossplane/crossplane/blob/master/GOVERNANCE.md)
-and [Ownership](https://github.com/crossplane/crossplane/blob/master/OWNERS.md)
-structure as the core Crossplane project.
+upjet is governed solely by Upbound Inc.
 
 ## Prior Art
 
@@ -61,13 +58,13 @@ license restrictions.
 
 ## Code of Conduct
 
-terrajet adheres to the same [Code of
+terrajet adheres to the [Code of
 Conduct](https://github.com/crossplane/crossplane/blob/master/CODE_OF_CONDUCT.md)
 as the core Crossplane project.
 
 ## Licensing
 
-terrajet is under the Apache 2.0 license.
+All rights of upjet belongs to Upbound Inc.
 
 [![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fcrossplane%2Fterrajet.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2Fcrossplane%2Fterrajet?ref=badge_large)
 

@@ -8,7 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/pkg/errors"
 
-	conversiontfjson "github.com/crossplane/terrajet/pkg/types/conversion/tfjson"
+	conversiontfjson "github.com/upbound/upjet/pkg/types/conversion/tfjson"
 )
 
 // ResourceConfiguratorFn is a function that implements the ResourceConfigurator

@@ -1,17 +1,5 @@
 /*
-Copyright 2021 The Crossplane Authors.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+Copyright 2021 Upbound Inc.
 */
 
 package terraform
@@ -29,9 +17,9 @@ import (
 	"github.com/spf13/afero"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/crossplane/terrajet/pkg/config"
-	"github.com/crossplane/terrajet/pkg/resource"
-	"github.com/crossplane/terrajet/pkg/resource/fake"
+	"github.com/upbound/upjet/pkg/config"
+	"github.com/upbound/upjet/pkg/resource"
+	"github.com/upbound/upjet/pkg/resource/fake"
 )
 
 const (
@@ -72,7 +60,7 @@ func TestWriteTFState(t *testing.T) {
 						"obs": "obsval",
 					}},
 				},
-				cfg: config.DefaultResource("terrajet_resource", nil),
+				cfg: config.DefaultResource("upjet_resource", nil),
 			},
 			want: want{
 				tfstate: `{"version":4,"terraform_version":"","serial":1,"lineage":"","outputs":null,"resources":[{"mode":"managed","type":"","name":"","provider":"provider[\"registry.terraform.io/\"]","instances":[{"schema_version":0,"attributes":{"id":"some-id","name":"some-id","obs":"obsval","param":"paramval"},"private":"cHJpdmF0ZXJhdw=="}]}]}`,
@@ -97,7 +85,7 @@ func TestWriteTFState(t *testing.T) {
 						"obs": "obsval",
 					}},
 				},
-				cfg: config.DefaultResource("terrajet_resource", nil, func(r *config.Resource) {
+				cfg: config.DefaultResource("upjet_resource", nil, func(r *config.Resource) {
 					r.OperationTimeouts.Read = 2 * time.Minute
 				}),
 			},
@@ -160,7 +148,7 @@ func TestWriteMainTF(t *testing.T) {
 						"obs": "obsval",
 					}},
 				},
-				cfg: config.DefaultResource("terrajet_resource", nil, func(r *config.Resource) {
+				cfg: config.DefaultResource("upjet_resource", nil, func(r *config.Resource) {
 					r.OperationTimeouts = config.OperationTimeouts{
 						Read:   30 * time.Second,
 						Update: 2 * time.Minute,
@@ -198,7 +186,7 @@ func TestWriteMainTF(t *testing.T) {
 						"obs": "obsval",
 					}},
 				},
-				cfg: config.DefaultResource("terrajet_resource", nil),
+				cfg: config.DefaultResource("upjet_resource", nil),
 				s: Setup{
 					Requirement: ProviderRequirement{
 						Source:  "hashicorp/provider-test",
@@ -231,7 +219,7 @@ func TestWriteMainTF(t *testing.T) {
 						"obs": "obsval",
 					}},
 				},
-				cfg: config.DefaultResource("terrajet_resource", nil),
+				cfg: config.DefaultResource("upjet_resource", nil),
 				s: Setup{
 					Requirement: ProviderRequirement{
 						Source:  "my-company/namespace/provider-test",
