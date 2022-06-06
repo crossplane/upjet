@@ -154,18 +154,10 @@ func WithDefaultResourceFn(f DefaultResourceFn) ProviderOption {
 	}
 }
 
-// WithProviderMetadata configures the Terraform metadata file scraped
-// from the Terraform registry
-func WithProviderMetadata(metadataPath string) ProviderOption {
-	return func(p *Provider) {
-		p.ProviderMetadataPath = metadataPath
-	}
-}
-
 // NewProviderWithSchema builds and returns a new Provider from provider
 // tfjson schema, that is generated using Terraform CLI with:
 // `terraform providers schema --json`
-func NewProviderWithSchema(schema []byte, prefix string, modulePath string, opts ...ProviderOption) *Provider {
+func NewProviderWithSchema(schema []byte, prefix string, modulePath string, metadataPath string, opts ...ProviderOption) *Provider {
 	ps := tfjson.ProviderSchemas{}
 	if err := ps.UnmarshalJSON(schema); err != nil {
 		panic(err)
@@ -178,13 +170,13 @@ func NewProviderWithSchema(schema []byte, prefix string, modulePath string, opts
 		rs = v.ResourceSchemas
 		break
 	}
-	return NewProvider(conversiontfjson.GetV2ResourceMap(rs), prefix, modulePath, opts...)
+	return NewProvider(conversiontfjson.GetV2ResourceMap(rs), prefix, modulePath, metadataPath, opts...)
 }
 
 // NewProvider builds and returns a new Provider.
 // Deprecated: This function will be removed soon, please use
 // NewProviderWithSchema instead.
-func NewProvider(resourceMap map[string]*schema.Resource, prefix string, modulePath string, opts ...ProviderOption) *Provider {
+func NewProvider(resourceMap map[string]*schema.Resource, prefix string, modulePath string, metadataPath string, opts ...ProviderOption) *Provider {
 	p := &Provider{
 		ModulePath:              modulePath,
 		TerraformResourcePrefix: fmt.Sprintf("%s_", prefix),
@@ -197,6 +189,7 @@ func NewProvider(resourceMap map[string]*schema.Resource, prefix string, moduleP
 			".+",
 		},
 		Resources:             map[string]*Resource{},
+		ProviderMetadataPath:  metadataPath,
 		resourceConfigurators: map[string]ResourceConfiguratorChain{},
 	}
 
