@@ -177,7 +177,7 @@ func (eg *ExampleGenerator) Generate(group, version string, r *config.Resource, 
 	if err := json.TFParser.Unmarshal([]byte(rm.Examples[0].Manifest), &exampleParams); err != nil {
 		return errors.Wrapf(err, "cannot unmarshal example manifest for resource: %s", r.Name)
 	}
-	transformRefFields(exampleParams, r.ExternalName.OmittedFields, fieldTransformations, "")
+	transformFields(exampleParams, r.ExternalName.OmittedFields, fieldTransformations, "")
 
 	example := map[string]interface{}{
 		"apiVersion": fmt.Sprintf("%s/%s", group, version),
@@ -207,7 +207,7 @@ func getHierarchicalName(prefix, name string) string {
 	return fmt.Sprintf("%s.%s", prefix, name)
 }
 
-func transformRefFields(params map[string]interface{}, omittedFields []string, t map[string]tjtypes.Transformation, namePrefix string) { // nolint:gocyclo
+func transformFields(params map[string]interface{}, omittedFields []string, t map[string]tjtypes.Transformation, namePrefix string) { // nolint:gocyclo
 	for _, hn := range omittedFields {
 		for n := range params {
 			if hn == getHierarchicalName(namePrefix, n) {
@@ -220,7 +220,7 @@ func transformRefFields(params map[string]interface{}, omittedFields []string, t
 	for n, v := range params {
 		switch pT := v.(type) {
 		case map[string]interface{}:
-			transformRefFields(pT, omittedFields, t, getHierarchicalName(namePrefix, n))
+			transformFields(pT, omittedFields, t, getHierarchicalName(namePrefix, n))
 
 		case []interface{}:
 			for _, e := range pT {
@@ -228,7 +228,7 @@ func transformRefFields(params map[string]interface{}, omittedFields []string, t
 				if !ok {
 					continue
 				}
-				transformRefFields(eM, omittedFields, t, getHierarchicalName(namePrefix, n))
+				transformFields(eM, omittedFields, t, getHierarchicalName(namePrefix, n))
 			}
 		}
 	}
