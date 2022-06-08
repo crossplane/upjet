@@ -38,6 +38,20 @@ var (
 		DisableNameInitializer:  true,
 	}
 
+	// ParameterAsIdentifier uses the given field name in the arguments as the
+	// identifier of the resource.
+	ParameterAsIdentifier = func(param string) ExternalName {
+		e := NameAsIdentifier
+		e.SetIdentifierArgumentFn = func(base map[string]interface{}, name string) {
+			base[param] = name
+		}
+		e.OmittedFields = []string{
+			param,
+			param + "_prefix",
+		}
+		return e
+	}
+
 	DefaultBasePackages = BasePackages{
 		APIVersion: []string{
 			// Default package for ProviderConfig APIs
