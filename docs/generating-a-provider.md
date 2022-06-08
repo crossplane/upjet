@@ -1,39 +1,73 @@
 # Generating a Crossplane Provider
 
-In this guide, we will generate a Crossplane provider based on an existing
+In this guide, we will generate an official provider based on an existing
 Terraform provider using Upjet.
 
 We have chosen [Terraform GitHub provider] as an example, but the process will
 be quite similar for any other Terraform provider.
 
-## Generate
+## Creating a Provider
 
-1. Generate a GitHub repository for the Crossplane provider by hitting the
-   "**Use this template**" button in [provider-jet-template] repository.
-2. Clone the repository to your local and `cd` into the repository directory.
-   Fetch the [upbound/build] submodule by running the following:
+### Initial Setup
 
-    ```bash
-    make submodules
-    ```
+Official providers are kept in a mono repo
+[`upbound/official-providers`][official-providers]. So, before starting any
+work, you'll need to clone that repo to your local filesystem.
 
-3. Replace `template` with your provider name.
+```console
+# You can use "upstream" as remote target name and save "origin" for your
+# fork, which you'll need to have to open pull requests.
+git clone --name upstream git@github.com:upbound/official-providers.git
+```
 
-    1. Export `ProviderName`:
+We have the clone of the upstream but we'll need to fork the upstream into our
+own account in Github so that we push to that fork and create pull requests
+against it. Go ahead and fork using the Github UI and then add your fork as the
+`origin` with the following command:
+```
+USERNAME=<your github username>
+git clone --name origin git@github.com:${USERNAME}/official-providers.git
+```
+
+Now, we're ready to create a new branch. Once we're done with our changes, we'll
+push this branch to our own fork and then open a pull request against the
+upstream repo.
+```
+# Create a new branch to add provider-github
+git checkout -b provider-github
+```
+
+### Generation
+
+1. Run the following command to bootstrap your new provider directory with the
+   scaffolding that's kept in [`upbound/provider-template`][provider-template]:
+
+   ```console
+   # This needs to be run in "upbound/official-providers" directory.
+   make provider name=provider-github
+   ```
+
+2. We will use our small script for rename and find&replace operations.
+
+    1. Go to the directory of the provider you created:
+        ```
+        cd provider-github
+        ```
+    2. Export `ProviderName`:
 
         ```bash
         export ProviderNameLower=github
         export ProviderNameUpper=GitHub
         ```
 
-    2. Run the `./hack/prepare.sh` script from repo root to prepare the repo, e.g., to
-       replace all occurrences of `template` with your provider name:
+    3. Run the `./hack/prepare.sh` script from repo root to prepare the repo,
+       e.g., to replace all occurrences of `template` with your provider name:
 
         ```bash
        ./hack/prepare.sh
         ```
 
-4. To configure the Terraform provider to generate from, update the following
+3. To configure the Terraform provider to generate from, update the following
    variables in `Makefile`:
 
     ```makefile
@@ -45,17 +79,17 @@ be quite similar for any other Terraform provider.
 
    You can find `TERRAFORM_PROVIDER_SOURCE` and `TERRAFORM_PROVIDER_VERSION` in
    [Terraform GitHub provider] documentation by hitting the "**USE PROVIDER**"
-   button. Check [this line in controller Dockerfile] to see how these
-   variables are used to build the provider plugin binary.
+   button. Check [this line in controller Dockerfile] to see how these variables
+   are used to build the provider plugin binary.
 
 
-5. Implement `ProviderConfig` logic. In `provider-jet-template`, there is already
-   a boilerplate code in file `internal/clients/${ProviderNameLower}.go` which
-   takes care of properly fetching secret data referenced from `ProviderConfig`
-   resource.
+4. Implement `ProviderConfig` logic. In `provider-jet-template`, there is
+   already a boilerplate code in file `internal/clients/${ProviderNameLower}.go`
+   which takes care of properly fetching secret data referenced from
+   `ProviderConfig` resource.
 
-   For our GitHub provider, we need to check [Terraform documentation for provider
-   configuration] and provide the keys there:
+   For our GitHub provider, we need to check [Terraform documentation for
+   provider configuration] and provide the keys there:
 
    ```go
    const (
@@ -85,7 +119,7 @@ be quite similar for any other Terraform provider.
    }
    ```
 
-6. Before generating all resources that the provider has, let's go step by step
+5. Before generating all resources that the provider has, let's go step by step
    and only start with generating CRDs for [github_repository] and
    [github_branch] Terraform resources.
 
@@ -101,7 +135,7 @@ be quite similar for any other Terraform provider.
        }))
    ```
 
-7. Finally, we would need to add some custom configurations for these two
+6. Finally, we would need to add some custom configurations for these two
    resources as follows:
 
    ```bash
@@ -187,19 +221,11 @@ be quite similar for any other Terraform provider.
    the [Configuring a Resource](/docs/configuring-a-resource.md) document._**
 
 
-8. Now we can generate our Upjet Provider:
+7. Now we can generate our Upjet Provider:
 
    ```bash
    make generate
    ```
-
-### Adding New Resources
-
-To add more resources, please **follow the steps between 6-8 for each resource**.
-
-Alternatively, you can drop the `tjconfig.WithIncludeList` option in provider
-Configuration which would generate all resources, and you can add resource
-configurations as a next step.
 
 ## Test
 
@@ -236,8 +262,7 @@ Now let's test our generated resources.
    ```
 
    Create example for `repository` resource, which will use
-   `provider-jet-template` repo as template for the repository
-   to be created:
+   `provider-jet-template` repo as template for the repository to be created:
 
    ```bash
    cat <<EOF > examples/repository/repository.yaml
@@ -257,8 +282,8 @@ Now let's test our generated resources.
    EOF
    ```
 
-   Create `branch` resource which refers to the above repository
-   managed resource:
+   Create `branch` resource which refers to the above repository managed
+   resource:
 
    ```bash
    cat <<EOF > examples/branch/branch.yaml
@@ -299,8 +324,8 @@ Now let's test our generated resources.
    make run
    ```
 
-6. Apply ProviderConfig and example manifests (_In another terminal since
-   the previous command is blocking_):
+6. Apply ProviderConfig and example manifests (_In another terminal since the
+   previous command is blocking_):
 
    ```bash
    # Create "crossplane-system" namespace if not exists
@@ -339,14 +364,67 @@ Now let's test our generated resources.
    Verify that the repo got deleted once deletion is completed on the control
    plane.
 
+## Adding New Resources
+
+In the earlier steps, we generated only two resources and added all
+configurations for them to test the whole flow is working. Now, we will expand
+the list of generated resources by adding a select set of configurations and
+mark them as `v1beta1`. We will need to go through the following steps for every
+resource we want to add.
+
+For `v1beta1` level resources, we will do only the external name configuration
+and make sure no field is represented as a separate resource. Then we'll test
+the example YAML we have created to make sure all `v1beta1` scenarios listed
+[here][v1beta1-criteria] are working.
+
+1. Initially, let's create a file exclusive for external name generation named
+   `config/external_name.go` with the following content
+   ```
+   # Assuming you are in official-providers/provider-github repo already.
+   touch config/external_name.go
+   ```
+
+1. Enable the resource by adding its Terraform name to the include list. You can
+   use a global list for this task. Once all resources are enabled you can
+   remove `tjconfig.WithIncludeList` function completely so that all resources
+   are included.
+
+   ```go
+
+   pc := tjconfig.NewProviderWithSchema([]byte(providerSchema), resourcePrefix, modulePath,
+       tjconfig.WithDefaultResourceFn(defaultResourceFn),
+       tjconfig.WithIncludeList([]string{
+           "github_repository$",
+           "github_branch$",
+           "github_new_resource$",
+       }))
+   ```
+
+* case1: there is a parameter called `name` and can be used to name the resource and to import the resource directly without a change: `config.NameAsIdentifier`
+* case2: there is a parameter that can be used to name the resource and to import the resource directly without a change: `config.ParameterAsIdentifier(<field name of the parameter, like cluster_name>)`
+* case3: Import requires an ID that's completely random, like VPC id `vpc-3211`: `config.IdentifierFromProvider`
+* case4: There is no import statement at all: `config.IdentifierFromProvider`
+* case5: The ID in import can be constructed with parameters:
+* case6: Some parts of the ID can be constructed with parameters, the rest is random:
+* case7: Some parts of the ID can be constructed with parameters, the rest is info you can't get directly, like account ID:
+* case8: a parameter is used directly as ID but it is name of another resource or a configuration rather than name and it's immutable, i.e. forces new: `config.IdentifierFromProvider`, `aws_ecr_pull_through_cache_rule`
 
 [comment]: <> (References)
 
-[Terraform GitHub provider]: https://registry.terraform.io/providers/integrations/github/latest/docs
-[provider-jet-template]: https://github.com/crossplane-contrib/provider-jet-template
+[Terraform GitHub provider]:
+    https://registry.terraform.io/providers/integrations/github/latest/docs
+[provider-jet-template]:
+    https://github.com/crossplane-contrib/provider-jet-template
 [upbound/build]: https://github.com/upbound/build
-[Terraform documentation for provider configuration]: https://registry.terraform.io/providers/integrations/github/latest/docs#argument-reference
-[github_repository]: https://registry.terraform.io/providers/integrations/github/latest/docs/resources/repository
-[github_branch]: https://registry.terraform.io/providers/integrations/github/latest/docs/resources/branch
-[this line in controller Dockerfile]: https://github.com/crossplane-contrib/provider-jet-template/blob/d9a793dd8a304f09bb2e9694c47c1bade1b6b057/cluster/images/provider-jet-template-controller/Dockerfile#L18-L25
+[Terraform documentation for provider configuration]:
+    https://registry.terraform.io/providers/integrations/github/latest/docs#argument-reference
+[github_repository]:
+    https://registry.terraform.io/providers/integrations/github/latest/docs/resources/repository
+[github_branch]:
+    https://registry.terraform.io/providers/integrations/github/latest/docs/resources/branch
+[this line in controller Dockerfile]:
+    https://github.com/crossplane-contrib/provider-jet-template/blob/d9a793dd8a304f09bb2e9694c47c1bade1b6b057/cluster/images/provider-jet-template-controller/Dockerfile#L18-L25
 [terraform-plugin-sdk]: https://github.com/hashicorp/terraform-plugin-sdk
+[official-providers]: https://github.com/upbound/official-providers
+[provider-template]: https://github.com/upbound/provider-template
+[v1beta1-criteria]: https://github.com/upbound/arch/pull/33
