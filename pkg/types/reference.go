@@ -9,7 +9,6 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/tools/go/packages"
 
-	"github.com/upbound/upjet/pkg/config"
 	"github.com/upbound/upjet/pkg/types/comments"
 	"github.com/upbound/upjet/pkg/types/name"
 )
@@ -27,10 +26,10 @@ var typeSelectorField types.Type
 var typeSecretKeySelector types.Type
 var commentOptional *comments.Comment
 
-func (g *Builder) generateReferenceFields(t *types.TypeName, f *types.Var, r config.Reference) (fields []*types.Var, tags []string) {
+func (g *Builder) generateReferenceFields(t *types.TypeName, f *types.Var, field *Field) (fields []*types.Var, tags []string) {
 	_, isSlice := f.Type().(*types.Slice)
 
-	rfn := r.RefFieldName
+	rfn := field.Reference.RefFieldName
 	if rfn == "" {
 		rfn = f.Name() + "Ref"
 		if isSlice {
@@ -38,7 +37,7 @@ func (g *Builder) generateReferenceFields(t *types.TypeName, f *types.Var, r con
 		}
 	}
 
-	sfn := r.SelectorFieldName
+	sfn := field.Reference.SelectorFieldName
 	if sfn == "" {
 		sfn = f.Name() + "Selector"
 	}
@@ -58,6 +57,7 @@ func (g *Builder) generateReferenceFields(t *types.TypeName, f *types.Var, r con
 
 	g.comments.AddFieldComment(t, rfn, commentOptional.Build())
 	g.comments.AddFieldComment(t, sfn, commentOptional.Build())
+	field.TransformedName = rn.LowerCamelComputed
 
 	return []*types.Var{ref, sel}, []string{refTag, selTag}
 }

@@ -1,3 +1,7 @@
+/*
+Copyright 2022 Upbound Inc.
+*/
+
 package config
 
 import (
@@ -96,6 +100,10 @@ type Provider struct {
 	// resource name.
 	Resources map[string]*Resource
 
+	// ProviderMetadataPath is the scraped provider metadata file path
+	// from Terraform registry
+	ProviderMetadataPath string
+
 	// resourceConfigurators is a map holding resource configurators where key
 	// is Terraform resource name.
 	resourceConfigurators map[string]ResourceConfiguratorChain
@@ -146,10 +154,10 @@ func WithDefaultResourceFn(f DefaultResourceFn) ProviderOption {
 	}
 }
 
-// NewProviderWithSchema builds and returns a new Provider from provider
+// NewProvider builds and returns a new Provider from provider
 // tfjson schema, that is generated using Terraform CLI with:
 // `terraform providers schema --json`
-func NewProviderWithSchema(schema []byte, prefix string, modulePath string, opts ...ProviderOption) *Provider {
+func NewProvider(schema []byte, prefix string, modulePath string, metadataPath string, opts ...ProviderOption) *Provider {
 	ps := tfjson.ProviderSchemas{}
 	if err := ps.UnmarshalJSON(schema); err != nil {
 		panic(err)
@@ -162,13 +170,8 @@ func NewProviderWithSchema(schema []byte, prefix string, modulePath string, opts
 		rs = v.ResourceSchemas
 		break
 	}
-	return NewProvider(conversiontfjson.GetV2ResourceMap(rs), prefix, modulePath, opts...)
-}
 
-// NewProvider builds and returns a new Provider.
-// Deprecated: This function will be removed soon, please use
-// NewProviderWithSchema instead.
-func NewProvider(resourceMap map[string]*schema.Resource, prefix string, modulePath string, opts ...ProviderOption) *Provider {
+	resourceMap := conversiontfjson.GetV2ResourceMap(rs)
 	p := &Provider{
 		ModulePath:              modulePath,
 		TerraformResourcePrefix: fmt.Sprintf("%s_", prefix),
@@ -181,6 +184,7 @@ func NewProvider(resourceMap map[string]*schema.Resource, prefix string, moduleP
 			".+",
 		},
 		Resources:             map[string]*Resource{},
+		ProviderMetadataPath:  metadataPath,
 		resourceConfigurators: map[string]ResourceConfiguratorChain{},
 	}
 
@@ -204,7 +208,6 @@ func NewProvider(resourceMap map[string]*schema.Resource, prefix string, moduleP
 
 		p.Resources[name] = p.DefaultResourceFn(name, terraformResource)
 	}
-
 	return p
 }
 

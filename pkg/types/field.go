@@ -25,10 +25,11 @@ type Field struct {
 	FieldType                                types.Type
 	AsBlocksMode                             bool
 	Reference                                *config.Reference
+	TransformedName                          string
 }
 
 // NewField returns a constructed Field object.
-func NewField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema, snakeFieldName string, tfPath, xpPath, names []string, asBlocksMode bool) (*Field, error) {
+func NewField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema, snakeFieldName string, tfPath, xpPath, names []string, asBlocksMode bool, t map[string]Transformation) (*Field, error) {
 	f := &Field{
 		Schema:         sch,
 		Name:           name.NewFromSnake(snakeFieldName),
@@ -43,6 +44,7 @@ func NewField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema,
 	f.Comment = comment
 	f.TFTag = fmt.Sprintf("%s,omitempty", f.Name.Snake)
 	f.JSONTag = fmt.Sprintf("%s,omitempty", f.Name.LowerCamelComputed)
+	f.TransformedName = f.Name.LowerCamelComputed
 
 	// Terraform paths, e.g. { "lifecycle_rule", "*", "transition", "*", "days" } for https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket#lifecycle_rule
 	f.TerraformPaths = append(tfPath, f.Name.Snake) // nolint:gocritic
@@ -62,7 +64,7 @@ func NewField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema,
 		}
 	}
 
-	fieldType, err := g.buildSchema(f, cfg, names, r)
+	fieldType, err := g.buildSchema(f, cfg, t, names, r)
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot infer type from schema of field %s", f.Name.Snake)
 	}
@@ -72,8 +74,8 @@ func NewField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema,
 }
 
 // NewSensitiveField returns a constructed sensitive Field object.
-func NewSensitiveField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema, snakeFieldName string, tfPath, xpPath, names []string, asBlocksMode bool) (*Field, bool, error) { //nolint:gocyclo
-	f, err := NewField(g, cfg, r, sch, snakeFieldName, tfPath, xpPath, names, asBlocksMode)
+func NewSensitiveField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema, snakeFieldName string, tfPath, xpPath, names []string, asBlocksMode bool, t map[string]Transformation) (*Field, bool, error) { //nolint:gocyclo
+	f, err := NewField(g, cfg, r, sch, snakeFieldName, tfPath, xpPath, names, asBlocksMode, t)
 	if err != nil {
 		return nil, false, err
 	}
@@ -105,7 +107,8 @@ func NewSensitiveField(g *Builder, cfg *config.Resource, r *resource, sch *schem
 	case "map[string]string", "map[string]*string":
 		f.FieldType = types.NewMap(types.Universe.Lookup("string").Type(), typeSecretKeySelector)
 	}
-	f.JSONTag = name.NewFromCamel(f.FieldNameCamel).LowerCamelComputed
+	f.TransformedName = name.NewFromCamel(f.FieldNameCamel).LowerCamelComputed
+	f.JSONTag = f.TransformedName
 	if f.Schema.Optional {
 		f.FieldType = types.NewPointer(f.FieldType)
 		f.JSONTag += ",omitempty"
@@ -114,8 +117,8 @@ func NewSensitiveField(g *Builder, cfg *config.Resource, r *resource, sch *schem
 }
 
 // NewReferenceField returns a constructed reference Field object.
-func NewReferenceField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema, ref *config.Reference, snakeFieldName string, tfPath, xpPath, names []string, asBlocksMode bool) (*Field, error) {
-	f, err := NewField(g, cfg, r, sch, snakeFieldName, tfPath, xpPath, names, asBlocksMode)
+func NewReferenceField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema, ref *config.Reference, snakeFieldName string, tfPath, xpPath, names []string, asBlocksMode bool, t map[string]Transformation) (*Field, error) {
+	f, err := NewField(g, cfg, r, sch, snakeFieldName, tfPath, xpPath, names, asBlocksMode, t)
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +151,7 @@ func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames) {
 	}
 
 	if f.Reference != nil {
-		r.addReferenceFields(g, typeNames.ParameterTypeName, field, *f.Reference)
+		r.addReferenceFields(g, typeNames.ParameterTypeName, field, f)
 	}
 
 	g.comments.AddFieldComment(typeNames.ParameterTypeName, f.FieldNameCamel, f.Comment.Build())
