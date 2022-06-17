@@ -9,7 +9,6 @@ import (
 	"regexp"
 
 	tfjson "github.com/hashicorp/terraform-json"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/pkg/errors"
 
 	conversiontfjson "github.com/upbound/upjet/pkg/types/conversion/tfjson"
@@ -47,10 +46,6 @@ type BasePackages struct {
 	Controller []string
 }
 
-// DefaultResourceFn returns a default resource configuration to be used while
-// building resource configurations.
-type DefaultResourceFn func(name string, terraformResource *schema.Resource, opts ...ResourceOption) *Resource
-
 // Provider holds configuration for a provider to be generated with Terrajet.
 type Provider struct {
 	// TerraformResourcePrefix is the prefix used in all resources of this
@@ -79,9 +74,9 @@ type Provider struct {
 	// here.
 	BasePackages BasePackages
 
-	// DefaultResourceFn is a function that returns resource configuration to be
-	// used as default while building the resources.
-	DefaultResourceFn DefaultResourceFn
+	// DefaultResourceOptions is a list of config.ResourceOption that will be
+	// applied to all resources before any user-provided options are applied.
+	DefaultResourceOptions []ResourceOption
 
 	// SkipList is a list of regex for the Terraform resources to be skipped.
 	// For example, to skip generation of "aws_shield_protection_group", one
@@ -147,10 +142,11 @@ func WithBasePackages(b BasePackages) ProviderOption {
 	}
 }
 
-// WithDefaultResourceFn configures DefaultResourceFn for this Provider
-func WithDefaultResourceFn(f DefaultResourceFn) ProviderOption {
+// WithDefaultResourceOptions configures DefaultResourceOptions for this
+// Provider.
+func WithDefaultResourceOptions(opts ...ResourceOption) ProviderOption {
 	return func(p *Provider) {
-		p.DefaultResourceFn = f
+		p.DefaultResourceOptions = opts
 	}
 }
 
@@ -178,7 +174,6 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadataPath s
 		RootGroup:               fmt.Sprintf("%s.jet.crossplane.io", prefix),
 		ShortName:               fmt.Sprintf("%sjet", prefix),
 		BasePackages:            DefaultBasePackages,
-		DefaultResourceFn:       DefaultResource,
 		IncludeList: []string{
 			// Include all Resources
 			".+",
@@ -206,7 +201,7 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadataPath s
 			continue
 		}
 
-		p.Resources[name] = p.DefaultResourceFn(name, terraformResource)
+		p.Resources[name] = DefaultResource(name, terraformResource, p.DefaultResourceOptions...)
 	}
 	return p
 }

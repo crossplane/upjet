@@ -94,7 +94,6 @@ be quite similar for any other Terraform provider.
 
    ```go
    pc := tjconfig.NewProviderWithSchema([]byte(providerSchema), resourcePrefix, modulePath,
-       tjconfig.WithDefaultResourceFn(defaultResourceFn),
        tjconfig.WithIncludeList([]string{
            "github_repository$",
            "github_branch$",
