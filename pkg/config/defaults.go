@@ -5,6 +5,7 @@ Copyright 2021 Upbound Inc.
 package config
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -108,4 +109,29 @@ func DefaultResource(name string, terraformSchema *schema.Resource, opts ...Reso
 		f(r)
 	}
 	return r
+}
+
+// MoveToStatus moves given fields and their leaf fields to the status as
+// a whole. It's used mostly in cases where there is a field that is
+// represented as a separate CRD, hence you'd like to remove that field from
+// spec.
+func MoveToStatus(sch *schema.Resource, fields ...string) {
+	for _, f := range fields {
+		if _, ok := sch.Schema[f]; !ok {
+			panic(fmt.Sprintf("field %s does not exist in schema", f))
+		}
+		sch.Schema[f].Optional = false
+		sch.Schema[f].Computed = true
+
+		// We need to move all nodes of that field to status.
+		if el, ok := sch.Schema[f].Elem.(*schema.Resource); ok {
+			l := make([]string, len(el.Schema))
+			i := 0
+			for fi := range el.Schema {
+				l[i] = fi
+				i++
+			}
+			MoveToStatus(el, l...)
+		}
+	}
 }
