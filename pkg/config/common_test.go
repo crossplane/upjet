@@ -117,3 +117,132 @@ func TestDefaultResource(t *testing.T) {
 		})
 	}
 }
+
+func TestMoveToStatus(t *testing.T) {
+	type args struct {
+		sch    *schema.Resource
+		fields []string
+	}
+	type want struct {
+		sch *schema.Resource
+	}
+
+	cases := map[string]struct {
+		reason string
+		args
+		want
+	}{
+		"TopLevelBasicFields": {
+			args: args{
+				fields: []string{"topA", "topB"},
+				sch: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"topA": {Type: schema.TypeString},
+						"topB": {Type: schema.TypeInt},
+						"topC": {Type: schema.TypeString, Optional: true},
+					},
+				},
+			},
+			want: want{
+				sch: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"topA": {
+							Type:     schema.TypeString,
+							Optional: false,
+							Computed: true,
+						},
+						"topB": {
+							Type:     schema.TypeInt,
+							Optional: false,
+							Computed: true,
+						},
+						"topC": {
+							Type:     schema.TypeString,
+							Optional: true,
+							Computed: false,
+						},
+					},
+				},
+			},
+		},
+		"ComplexFields": {
+			args: args{
+				fields: []string{"topA"},
+				sch: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"topA": {
+							Type: schema.TypeMap,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"leafA": {
+										Type: schema.TypeMap,
+										Elem: &schema.Resource{
+											Schema: map[string]*schema.Schema{
+												"leafB": {
+													Type:     schema.TypeString,
+													Computed: false,
+													Optional: true,
+												},
+												"leafC": {
+													Type:     schema.TypeString,
+													Computed: false,
+													Optional: true,
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+						"topB": {Type: schema.TypeString},
+					},
+				},
+			},
+			want: want{
+				sch: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"topA": {
+							Type:     schema.TypeMap,
+							Computed: true,
+							Optional: false,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"leafA": {
+										Type:     schema.TypeMap,
+										Computed: true,
+										Optional: false,
+										Elem: &schema.Resource{
+											Schema: map[string]*schema.Schema{
+												"leafB": {
+													Type:     schema.TypeString,
+													Computed: true,
+													Optional: false,
+												},
+												"leafC": {
+													Type:     schema.TypeString,
+													Computed: true,
+													Optional: false,
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+						"topB": {Type: schema.TypeString},
+					},
+				},
+			},
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			MoveToStatus(tc.args.sch, tc.args.fields...)
+			if diff := cmp.Diff(tc.want.sch, tc.args.sch); diff != "" {
+				t.Errorf("\n%s\nMoveToStatus(...): -want, +got:\n%s", tc.reason, diff)
+			}
+		})
+	}
+
+}
