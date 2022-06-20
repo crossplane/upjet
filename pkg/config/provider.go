@@ -6,11 +6,13 @@ package config
 
 import (
 	"fmt"
+	"path/filepath"
 	"regexp"
 
 	tfjson "github.com/hashicorp/terraform-json"
 	"github.com/pkg/errors"
 
+	"github.com/upbound/upjet/pkg/meta"
 	conversiontfjson "github.com/upbound/upjet/pkg/types/conversion/tfjson"
 )
 
@@ -99,6 +101,10 @@ type Provider struct {
 	// from Terraform registry
 	ProviderMetadataPath string
 
+	// RootDir of the Crossplane provider repo for code generation and
+	// configuration files.
+	RootDir string
+
 	// resourceConfigurators is a map holding resource configurators where key
 	// is Terraform resource name.
 	resourceConfigurators map[string]ResourceConfiguratorChain
@@ -153,7 +159,7 @@ func WithDefaultResourceOptions(opts ...ResourceOption) ProviderOption {
 // NewProvider builds and returns a new Provider from provider
 // tfjson schema, that is generated using Terraform CLI with:
 // `terraform providers schema --json`
-func NewProvider(schema []byte, prefix string, modulePath string, metadataPath string, opts ...ProviderOption) *Provider {
+func NewProvider(schema []byte, rootDir string, prefix string, modulePath string, metadataPath string, opts ...ProviderOption) *Provider {
 	ps := tfjson.ProviderSchemas{}
 	if err := ps.UnmarshalJSON(schema); err != nil {
 		panic(err)
@@ -180,6 +186,7 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadataPath s
 		},
 		Resources:             map[string]*Resource{},
 		ProviderMetadataPath:  metadataPath,
+		RootDir:               rootDir,
 		resourceConfigurators: map[string]ResourceConfiguratorChain{},
 	}
 
@@ -203,7 +210,25 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadataPath s
 
 		p.Resources[name] = DefaultResource(name, terraformResource, p.DefaultResourceOptions...)
 	}
+	if err := p.loadMetadata(); err != nil {
+		panic(errors.Wrap(err, "cannot load provider metadata"))
+	}
 	return p
+}
+
+func (p *Provider) loadMetadata() error {
+	if p.ProviderMetadataPath == "" {
+		return nil
+	}
+	metadataPath := filepath.Join(p.RootDir, p.ProviderMetadataPath)
+	providerMetadata, err := meta.NewProviderMetadataFromFile(metadataPath)
+	if err != nil {
+		return errors.Wrapf(err, "cannot load provider metadata from file: %s", metadataPath)
+	}
+	for name, r := range p.Resources {
+		r.MetaResource = providerMetadata.Resources[name]
+	}
+	return nil
 }
 
 // AddResourceConfigurator adds resource specific configurators.
