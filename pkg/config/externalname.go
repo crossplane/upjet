@@ -121,32 +121,25 @@ func TemplatedStringAsIdentifier(nameFieldPath, tmpl string) ExternalName {
 // "/subscription/someval/myname" and get "myname" returned.
 func GetExternalNameFromTemplated(tmpl, val string) (string, error) {
 	leftIndex, count := findExternalNameInTemplate(tmpl)
-	// There is nothing before external name.
-	if leftIndex == -1 {
-		leftIndex = 0
+	leftSeparator := ""
+	if leftIndex > 0 {
+		leftSeparator = string(tmpl[leftIndex-1])
 	}
-	// It may be "{" if nothing exists before the external name.
-	leftSeparator := string(tmpl[leftIndex])
-
-	// The index of the first character after the external name.
-	// It may be more than the length, meaning there is nothing after the
-	// external name.
+	rightSeparator := ""
 	rightIndex := leftIndex + count
-	if rightIndex >= len(tmpl) {
-		rightIndex = len(tmpl) - 1
+	if rightIndex < len(tmpl) {
+		rightSeparator = string(tmpl[rightIndex])
 	}
-	// It may be "}" if there is nothing left after the external name.
-	rightSeparator := string(tmpl[rightIndex])
 
 	switch {
 	// {{ .externalName }}
-	case leftSeparator == "{" && rightSeparator == "}":
+	case leftSeparator == "" && rightSeparator == "":
 		return val, nil
 	// {{ .externalName }}/someother
-	case leftSeparator == "{" && rightSeparator != "}":
+	case leftSeparator == "" && rightSeparator != "":
 		return strings.Split(val, rightSeparator)[0], nil
 	// /another/{{ .externalName }}/someother
-	case leftSeparator != "{" && rightSeparator != "}":
+	case leftSeparator != "" && rightSeparator != "":
 		leftSeparatorCount := strings.Count(tmpl[:leftIndex+1], leftSeparator)
 		// ["", "another","myname/someother"]
 		separatedLeft := strings.SplitAfterN(val, leftSeparator, leftSeparatorCount+1)
@@ -155,7 +148,7 @@ func GetExternalNameFromTemplated(tmpl, val string) (string, error) {
 		// myname
 		return strings.Split(rightString, rightSeparator)[0], nil
 	// /another/{{ .externalName }}
-	case leftSeparator != "{" && rightSeparator == "}":
+	case leftSeparator != "" && rightSeparator == "":
 		separated := strings.Split(val, leftSeparator)
 		return separated[len(separated)-1], nil
 	}
