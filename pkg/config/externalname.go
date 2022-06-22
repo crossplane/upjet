@@ -123,14 +123,15 @@ func TemplatedStringAsIdentifier(nameFieldPath, tmpl string) ExternalName {
 // from and reverse it to get the external name. For example, you can supply
 // "/subscription/{{ .paramters.some }}/{{ .externalName }}" with
 // "/subscription/someval/myname" and get "myname" returned.
-func GetExternalNameFromTemplated(tmpl, val string) (string, error) {
-	leftIndex, count := findExternalNameInTemplate(tmpl)
+func GetExternalNameFromTemplated(tmpl, val string) (string, error) { //nolint:gocyclo
+	// gocyclo: I couldn't find any more room.
+	leftIndex, length := findExternalNameInTemplate(tmpl)
 	leftSeparator := ""
 	if leftIndex > 0 {
 		leftSeparator = string(tmpl[leftIndex-1])
 	}
 	rightSeparator := ""
-	rightIndex := leftIndex + count
+	rightIndex := leftIndex + length
 	if rightIndex < len(tmpl) {
 		rightSeparator = string(tmpl[rightIndex])
 	}
@@ -159,7 +160,7 @@ func GetExternalNameFromTemplated(tmpl, val string) (string, error) {
 	return "", errors.Errorf("unhandled case with template %s and value %s", tmpl, val)
 }
 
-func findExternalNameInTemplate(tmpl string) (i int, count int) {
+func findExternalNameInTemplate(tmpl string) (i int, length int) {
 	cases := []string{
 		"{{ .externalName }}",
 		"{{.externalName }}",
@@ -167,11 +168,11 @@ func findExternalNameInTemplate(tmpl string) (i int, count int) {
 		"{{.externalName}}",
 	}
 	i = -1
-	count = 0
+	length = 0
 	for _, c := range cases {
 		i = strings.Index(tmpl, c)
 		if i != -1 {
-			count = len(c)
+			length = len(c)
 			break
 		}
 	}

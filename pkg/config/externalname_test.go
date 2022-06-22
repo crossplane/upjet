@@ -149,7 +149,6 @@ func TestTemplatedSetIdentifierArgumentFn(t *testing.T) {
 func TestTemplatedGetIDFn(t *testing.T) {
 	type args struct {
 		tmpl           string
-		ctx            context.Context
 		externalName   string
 		parameters     map[string]interface{}
 		providerConfig map[string]interface{}

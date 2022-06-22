@@ -53,10 +53,8 @@ func (cg *CRDGenerator) Generate(cfg *config.Resource) (string, error) {
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath(cg.LicenseHeaderPath),
 	)
-	for _, omit := range cfg.ExternalName.OmittedFields {
-		delete(cfg.TerraformResource.Schema, omit)
-	}
 
+	deleteOmittedFields(cfg.TerraformResource.Schema, cfg.ExternalName.OmittedFields)
 	cfg.TerraformResource.Schema["id"] = &schema.Schema{
 		Type:     schema.TypeString,
 		Computed: true,
@@ -95,4 +93,18 @@ func (cg *CRDGenerator) Generate(cfg *config.Resource) (string, error) {
 	}
 	filePath := filepath.Join(cg.LocalDirectoryPath, fmt.Sprintf("zz_%s_types.go", strings.ToLower(cfg.Kind)))
 	return gen.ForProviderType.Obj().Name(), errors.Wrap(file.Write(filePath, vars, os.ModePerm), "cannot write crd file")
+}
+
+func deleteOmittedFields(sch map[string]*schema.Schema, omittedFields []string) {
+	for _, omit := range omittedFields {
+		fields := strings.Split(omit, ".")
+		current := sch
+		for i, f := range fields {
+			if i == len(fields)-1 {
+				delete(current, f)
+				break
+			}
+			current = current[f].Elem.(*schema.Resource).Schema
+		}
+	}
 }
