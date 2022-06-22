@@ -15,44 +15,6 @@ import (
 
 // Commonly used resource configurations.
 var (
-	// NameAsIdentifier uses "name" field in the arguments as the identifier of
-	// the resource.
-	NameAsIdentifier = ExternalName{
-		SetIdentifierArgumentFn: func(base map[string]interface{}, name string) {
-			base["name"] = name
-		},
-		GetExternalNameFn: IDAsExternalName,
-		GetIDFn:           ExternalNameAsID,
-		OmittedFields: []string{
-			"name",
-			"name_prefix",
-		},
-	}
-
-	// IdentifierFromProvider is used in resources whose identifier is assigned by
-	// the remote client, such as AWS VPC where it gets an identifier like
-	// vpc-2213das instead of letting user choose a name.
-	IdentifierFromProvider = ExternalName{
-		SetIdentifierArgumentFn: NopSetIdentifierArgument,
-		GetExternalNameFn:       IDAsExternalName,
-		GetIDFn:                 ExternalNameAsID,
-		DisableNameInitializer:  true,
-	}
-
-	// ParameterAsIdentifier uses the given field name in the arguments as the
-	// identifier of the resource.
-	ParameterAsIdentifier = func(param string) ExternalName {
-		e := NameAsIdentifier
-		e.SetIdentifierArgumentFn = func(base map[string]interface{}, name string) {
-			base[param] = name
-		}
-		e.OmittedFields = []string{
-			param,
-			param + "_prefix",
-		}
-		return e
-	}
-
 	DefaultBasePackages = BasePackages{
 		APIVersion: []string{
 			// Default package for ProviderConfig APIs
