@@ -14,6 +14,10 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 )
 
+const (
+	errIDNotFoundInTFState = "id does not exist in tfstate"
+)
+
 var (
 	// NameAsIdentifier uses "name" field in the arguments as the identifier of
 	// the resource.
@@ -108,7 +112,7 @@ func TemplatedStringAsIdentifier(nameFieldPath, tmpl string) ExternalName {
 		GetExternalNameFn: func(tfstate map[string]interface{}) (string, error) {
 			id, ok := tfstate["id"]
 			if !ok {
-				return "", errors.New("id does not exist in tfstate")
+				return "", errors.New(errIDNotFoundInTFState)
 			}
 			return GetExternalNameFromTemplated(tmpl, id.(string))
 		},
