@@ -57,6 +57,7 @@ var (
 		APIVersion: []string{
 			// Default package for ProviderConfig APIs
 			"apis/v1alpha1",
+			"apis/v1beta1",
 		},
 		Controller: []string{
 			// Default package for ProviderConfig controllers
