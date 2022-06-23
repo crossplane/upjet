@@ -76,15 +76,15 @@ func ParameterAsIdentifier(param string) ExternalName {
 // TemplatedStringAsIdentifier("index.name", "/resource/{{ .externalName }}/static")
 // TemplatedStringAsIdentifier("index.name", "{{ .parameters.cluster_id }}:{{ .parameters.node_id }}:{{ .externalName }}")
 func TemplatedStringAsIdentifier(nameFieldPath, tmpl string) ExternalName {
-	if i, _ := findExternalNameInTemplate(tmpl); i == -1 {
-		panic("template needs to contain externalName variable")
-	}
 	t, err := template.New("getid").Parse(tmpl)
 	if err != nil {
 		panic(errors.Wrap(err, "cannot parse template"))
 	}
 	return ExternalName{
 		SetIdentifierArgumentFn: func(base map[string]interface{}, externalName string) {
+			if nameFieldPath == "" {
+				return
+			}
 			// TODO(muvaf): Return error in this function? Not returning error
 			// is a valid option since the schemas are static so we'd get the
 			// panic right when you create a resource. It's not generation-time
@@ -126,6 +126,10 @@ func TemplatedStringAsIdentifier(nameFieldPath, tmpl string) ExternalName {
 func GetExternalNameFromTemplated(tmpl, val string) (string, error) { //nolint:gocyclo
 	// gocyclo: I couldn't find any more room.
 	leftIndex, length := findExternalNameInTemplate(tmpl)
+	// A template without external name usage.
+	if length == 0 {
+		return val, nil
+	}
 	leftSeparator := ""
 	if leftIndex > 0 {
 		leftSeparator = string(tmpl[leftIndex-1])

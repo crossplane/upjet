@@ -107,6 +107,17 @@ func TestTemplatedSetIdentifierArgumentFn(t *testing.T) {
 		args   args
 		want   want
 	}{
+		"NoNameField": {
+			reason: "Should be no-op if no name fieldpath given.",
+			args: args{
+				nameFieldPath: "",
+				base:          map[string]interface{}{},
+				externalName:  "myname",
+			},
+			want: want{
+				base: map[string]interface{}{},
+			},
+		},
 		"TopLevelSetIdentifier": {
 			reason: "Should set top level identifier in arguments.",
 			args: args{
@@ -162,6 +173,18 @@ func TestTemplatedGetIDFn(t *testing.T) {
 		args   args
 		want   want
 	}{
+		"NoExternalName": {
+			reason: "Should work when only externalName is used.",
+			args: args{
+				tmpl: "olala/{{ .parameters.somethingElse }}",
+				parameters: map[string]interface{}{
+					"somethingElse": "otherthing",
+				},
+			},
+			want: want{
+				id: "olala/otherthing",
+			},
+		},
 		"OnlyExternalName": {
 			reason: "Should work when only externalName is used.",
 			args: args{
@@ -221,6 +244,18 @@ func TestTemplatedGetExternalNameFn(t *testing.T) {
 		args   args
 		want   want
 	}{
+		"NoExternalName": {
+			reason: "Should work when only externalName is used.",
+			args: args{
+				tmpl: "olala/{{ .parameters.somethingElse }}",
+				tfstate: map[string]interface{}{
+					"id": "olala/otherthing",
+				},
+			},
+			want: want{
+				name: "olala/otherthing",
+			},
+		},
 		"BareExternalName": {
 			reason: "Should work when only externalName is used in template.",
 			args: args{
