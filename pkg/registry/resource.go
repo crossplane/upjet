@@ -2,7 +2,7 @@
 Copyright 2022 Upbound Inc.
 */
 
-package meta
+package registry
 
 import (
 	"io/ioutil"
@@ -16,7 +16,7 @@ import (
 const (
 	// RandRFC1123Subdomain represents a template variable to be substituted
 	// by the test runner at runtime with a random RFC1123 subdomain string.
-	RandRFC1123Subdomain = "{{ .Rand.RFC1123Subdomain }}"
+	RandRFC1123Subdomain = "${Rand.RFC1123Subdomain}"
 )
 
 // Dependencies are the example manifests for the dependency resources.
@@ -26,6 +26,7 @@ type Dependencies map[string]string
 // ResourceExample represents the scraped example HCL configuration
 // for a Terraform resource
 type ResourceExample struct {
+	Name         string            `yaml:"name"`
 	Manifest     string            `yaml:"manifest"`
 	References   map[string]string `yaml:"references,omitempty"`
 	Dependencies Dependencies      `yaml:"dependencies,omitempty"`
@@ -34,14 +35,35 @@ type ResourceExample struct {
 
 // Resource represents the scraped metadata for a Terraform resource
 type Resource struct {
-	SubCategory      string            `yaml:"subCategory"`
-	Description      string            `yaml:"description,omitempty"`
-	Name             string            `yaml:"name"`
-	TitleName        string            `yaml:"titleName"`
-	Examples         []ResourceExample `yaml:"examples,omitempty"`
-	ArgumentDocs     map[string]string `yaml:"argumentDocs"`
-	ImportStatements []string          `yaml:"importStatements"`
-	ExternalName     string            `yaml:"-"`
+	// SubCategory is the category name under which this Resource resides in
+	// Terraform registry docs. Example:"Key Vault" for Azure Vault resources.
+	// In Terraform docs, resources are grouped (categorized) using this field.
+	SubCategory string `yaml:"subCategory"`
+	// Description is a short description for the resource as it appears in
+	// Terraform registry. Example: "Manages a Key Vault Key." for the
+	// azurerm_key_vault_key resource.
+	// This field is suitable for use in generating CRD Kind documentation.
+	Description string `yaml:"description,omitempty"`
+	// Name is the Terraform name of the resource. Example: azurerm_key_vault_key
+	Name string `yaml:"name"`
+	// Title is the title name of the resource that appears in
+	// the Terraform registry doc page for a Terraform resource.
+	Title string `yaml:"title"`
+	// Examples are the example HCL configuration blocks for the resource
+	// that appear in the resource's registry page. They are in the same
+	// order as they appear on the registry page.
+	Examples []ResourceExample `yaml:"examples,omitempty"`
+	// ArgumentDocs maps resource attributes to their documentation in the
+	// resource's registry page.
+	ArgumentDocs map[string]string `yaml:"argumentDocs"`
+	// ImportStatements are the example Terraform import statements as they
+	// appear in the resource's registry page.
+	// Example: terraform import azurerm_key_vault.example /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/mygroup1/providers/Microsoft.KeyVault/vaults/vault1
+	ImportStatements []string `yaml:"importStatements"`
+	// ExternalName configured for this resource. This allows the
+	// external name used in the generated example manifests to be
+	// overridden for a specific resource via configuration.
+	ExternalName string `yaml:"-"`
 }
 
 // ProviderMetadata metadata for a Terraform native provider

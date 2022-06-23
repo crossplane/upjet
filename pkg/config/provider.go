@@ -12,7 +12,7 @@ import (
 	tfjson "github.com/hashicorp/terraform-json"
 	"github.com/pkg/errors"
 
-	"github.com/upbound/upjet/pkg/meta"
+	"github.com/upbound/upjet/pkg/registry"
 	conversiontfjson "github.com/upbound/upjet/pkg/types/conversion/tfjson"
 )
 
@@ -221,7 +221,7 @@ func (p *Provider) loadMetadata() error {
 		return nil
 	}
 	metadataPath := filepath.Join(p.RootDir, p.ProviderMetadataPath)
-	providerMetadata, err := meta.NewProviderMetadataFromFile(metadataPath)
+	providerMetadata, err := registry.NewProviderMetadataFromFile(metadataPath)
 	if err != nil {
 		return errors.Wrapf(err, "cannot load provider metadata from file: %s", metadataPath)
 	}
