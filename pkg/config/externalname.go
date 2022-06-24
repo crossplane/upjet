@@ -64,7 +64,7 @@ func ParameterAsIdentifier(param string) ExternalName {
 // parameters: A tree of parameters that you'd normally see in a Terraform HCL
 //             file. You can use TF registry documentation of given resource to
 //             see what's available.
-// providerConfig: The Terraform configuration object of the provider. You can
+// terraformProviderConfig: The Terraform configuration object of the provider. You can
 //                 take a look at the TF registry provider configuration object
 //                 to see what's available. Not to be confused with ProviderConfig
 //                 custom resource of the Crossplane provider.
@@ -72,7 +72,7 @@ func ParameterAsIdentifier(param string) ExternalName {
 //               It is required to use this as part of the template.
 //
 // Example usages:
-// TemplatedStringAsIdentifier("index_name", "/subscriptions/{{ .providerConfig.subscription }}/{{ .externalName }}")
+// TemplatedStringAsIdentifier("index_name", "/subscriptions/{{ .terraformProviderConfig.subscription }}/{{ .externalName }}")
 // TemplatedStringAsIdentifier("index.name", "/resource/{{ .externalName }}/static")
 // TemplatedStringAsIdentifier("index.name", "{{ .parameters.cluster_id }}:{{ .parameters.node_id }}:{{ .externalName }}")
 func TemplatedStringAsIdentifier(nameFieldPath, tmpl string) ExternalName {
@@ -97,11 +97,11 @@ func TemplatedStringAsIdentifier(nameFieldPath, tmpl string) ExternalName {
 			nameFieldPath,
 			nameFieldPath + "_prefix",
 		},
-		GetIDFn: func(ctx context.Context, externalName string, parameters map[string]interface{}, providerConfig map[string]interface{}) (string, error) {
+		GetIDFn: func(ctx context.Context, externalName string, parameters map[string]interface{}, terraformProviderConfig map[string]interface{}) (string, error) {
 			o := map[string]interface{}{
-				"externalName":   externalName,
-				"parameters":     parameters,
-				"providerConfig": providerConfig,
+				"externalName":            externalName,
+				"parameters":              parameters,
+				"terraformProviderConfig": terraformProviderConfig,
 			}
 			b := bytes.Buffer{}
 			if err := t.Execute(&b, o); err != nil {

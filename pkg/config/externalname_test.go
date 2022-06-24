@@ -159,10 +159,10 @@ func TestTemplatedSetIdentifierArgumentFn(t *testing.T) {
 
 func TestTemplatedGetIDFn(t *testing.T) {
 	type args struct {
-		tmpl           string
-		externalName   string
-		parameters     map[string]interface{}
-		providerConfig map[string]interface{}
+		tmpl                    string
+		externalName            string
+		parameters              map[string]interface{}
+		terraformProviderConfig map[string]interface{}
 	}
 	type want struct {
 		id  string
@@ -196,14 +196,14 @@ func TestTemplatedGetIDFn(t *testing.T) {
 			},
 		},
 		"MultipleParameters": {
-			reason: "Should work when parameters and providerConfig are used as well.",
+			reason: "Should work when parameters and terraformProviderConfig are used as well.",
 			args: args{
-				tmpl:         "olala/{{ .parameters.ola }}:{{ .externalName }}/{{ .providerConfig.oma }}",
+				tmpl:         "olala/{{ .parameters.ola }}:{{ .externalName }}/{{ .terraformProviderConfig.oma }}",
 				externalName: "myname",
 				parameters: map[string]interface{}{
 					"ola": "paramval",
 				},
-				providerConfig: map[string]interface{}{
+				terraformProviderConfig: map[string]interface{}{
 					"oma": "configval",
 				},
 			},
@@ -218,7 +218,7 @@ func TestTemplatedGetIDFn(t *testing.T) {
 				GetIDFn(context.TODO(),
 					tc.args.externalName,
 					tc.args.parameters,
-					tc.args.providerConfig,
+					tc.args.terraformProviderConfig,
 				)
 			if diff := cmp.Diff(tc.want.err, err); diff != "" {
 				t.Fatalf("TemplatedStringAsIdentifier.GetIDFn(...): -want, +got: %s", diff)
