@@ -245,7 +245,7 @@ func TestTemplatedGetExternalNameFn(t *testing.T) {
 		want   want
 	}{
 		"NoExternalName": {
-			reason: "Should work when only externalName is used.",
+			reason: "Should work when no externalName is used.",
 			args: args{
 				tmpl: "olala/{{ .parameters.somethingElse }}",
 				tfstate: map[string]interface{}{
@@ -260,6 +260,18 @@ func TestTemplatedGetExternalNameFn(t *testing.T) {
 			reason: "Should work when only externalName is used in template.",
 			args: args{
 				tmpl: "{{ .externalName }}",
+				tfstate: map[string]interface{}{
+					"id": "myname",
+				},
+			},
+			want: want{
+				name: "myname",
+			},
+		},
+		"ExternalNameSpaces": {
+			reason: "Should work when externalName variable has random space characters..",
+			args: args{
+				tmpl: "another/thing:{{  .externalName         }}/something",
 				tfstate: map[string]interface{}{
 					"id": "myname",
 				},

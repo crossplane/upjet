@@ -7,6 +7,7 @@ package config
 import (
 	"bytes"
 	"context"
+	"regexp"
 	"strings"
 	"text/template"
 
@@ -16,6 +17,10 @@ import (
 
 const (
 	errIDNotFoundInTFState = "id does not exist in tfstate"
+)
+
+var (
+	externalNameRegex = regexp.MustCompile(`{{\ *\.externalName\b\ *}}`)
 )
 
 var (
@@ -125,17 +130,19 @@ func TemplatedStringAsIdentifier(nameFieldPath, tmpl string) ExternalName {
 // "/subscription/someval/myname" and get "myname" returned.
 func GetExternalNameFromTemplated(tmpl, val string) (string, error) { //nolint:gocyclo
 	// gocyclo: I couldn't find any more room.
-	leftIndex, length := findExternalNameInTemplate(tmpl)
+	loc := externalNameRegex.FindIndex([]byte(tmpl))
 	// A template without external name usage.
-	if length == 0 {
+	if loc == nil {
 		return val, nil
 	}
+	leftIndex := loc[0]
+	rightIndex := loc[1]
+
 	leftSeparator := ""
 	if leftIndex > 0 {
 		leftSeparator = string(tmpl[leftIndex-1])
 	}
 	rightSeparator := ""
-	rightIndex := leftIndex + length
 	if rightIndex < len(tmpl) {
 		rightSeparator = string(tmpl[rightIndex])
 	}
@@ -162,23 +169,4 @@ func GetExternalNameFromTemplated(tmpl, val string) (string, error) { //nolint:g
 		return separated[len(separated)-1], nil
 	}
 	return "", errors.Errorf("unhandled case with template %s and value %s", tmpl, val)
-}
-
-func findExternalNameInTemplate(tmpl string) (i int, length int) {
-	cases := []string{
-		"{{ .externalName }}",
-		"{{.externalName }}",
-		"{{ .externalName}}",
-		"{{.externalName}}",
-	}
-	i = -1
-	length = 0
-	for _, c := range cases {
-		i = strings.Index(tmpl, c)
-		if i != -1 {
-			length = len(c)
-			break
-		}
-	}
-	return
 }
