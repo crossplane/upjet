@@ -269,11 +269,23 @@ func TestTemplatedGetExternalNameFn(t *testing.T) {
 			},
 		},
 		"ExternalNameSpaces": {
-			reason: "Should work when externalName variable has random space characters..",
+			reason: "Should work when externalName variable has random space characters.",
 			args: args{
 				tmpl: "another/thing:{{  .externalName         }}/something",
 				tfstate: map[string]interface{}{
-					"id": "myname",
+					"id": "another/thing:myname/something",
+				},
+			},
+			want: want{
+				name: "myname",
+			},
+		},
+		"DifferentLeftRightSeparators": {
+			reason: "Should work when externalName has different left and right separators.",
+			args: args{
+				tmpl: "another/{{ .parameters.another }}:{{ .externalName }}/somethingelse",
+				tfstate: map[string]interface{}{
+					"id": "another/thing:myname/somethingelse",
 				},
 			},
 			want: want{
