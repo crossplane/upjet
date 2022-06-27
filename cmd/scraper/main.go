@@ -1,0 +1,38 @@
+/*
+Copyright 2022 Upbound Inc.
+*/
+
+package main
+
+import (
+	"os"
+	"path/filepath"
+
+	"gopkg.in/alecthomas/kingpin.v2"
+
+	"github.com/upbound/upjet/pkg/registry"
+)
+
+func main() {
+	var (
+		app                   = kingpin.New(filepath.Base(os.Args[0]), "Terraform Registry provider metadata scraper.").DefaultEnvars()
+		outFile               = app.Flag("out", "Provider metadata output file path").Short('o').Default("provider-metadata.yaml").OpenFile(os.O_CREATE, 0644)
+		providerName          = app.Flag("name", "Provider name").Short('n').Required().String()
+		codeXPath             = app.Flag("code-xpath", "Code XPath expression").Default(`//code[@class="language-terraform" or @class="language-hcl"]/text()`).String()
+		preludeXPath          = app.Flag("prelude-xpath", "Prelude XPath expression").Default(`//text()[contains(., "description") and contains(., "subcategory")]`).String()
+		fieldXPath            = app.Flag("field-xpath", "Field XPath expression").Default(`//ul/li//code[1]/text()`).String()
+		importXPath           = app.Flag("import-xpath", "Import statements XPath expression").Default(`//code[@class="language-shell"]/text()`).String()
+		repoPath              = app.Flag("repo", "Terraform provider repo path").Short('r').Required().ExistingDir()
+		reportExampleErrors   = app.Flag("report-example-errors", "Report errors encountered while parsing example manifests").Default("false").Bool()
+		skipExampleReferences = app.Flag("skip-example-refs", "Skip parsing references in example manifests").Default("false").Bool()
+	)
+	kingpin.MustParse(app.Parse(os.Args[1:]))
+
+	pm := registry.NewProviderMetadata(*providerName, *codeXPath, *preludeXPath, *fieldXPath, *importXPath)
+	kingpin.FatalIfError(pm.ScrapeRepo(&registry.ScrapeConfiguration{
+		ReportExampleErrors:   *reportExampleErrors,
+		SkipExampleReferences: *skipExampleReferences,
+		RepoPath:              *repoPath,
+	}), "Failed to scrape Terraform provider metadata")
+	kingpin.FatalIfError(pm.Store((*outFile).Name()), "Failed to store Terraform provider metadata to file: %s", (*outFile).Name())
+}
