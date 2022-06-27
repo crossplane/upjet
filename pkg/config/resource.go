@@ -30,7 +30,7 @@ var NopSetIdentifierArgument SetIdentifierArgumentsFn = func(_ map[string]interf
 
 // GetIDFn returns the ID to be used in TF State file, i.e. "id" field in
 // terraform.tfstate.
-type GetIDFn func(ctx context.Context, externalName string, parameters map[string]interface{}, providerConfig map[string]interface{}) (string, error)
+type GetIDFn func(ctx context.Context, externalName string, parameters map[string]interface{}, terraformProviderConfig map[string]interface{}) (string, error)
 
 // ExternalNameAsID returns the name to be used as ID in TF State file.
 var ExternalNameAsID GetIDFn = func(_ context.Context, externalName string, _ map[string]interface{}, _ map[string]interface{}) (string, error) {
@@ -85,7 +85,7 @@ type ExternalName struct {
 	// /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/mygroup1
 	// The function here should use information from supplied arguments to
 	// construct this ID, i.e. "mygroup1" from external name, subscription ID
-	// from providerConfig, and others from parameters map if needed.
+	// from terraformProviderConfig, and others from parameters map if needed.
 	GetIDFn GetIDFn
 
 	// OmittedFields are the ones you'd like to be removed from the schema since
