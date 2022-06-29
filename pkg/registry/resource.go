@@ -5,9 +5,6 @@ Copyright 2022 Upbound Inc.
 package registry
 
 import (
-	"io/ioutil"
-	"path/filepath"
-
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
@@ -72,15 +69,10 @@ type ProviderMetadata struct {
 	Resources map[string]*Resource `yaml:"resources"`
 }
 
-// NewProviderMetadataFromFile loads metadata from the specified YAML-formatted file
-func NewProviderMetadataFromFile(path string) (*ProviderMetadata, error) {
-	buff, err := ioutil.ReadFile(filepath.Clean(path))
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to read metadata file %q", path)
-	}
-
+// NewProviderMetadataFromFile loads metadata from the specified YAML-formatted document
+func NewProviderMetadataFromFile(providerMetadata string) (*ProviderMetadata, error) {
 	metadata := &ProviderMetadata{}
-	if err := yaml.Unmarshal(buff, metadata); err != nil {
+	if err := yaml.Unmarshal([]byte(providerMetadata), metadata); err != nil {
 		return nil, errors.Wrap(err, "failed to unmarshal provider metadata")
 	}
 	for name, rm := range metadata.Resources {

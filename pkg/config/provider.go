@@ -6,7 +6,6 @@ package config
 
 import (
 	"fmt"
-	"path/filepath"
 	"regexp"
 
 	tfjson "github.com/hashicorp/terraform-json"
@@ -97,13 +96,9 @@ type Provider struct {
 	// resource name.
 	Resources map[string]*Resource
 
-	// ProviderMetadataPath is the scraped provider metadata file path
-	// from Terraform registry
-	ProviderMetadataPath string
-
-	// RootDir of the Crossplane provider repo for code generation and
-	// configuration files.
-	RootDir string
+	// ProviderMetadata is the scraped provider metadata
+	// from the corresponding Terraform registry.
+	ProviderMetadata string
 
 	// resourceConfigurators is a map holding resource configurators where key
 	// is Terraform resource name.
@@ -159,7 +154,7 @@ func WithDefaultResourceOptions(opts ...ResourceOption) ProviderOption {
 // NewProvider builds and returns a new Provider from provider
 // tfjson schema, that is generated using Terraform CLI with:
 // `terraform providers schema --json`
-func NewProvider(schema []byte, rootDir string, prefix string, modulePath string, metadataPath string, opts ...ProviderOption) *Provider {
+func NewProvider(schema []byte, prefix string, modulePath string, metadata string, opts ...ProviderOption) *Provider {
 	ps := tfjson.ProviderSchemas{}
 	if err := ps.UnmarshalJSON(schema); err != nil {
 		panic(err)
@@ -185,8 +180,7 @@ func NewProvider(schema []byte, rootDir string, prefix string, modulePath string
 			".+",
 		},
 		Resources:             map[string]*Resource{},
-		ProviderMetadataPath:  metadataPath,
-		RootDir:               rootDir,
+		ProviderMetadata:      metadata,
 		resourceConfigurators: map[string]ResourceConfiguratorChain{},
 	}
 
@@ -217,13 +211,12 @@ func NewProvider(schema []byte, rootDir string, prefix string, modulePath string
 }
 
 func (p *Provider) loadMetadata() error {
-	if p.ProviderMetadataPath == "" {
+	if len(p.ProviderMetadata) == 0 {
 		return nil
 	}
-	metadataPath := filepath.Join(p.RootDir, p.ProviderMetadataPath)
-	providerMetadata, err := registry.NewProviderMetadataFromFile(metadataPath)
+	providerMetadata, err := registry.NewProviderMetadataFromFile(p.ProviderMetadata)
 	if err != nil {
-		return errors.Wrapf(err, "cannot load provider metadata from file: %s", metadataPath)
+		return errors.Wrap(err, "cannot load provider metadata")
 	}
 	for name, r := range p.Resources {
 		r.MetaResource = providerMetadata.Resources[name]

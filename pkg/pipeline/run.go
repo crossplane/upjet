@@ -34,7 +34,7 @@ type terraformedInput struct {
 }
 
 // Run runs the Terrajet code generation pipelines.
-func Run(pc *config.Provider) { // nolint:gocyclo
+func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
 	// Note(turkenh): nolint reasoning - this is the main function of the code
 	// generation pipeline. We didn't want to split it into multiple functions
 	// for better readability considering the straightforward logic here.
@@ -68,14 +68,14 @@ func Run(pc *config.Provider) { // nolint:gocyclo
 		controllerPkgList = append(controllerPkgList, filepath.Join(pc.ModulePath, p))
 	}
 	count := 0
-	exampleGen := NewExampleGenerator(pc.RootDir, pc.Resources)
+	exampleGen := NewExampleGenerator(rootDir, pc.Resources)
 	for group, versions := range resourcesGroups {
 		for version, resources := range versions {
 			var tfResources []*terraformedInput
-			versionGen := NewVersionGenerator(pc.RootDir, pc.ModulePath, group, version)
-			crdGen := NewCRDGenerator(versionGen.Package(), pc.RootDir, pc.ShortName, group, version)
-			tfGen := NewTerraformedGenerator(versionGen.Package(), pc.RootDir, group, version)
-			ctrlGen := NewControllerGenerator(pc.RootDir, pc.ModulePath, group)
+			versionGen := NewVersionGenerator(rootDir, pc.ModulePath, group, version)
+			crdGen := NewCRDGenerator(versionGen.Package(), rootDir, pc.ShortName, group, version)
+			tfGen := NewTerraformedGenerator(versionGen.Package(), rootDir, group, version)
+			ctrlGen := NewControllerGenerator(rootDir, pc.ModulePath, group)
 
 			for _, name := range sortedResources(resources) {
 				paramTypeName, err := crdGen.Generate(resources[name])
@@ -112,10 +112,10 @@ func Run(pc *config.Provider) { // nolint:gocyclo
 		panic(errors.Wrapf(err, "cannot store examples"))
 	}
 
-	if err := NewRegisterGenerator(pc.RootDir, pc.ModulePath).Generate(apiVersionPkgList); err != nil {
+	if err := NewRegisterGenerator(rootDir, pc.ModulePath).Generate(apiVersionPkgList); err != nil {
 		panic(errors.Wrap(err, "cannot generate register file"))
 	}
-	if err := NewSetupGenerator(pc.RootDir, pc.ModulePath).Generate(controllerPkgList); err != nil {
+	if err := NewSetupGenerator(rootDir, pc.ModulePath).Generate(controllerPkgList); err != nil {
 		panic(errors.Wrap(err, "cannot generate setup file"))
 	}
 
@@ -123,13 +123,13 @@ func Run(pc *config.Provider) { // nolint:gocyclo
 	// So, we set the directory of the command instead of passing in the directory
 	// as an argument to "find".
 	apisCmd := exec.Command("bash", "-c", "goimports -w $(find . -iname 'zz_*')")
-	apisCmd.Dir = filepath.Clean(filepath.Join(pc.RootDir, "apis"))
+	apisCmd.Dir = filepath.Clean(filepath.Join(rootDir, "apis"))
 	if out, err := apisCmd.CombinedOutput(); err != nil {
 		panic(errors.Wrap(err, "cannot run goimports for apis folder: "+string(out)))
 	}
 
 	internalCmd := exec.Command("bash", "-c", "goimports -w $(find . -iname 'zz_*')")
-	internalCmd.Dir = filepath.Clean(filepath.Join(pc.RootDir, "internal"))
+	internalCmd.Dir = filepath.Clean(filepath.Join(rootDir, "internal"))
 	if out, err := internalCmd.CombinedOutput(); err != nil {
 		panic(errors.Wrap(err, "cannot run goimports for internal folder: "+string(out)))
 	}
