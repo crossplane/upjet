@@ -96,10 +96,6 @@ type Provider struct {
 	// resource name.
 	Resources map[string]*Resource
 
-	// ProviderMetadata is the scraped provider metadata
-	// from the corresponding Terraform registry.
-	ProviderMetadata string
-
 	// resourceConfigurators is a map holding resource configurators where key
 	// is Terraform resource name.
 	resourceConfigurators map[string]ResourceConfiguratorChain
@@ -180,7 +176,6 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadata strin
 			".+",
 		},
 		Resources:             map[string]*Resource{},
-		ProviderMetadata:      metadata,
 		resourceConfigurators: map[string]ResourceConfiguratorChain{},
 	}
 
@@ -204,17 +199,17 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadata strin
 
 		p.Resources[name] = DefaultResource(name, terraformResource, p.DefaultResourceOptions...)
 	}
-	if err := p.loadMetadata(); err != nil {
+	if err := p.loadMetadata(metadata); err != nil {
 		panic(errors.Wrap(err, "cannot load provider metadata"))
 	}
 	return p
 }
 
-func (p *Provider) loadMetadata() error {
-	if len(p.ProviderMetadata) == 0 {
+func (p *Provider) loadMetadata(metadata string) error {
+	if len(metadata) == 0 {
 		return nil
 	}
-	providerMetadata, err := registry.NewProviderMetadataFromFile(p.ProviderMetadata)
+	providerMetadata, err := registry.NewProviderMetadataFromFile(metadata)
 	if err != nil {
 		return errors.Wrap(err, "cannot load provider metadata")
 	}
