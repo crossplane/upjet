@@ -70,9 +70,9 @@ type ProviderMetadata struct {
 }
 
 // NewProviderMetadataFromFile loads metadata from the specified YAML-formatted document
-func NewProviderMetadataFromFile(providerMetadata string) (*ProviderMetadata, error) {
+func NewProviderMetadataFromFile(providerMetadata []byte) (*ProviderMetadata, error) {
 	metadata := &ProviderMetadata{}
-	if err := yaml.Unmarshal([]byte(providerMetadata), metadata); err != nil {
+	if err := yaml.Unmarshal(providerMetadata, metadata); err != nil {
 		return nil, errors.Wrap(err, "failed to unmarshal provider metadata")
 	}
 	for name, rm := range metadata.Resources {

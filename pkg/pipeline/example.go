@@ -155,9 +155,6 @@ func (eg *ExampleGenerator) Generate(group, version string, r *config.Resource, 
 		"metadata":   metadata,
 		"spec": map[string]interface{}{
 			"forProvider": exampleParams,
-			"providerConfigRef": map[string]interface{}{
-				"name": "default",
-			},
 		},
 	}
 	manifestDir := filepath.Join(eg.rootDir, "examples-generated", strings.ToLower(strings.Split(group, ".")[0]))

@@ -150,7 +150,7 @@ func WithDefaultResourceOptions(opts ...ResourceOption) ProviderOption {
 // NewProvider builds and returns a new Provider from provider
 // tfjson schema, that is generated using Terraform CLI with:
 // `terraform providers schema --json`
-func NewProvider(schema []byte, prefix string, modulePath string, metadata string, opts ...ProviderOption) *Provider {
+func NewProvider(schema []byte, prefix string, modulePath string, metadata []byte, opts ...ProviderOption) *Provider {
 	ps := tfjson.ProviderSchemas{}
 	if err := ps.UnmarshalJSON(schema); err != nil {
 		panic(err)
@@ -205,7 +205,7 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadata strin
 	return p
 }
 
-func (p *Provider) loadMetadata(metadata string) error {
+func (p *Provider) loadMetadata(metadata []byte) error {
 	if len(metadata) == 0 {
 		return nil
 	}
