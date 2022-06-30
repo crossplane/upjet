@@ -11,6 +11,7 @@ import (
 	tfjson "github.com/hashicorp/terraform-json"
 	"github.com/pkg/errors"
 
+	"github.com/upbound/upjet/pkg/registry"
 	conversiontfjson "github.com/upbound/upjet/pkg/types/conversion/tfjson"
 )
 
@@ -95,10 +96,6 @@ type Provider struct {
 	// resource name.
 	Resources map[string]*Resource
 
-	// ProviderMetadataPath is the scraped provider metadata file path
-	// from Terraform registry
-	ProviderMetadataPath string
-
 	// resourceConfigurators is a map holding resource configurators where key
 	// is Terraform resource name.
 	resourceConfigurators map[string]ResourceConfiguratorChain
@@ -153,7 +150,7 @@ func WithDefaultResourceOptions(opts ...ResourceOption) ProviderOption {
 // NewProvider builds and returns a new Provider from provider
 // tfjson schema, that is generated using Terraform CLI with:
 // `terraform providers schema --json`
-func NewProvider(schema []byte, prefix string, modulePath string, metadataPath string, opts ...ProviderOption) *Provider {
+func NewProvider(schema []byte, prefix string, modulePath string, metadata []byte, opts ...ProviderOption) *Provider {
 	ps := tfjson.ProviderSchemas{}
 	if err := ps.UnmarshalJSON(schema); err != nil {
 		panic(err)
@@ -179,7 +176,6 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadataPath s
 			".+",
 		},
 		Resources:             map[string]*Resource{},
-		ProviderMetadataPath:  metadataPath,
 		resourceConfigurators: map[string]ResourceConfiguratorChain{},
 	}
 
@@ -203,7 +199,24 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadataPath s
 
 		p.Resources[name] = DefaultResource(name, terraformResource, p.DefaultResourceOptions...)
 	}
+	if err := p.loadMetadata(metadata); err != nil {
+		panic(errors.Wrap(err, "cannot load provider metadata"))
+	}
 	return p
+}
+
+func (p *Provider) loadMetadata(metadata []byte) error {
+	if len(metadata) == 0 {
+		return nil
+	}
+	providerMetadata, err := registry.NewProviderMetadataFromFile(metadata)
+	if err != nil {
+		return errors.Wrap(err, "cannot load provider metadata")
+	}
+	for name, r := range p.Resources {
+		r.MetaResource = providerMetadata.Resources[name]
+	}
+	return nil
 }
 
 // AddResourceConfigurator adds resource specific configurators.

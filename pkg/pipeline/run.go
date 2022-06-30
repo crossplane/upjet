@@ -23,9 +23,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/upbound/upjet/pkg/config"
-
 	"github.com/crossplane/crossplane-runtime/pkg/errors"
+
+	"github.com/upbound/upjet/pkg/config"
 )
 
 type terraformedInput struct {
@@ -57,15 +57,6 @@ func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
 		resourcesGroups[group][resource.Version][name] = resource
 	}
 
-	metaResources := make(map[string]*Resource)
-	if pc.ProviderMetadataPath != "" {
-		providerMetadata, err := NewProviderMetadataFromFile(filepath.Join(rootDir, pc.ProviderMetadataPath))
-		if err != nil {
-			panic(errors.Wrap(err, "cannot read Terraform provider metadata"))
-		}
-		metaResources = providerMetadata.Resources
-	}
-
 	// Add ProviderConfig API package to the list of API version packages.
 	apiVersionPkgList := make([]string, 0)
 	for _, p := range pc.BasePackages.APIVersion {
@@ -77,7 +68,7 @@ func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
 		controllerPkgList = append(controllerPkgList, filepath.Join(pc.ModulePath, p))
 	}
 	count := 0
-	exampleGen := NewExampleGenerator(rootDir, metaResources)
+	exampleGen := NewExampleGenerator(rootDir, pc.Resources)
 	for group, versions := range resourcesGroups {
 		for version, resources := range versions {
 			var tfResources []*terraformedInput

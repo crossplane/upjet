@@ -18,6 +18,8 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
+
+	"github.com/upbound/upjet/pkg/registry"
 )
 
 // SetIdentifierArgumentsFn sets the name of the resource in Terraform attributes map,
@@ -290,4 +292,8 @@ type Resource struct {
 
 	// LateInitializer configuration to control late-initialization behaviour
 	LateInitializer LateInitializer
+
+	// MetaResource is the metadata associated with the resource scraped from
+	// the Terraform registry.
+	MetaResource *registry.Resource
 }

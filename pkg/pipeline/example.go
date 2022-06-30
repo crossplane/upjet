@@ -13,11 +13,11 @@ import (
 	"strings"
 
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
+	xpmeta "github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/pkg/errors"
 	"sigs.k8s.io/yaml"
 
 	"github.com/upbound/upjet/pkg/config"
-	"github.com/upbound/upjet/pkg/resource/json"
 	tjtypes "github.com/upbound/upjet/pkg/types"
 )
 
@@ -32,55 +32,20 @@ type pavedWithManifest struct {
 	refsResolved bool
 }
 
-// ResourceExample represents the scraped example HCL configuration
-// for a Terraform resource
-type ResourceExample struct {
-	Manifest   string            `yaml:"manifest"`
-	References map[string]string `yaml:"references,omitempty"`
-}
-
-// Resource represents the scraped metadata for a Terraform resource
-type Resource struct {
-	SubCategory      string            `yaml:"subCategory"`
-	Description      string            `yaml:"description,omitempty"`
-	Name             string            `yaml:"name"`
-	TitleName        string            `yaml:"titleName"`
-	Examples         []ResourceExample `yaml:"examples,omitempty"`
-	ArgumentDocs     map[string]string `yaml:"argumentDocs"`
-	ImportStatements []string          `yaml:"importStatements"`
-}
-
-// ProviderMetadata metadata for a Terraform native provider
-type ProviderMetadata struct {
-	Name      string               `yaml:"name"`
-	Resources map[string]*Resource `yaml:"resources"`
-}
-
-// NewProviderMetadataFromFile loads metadata from the specified YAML-formatted file
-func NewProviderMetadataFromFile(path string) (*ProviderMetadata, error) {
-	buff, err := ioutil.ReadFile(filepath.Clean(path))
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to read metadata file %q", path)
-	}
-
-	metadata := &ProviderMetadata{}
-	return metadata, errors.Wrap(yaml.Unmarshal(buff, metadata), "failed to unmarshal provider metadata")
-}
-
 // ExampleGenerator represents a pipeline for generating example manifests.
 // Generates example manifests for Terraform resources under examples-generated.
 type ExampleGenerator struct {
-	rootDir      string
-	resourceMeta map[string]*Resource
-	resources    map[string]*pavedWithManifest
+	rootDir        string
+	configResource map[string]*config.Resource
+	resources      map[string]*pavedWithManifest
 }
 
 // NewExampleGenerator returns a configured ExampleGenerator
-func NewExampleGenerator(rootDir string, resourceMeta map[string]*Resource) *ExampleGenerator {
+func NewExampleGenerator(rootDir string, configResource map[string]*config.Resource) *ExampleGenerator {
 	return &ExampleGenerator{
-		rootDir:      rootDir,
-		resourceMeta: resourceMeta,
-		resources:    make(map[string]*pavedWithManifest),
+		rootDir:        rootDir,
+		configResource: configResource,
+		resources:      make(map[string]*pavedWithManifest),
 	}
 }
 
@@ -169,27 +134,27 @@ func (eg *ExampleGenerator) resolveReferences(params map[string]interface{}) err
 
 // Generate generates an example manifest for the specified Terraform resource.
 func (eg *ExampleGenerator) Generate(group, version string, r *config.Resource, fieldTransformations map[string]tjtypes.Transformation) error {
-	rm := eg.resourceMeta[r.Name]
+	rm := eg.configResource[r.Name].MetaResource
 	if rm == nil || len(rm.Examples) == 0 {
 		return nil
 	}
-	var exampleParams map[string]interface{}
-	if err := json.TFParser.Unmarshal([]byte(rm.Examples[0].Manifest), &exampleParams); err != nil {
-		return errors.Wrapf(err, "cannot unmarshal example manifest for resource: %s", r.Name)
-	}
+	exampleParams := rm.Examples[0].Paved.UnstructuredContent()
 	transformFields(exampleParams, r.ExternalName.OmittedFields, fieldTransformations, "")
 
+	metadata := map[string]interface{}{
+		"name": "example",
+	}
+	if len(rm.ExternalName) != 0 {
+		metadata["annotations"] = map[string]string{
+			xpmeta.AnnotationKeyExternalName: rm.ExternalName,
+		}
+	}
 	example := map[string]interface{}{
 		"apiVersion": fmt.Sprintf("%s/%s", group, version),
 		"kind":       r.Kind,
-		"metadata": map[string]interface{}{
-			"name": "example",
-		},
+		"metadata":   metadata,
 		"spec": map[string]interface{}{
 			"forProvider": exampleParams,
-			"providerConfigRef": map[string]interface{}{
-				"name": "example",
-			},
 		},
 	}
 	manifestDir := filepath.Join(eg.rootDir, "examples-generated", strings.ToLower(strings.Split(group, ".")[0]))
