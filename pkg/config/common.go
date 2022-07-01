@@ -5,12 +5,18 @@ Copyright 2021 Upbound Inc.
 package config
 
 import (
-	"fmt"
 	"strings"
 
+	"github.com/crossplane/crossplane-runtime/pkg/errors"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 
 	tjname "github.com/upbound/upjet/pkg/types/name"
+)
+
+const (
+	errFmtFieldNotFound       = "field %s is not found"
+	errFmtElemNil             = "field %s does not have an element type"
+	errFmtElemTypeNotResource = "element type of %s is not *schema.Resource"
 )
 
 // Commonly used resource configurations.
@@ -78,16 +84,14 @@ func DefaultResource(name string, terraformSchema *schema.Resource, opts ...Reso
 // a whole. It's used mostly in cases where there is a field that is
 // represented as a separate CRD, hence you'd like to remove that field from
 // spec.
-func MoveToStatus(sch *schema.Resource, fields ...string) {
-	for _, f := range fields {
-		if _, ok := sch.Schema[f]; !ok {
-			panic(fmt.Sprintf("field %s does not exist in schema", f))
-		}
-		sch.Schema[f].Optional = false
-		sch.Schema[f].Computed = true
+func MoveToStatus(sch *schema.Resource, fieldpaths ...string) {
+	for _, f := range fieldpaths {
+		s := GetSchema(sch, f)
+		s.Optional = false
+		s.Computed = true
 
 		// We need to move all nodes of that field to status.
-		if el, ok := sch.Schema[f].Elem.(*schema.Resource); ok {
+		if el, ok := s.Elem.(*schema.Resource); ok {
 			l := make([]string, len(el.Schema))
 			i := 0
 			for fi := range el.Schema {
@@ -97,4 +101,45 @@ func MoveToStatus(sch *schema.Resource, fields ...string) {
 			MoveToStatus(el, l...)
 		}
 	}
+}
+
+// MarkAsRequired marks the schema of the given fieldpath as required. It's most
+// useful in cases where external name contains an optional parameter that is
+// defaulted by the provider but we need it to exist or to fix plain buggy
+// schemas.
+func MarkAsRequired(sch *schema.Resource, fieldpaths ...string) {
+	for _, fieldpath := range fieldpaths {
+		s := GetSchema(sch, fieldpath)
+		s.Computed = false
+		s.Optional = false
+	}
+}
+
+// GetSchema returns the schema of the field whose fieldpath is given. It's
+// supposed to run in generation time, so it will panic if it cannot find the
+// field.
+func GetSchema(sch *schema.Resource, fieldpath string) *schema.Schema {
+	current := sch
+	fields := strings.Split(fieldpath, ".")
+	final := fields[len(fields)-1]
+	formers := fields[:len(fields)-1]
+	for i, field := range formers {
+		s, ok := current.Schema[field]
+		if !ok {
+			panic(errors.Errorf(errFmtFieldNotFound, strings.Join(fields[:i+1], ".")))
+		}
+		if s.Elem == nil {
+			panic(errors.Errorf(errFmtElemNil, strings.Join(fields[:i+1], ".")))
+		}
+		res, rok := s.Elem.(*schema.Resource)
+		if !rok {
+			panic(errors.Errorf(errFmtElemTypeNotResource, strings.Join(fields[:i+1], ".")))
+		}
+		current = res
+	}
+	s, ok := current.Schema[final]
+	if !ok {
+		panic(errors.Errorf("field %s is not found", fieldpath))
+	}
+	return s
 }

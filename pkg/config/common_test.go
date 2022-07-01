@@ -1,5 +1,5 @@
 /*
-Copyright 2021 Upbound Inc.
+Copyright 2022 Upbound Inc.
 */
 
 package config
@@ -7,6 +7,8 @@ package config
 import (
 	"testing"
 
+	"github.com/crossplane/crossplane-runtime/pkg/errors"
+	"github.com/crossplane/crossplane-runtime/pkg/test"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -241,6 +243,237 @@ func TestMoveToStatus(t *testing.T) {
 			MoveToStatus(tc.args.sch, tc.args.fields...)
 			if diff := cmp.Diff(tc.want.sch, tc.args.sch); diff != "" {
 				t.Errorf("\n%s\nMoveToStatus(...): -want, +got:\n%s", tc.reason, diff)
+			}
+		})
+	}
+}
+
+func TestMarkAsRequired(t *testing.T) {
+	type args struct {
+		sch    *schema.Resource
+		fields []string
+	}
+	type want struct {
+		sch *schema.Resource
+	}
+
+	cases := map[string]struct {
+		reason string
+		args
+		want
+	}{
+		"TopLevelBasicFields": {
+			args: args{
+				fields: []string{"topB", "topC"},
+				sch: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"topA": {Type: schema.TypeString},
+						"topB": {Type: schema.TypeInt, Computed: true},
+						"topC": {Type: schema.TypeString, Optional: true},
+					},
+				},
+			},
+			want: want{
+				sch: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"topA": {Type: schema.TypeString},
+						"topB": {
+							Type:     schema.TypeInt,
+							Optional: false,
+							Computed: false,
+						},
+						"topC": {
+							Type:     schema.TypeString,
+							Optional: false,
+							Computed: false,
+						},
+					},
+				},
+			},
+		},
+		"ComplexFields": {
+			args: args{
+				fields: []string{"topA.leafA", "topA.leafA.leafC"},
+				sch: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"topA": {
+							Type: schema.TypeMap,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"leafA": {
+										Type: schema.TypeMap,
+										Elem: &schema.Resource{
+											Schema: map[string]*schema.Schema{
+												"leafB": {Type: schema.TypeString},
+												"leafC": {Type: schema.TypeString},
+											},
+										},
+									},
+								},
+							},
+						},
+						"topB": {Type: schema.TypeString},
+					},
+				},
+			},
+			want: want{
+				sch: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"topA": {
+							Type: schema.TypeMap,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"leafA": {
+										Type:     schema.TypeMap,
+										Computed: false,
+										Optional: false,
+										Elem: &schema.Resource{
+											Schema: map[string]*schema.Schema{
+												"leafB": {Type: schema.TypeString},
+												"leafC": {
+													Type:     schema.TypeString,
+													Computed: false,
+													Optional: false,
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+						"topB": {Type: schema.TypeString},
+					},
+				},
+			},
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			MarkAsRequired(tc.args.sch, tc.args.fields...)
+			if diff := cmp.Diff(tc.want.sch, tc.args.sch); diff != "" {
+				t.Errorf("\n%s\nMarkAsRequired(...): -want, +got:\n%s", tc.reason, diff)
+			}
+		})
+	}
+}
+
+func TestGetSchema(t *testing.T) {
+	type args struct {
+		sch       *schema.Resource
+		fieldpath string
+	}
+	type want struct {
+		sch      *schema.Schema
+		panicErr error
+	}
+	schLeaf := &schema.Schema{
+		Type: schema.TypeString,
+	}
+	schA := &schema.Schema{
+		Type: schema.TypeMap,
+		Elem: &schema.Resource{
+			Schema: map[string]*schema.Schema{
+				"fieldA": schLeaf,
+			},
+		},
+	}
+	res := &schema.Resource{
+		Schema: map[string]*schema.Schema{
+			"topA": schA,
+		},
+	}
+	cases := map[string]struct {
+		reason string
+		args
+		want
+	}{
+		"TopLevelField": {
+			args: args{
+				fieldpath: "topA",
+				sch:       res,
+			},
+			want: want{
+				sch: schA,
+			},
+		},
+		"LeafField": {
+			args: args{
+				fieldpath: "topA.fieldA",
+				sch:       res,
+			},
+			want: want{
+				sch: schLeaf,
+			},
+		},
+		"TopLevelFieldNotFound": {
+			args: args{
+				fieldpath: "topB",
+				sch:       res,
+			},
+			want: want{
+				sch:      schLeaf,
+				panicErr: errors.Errorf(errFmtFieldNotFound, "topB"),
+			},
+		},
+		"LeafFieldNotFound": {
+			args: args{
+				fieldpath: "topA.olala.omama",
+				sch:       res,
+			},
+			want: want{
+				sch:      schLeaf,
+				panicErr: errors.Errorf(errFmtFieldNotFound, "topA.olala"),
+			},
+		},
+		"TopFieldIsNotMap": {
+			args: args{
+				fieldpath: "topA.topB",
+				sch: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"topA": {Type: schema.TypeString},
+					},
+				},
+			},
+			want: want{
+				sch:      schLeaf,
+				panicErr: errors.Errorf(errFmtElemNil, "topA"),
+			},
+		},
+		"MiddleFieldIsNotResource": {
+			args: args{
+				fieldpath: "topA.topB.topC",
+				sch: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"topA": {
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"topB": {
+										Elem: &schema.Schema{},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			want: want{
+				sch:      schLeaf,
+				panicErr: errors.Errorf(errFmtElemTypeNotResource, "topA.topB"),
+			},
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			defer func() {
+				if diff := cmp.Diff(tc.want.panicErr, recover(), test.EquateErrors()); diff != "" {
+					t.Errorf("\n%s\nGetSchema(...): -want panic err, +got panic err:\n%s", tc.reason, diff)
+				}
+			}()
+			sch := GetSchema(tc.args.sch, tc.args.fieldpath)
+			if diff := cmp.Diff(tc.want.sch, sch); diff != "" {
+				t.Errorf("\n%s\nGetSchema(...): -want, +got:\n%s", tc.reason, diff)
 			}
 		})
 	}
