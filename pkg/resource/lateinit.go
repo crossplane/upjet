@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	xpmeta "github.com/crossplane/crossplane-runtime/pkg/meta"
+	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -22,6 +23,9 @@ const (
 	// of the Terraform State. It's non-sensitive and used by provider to store
 	// arbitrary metadata, usually details about schema version.
 	AnnotationKeyPrivateRawAttribute = "upjet.crossplane.io/provider-meta"
+
+	// AnnotationKeyTestResource is used for marking an MR as test for automated tests
+	AnnotationKeyTestResource = "upjet.upbound.io/test"
 
 	// CNameWildcard can be used as the canonical name of a value filter option
 	// that will apply to all fields of a struct
@@ -390,4 +394,9 @@ func getCanonicalName(parent, child string) string {
 	}
 
 	return fmt.Sprintf(fmtCanonical, parent, child)
+}
+
+// IsTest returns true if the managed resource has upjet.upbound.io/test= "true" annotation
+func IsTest(mg xpresource.Managed) bool {
+	return mg.GetAnnotations()[AnnotationKeyTestResource] == "true"
 }

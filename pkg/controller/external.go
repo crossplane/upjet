@@ -155,6 +155,7 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot late initialize parameters")
 	}
 	markedAvailable := tr.GetCondition(xpv1.TypeReady).Equal(xpv1.Available())
+
 	// In the following switch block, before running a relatively costly
 	// Terraform apply and that may fail before critical annotations are
 	// updated, or late-initialized configuration is written to main.tf.json,
@@ -196,11 +197,17 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 	// now we do a Workspace.Refresh
 	default:
 		plan, err := e.workspace.Plan(ctx)
+		if err != nil {
+			return managed.ExternalObservation{}, errors.Wrap(err, errPlan)
+		}
+
+		resource.SetUpToDateCondition(mg, plan.UpToDate)
+
 		return managed.ExternalObservation{
 			ResourceExists:    true,
 			ResourceUpToDate:  plan.UpToDate,
 			ConnectionDetails: conn,
-		}, errors.Wrap(err, errPlan)
+		}, nil
 	}
 }
 
