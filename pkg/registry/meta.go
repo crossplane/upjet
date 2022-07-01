@@ -34,14 +34,10 @@ const (
 
 // NewProviderMetadata initializes a new ProviderMetadata for
 // extracting metadata from the Terraform registry.
-func NewProviderMetadata(name, codeXPath, preludeXPath, fieldPathXPath, importXPath string) *ProviderMetadata {
+func NewProviderMetadata(name string) *ProviderMetadata {
 	return &ProviderMetadata{
-		Name:          name,
-		Resources:     make(map[string]*Resource),
-		codeXPath:     codeXPath,
-		preludeXPath:  preludeXPath,
-		fieldDocXPath: fieldPathXPath,
-		importXPath:   importXPath,
+		Name:      name,
+		Resources: make(map[string]*Resource),
 	}
 }
 
@@ -66,13 +62,13 @@ func (r *Resource) AddArgumentDoc(fieldName, doc string) {
 	r.ArgumentDocs[fieldName] = strings.TrimSpace(doc)
 }
 
-func (r *Resource) scrapeExamples(doc *html.Node, codeElXPath string) error { // nolint: gocyclo
+func (r *Resource) scrapeExamples(doc *html.Node, codeElXPath string, debug bool) error { // nolint: gocyclo
 	resourceName := r.Title
 	nodes := htmlquery.Find(doc, codeElXPath)
 	for _, n := range nodes {
 		parser := hclparse.NewParser()
 		f, diag := parser.ParseHCL([]byte(n.Data), "example.hcl")
-		if diag != nil && diag.HasErrors() && r.scrapeConfig.ReportExampleErrors {
+		if debug && diag != nil && diag.HasErrors() {
 			fmt.Println(errors.Wrapf(diag, "failed to parse example Terraform configuration for %q: Configuration:\n%s", resourceName, n.Data))
 		}
 		if f == nil {
@@ -301,8 +297,8 @@ func (r *Resource) scrapeImportStatements(doc *html.Node, importXPath string) {
 // scrape scrapes resource metadata from the specified HTML doc.
 // filename is not always the precise resource name, hence,
 // it returns the resource name scraped from the doc.
-func (r *Resource) scrape(path, codeElXPath, preludeXPath, docXPath, importXPath string) error {
-	source, err := ioutil.ReadFile(path) // nolint: G304
+func (r *Resource) scrape(path string, config *ScrapeConfiguration) error {
+	source, err := ioutil.ReadFile(filepath.Clean(path))
 	if err != nil {
 		return errors.Wrap(err, "failed to read markdown file")
 	}
@@ -317,26 +313,30 @@ func (r *Resource) scrape(path, codeElXPath, preludeXPath, docXPath, importXPath
 		return errors.Wrap(err, "failed to parse HTML")
 	}
 
-	if err := r.scrapePrelude(doc, preludeXPath); err != nil {
+	if err := r.scrapePrelude(doc, config.PreludeXPath); err != nil {
 		return err
 	}
 
-	r.scrapeFieldDocs(doc, docXPath)
-	r.scrapeImportStatements(doc, importXPath)
+	r.scrapeFieldDocs(doc, config.FieldDocXPath)
+	r.scrapeImportStatements(doc, config.ImportXPath)
 
-	return r.scrapeExamples(doc, codeElXPath)
+	return r.scrapeExamples(doc, config.CodeXPath, config.Debug)
 }
 
 // ScrapeConfiguration is a configurator for the scraper
 type ScrapeConfiguration struct {
-	// ReportExampleErrors report errors encountered
-	// while parsing example manifests.
-	ReportExampleErrors bool
-	// SkipExampleReferences skip scraping references from
-	// example HCL configurations.
-	SkipExampleReferences bool
+	// Debug Output debug messages
+	Debug bool
 	// RepoPath is the path of the Terraform native provider repo
 	RepoPath string
+	// CodeXPath Code XPath expression
+	CodeXPath string
+	// PreludeXPath Prelude XPath expression
+	PreludeXPath string
+	// FieldDocXPath Field documentation XPath expression
+	FieldDocXPath string
+	// ImportXPath Import statements XPath expression
+	ImportXPath string
 }
 
 // ScrapeRepo scrape metadata from the configured Terraform native provider repo
@@ -348,10 +348,8 @@ func (pm *ProviderMetadata) ScrapeRepo(config *ScrapeConfiguration) error {
 		if d.IsDir() || filepath.Ext(d.Name()) != extMarkdown {
 			return nil
 		}
-		r := &Resource{
-			scrapeConfig: config,
-		}
-		if err := r.scrape(path, pm.codeXPath, pm.preludeXPath, pm.fieldDocXPath, pm.importXPath); err != nil {
+		r := &Resource{}
+		if err := r.scrape(path, config); err != nil {
 			return errors.Wrap(err, "failed to scrape resource metadata")
 		}
 

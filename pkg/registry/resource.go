@@ -61,17 +61,12 @@ type Resource struct {
 	// external name used in the generated example manifests to be
 	// overridden for a specific resource via configuration.
 	ExternalName string `yaml:"-"`
-	scrapeConfig *ScrapeConfiguration
 }
 
 // ProviderMetadata metadata for a Terraform native provider
 type ProviderMetadata struct {
-	Name          string               `yaml:"name"`
-	Resources     map[string]*Resource `yaml:"resources"`
-	codeXPath     string
-	preludeXPath  string
-	fieldDocXPath string
-	importXPath   string
+	Name      string               `yaml:"name"`
+	Resources map[string]*Resource `yaml:"resources"`
 }
 
 // NewProviderMetadataFromFile loads metadata from the specified YAML-formatted document
