@@ -8,6 +8,7 @@ require (
 	github.com/fatih/camelcase v1.0.0
 	github.com/golang/mock v1.6.0
 	github.com/google/go-cmp v0.5.8
+	github.com/hashicorp/hcl/v2 v2.12.0
 	github.com/hashicorp/terraform-json v0.14.0
 	github.com/hashicorp/terraform-plugin-sdk v1.17.2
 	github.com/hashicorp/terraform-plugin-sdk/v2 v2.17.0
@@ -19,20 +20,16 @@ require (
 	github.com/tmccombs/hcl2json v0.3.3
 	github.com/yuin/goldmark v1.4.4
 	github.com/zclconf/go-cty v1.10.0
+	golang.org/x/net v0.0.0-20220127200216-cd36cc0744dd
 	golang.org/x/tools v0.1.10-0.20220218145154-897bd77cd717
+	gopkg.in/alecthomas/kingpin.v2 v2.2.6
 	gopkg.in/yaml.v2 v2.4.0
+	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
 	k8s.io/api v0.24.0
 	k8s.io/apimachinery v0.24.0
 	k8s.io/utils v0.0.0-20220210201930-3a6ce19ff2f9
 	sigs.k8s.io/controller-runtime v0.12.1
 	sigs.k8s.io/yaml v1.3.0
-)
-
-require (
-	github.com/hashicorp/hcl/v2 v2.12.0
-	golang.org/x/net v0.0.0-20220127200216-cd36cc0744dd
-	gopkg.in/alecthomas/kingpin.v2 v2.2.6
-	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
 )
 
 require (

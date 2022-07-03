@@ -53,15 +53,6 @@ func (r *Resource) addExampleManifest(file *hcl.File, body *hclsyntax.Block) err
 	return nil
 }
 
-// AddArgumentDoc adds documentation for the specified field
-// of this Resource.
-func (r *Resource) AddArgumentDoc(fieldName, doc string) {
-	if r.ArgumentDocs == nil {
-		r.ArgumentDocs = make(map[string]string)
-	}
-	r.ArgumentDocs[fieldName] = strings.TrimSpace(doc)
-}
-
 func (r *Resource) scrapeExamples(doc *html.Node, codeElXPath string, debug bool) error { // nolint: gocyclo
 	resourceName := r.Title
 	nodes := htmlquery.Find(doc, codeElXPath)
@@ -201,35 +192,36 @@ func (r *Resource) findExampleBlock(file *hcl.File, blocks hclsyntax.Blocks, res
 func (r *Resource) scrapePrelude(doc *html.Node, preludeXPath string) error {
 	// parse prelude
 	nodes := htmlquery.Find(doc, preludeXPath)
-	rawData := ""
-	if len(nodes) > 0 {
-		n := nodes[0]
-		rawData = n.Data
-		lines := strings.Split(n.Data, "\n")
-		descIndex := -1
-		for i, l := range lines {
-			kv := strings.Split(l, ":")
-			if len(kv) < 2 {
-				continue
-			}
-			switch kv[0] {
-			case keyPageTitle:
-				r.Title = strings.TrimSpace(strings.ReplaceAll(kv[len(kv)-1], `"`, ""))
-
-			case keyDescription:
-				r.Description = kv[1]
-				descIndex = i
-
-			case keySubCategory:
-				r.SubCategory = strings.TrimSpace(strings.ReplaceAll(kv[1], `"`, ""))
-			}
-		}
-
-		if descIndex > -1 {
-			r.Description += strings.Join(lines[descIndex+1:], " ")
-		}
-		r.Description = strings.TrimSpace(strings.Replace(r.Description, "|-", "", 1))
+	if len(nodes) == 0 {
+		return errors.Errorf("failed to extract subcategory and title name of the resource")
 	}
+
+	n := nodes[0]
+	rawData := n.Data
+	lines := strings.Split(n.Data, "\n")
+	descIndex := -1
+	for i, l := range lines {
+		kv := strings.Split(l, ":")
+		if len(kv) < 2 {
+			continue
+		}
+		switch kv[0] {
+		case keyPageTitle:
+			r.Title = strings.TrimSpace(strings.ReplaceAll(kv[len(kv)-1], `"`, ""))
+
+		case keyDescription:
+			r.Description = kv[1]
+			descIndex = i
+
+		case keySubCategory:
+			r.SubCategory = strings.TrimSpace(strings.ReplaceAll(kv[1], `"`, ""))
+		}
+	}
+
+	if descIndex > -1 {
+		r.Description += strings.Join(lines[descIndex+1:], " ")
+	}
+	r.Description = strings.TrimSpace(strings.Replace(r.Description, "|-", "", 1))
 
 	if r.SubCategory == "" || r.Title == "" {
 		return errors.Errorf("failed to parse prelude. Description: %s, Subcategory: %s, Title name: %s. Raw data:%s\n",
@@ -243,11 +235,15 @@ func (r *Resource) scrapeFieldDocs(doc *html.Node, fieldXPath string) {
 	codeNodes := htmlquery.Find(doc, fieldXPath)
 	for _, n := range codeNodes {
 		attrName := ""
-		doc := r.scrapeDocString(n, &attrName, processed)
-		if doc == "" {
+		docStr := r.scrapeDocString(n, &attrName, processed)
+		if docStr == "" {
 			continue
 		}
-		r.AddArgumentDoc(attrName, doc)
+		if r.ArgumentDocs == nil {
+			r.ArgumentDocs = make(map[string]string)
+		}
+		r.ArgumentDocs[attrName] = strings.TrimSpace(docStr)
+
 	}
 }
 
