@@ -116,6 +116,11 @@ type Reference struct {
 	// Type is the type name of the CRD if it is in the same package or
 	// <package-path>.<type-name> if it is in a different package.
 	Type string
+	// TerraformName is the name of the Terraform resource
+	// which will be referenced. The supplied resource name is
+	// converted to a type name of the corresponding CRD using
+	// the configured TerraformTypeMapper.
+	TerraformName string
 	// Extractor is the function to be used to extract value from the
 	// referenced type. Defaults to getting external name.
 	// Optional
@@ -286,6 +291,11 @@ type Resource struct {
 
 	// References keeps the configuration to build cross resource references
 	References References
+
+	// SkipReferencesTo configures attributes for which
+	// references will not be injected. Expected format
+	// for each element is <Terraform resource name>.<attribute name>.
+	SkipReferencesTo []string
 
 	// Sensitive keeps the configuration to handle sensitive information
 	Sensitive Sensitive

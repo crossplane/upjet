@@ -216,7 +216,8 @@ func (p *Provider) loadMetadata(metadata []byte) error {
 	for name, r := range p.Resources {
 		r.MetaResource = providerMetadata.Resources[name]
 	}
-	return nil
+	rr := NewReferenceResolver(p.ModulePath, p.Resources)
+	return errors.Wrap(rr.setReferencesFromMetadata(), "cannot populate references from metadata")
 }
 
 // AddResourceConfigurator adds resource specific configurators.
