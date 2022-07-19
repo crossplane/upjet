@@ -346,7 +346,7 @@ func (pm *ProviderMetadata) ScrapeRepo(config *ScrapeConfiguration) error {
 		}
 		r := &Resource{}
 		if err := r.scrape(path, config); err != nil {
-			return errors.Wrap(err, "failed to scrape resource metadata")
+			return errors.Wrapf(err, "failed to scrape resource metadata from path: %s", path)
 		}
 
 		pm.Resources[r.Name] = r
