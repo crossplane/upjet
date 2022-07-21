@@ -128,10 +128,7 @@ func (sr *SharedProvider) Start() (string, error) { //nolint:gocyclo
 	}
 	errCh := make(chan error, 1)
 	reattachCh := make(chan string, 1)
-	re, err := regexp.Compile(regexReattachLine)
-	if err != nil {
-		return "", errors.Wrap(err, "failed to compile regexp")
-	}
+	re := regexp.MustCompile(regexReattachLine)
 
 	go func() {
 		defer close(errCh)

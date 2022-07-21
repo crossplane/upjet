@@ -130,7 +130,7 @@ func TemplatedStringAsIdentifier(nameFieldPath, tmpl string) ExternalName {
 // "/subscription/someval/myname" and get "myname" returned.
 func GetExternalNameFromTemplated(tmpl, val string) (string, error) { //nolint:gocyclo
 	// gocyclo: I couldn't find any more room.
-	loc := externalNameRegex.FindIndex([]byte(tmpl))
+	loc := externalNameRegex.FindStringIndex(tmpl)
 	// A template without external name usage.
 	if loc == nil {
 		return val, nil
