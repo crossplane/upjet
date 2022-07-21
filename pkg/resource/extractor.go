@@ -37,7 +37,7 @@ func ExtractParamPath(sourceAttr string, isObservation bool) xpref.ExtractValueF
 		if !ok {
 			return ""
 		}
-		var params map[string]interface{}
+		var params map[string]any
 		var err error
 		if isObservation {
 			params, err = tr.GetObservation()

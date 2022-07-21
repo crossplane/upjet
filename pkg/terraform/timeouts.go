@@ -47,10 +47,10 @@ func (ts timeouts) asParameter() map[string]string {
 	return param
 }
 
-func (ts timeouts) asMetadata() map[string]interface{} {
+func (ts timeouts) asMetadata() map[string]any {
 	// See how timeouts encoded as metadata on Terraform side:
 	// https://github.com/hashicorp/terraform-plugin-sdk/blob/112e2164c381d80e8ada3170dac9a8a5db01079a/helper/schema/resource_timeout.go#L170
-	meta := make(map[string]interface{})
+	meta := make(map[string]any)
 	if t := ts.Read.String(); t != "0s" {
 		meta["read"] = ts.Read.Nanoseconds()
 	}
@@ -72,7 +72,7 @@ func insertTimeoutsMeta(existingMeta []byte, to timeouts) ([]byte, error) {
 		// No custom timeout configured, nothing to do.
 		return existingMeta, nil
 	}
-	meta := make(map[string]interface{})
+	meta := make(map[string]any)
 	if len(existingMeta) == 0 {
 		// No existing data, just initialize a new meta with custom timeouts.
 		meta[tfMetaTimeoutKey] = customTimeouts
@@ -83,7 +83,7 @@ func insertTimeoutsMeta(existingMeta []byte, to timeouts) ([]byte, error) {
 	if err := json.JSParser.Unmarshal(existingMeta, &meta); err != nil {
 		return nil, errors.Wrap(err, "cannot parse existing metadata")
 	}
-	if existingTimeouts, ok := meta[tfMetaTimeoutKey].(map[string]interface{}); ok {
+	if existingTimeouts, ok := meta[tfMetaTimeoutKey].(map[string]any); ok {
 		// There are some timeout configuration exists in existing metadata.
 		// Only override custom timeouts.
 		for k, v := range customTimeouts {

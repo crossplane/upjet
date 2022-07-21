@@ -10,16 +10,16 @@ import (
 
 // Observable structs can get and set observations in the form of Terraform JSON.
 type Observable interface {
-	GetObservation() (map[string]interface{}, error)
-	SetObservation(map[string]interface{}) error
+	GetObservation() (map[string]any, error)
+	SetObservation(map[string]any) error
 	GetID() string
 }
 
 // Parameterizable structs can get and set parameters of the managed resource
 // using map form of Terraform JSON.
 type Parameterizable interface {
-	GetParameters() (map[string]interface{}, error)
-	SetParameters(map[string]interface{}) error
+	GetParameters() (map[string]any, error)
+	SetParameters(map[string]any) error
 }
 
 // MetadataProvider provides Terraform metadata for the Terraform managed

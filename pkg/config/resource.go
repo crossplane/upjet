@@ -24,26 +24,26 @@ import (
 
 // SetIdentifierArgumentsFn sets the name of the resource in Terraform attributes map,
 // i.e. Main HCL file.
-type SetIdentifierArgumentsFn func(base map[string]interface{}, externalName string)
+type SetIdentifierArgumentsFn func(base map[string]any, externalName string)
 
 // NopSetIdentifierArgument does nothing. It's useful for cases where the external
 // name is calculated by provider and doesn't have any effect on spec fields.
-var NopSetIdentifierArgument SetIdentifierArgumentsFn = func(_ map[string]interface{}, _ string) {}
+var NopSetIdentifierArgument SetIdentifierArgumentsFn = func(_ map[string]any, _ string) {}
 
 // GetIDFn returns the ID to be used in TF State file, i.e. "id" field in
 // terraform.tfstate.
-type GetIDFn func(ctx context.Context, externalName string, parameters map[string]interface{}, terraformProviderConfig map[string]interface{}) (string, error)
+type GetIDFn func(ctx context.Context, externalName string, parameters map[string]any, terraformProviderConfig map[string]any) (string, error)
 
 // ExternalNameAsID returns the name to be used as ID in TF State file.
-var ExternalNameAsID GetIDFn = func(_ context.Context, externalName string, _ map[string]interface{}, _ map[string]interface{}) (string, error) {
+var ExternalNameAsID GetIDFn = func(_ context.Context, externalName string, _ map[string]any, _ map[string]any) (string, error) {
 	return externalName, nil
 }
 
 // GetExternalNameFn returns the external name extracted from the TF State.
-type GetExternalNameFn func(tfstate map[string]interface{}) (string, error)
+type GetExternalNameFn func(tfstate map[string]any) (string, error)
 
 // IDAsExternalName returns the TF State ID as external name.
-var IDAsExternalName GetExternalNameFn = func(tfstate map[string]interface{}) (string, error) {
+var IDAsExternalName GetExternalNameFn = func(tfstate map[string]any) (string, error) {
 	if id, ok := tfstate["id"].(string); ok && id != "" {
 		return id, nil
 	}
@@ -52,11 +52,11 @@ var IDAsExternalName GetExternalNameFn = func(tfstate map[string]interface{}) (s
 
 // AdditionalConnectionDetailsFn functions adds custom keys to connection details
 // secret using input terraform attributes
-type AdditionalConnectionDetailsFn func(attr map[string]interface{}) (map[string][]byte, error)
+type AdditionalConnectionDetailsFn func(attr map[string]any) (map[string][]byte, error)
 
 // NopAdditionalConnectionDetails does nothing, when no additional connection
 // details configuration function provided.
-var NopAdditionalConnectionDetails AdditionalConnectionDetailsFn = func(_ map[string]interface{}) (map[string][]byte, error) {
+var NopAdditionalConnectionDetails AdditionalConnectionDetailsFn = func(_ map[string]any) (map[string][]byte, error) {
 	return nil, nil
 }
 

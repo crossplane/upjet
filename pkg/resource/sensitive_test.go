@@ -109,7 +109,7 @@ func TestGetConnectionDetails(t *testing.T) {
 	type args struct {
 		tr   Terraformed
 		cfg  *config.Resource
-		data map[string]interface{}
+		data map[string]any
 	}
 	type want struct {
 		out managed.ConnectionDetails
@@ -135,7 +135,7 @@ func TestGetConnectionDetails(t *testing.T) {
 					},
 				},
 				cfg: config.DefaultResource("upjet_resource", nil, nil),
-				data: map[string]interface{}{
+				data: map[string]any{
 					"top_level_secret": "sensitive-data-top-level-secret",
 				},
 			},
@@ -155,8 +155,8 @@ func TestGetConnectionDetails(t *testing.T) {
 					},
 				},
 				cfg: config.DefaultResource("upjet_resource", nil, nil),
-				data: map[string]interface{}{
-					"top_level_secrets": []interface{}{
+				data: map[string]any{
+					"top_level_secrets": []any{
 						"val1",
 						"val2",
 						"val3",
@@ -181,8 +181,8 @@ func TestGetConnectionDetails(t *testing.T) {
 					},
 				},
 				cfg: config.DefaultResource("upjet_resource", nil, nil),
-				data: map[string]interface{}{
-					"top_level_secrets": map[string]interface{}{
+				data: map[string]any{
+					"top_level_secrets": map[string]any{
 						"key1": "val1",
 						"key2": "val2",
 						"key3": "val3",
@@ -202,14 +202,14 @@ func TestGetConnectionDetails(t *testing.T) {
 				tr: &fake.Terraformed{},
 				cfg: &config.Resource{
 					Sensitive: config.Sensitive{
-						AdditionalConnectionDetailsFn: func(attr map[string]interface{}) (map[string][]byte, error) {
+						AdditionalConnectionDetailsFn: func(attr map[string]any) (map[string][]byte, error) {
 							return map[string][]byte{
 								"top_level_secret_custom": []byte(attr["top_level_secret"].(string)),
 							}, nil
 						},
 					},
 				},
-				data: map[string]interface{}{
+				data: map[string]any{
 					"top_level_secret": "sensitive-data-top-level-secret",
 				},
 			},
@@ -224,7 +224,7 @@ func TestGetConnectionDetails(t *testing.T) {
 				tr: &fake.Terraformed{},
 				cfg: &config.Resource{
 					Sensitive: config.Sensitive{
-						AdditionalConnectionDetailsFn: func(attr map[string]interface{}) (map[string][]byte, error) {
+						AdditionalConnectionDetailsFn: func(attr map[string]any) (map[string][]byte, error) {
 							return nil, errBoom
 						},
 					},
@@ -245,14 +245,14 @@ func TestGetConnectionDetails(t *testing.T) {
 				},
 				cfg: &config.Resource{
 					Sensitive: config.Sensitive{
-						AdditionalConnectionDetailsFn: func(attr map[string]interface{}) (map[string][]byte, error) {
+						AdditionalConnectionDetailsFn: func(attr map[string]any) (map[string][]byte, error) {
 							return map[string][]byte{
 								"attribute.top_level_secret": []byte(""),
 							}, nil
 						},
 					},
 				},
-				data: map[string]interface{}{
+				data: map[string]any{
 					"id":               "secret-id",
 					"top_level_secret": "sensitive-data-top-level-secret",
 				},
@@ -276,13 +276,13 @@ func TestGetConnectionDetails(t *testing.T) {
 }
 
 func TestGetSensitiveAttributes(t *testing.T) {
-	testInput := map[string]interface{}{}
+	testInput := map[string]any{}
 	if err := json.JSParser.Unmarshal(testData, &testInput); err != nil {
 		t.Fatalf("cannot unmarshall test data: %v", err)
 	}
 	type args struct {
 		paths map[string]string
-		data  map[string]interface{}
+		data  map[string]any
 	}
 	type want struct {
 		out map[string][]byte
@@ -439,11 +439,11 @@ func TestGetSensitiveParameters(t *testing.T) {
 	type args struct {
 		clientFn func(client *mocks.MockSecretClient)
 		from     runtime.Object
-		into     map[string]interface{}
+		into     map[string]any
 		mapping  map[string]string
 	}
 	type want struct {
-		out map[string]interface{}
+		out map[string]any
 		err error
 	}
 	cases := map[string]struct {
@@ -454,15 +454,15 @@ func TestGetSensitiveParameters(t *testing.T) {
 			args: args{
 				clientFn: func(client *mocks.MockSecretClient) {},
 				from: &unstructured.Unstructured{
-					Object: map[string]interface{}{
-						"spec": map[string]interface{}{
-							"forProvider": map[string]interface{}{
+					Object: map[string]any{
+						"spec": map[string]any{
+							"forProvider": map[string]any{
 								"adminPasswordSecretRef": nil,
 							},
 						},
 					},
 				},
-				into: map[string]interface{}{
+				into: map[string]any{
 					"some_other_key": "some_other_value",
 				},
 				mapping: map[string]string{
@@ -470,7 +470,7 @@ func TestGetSensitiveParameters(t *testing.T) {
 				},
 			},
 			want: want{
-				out: map[string]interface{}{
+				out: map[string]any{
 					"some_other_key": "some_other_value",
 				},
 			},
@@ -487,10 +487,10 @@ func TestGetSensitiveParameters(t *testing.T) {
 					})).Return([]byte("foo"), nil)
 				},
 				from: &unstructured.Unstructured{
-					Object: map[string]interface{}{
-						"spec": map[string]interface{}{
-							"forProvider": map[string]interface{}{
-								"adminPasswordSecretRef": map[string]interface{}{
+					Object: map[string]any{
+						"spec": map[string]any{
+							"forProvider": map[string]any{
+								"adminPasswordSecretRef": map[string]any{
 									"key":       "pass",
 									"name":      "admin-password",
 									"namespace": "crossplane-system",
@@ -499,7 +499,7 @@ func TestGetSensitiveParameters(t *testing.T) {
 						},
 					},
 				},
-				into: map[string]interface{}{
+				into: map[string]any{
 					"some_other_key": "some_other_value",
 				},
 				mapping: map[string]string{
@@ -507,7 +507,7 @@ func TestGetSensitiveParameters(t *testing.T) {
 				},
 			},
 			want: want{
-				out: map[string]interface{}{
+				out: map[string]any{
 					"some_other_key": "some_other_value",
 					"admin_password": "foo",
 				},
@@ -525,10 +525,10 @@ func TestGetSensitiveParameters(t *testing.T) {
 					})).Return([]byte(""), kerrors.NewNotFound(v1.Resource("secret"), "admin-password"))
 				},
 				from: &unstructured.Unstructured{
-					Object: map[string]interface{}{
-						"spec": map[string]interface{}{
-							"forProvider": map[string]interface{}{
-								"adminPasswordSecretRef": map[string]interface{}{
+					Object: map[string]any{
+						"spec": map[string]any{
+							"forProvider": map[string]any{
+								"adminPasswordSecretRef": map[string]any{
 									"key":       "pass",
 									"name":      "admin-password",
 									"namespace": "crossplane-system",
@@ -537,7 +537,7 @@ func TestGetSensitiveParameters(t *testing.T) {
 						},
 					},
 				},
-				into: map[string]interface{}{
+				into: map[string]any{
 					"some_other_key": "some_other_value",
 				},
 				mapping: map[string]string{
@@ -545,7 +545,7 @@ func TestGetSensitiveParameters(t *testing.T) {
 				},
 			},
 			want: want{
-				out: map[string]interface{}{
+				out: map[string]any{
 					"some_other_key": "some_other_value",
 					"admin_password": "",
 				},
@@ -570,10 +570,10 @@ func TestGetSensitiveParameters(t *testing.T) {
 					})).Return([]byte("system_pwd"), nil)
 				},
 				from: &unstructured.Unstructured{
-					Object: map[string]interface{}{
-						"spec": map[string]interface{}{
-							"forProvider": map[string]interface{}{
-								"passwordsSecretRef": []interface{}{
+					Object: map[string]any{
+						"spec": map[string]any{
+							"forProvider": map[string]any{
+								"passwordsSecretRef": []any{
 									secretKeySelector(
 										secretKeySelectorWithKey("admin"),
 										secretKeySelectorWithSecretReference(xpv1.SecretReference{
@@ -593,7 +593,7 @@ func TestGetSensitiveParameters(t *testing.T) {
 						},
 					},
 				},
-				into: map[string]interface{}{
+				into: map[string]any{
 					"some_other_key": "some_other_value",
 				},
 				mapping: map[string]string{
@@ -601,9 +601,9 @@ func TestGetSensitiveParameters(t *testing.T) {
 				},
 			},
 			want: want{
-				out: map[string]interface{}{
+				out: map[string]any{
 					"some_other_key": "some_other_value",
-					"db_passwords": []interface{}{
+					"db_passwords": []any{
 						"admin_pwd",
 						"system_pwd",
 					},
@@ -629,16 +629,16 @@ func TestGetSensitiveParameters(t *testing.T) {
 					})).Return([]byte("system_pwd"), nil)
 				},
 				from: &unstructured.Unstructured{
-					Object: map[string]interface{}{
-						"spec": map[string]interface{}{
-							"forProvider": map[string]interface{}{
-								"passwordsSecretRef": map[string]interface{}{
-									"pwd1": map[string]interface{}{
+					Object: map[string]any{
+						"spec": map[string]any{
+							"forProvider": map[string]any{
+								"passwordsSecretRef": map[string]any{
+									"pwd1": map[string]any{
 										"key":       "admin",
 										"name":      "db-passwords",
 										"namespace": "crossplane-system",
 									},
-									"pwd2": map[string]interface{}{
+									"pwd2": map[string]any{
 										"key":       "system",
 										"name":      "db-passwords",
 										"namespace": "crossplane-system",
@@ -648,7 +648,7 @@ func TestGetSensitiveParameters(t *testing.T) {
 						},
 					},
 				},
-				into: map[string]interface{}{
+				into: map[string]any{
 					"some_other_key": "some_other_value",
 				},
 				mapping: map[string]string{
@@ -656,9 +656,9 @@ func TestGetSensitiveParameters(t *testing.T) {
 				},
 			},
 			want: want{
-				out: map[string]interface{}{
+				out: map[string]any{
 					"some_other_key": "some_other_value",
-					"db_passwords": map[string]interface{}{
+					"db_passwords": map[string]any{
 						"pwd1": "admin_pwd",
 						"pwd2": "system_pwd",
 					},
@@ -677,10 +677,10 @@ func TestGetSensitiveParameters(t *testing.T) {
 					})).Return([]byte("foo"), nil)
 				},
 				from: &unstructured.Unstructured{
-					Object: map[string]interface{}{
-						"spec": map[string]interface{}{
-							"forProvider": map[string]interface{}{
-								"adminPasswordSecretRef": map[string]interface{}{
+					Object: map[string]any{
+						"spec": map[string]any{
+							"forProvider": map[string]any{
+								"adminPasswordSecretRef": map[string]any{
 									"key":       "pass",
 									"name":      "admin-password",
 									"namespace": "crossplane-system",
@@ -689,7 +689,7 @@ func TestGetSensitiveParameters(t *testing.T) {
 						},
 					},
 				},
-				into: map[string]interface{}{
+				into: map[string]any{
 					"some_other_key": "some_other_value",
 				},
 				mapping: map[string]string{
@@ -698,7 +698,7 @@ func TestGetSensitiveParameters(t *testing.T) {
 				},
 			},
 			want: want{
-				out: map[string]interface{}{
+				out: map[string]any{
 					"some_other_key": "some_other_value",
 					"admin_password": "foo",
 				},
@@ -723,34 +723,34 @@ func TestGetSensitiveParameters(t *testing.T) {
 					})).Return([]byte("baz"), nil)
 				},
 				from: &unstructured.Unstructured{
-					Object: map[string]interface{}{
-						"spec": map[string]interface{}{
-							"forProvider": map[string]interface{}{
-								"databaseUsers": []interface{}{
-									map[string]interface{}{
+					Object: map[string]any{
+						"spec": map[string]any{
+							"forProvider": map[string]any{
+								"databaseUsers": []any{
+									map[string]any{
 										"name": "admin",
-										"passwordSecretRef": map[string]interface{}{
+										"passwordSecretRef": map[string]any{
 											"key":       "pass",
 											"name":      "admin-password",
 											"namespace": "crossplane-system",
 										},
 										"displayName": "Administrator",
 									},
-									map[string]interface{}{
+									map[string]any{
 										"name": "system",
 										// Intentionally skip providing this optional parameter
 										// to test the behaviour when an optional parameter
 										// not provided.
-										/*"passwordSecretRef": map[string]interface{}{
+										/*"passwordSecretRef": map[string]any{
 											"name":      "system-password",
 											"namespace": "crossplane-system",
 											"key":       "pass",
 										},*/
 										"displayName": "System",
 									},
-									map[string]interface{}{
+									map[string]any{
 										"name": "maintenance",
-										"passwordSecretRef": map[string]interface{}{
+										"passwordSecretRef": map[string]any{
 											"key":       "pass",
 											"name":      "maintenance-password",
 											"namespace": "crossplane-system",
@@ -762,18 +762,18 @@ func TestGetSensitiveParameters(t *testing.T) {
 						},
 					},
 				},
-				into: map[string]interface{}{
+				into: map[string]any{
 					"some_other_key": "some_other_value",
-					"database_users": []interface{}{
-						map[string]interface{}{
+					"database_users": []any{
+						map[string]any{
 							"name":         "admin",
 							"display_name": "Administrator",
 						},
-						map[string]interface{}{
+						map[string]any{
 							"name":         "system",
 							"display_name": "System",
 						},
-						map[string]interface{}{
+						map[string]any{
 							"name":         "maintenance",
 							"display_name": "Maintenance",
 						},
@@ -784,19 +784,19 @@ func TestGetSensitiveParameters(t *testing.T) {
 				},
 			},
 			want: want{
-				out: map[string]interface{}{
+				out: map[string]any{
 					"some_other_key": "some_other_value",
-					"database_users": []interface{}{
-						map[string]interface{}{
+					"database_users": []any{
+						map[string]any{
 							"name":         "admin",
 							"password":     "foo",
 							"display_name": "Administrator",
 						},
-						map[string]interface{}{
+						map[string]any{
 							"name":         "system",
 							"display_name": "System",
 						},
-						map[string]interface{}{
+						map[string]any{
 							"name":         "maintenance",
 							"password":     "baz",
 							"display_name": "Maintenance",
@@ -830,10 +830,10 @@ func TestGetSensitiveObservation(t *testing.T) {
 	}
 	type args struct {
 		clientFn func(client *mocks.MockSecretClient)
-		into     map[string]interface{}
+		into     map[string]any
 	}
 	type want struct {
-		out map[string]interface{}
+		out map[string]any
 		err error
 	}
 	cases := map[string]struct {
@@ -849,12 +849,12 @@ func TestGetSensitiveObservation(t *testing.T) {
 							"a_custom_key":                     []byte("t0p-s3cr3t"),
 						}, nil)
 				},
-				into: map[string]interface{}{
+				into: map[string]any{
 					"some_other_key": "some_other_value",
 				},
 			},
 			want: want{
-				out: map[string]interface{}{
+				out: map[string]any{
 					"some_other_key": "some_other_value",
 					"admin_password": "foo",
 				},
@@ -870,12 +870,12 @@ func TestGetSensitiveObservation(t *testing.T) {
 							prefixAttribute + "admin_private_key": []byte("bar"),
 						}, nil)
 				},
-				into: map[string]interface{}{
+				into: map[string]any{
 					"some_other_key": "some_other_value",
 				},
 			},
 			want: want{
-				out: map[string]interface{}{
+				out: map[string]any{
 					"some_other_key":    "some_other_value",
 					"admin_password":    "foo",
 					"admin_private_key": "bar",
@@ -893,18 +893,18 @@ func TestGetSensitiveObservation(t *testing.T) {
 							"a_custom_key": []byte("t0p-s3cr3t"),
 						}, nil)
 				},
-				into: map[string]interface{}{
+				into: map[string]any{
 					"some_other_key": "some_other_value",
-					"database_users": []interface{}{
-						map[string]interface{}{
+					"database_users": []any{
+						map[string]any{
 							"name":         "admin",
 							"display_name": "Administrator",
 						},
-						map[string]interface{}{
+						map[string]any{
 							"name":         "system",
 							"display_name": "System",
 						},
-						map[string]interface{}{
+						map[string]any{
 							"name":         "maintenance",
 							"display_name": "Maintenance",
 						},
@@ -912,20 +912,20 @@ func TestGetSensitiveObservation(t *testing.T) {
 				},
 			},
 			want: want{
-				out: map[string]interface{}{
+				out: map[string]any{
 					"some_other_key": "some_other_value",
-					"database_users": []interface{}{
-						map[string]interface{}{
+					"database_users": []any{
+						map[string]any{
 							"name":         "admin",
 							"password":     "foo",
 							"display_name": "Administrator",
 						},
-						map[string]interface{}{
+						map[string]any{
 							"name":         "system",
 							"password":     "bar",
 							"display_name": "System",
 						},
-						map[string]interface{}{
+						map[string]any{
 							"name":         "maintenance",
 							"password":     "baz",
 							"display_name": "Maintenance",

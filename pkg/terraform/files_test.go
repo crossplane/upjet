@@ -53,10 +53,10 @@ func TestWriteTFState(t *testing.T) {
 							},
 						},
 					},
-					Parameterizable: fake.Parameterizable{Parameters: map[string]interface{}{
+					Parameterizable: fake.Parameterizable{Parameters: map[string]any{
 						"param": "paramval",
 					}},
-					Observable: fake.Observable{Observation: map[string]interface{}{
+					Observable: fake.Observable{Observation: map[string]any{
 						"obs": "obsval",
 					}},
 				},
@@ -78,10 +78,10 @@ func TestWriteTFState(t *testing.T) {
 							},
 						},
 					},
-					Parameterizable: fake.Parameterizable{Parameters: map[string]interface{}{
+					Parameterizable: fake.Parameterizable{Parameters: map[string]any{
 						"param": "paramval",
 					}},
-					Observable: fake.Observable{Observation: map[string]interface{}{
+					Observable: fake.Observable{Observation: map[string]any{
 						"obs": "obsval",
 					}},
 				},
@@ -141,10 +141,10 @@ func TestWriteMainTF(t *testing.T) {
 							},
 						},
 					},
-					Parameterizable: fake.Parameterizable{Parameters: map[string]interface{}{
+					Parameterizable: fake.Parameterizable{Parameters: map[string]any{
 						"param": "paramval",
 					}},
-					Observable: fake.Observable{Observation: map[string]interface{}{
+					Observable: fake.Observable{Observation: map[string]any{
 						"obs": "obsval",
 					}},
 				},
@@ -179,10 +179,10 @@ func TestWriteMainTF(t *testing.T) {
 							},
 						},
 					},
-					Parameterizable: fake.Parameterizable{Parameters: map[string]interface{}{
+					Parameterizable: fake.Parameterizable{Parameters: map[string]any{
 						"param": "paramval",
 					}},
-					Observable: fake.Observable{Observation: map[string]interface{}{
+					Observable: fake.Observable{Observation: map[string]any{
 						"obs": "obsval",
 					}},
 				},
@@ -212,10 +212,10 @@ func TestWriteMainTF(t *testing.T) {
 							},
 						},
 					},
-					Parameterizable: fake.Parameterizable{Parameters: map[string]interface{}{
+					Parameterizable: fake.Parameterizable{Parameters: map[string]any{
 						"param": "paramval",
 					}},
-					Observable: fake.Observable{Observation: map[string]interface{}{
+					Observable: fake.Observable{Observation: map[string]any{
 						"obs": "obsval",
 					}},
 				},

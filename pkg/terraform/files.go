@@ -71,15 +71,15 @@ type FileProducer struct {
 	Dir      string
 	Config   *config.Resource
 
-	parameters  map[string]interface{}
-	observation map[string]interface{}
+	parameters  map[string]any
+	observation map[string]any
 	fs          afero.Afero
 }
 
 // WriteTFState writes the Terraform state that should exist in the filesystem to
 // start any Terraform operation.
 func (fp *FileProducer) WriteTFState(ctx context.Context) error {
-	base := make(map[string]interface{})
+	base := make(map[string]any)
 	// NOTE(muvaf): Since we try to produce the current state, observation
 	// takes precedence over parameters.
 	for k, v := range fp.parameters {
@@ -149,20 +149,20 @@ func (fp *FileProducer) WriteMainTF() error {
 	// Note(turkenh): To use third party providers, we need to configure
 	// provider name in required_providers.
 	providerSource := strings.Split(fp.Setup.Requirement.Source, "/")
-	m := map[string]interface{}{
-		"terraform": map[string]interface{}{
-			"required_providers": map[string]interface{}{
+	m := map[string]any{
+		"terraform": map[string]any{
+			"required_providers": map[string]any{
 				providerSource[len(providerSource)-1]: map[string]string{
 					"source":  fp.Setup.Requirement.Source,
 					"version": fp.Setup.Requirement.Version,
 				},
 			},
 		},
-		"provider": map[string]interface{}{
+		"provider": map[string]any{
 			providerSource[len(providerSource)-1]: fp.Setup.Configuration,
 		},
-		"resource": map[string]interface{}{
-			fp.Resource.GetTerraformResourceType(): map[string]interface{}{
+		"resource": map[string]any{
+			fp.Resource.GetTerraformResourceType(): map[string]any{
 				fp.Resource.GetName(): fp.parameters,
 			},
 		},

@@ -96,11 +96,11 @@ func TestGetExternalNameFromTemplated(t *testing.T) {
 func TestTemplatedSetIdentifierArgumentFn(t *testing.T) {
 	type args struct {
 		nameFieldPath string
-		base          map[string]interface{}
+		base          map[string]any
 		externalName  string
 	}
 	type want struct {
-		base map[string]interface{}
+		base map[string]any
 	}
 	cases := map[string]struct {
 		reason string
@@ -111,22 +111,22 @@ func TestTemplatedSetIdentifierArgumentFn(t *testing.T) {
 			reason: "Should be no-op if no name fieldpath given.",
 			args: args{
 				nameFieldPath: "",
-				base:          map[string]interface{}{},
+				base:          map[string]any{},
 				externalName:  "myname",
 			},
 			want: want{
-				base: map[string]interface{}{},
+				base: map[string]any{},
 			},
 		},
 		"TopLevelSetIdentifier": {
 			reason: "Should set top level identifier in arguments.",
 			args: args{
 				nameFieldPath: "cluster_name",
-				base:          map[string]interface{}{},
+				base:          map[string]any{},
 				externalName:  "myname",
 			},
 			want: want{
-				base: map[string]interface{}{
+				base: map[string]any{
 					"cluster_name": "myname",
 				},
 			},
@@ -135,12 +135,12 @@ func TestTemplatedSetIdentifierArgumentFn(t *testing.T) {
 			reason: "Should set identifier in arguments even when it is in leaf nodes.",
 			args: args{
 				nameFieldPath: "cluster_settings.cluster_name",
-				base:          map[string]interface{}{},
+				base:          map[string]any{},
 				externalName:  "myname",
 			},
 			want: want{
-				base: map[string]interface{}{
-					"cluster_settings": map[string]interface{}{
+				base: map[string]any{
+					"cluster_settings": map[string]any{
 						"cluster_name": "myname",
 					},
 				},
@@ -161,8 +161,8 @@ func TestTemplatedGetIDFn(t *testing.T) {
 	type args struct {
 		tmpl                    string
 		externalName            string
-		parameters              map[string]interface{}
-		terraformProviderConfig map[string]interface{}
+		parameters              map[string]any
+		terraformProviderConfig map[string]any
 	}
 	type want struct {
 		id  string
@@ -177,7 +177,7 @@ func TestTemplatedGetIDFn(t *testing.T) {
 			reason: "Should work when only externalName is used.",
 			args: args{
 				tmpl: "olala/{{ .parameters.somethingElse }}",
-				parameters: map[string]interface{}{
+				parameters: map[string]any{
 					"somethingElse": "otherthing",
 				},
 			},
@@ -200,10 +200,10 @@ func TestTemplatedGetIDFn(t *testing.T) {
 			args: args{
 				tmpl:         "olala/{{ .parameters.ola }}:{{ .externalName }}/{{ .terraformProviderConfig.oma }}",
 				externalName: "myname",
-				parameters: map[string]interface{}{
+				parameters: map[string]any{
 					"ola": "paramval",
 				},
-				terraformProviderConfig: map[string]interface{}{
+				terraformProviderConfig: map[string]any{
 					"oma": "configval",
 				},
 			},
@@ -233,7 +233,7 @@ func TestTemplatedGetIDFn(t *testing.T) {
 func TestTemplatedGetExternalNameFn(t *testing.T) {
 	type args struct {
 		tmpl    string
-		tfstate map[string]interface{}
+		tfstate map[string]any
 	}
 	type want struct {
 		name string
@@ -248,7 +248,7 @@ func TestTemplatedGetExternalNameFn(t *testing.T) {
 			reason: "Should work when no externalName is used.",
 			args: args{
 				tmpl: "olala/{{ .parameters.somethingElse }}",
-				tfstate: map[string]interface{}{
+				tfstate: map[string]any{
 					"id": "olala/otherthing",
 				},
 			},
@@ -260,7 +260,7 @@ func TestTemplatedGetExternalNameFn(t *testing.T) {
 			reason: "Should work when only externalName is used in template.",
 			args: args{
 				tmpl: "{{ .externalName }}",
-				tfstate: map[string]interface{}{
+				tfstate: map[string]any{
 					"id": "myname",
 				},
 			},
@@ -272,7 +272,7 @@ func TestTemplatedGetExternalNameFn(t *testing.T) {
 			reason: "Should work when externalName variable has random space characters.",
 			args: args{
 				tmpl: "another/thing:{{  .externalName         }}/something",
-				tfstate: map[string]interface{}{
+				tfstate: map[string]any{
 					"id": "another/thing:myname/something",
 				},
 			},
@@ -284,7 +284,7 @@ func TestTemplatedGetExternalNameFn(t *testing.T) {
 			reason: "Should work when externalName has different left and right separators.",
 			args: args{
 				tmpl: "another/{{ .parameters.another }}:{{ .externalName }}/somethingelse",
-				tfstate: map[string]interface{}{
+				tfstate: map[string]any{
 					"id": "another/thing:myname/somethingelse",
 				},
 			},
@@ -296,7 +296,7 @@ func TestTemplatedGetExternalNameFn(t *testing.T) {
 			reason: "Should not work when ID cannot be found.",
 			args: args{
 				tmpl: "{{ .externalName }}",
-				tfstate: map[string]interface{}{
+				tfstate: map[string]any{
 					"another": "myname",
 				},
 			},

@@ -41,25 +41,25 @@ func (tg *TerraformedGenerator) Generate(cfgs []*terraformedInput, apiVersion st
 		wrapper.WithHeaderPath(tg.LicenseHeaderPath),
 	)
 	filePath := filepath.Join(tg.LocalDirectoryPath, "zz_generated_terraformed.go")
-	vars := map[string]interface{}{
+	vars := map[string]any{
 		"APIVersion": apiVersion,
 	}
-	resources := make([]map[string]interface{}, len(cfgs))
+	resources := make([]map[string]any, len(cfgs))
 	index := 0
 	for _, cfg := range cfgs {
-		resources[index] = map[string]interface{}{
+		resources[index] = map[string]any{
 			"CRD": map[string]string{
 				"Kind":               cfg.Kind,
 				"ParametersTypeName": cfg.ParametersTypeName,
 			},
-			"Terraform": map[string]interface{}{
+			"Terraform": map[string]any{
 				"ResourceType":  cfg.Name,
 				"SchemaVersion": cfg.TerraformResource.SchemaVersion,
 			},
-			"Sensitive": map[string]interface{}{
+			"Sensitive": map[string]any{
 				"Fields": cfg.Sensitive.GetFieldPaths(),
 			},
-			"LateInitializer": map[string]interface{}{
+			"LateInitializer": map[string]any{
 				"IgnoredFields": cfg.LateInitializer.GetIgnoredCanonicalFields(),
 			},
 		}

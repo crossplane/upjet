@@ -36,12 +36,12 @@ Here are [the types for the External Name configuration]:
 ```go
 // SetIdentifierArgumentsFn sets the name of the resource in Terraform attributes map,
 // i.e. Main HCL file.
-type SetIdentifierArgumentsFn func(base map[string]interface{}, externalName string)
+type SetIdentifierArgumentsFn func(base map[string]any, externalName string)
 // GetExternalNameFn returns the external name extracted from the TF State.
-type GetExternalNameFn func(tfstate map[string]interface{}) (string, error)
+type GetExternalNameFn func(tfstate map[string]any) (string, error)
 // GetIDFn returns the ID to be used in TF State file, i.e. "id" field in
 // terraform.tfstate.
-type GetIDFn func(ctx context.Context, externalName string, parameters map[string]interface{}, providerConfig map[string]interface{}) (string, error)
+type GetIDFn func(ctx context.Context, externalName string, parameters map[string]any, providerConfig map[string]any) (string, error)
 
 // ExternalName contains all information that is necessary for naming operations,
 // such as removal of those fields from spec schema and calling Configure function
@@ -53,7 +53,7 @@ type ExternalName struct {
   // "cluster_identifier". This function is the place that you can take external
   // name and assign it to that specific key for that resource type.
   SetIdentifierArgumentFn SetIdentifierArgumentsFn
-  
+
   // GetExternalNameFn returns the external name extracted from TF State. In most cases,
   // "id" field contains all the information you need. You'll need to extract
   // the format that is decided for external name annotation to use.
@@ -62,7 +62,7 @@ type ExternalName struct {
   // The function should return "mygroup1" so that it can be used to set external
   // name if it was not set already.
   GetExternalNameFn GetExternalNameFn
-  
+
   // GetIDFn returns the string that will be used as "id" key in TF state. In
   // many cases, external name format is the same as "id" but when it is not
   // we may need information from other places to construct it. For example,
@@ -72,7 +72,7 @@ type ExternalName struct {
   // construct this ID, i.e. "mygroup1" from external name, subscription ID
   // from providerConfig, and others from parameters map if needed.
   GetIDFn GetIDFn
-  
+
   // OmittedFields are the ones you'd like to be removed from the schema since
   // they are specified via external name. For example, if you set
   // "cluster_identifier" in SetIdentifierArgumentFn, then you need to omit
@@ -80,7 +80,7 @@ type ExternalName struct {
   // You can omit only the top level fields.
   // No field is omitted by default.
   OmittedFields []string
-  
+
   // DisableNameInitializer allows you to specify whether the name initializer
   // that sets external name to metadata.name if none specified should be disabled.
   // It needs to be disabled for resources whose external identifier is randomly
@@ -122,7 +122,7 @@ expecting an argument other than `name` to name/identify a resource, for
 example, [bucket] for [aws_s3_bucket] and [cluster_identifier] for
 [aws_rds_cluster].
 
-Let's check [aws_s3_bucket] further. Reading the [import section of s3 bucket] 
+Let's check [aws_s3_bucket] further. Reading the [import section of s3 bucket]
 we see that bucket is imported with its **name**, however, checking _arguments_
 section we see that this name is provided with the [bucket] argument. We also
 notice, there is also another argument as `bucket_prefix` which conflicts with
@@ -140,7 +140,7 @@ import (
 ...
     p.AddResourceConfigurator("aws_s3_bucket", func(r *config.Resource) {
         r.ExternalName = config.NameAsIdentifier
-        r.ExternalName.SetIdentifierArgumentFn = func(base map[string]interface{}, externalName string) {
+        r.ExternalName.SetIdentifierArgumentFn = func(base map[string]any, externalName string) {
             base["bucket"] = externalName
         }
         r.ExternalName.OmittedFields = []string{
@@ -180,11 +180,11 @@ import (
 
 For some resources, Terraform uses a formatted string as `id` which include
 resource identifier that Crossplane uses as external name but may also contain
-some other parameters. 
+some other parameters.
 
 Most `azurerm` resources fall into this category. Checking the
 [import section of azurerm_sql_server], we see that can be imported with an `id`
-in the following format: 
+in the following format:
 
 ```
 /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/myresourcegroup/providers/Microsoft.Sql/servers/myserver
@@ -200,7 +200,7 @@ import (
 	...
 )
 
-func getNameFromFullyQualifiedID(tfstate map[string]interface{}) (string, error) {
+func getNameFromFullyQualifiedID(tfstate map[string]any) (string, error) {
 	id, ok := tfstate["id"]
 	if !ok {
 		return "", errors.Errorf(ErrFmtNoAttribute, "id")
@@ -213,7 +213,7 @@ func getNameFromFullyQualifiedID(tfstate map[string]interface{}) (string, error)
 	return words[len(words)-1], nil
 }
 
-func getFullyQualifiedIDfunc(ctx context.Context, externalName string, parameters map[string]interface{}, providerConfig map[string]interface{}) (string, error) {
+func getFullyQualifiedIDfunc(ctx context.Context, externalName string, parameters map[string]any, providerConfig map[string]any) (string, error) {
 	subID, ok := providerConfig["subscription_id"]
     if !ok {
         return "", errors.Errorf(ErrFmtNoAttribute, "subscription_id")
@@ -230,7 +230,7 @@ func getFullyQualifiedIDfunc(ctx context.Context, externalName string, parameter
     if !ok {
         return "", errors.Errorf(ErrFmtUnexpectedType, "resource_group_name")
     }
-    
+
 	name, ok := parameters["name"]
     if !ok {
         return "", errors.Errorf(ErrFmtNoAttribute, "name")
@@ -380,7 +380,7 @@ respectively. To see them with more common keys, i.e. `aws_access_key_id` and
 ```go
 func Configure(p *config.Provider) {
 	p.AddResourceConfigurator("aws_iam_access_key", func(r *config.Resource) {
-		r.Sensitive.AdditionalConnectionDetailsFn = func(attr map[string]interface{}) (map[string][]byte, error) {
+		r.Sensitive.AdditionalConnectionDetailsFn = func(attr map[string]any) (map[string][]byte, error) {
 			conn := map[string][]byte{}
 			if a, ok := attr["id"].(string); ok {
 				conn["aws_access_key_id"] = []byte(a)
@@ -497,8 +497,8 @@ type SubnetParameters struct {
 }
 ```
 
-In most cases, custom late-initialization configuration will not be necessary. 
-However, after generating a new managed resource and observing its behaviour 
+In most cases, custom late-initialization configuration will not be necessary.
+However, after generating a new managed resource and observing its behaviour
 (at runtime), it may turn out that late-initialization behaviour needs
 customization. For certain resources like the `provider-tf-azure`'s
 `PostgresqlServer` resource, we have observed that Terraform state contains
@@ -559,10 +559,10 @@ p.AddResourceConfigurator("aws_autoscaling_group", func(r *config.Resource) {
 
 ### Initializers
 
-Initializers involve the operations that run before beginning of reconciliation. This configuration option will 
+Initializers involve the operations that run before beginning of reconciliation. This configuration option will
 provide that setting initializers for per resource.
 
-Many resources in aws have `tags` field in their schema. Also, in Crossplane there is a [tagging convention]. 
+Many resources in aws have `tags` field in their schema. Also, in Crossplane there is a [tagging convention].
 To implement the tagging convention for jet-aws provider, this initializer configuration support was provided.
 
 There is a common struct (`Tagger`) in upjet to use the tagging convention:
@@ -599,11 +599,11 @@ func (t *Tagger) Initialize(ctx context.Context, mg xpresource.Managed) error {
 }
 ```
 
-As seen above, the `Tagger` struct accepts a `fieldName`. This `fieldName` specifies which value of field to set in the 
-resource's spec. You can use the common `Initializer` by specifying the field name that points to the external tags 
+As seen above, the `Tagger` struct accepts a `fieldName`. This `fieldName` specifies which value of field to set in the
+resource's spec. You can use the common `Initializer` by specifying the field name that points to the external tags
 in the configured resource.
 
-There is also a default initializer for tagging convention, `TagInitializer`. It sets the value of `fieldName` to `tags` 
+There is also a default initializer for tagging convention, `TagInitializer`. It sets the value of `fieldName` to `tags`
 as default:
 
 ```go
@@ -636,8 +636,8 @@ r.InitializerFns = append(r.InitializerFns, func(client client.Client) managed.I
 })
 ```
 
-If the above tagging convention logic does not work for you, and you want to use this configuration option for a reason 
-other than tagging convention (for another custom initializer operation), you need to write your own struct in provider 
+If the above tagging convention logic does not work for you, and you want to use this configuration option for a reason
+other than tagging convention (for another custom initializer operation), you need to write your own struct in provider
 and have this struct implement the `Initializer` function with a custom logic.
 
 This configuration option is set by using the [InitializerFns] field that is a list of [NewInitializerFn]:

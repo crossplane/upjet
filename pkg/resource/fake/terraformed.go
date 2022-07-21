@@ -14,18 +14,18 @@ import (
 
 // Observable is mock Observable.
 type Observable struct {
-	Observation                 map[string]interface{}
+	Observation                 map[string]any
 	AdditionalConnectionDetails map[string][]byte
 	ID                          string
 }
 
 // GetObservation is a mock.
-func (o *Observable) GetObservation() (map[string]interface{}, error) {
+func (o *Observable) GetObservation() (map[string]any, error) {
 	return o.Observation, nil
 }
 
 // SetObservation is a mock.
-func (o *Observable) SetObservation(data map[string]interface{}) error {
+func (o *Observable) SetObservation(data map[string]any) error {
 	o.Observation = data
 	return nil
 }
@@ -36,22 +36,22 @@ func (o *Observable) GetID() string {
 }
 
 // GetAdditionalConnectionDetails is a mock
-func (o *Observable) GetAdditionalConnectionDetails(_ map[string]interface{}) (map[string][]byte, error) {
+func (o *Observable) GetAdditionalConnectionDetails(_ map[string]any) (map[string][]byte, error) {
 	return o.AdditionalConnectionDetails, nil
 }
 
 // Parameterizable is mock Parameterizable.
 type Parameterizable struct {
-	Parameters map[string]interface{}
+	Parameters map[string]any
 }
 
 // GetParameters is a mock.
-func (p *Parameterizable) GetParameters() (map[string]interface{}, error) {
+func (p *Parameterizable) GetParameters() (map[string]any, error) {
 	return p.Parameters, nil
 }
 
 // SetParameters is a mock.
-func (p *Parameterizable) SetParameters(data map[string]interface{}) error {
+func (p *Parameterizable) SetParameters(data map[string]any) error {
 	p.Parameters = data
 	return nil
 }

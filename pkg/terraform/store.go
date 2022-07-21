@@ -38,7 +38,7 @@ type ProviderRequirement struct {
 }
 
 // ProviderConfiguration holds the setup configuration body
-type ProviderConfiguration map[string]interface{}
+type ProviderConfiguration map[string]any
 
 // Setup holds values for the Terraform version and setup
 // requirements and configuration body

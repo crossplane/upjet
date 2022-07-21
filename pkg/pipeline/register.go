@@ -43,7 +43,7 @@ func (rg *RegisterGenerator) Generate(versionPkgList []string) error {
 	for i, pkgPath := range versionPkgList {
 		aliases[i] = registerFile.Imports.UsePackage(pkgPath)
 	}
-	vars := map[string]interface{}{
+	vars := map[string]any{
 		"Aliases": aliases,
 	}
 	filePath := filepath.Join(rg.LocalDirectoryPath, "zz_register.go")

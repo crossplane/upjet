@@ -70,7 +70,7 @@ be quite similar for any other Terraform provider.
    func TerraformSetupBuilder(version, providerSource, providerVersion string) terraform.SetupFn {
      ...
      // set provider configuration
-     ps.Configuration = map[string]interface{}{}
+     ps.Configuration = map[string]any{}
      if v, ok := githubCreds[keyBaseURL]; ok {
          ps.Configuration[keyBaseURL] = v
      }
@@ -119,9 +119,9 @@ be quite similar for any other Terraform provider.
    // Configure configures individual resources by adding custom ResourceConfigurators.
    func Configure(p *config.Provider) {
        p.AddResourceConfigurator("github_repository", func(r *config.Resource) {
-   
+
            // we need to override the default group that upjet generated for
-           // this resource, which would be "github"  
+           // this resource, which would be "github"
            r.ShortGroup = "repository"
        })
    }
@@ -136,18 +136,18 @@ be quite similar for any other Terraform provider.
 
    func Configure(p *config.Provider) {
        p.AddResourceConfigurator("github_branch", func(r *config.Resource) {
-   
+
            // we need to override the default group that upjet generated for
-           // this resource, which would be "github" 
+           // this resource, which would be "github"
            r.ShortGroup = "branch"
-   
+
            // Identifier for this resource is assigned by the provider. In other
            // words it is not simply the name of the resource.
            r.ExternalName = config.IdentifierFromProvider
-   
+
            // This resource need the repository in which branch would be created
            // as an input. And by defining it as a reference to Repository
-           // object, we can build cross resource referencing. See 
+           // object, we can build cross resource referencing. See
            // repositoryRef in the example in the Testing section below.
            r.References["repository"] = config.Reference{
                Type: "github.com/crossplane-contrib/provider-jet-github/apis/repository/v1alpha1.Repository",
@@ -211,7 +211,7 @@ Now let's test our generated resources.
    ```bash
    mkdir examples/repository
    mkdir examples/branch
-   
+
    # remove the sample directory which was an example in the template
    rm -rf examples/sample
    ```

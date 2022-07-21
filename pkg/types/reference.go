@@ -90,6 +90,6 @@ func init() {
 // function to be used whenever this information is needed, like configuring to
 // reference to a type. Should not be used if the type is in the same package as
 // the caller.
-func TypePath(i interface{}) string {
+func TypePath(i any) string {
 	return reflect.TypeOf(i).PkgPath() + "." + reflect.TypeOf(i).Name()
 }

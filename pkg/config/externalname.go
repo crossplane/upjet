@@ -27,7 +27,7 @@ var (
 	// NameAsIdentifier uses "name" field in the arguments as the identifier of
 	// the resource.
 	NameAsIdentifier = ExternalName{
-		SetIdentifierArgumentFn: func(base map[string]interface{}, name string) {
+		SetIdentifierArgumentFn: func(base map[string]any, name string) {
 			base["name"] = name
 		},
 		GetExternalNameFn: IDAsExternalName,
@@ -53,7 +53,7 @@ var (
 // identifier of the resource.
 func ParameterAsIdentifier(param string) ExternalName {
 	e := NameAsIdentifier
-	e.SetIdentifierArgumentFn = func(base map[string]interface{}, name string) {
+	e.SetIdentifierArgumentFn = func(base map[string]any, name string) {
 		base[param] = name
 	}
 	e.OmittedFields = []string{
@@ -86,7 +86,7 @@ func TemplatedStringAsIdentifier(nameFieldPath, tmpl string) ExternalName {
 		panic(errors.Wrap(err, "cannot parse template"))
 	}
 	return ExternalName{
-		SetIdentifierArgumentFn: func(base map[string]interface{}, externalName string) {
+		SetIdentifierArgumentFn: func(base map[string]any, externalName string) {
 			if nameFieldPath == "" {
 				return
 			}
@@ -102,8 +102,8 @@ func TemplatedStringAsIdentifier(nameFieldPath, tmpl string) ExternalName {
 			nameFieldPath,
 			nameFieldPath + "_prefix",
 		},
-		GetIDFn: func(ctx context.Context, externalName string, parameters map[string]interface{}, terraformProviderConfig map[string]interface{}) (string, error) {
-			o := map[string]interface{}{
+		GetIDFn: func(ctx context.Context, externalName string, parameters map[string]any, terraformProviderConfig map[string]any) (string, error) {
+			o := map[string]any{
 				"externalName":            externalName,
 				"parameters":              parameters,
 				"terraformProviderConfig": terraformProviderConfig,
@@ -114,7 +114,7 @@ func TemplatedStringAsIdentifier(nameFieldPath, tmpl string) ExternalName {
 			}
 			return b.String(), nil
 		},
-		GetExternalNameFn: func(tfstate map[string]interface{}) (string, error) {
+		GetExternalNameFn: func(tfstate map[string]any) (string, error) {
 			id, ok := tfstate["id"]
 			if !ok {
 				return "", errors.New(errIDNotFoundInTFState)

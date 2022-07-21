@@ -133,7 +133,7 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 
 	// No operation was in progress, our observation completed successfully, and
 	// we have an observation to consume.
-	tfstate := map[string]interface{}{}
+	tfstate := map[string]any{}
 	if err := json.JSParser.Unmarshal(res.State.GetAttributes(), &tfstate); err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot unmarshal state attributes")
 	}
@@ -223,7 +223,7 @@ func (e *external) Create(ctx context.Context, mg xpresource.Managed) (managed.E
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, errApply)
 	}
-	tfstate := map[string]interface{}{}
+	tfstate := map[string]any{}
 	if err := json.JSParser.Unmarshal(res.State.GetAttributes(), &tfstate); err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, "cannot unmarshal state attributes")
 	}
@@ -250,7 +250,7 @@ func (e *external) Update(ctx context.Context, mg xpresource.Managed) (managed.E
 	if err != nil {
 		return managed.ExternalUpdate{}, errors.Wrap(err, errApply)
 	}
-	attr := map[string]interface{}{}
+	attr := map[string]any{}
 	if err := json.JSParser.Unmarshal(res.State.GetAttributes(), &attr); err != nil {
 		return managed.ExternalUpdate{}, errors.Wrap(err, "cannot unmarshal state attributes")
 	}
