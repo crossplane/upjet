@@ -32,8 +32,11 @@ const (
 	// https://github.com/hashicorp/terraform/blob/d35bc0531255b496beb5d932f185cbcdb2d61a99/internal/plugin/serve.go#L33
 	valMagicCookie         = "d602bf8f470bc67ca7faa0386276bbdd4330efaf76d1a219cb4d6991ca9872b2"
 	defaultProtocolVersion = 5
-	regexReattachLine      = `.*unix\|(.*)\|grpc.*`
 	reattachTimeout        = 1 * time.Minute
+)
+
+var (
+	regexReattachLine = regexp.MustCompile(`.*unix\|(.*)\|grpc.*`)
 )
 
 // ProviderRunner is the interface for running
@@ -128,7 +131,6 @@ func (sr *SharedProvider) Start() (string, error) { //nolint:gocyclo
 	}
 	errCh := make(chan error, 1)
 	reattachCh := make(chan string, 1)
-	re := regexp.MustCompile(regexReattachLine)
 
 	go func() {
 		defer close(errCh)
@@ -153,7 +155,7 @@ func (sr *SharedProvider) Start() (string, error) { //nolint:gocyclo
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
 			t := scanner.Text()
-			matches := re.FindStringSubmatch(t)
+			matches := regexReattachLine.FindStringSubmatch(t)
 			if matches == nil {
 				continue
 			}
