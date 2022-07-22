@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	github.com/antchfx/htmlquery v1.2.4
-	github.com/crossplane/crossplane-runtime v0.16.0
+	github.com/crossplane/crossplane-runtime v0.18.0-rc.0.0.20220722162506-9ea84ae53615
 	github.com/fatih/camelcase v1.0.0
 	github.com/golang/mock v1.6.0
 	github.com/google/go-cmp v0.5.8
