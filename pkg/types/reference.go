@@ -62,6 +62,7 @@ func (g *Builder) generateReferenceFields(t *types.TypeName, f *Field) (fields [
 	g.comments.AddFieldComment(t, rfn.Camel, commentOptional.Build())
 	g.comments.AddFieldComment(t, sfn.Camel, commentOptional.Build())
 	f.TransformedName = rfn.LowerCamelComputed
+	f.SelectorName = sfn.LowerCamelComputed
 
 	return []*types.Var{ref, sel}, []string{refTag, selTag}
 }
