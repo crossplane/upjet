@@ -18,6 +18,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/upbound/upjet/pkg/config"
+	"github.com/upbound/upjet/pkg/registry/reference"
 	tjtypes "github.com/upbound/upjet/pkg/types"
 )
 
@@ -28,21 +29,21 @@ var (
 // ExampleGenerator represents a pipeline for generating example manifests.
 // Generates example manifests for Terraform resources under examples-generated.
 type ExampleGenerator struct {
-	config.ReferenceResolver
+	reference.Resolver
 	rootDir   string
-	resources map[string]*config.PavedWithManifest
+	resources map[string]*reference.PavedWithManifest
 }
 
 // NewExampleGenerator returns a configured ExampleGenerator
 func NewExampleGenerator(rootDir, modulePath, shortName string, configResources map[string]*config.Resource) *ExampleGenerator {
 	return &ExampleGenerator{
-		ReferenceResolver: config.ReferenceResolver{
+		Resolver: reference.Resolver{
 			ModulePath:        modulePath,
 			ConfigResources:   configResources,
 			ProviderShortName: shortName,
 		},
 		rootDir:   rootDir,
-		resources: make(map[string]*config.PavedWithManifest),
+		resources: make(map[string]*reference.PavedWithManifest),
 	}
 }
 
@@ -97,7 +98,7 @@ func (eg *ExampleGenerator) Generate(group, version string, r *config.Resource, 
 		},
 	}
 	manifestDir := filepath.Join(eg.rootDir, "examples-generated", strings.ToLower(strings.Split(group, ".")[0]))
-	eg.resources[r.Name] = &config.PavedWithManifest{
+	eg.resources[r.Name] = &reference.PavedWithManifest{
 		ManifestPath: filepath.Join(manifestDir, fmt.Sprintf("%s.yaml", strings.ToLower(r.Kind))),
 		Paved:        fieldpath.Pave(example),
 		ParamsPrefix: []string{"spec", "forProvider"},
@@ -185,7 +186,7 @@ func getSecretRef(v interface{}) (string, string) {
 	if !ok {
 		return secretName, secretKey
 	}
-	g := config.ReRef.FindStringSubmatch(s)
+	g := reference.ReRef.FindStringSubmatch(s)
 	if len(g) != 2 {
 		return secretName, secretKey
 	}

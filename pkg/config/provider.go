@@ -96,9 +96,19 @@ type Provider struct {
 	// resource name.
 	Resources map[string]*Resource
 
+	// refResolvers is an ordered list of `ReferenceResolver`s for
+	// injecting references across this Provider's resources.
+	refResolvers []ReferenceResolver
+
 	// resourceConfigurators is a map holding resource configurators where key
 	// is Terraform resource name.
 	resourceConfigurators map[string]ResourceConfiguratorChain
+}
+
+// ReferenceResolver injects cross-resource references across the resources
+// of this Provider.
+type ReferenceResolver interface {
+	InjectReferences() error
 }
 
 // A ProviderOption configures a Provider.
@@ -147,10 +157,19 @@ func WithDefaultResourceOptions(opts ...ResourceOption) ProviderOption {
 	}
 }
 
+// WithReferenceResolvers configures an ordered list of `ReferenceResolver`s
+// for this Provider. The configured reference resolvers are executed in order
+// to inject cross-resource references across this Provider's resources.
+func WithReferenceResolvers(refResolvers []ReferenceResolver) ProviderOption {
+	return func(p *Provider) {
+		p.refResolvers = refResolvers
+	}
+}
+
 // NewProvider builds and returns a new Provider from provider
 // tfjson schema, that is generated using Terraform CLI with:
 // `terraform providers schema --json`
-func NewProvider(schema []byte, prefix string, modulePath string, metadata []byte, opts ...ProviderOption) *Provider {
+func NewProvider(schema []byte, prefix string, modulePath string, metadata []byte, opts ...ProviderOption) *Provider { // nolint:gocyclo
 	ps := tfjson.ProviderSchemas{}
 	if err := ps.UnmarshalJSON(schema); err != nil {
 		panic(err)
@@ -202,6 +221,11 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadata []byt
 	if err := p.loadMetadata(metadata); err != nil {
 		panic(errors.Wrap(err, "cannot load provider metadata"))
 	}
+	for i, refResolver := range p.refResolvers {
+		if err := refResolver.InjectReferences(); err != nil {
+			panic(errors.Wrapf(err, "cannot inject references using the configured ReferenceResolver at index %d", i))
+		}
+	}
 	return p
 }
 
@@ -216,8 +240,7 @@ func (p *Provider) loadMetadata(metadata []byte) error {
 	for name, r := range p.Resources {
 		r.MetaResource = providerMetadata.Resources[name]
 	}
-	rr := NewReferenceResolver(p.ModulePath, p.Resources)
-	return errors.Wrap(rr.setReferencesFromMetadata(), "cannot populate references from metadata")
+	return nil
 }
 
 // AddResourceConfigurator adds resource specific configurators.

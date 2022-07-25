@@ -2,7 +2,7 @@
 Copyright 2022 Upbound Inc.
 */
 
-package config
+package reference
 
 import (
 	"fmt"
@@ -22,13 +22,15 @@ var (
 	ReRef = regexp.MustCompile(`\${(.+)}`)
 )
 
-type refParts struct {
-	resource    string
-	exampleName string
-	attribute   string
+// Parts represents the components (resource name, example name &
+// attribute name) parsed from an HCL reference.
+type Parts struct {
+	Resource    string
+	ExampleName string
+	Attribute   string
 }
 
-func matchRefParts(ref string) *refParts {
+func matchRefParts(ref string) *Parts {
 	g := ReRef.FindStringSubmatch(ref)
 	if len(g) != 2 {
 		return nil
@@ -36,21 +38,21 @@ func matchRefParts(ref string) *refParts {
 	return getRefParts(g[1])
 }
 
-func getRefParts(ref string) *refParts {
+func getRefParts(ref string) *Parts {
 	parts := strings.Split(ref, ".")
 	// expected reference format is <resource type>.<resource name>.<field name>
 	if len(parts) < 3 {
 		return nil
 	}
-	return &refParts{
-		resource:    parts[0],
-		exampleName: parts[1],
-		attribute:   strings.Join(parts[2:], "."),
+	return &Parts{
+		Resource:    parts[0],
+		ExampleName: parts[1],
+		Attribute:   strings.Join(parts[2:], "."),
 	}
 }
 
-func (parts *refParts) getResourceAttr() string {
-	return fmt.Sprintf("%s.%s", parts.resource, parts.attribute)
+func (parts *Parts) getResourceAttr() string {
+	return fmt.Sprintf("%s.%s", parts.Resource, parts.Attribute)
 }
 
 // PavedWithManifest represents an example manifest with a fieldpath.Paved
@@ -74,7 +76,7 @@ func paveExampleManifest(m string) (*PavedWithManifest, error) {
 
 // ResolveReferencesOfPaved resolves references of a PavedWithManifest
 // in the given resolution context.
-func (rr *ReferenceResolver) ResolveReferencesOfPaved(pm *PavedWithManifest, resolutionContext map[string]*PavedWithManifest) error {
+func (rr *Resolver) ResolveReferencesOfPaved(pm *PavedWithManifest, resolutionContext map[string]*PavedWithManifest) error {
 	if pm.refsResolved {
 		return nil
 	}
@@ -84,7 +86,7 @@ func (rr *ReferenceResolver) ResolveReferencesOfPaved(pm *PavedWithManifest, res
 	return errors.Wrap(err, "failed to resolve references of paved")
 }
 
-func (rr *ReferenceResolver) resolveReferences(params map[string]interface{}, resolutionContext map[string]*PavedWithManifest) ([]string, error) { // nolint:gocyclo
+func (rr *Resolver) resolveReferences(params map[string]interface{}, resolutionContext map[string]*PavedWithManifest) ([]string, error) { // nolint:gocyclo
 	var resolvedParams []string
 	for k, v := range params {
 		switch t := v.(type) {
@@ -113,14 +115,14 @@ func (rr *ReferenceResolver) resolveReferences(params map[string]interface{}, re
 			if parts == nil {
 				continue
 			}
-			pm := resolutionContext[parts.resource]
+			pm := resolutionContext[parts.Resource]
 			if pm == nil || pm.Paved == nil {
 				continue
 			}
 			if err := rr.ResolveReferencesOfPaved(pm, resolutionContext); err != nil {
-				return nil, errors.Wrapf(err, "cannot recursively resolve references for %q", parts.resource)
+				return nil, errors.Wrapf(err, "cannot recursively resolve references for %q", parts.Resource)
 			}
-			pathStr := strings.Join(append(pm.ParamsPrefix, parts.attribute), ".")
+			pathStr := strings.Join(append(pm.ParamsPrefix, parts.Attribute), ".")
 			s, err := pm.Paved.GetString(pathStr)
 			if fieldpath.IsNotFound(err) {
 				continue
@@ -135,7 +137,10 @@ func (rr *ReferenceResolver) resolveReferences(params map[string]interface{}, re
 	return resolvedParams, nil
 }
 
-func prepareLocalResolutionContext(exampleMeta registry.ResourceExample) (map[string]*PavedWithManifest, error) {
+// PrepareLocalResolutionContext prepares a resolution context for resolving
+// cross-resource references locally between a target resource and its
+// dependencies given as examples in the Terraform registry.
+func PrepareLocalResolutionContext(exampleMeta registry.ResourceExample) (map[string]*PavedWithManifest, error) {
 	resolutionContext := make(map[string]*PavedWithManifest, len(exampleMeta.Dependencies))
 	for rn, m := range exampleMeta.Dependencies {
 		// <Terraform resource>.<example name>

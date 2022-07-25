@@ -2,12 +2,14 @@
 Copyright 2022 Upbound Inc.
 */
 
-package config
+package reference
 
 import (
 	"fmt"
 
 	"github.com/pkg/errors"
+
+	"github.com/upbound/upjet/pkg/config"
 )
 
 const (
@@ -16,16 +18,16 @@ const (
 	fmtExtractParamFuncPath   = extractorPackagePath + `.ExtractParamPath("%s")`
 )
 
-// ReferenceResolver resolves references using provider metadata
-type ReferenceResolver struct {
-	ConfigResources   map[string]*Resource
+// Resolver resolves references using provider metadata
+type Resolver struct {
+	ConfigResources   map[string]*config.Resource
 	ModulePath        string
 	ProviderShortName string
 }
 
-// NewReferenceResolver initializes a new ReferenceResolver
-func NewReferenceResolver(modulePath string, configResources map[string]*Resource) *ReferenceResolver {
-	return &ReferenceResolver{
+// NewResolver initializes a new Resolver
+func NewResolver(modulePath string, configResources map[string]*config.Resource) *Resolver {
+	return &Resolver{
 		ConfigResources: configResources,
 		ModulePath:      modulePath,
 	}
@@ -42,7 +44,9 @@ func getExtractorFuncPath(sourceAttr string) string {
 	}
 }
 
-func (rr *ReferenceResolver) setReferencesFromMetadata() error { // nolint:gocyclo
+// InjectReferences injects cross-resource references using the
+// provider metadata scraped from the Terraform registry.
+func (rr *Resolver) InjectReferences() error { // nolint:gocyclo
 	for n, r := range rr.ConfigResources {
 		m := rr.ConfigResources[n].MetaResource
 		if m == nil {
@@ -54,7 +58,7 @@ func (rr *ReferenceResolver) setReferencesFromMetadata() error { // nolint:gocyc
 			if err != nil {
 				return errors.Wrapf(err, "cannot pave example manifest for resource: %s", n)
 			}
-			resolutionContext, err := prepareLocalResolutionContext(re)
+			resolutionContext, err := PrepareLocalResolutionContext(re)
 			if err != nil {
 				return errors.Wrapf(err, "cannot prepare local resolution context for resource: %s", n)
 			}
@@ -80,12 +84,12 @@ func (rr *ReferenceResolver) setReferencesFromMetadata() error { // nolint:gocyc
 				if resolved && skipReference(rr.ConfigResources[n].SkipReferencesTo, parts) {
 					continue
 				}
-				if _, ok := rr.ConfigResources[parts.resource]; !ok {
+				if _, ok := rr.ConfigResources[parts.Resource]; !ok {
 					continue
 				}
-				r.References[targetAttr] = Reference{
-					TerraformName: parts.resource,
-					Extractor:     getExtractorFuncPath(parts.attribute),
+				r.References[targetAttr] = config.Reference{
+					TerraformName: parts.Resource,
+					Extractor:     getExtractorFuncPath(parts.Attribute),
 				}
 			}
 		}
@@ -93,7 +97,7 @@ func (rr *ReferenceResolver) setReferencesFromMetadata() error { // nolint:gocyc
 	return nil
 }
 
-func skipReference(skippedRefs []string, parts *refParts) bool {
+func skipReference(skippedRefs []string, parts *Parts) bool {
 	for _, p := range skippedRefs {
 		if p == parts.getResourceAttr() {
 			return true
@@ -102,7 +106,7 @@ func skipReference(skippedRefs []string, parts *refParts) bool {
 	return false
 }
 
-func (rr *ReferenceResolver) getTypePath(tfName string) (string, error) {
+func (rr *Resolver) getTypePath(tfName string) (string, error) {
 	r := rr.ConfigResources[tfName]
 	if r == nil {
 		return "", errors.Errorf("cannot find configuration for Terraform resource: %s", tfName)
@@ -116,7 +120,7 @@ func (rr *ReferenceResolver) getTypePath(tfName string) (string, error) {
 
 // SetReferenceTypes resolves reference types of configured references
 // using their TerraformNames.
-func (rr *ReferenceResolver) SetReferenceTypes() error {
+func (rr *Resolver) SetReferenceTypes() error {
 	for _, r := range rr.ConfigResources {
 		for attr, ref := range r.References {
 			if ref.Type == "" && ref.TerraformName != "" {
