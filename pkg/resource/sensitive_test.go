@@ -122,7 +122,7 @@ func TestGetConnectionDetails(t *testing.T) {
 		"NoConnectionDetails": {
 			args: args{
 				tr:  &fake.Terraformed{},
-				cfg: config.DefaultResource("upjet_resource", nil),
+				cfg: config.DefaultResource("upjet_resource", nil, nil),
 			},
 		},
 		"OnlyDefaultConnectionDetails": {
@@ -134,7 +134,7 @@ func TestGetConnectionDetails(t *testing.T) {
 						},
 					},
 				},
-				cfg: config.DefaultResource("upjet_resource", nil),
+				cfg: config.DefaultResource("upjet_resource", nil, nil),
 				data: map[string]interface{}{
 					"top_level_secret": "sensitive-data-top-level-secret",
 				},
@@ -154,7 +154,7 @@ func TestGetConnectionDetails(t *testing.T) {
 						},
 					},
 				},
-				cfg: config.DefaultResource("upjet_resource", nil),
+				cfg: config.DefaultResource("upjet_resource", nil, nil),
 				data: map[string]interface{}{
 					"top_level_secrets": []interface{}{
 						"val1",
@@ -180,7 +180,7 @@ func TestGetConnectionDetails(t *testing.T) {
 						},
 					},
 				},
-				cfg: config.DefaultResource("upjet_resource", nil),
+				cfg: config.DefaultResource("upjet_resource", nil, nil),
 				data: map[string]interface{}{
 					"top_level_secrets": map[string]interface{}{
 						"key1": "val1",

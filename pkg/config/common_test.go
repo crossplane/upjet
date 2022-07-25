@@ -12,12 +12,15 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/upbound/upjet/pkg/registry"
 )
 
 func TestDefaultResource(t *testing.T) {
 	type args struct {
 		name string
 		sch  *schema.Resource
+		reg  *registry.Resource
 		opts []ResourceOption
 	}
 
@@ -112,7 +115,7 @@ func TestDefaultResource(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			r := DefaultResource(tc.args.name, tc.args.sch, tc.args.opts...)
+			r := DefaultResource(tc.args.name, tc.args.sch, tc.args.reg, tc.args.opts...)
 			if diff := cmp.Diff(tc.want, r, ignoreUnexported...); diff != "" {
 				t.Errorf("\n%s\nDefaultResource(...): -want, +got:\n%s", tc.reason, diff)
 			}

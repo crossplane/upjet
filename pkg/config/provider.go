@@ -165,6 +165,11 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadata []byt
 	}
 
 	resourceMap := conversiontfjson.GetV2ResourceMap(rs)
+	providerMetadata, err := registry.NewProviderMetadataFromFile(metadata)
+	if err != nil {
+		panic(errors.Wrap(err, "cannot load provider metadata"))
+	}
+
 	p := &Provider{
 		ModulePath:              modulePath,
 		TerraformResourcePrefix: fmt.Sprintf("%s_", prefix),
@@ -197,26 +202,9 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadata []byt
 			continue
 		}
 
-		p.Resources[name] = DefaultResource(name, terraformResource, p.DefaultResourceOptions...)
-	}
-	if err := p.loadMetadata(metadata); err != nil {
-		panic(errors.Wrap(err, "cannot load provider metadata"))
+		p.Resources[name] = DefaultResource(name, terraformResource, providerMetadata.Resources[name], p.DefaultResourceOptions...)
 	}
 	return p
-}
-
-func (p *Provider) loadMetadata(metadata []byte) error {
-	if len(metadata) == 0 {
-		return nil
-	}
-	providerMetadata, err := registry.NewProviderMetadataFromFile(metadata)
-	if err != nil {
-		return errors.Wrap(err, "cannot load provider metadata")
-	}
-	for name, r := range p.Resources {
-		r.MetaResource = providerMetadata.Resources[name]
-	}
-	return nil
 }
 
 // AddResourceConfigurator adds resource specific configurators.

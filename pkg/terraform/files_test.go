@@ -60,7 +60,7 @@ func TestWriteTFState(t *testing.T) {
 						"obs": "obsval",
 					}},
 				},
-				cfg: config.DefaultResource("upjet_resource", nil),
+				cfg: config.DefaultResource("upjet_resource", nil, nil),
 			},
 			want: want{
 				tfstate: `{"version":4,"terraform_version":"","serial":1,"lineage":"","outputs":null,"resources":[{"mode":"managed","type":"","name":"","provider":"provider[\"registry.terraform.io/\"]","instances":[{"schema_version":0,"attributes":{"id":"some-id","name":"some-id","obs":"obsval","param":"paramval"},"private":"cHJpdmF0ZXJhdw=="}]}]}`,
@@ -85,7 +85,7 @@ func TestWriteTFState(t *testing.T) {
 						"obs": "obsval",
 					}},
 				},
-				cfg: config.DefaultResource("upjet_resource", nil, func(r *config.Resource) {
+				cfg: config.DefaultResource("upjet_resource", nil, nil, func(r *config.Resource) {
 					r.OperationTimeouts.Read = 2 * time.Minute
 				}),
 			},
@@ -148,7 +148,7 @@ func TestWriteMainTF(t *testing.T) {
 						"obs": "obsval",
 					}},
 				},
-				cfg: config.DefaultResource("upjet_resource", nil, func(r *config.Resource) {
+				cfg: config.DefaultResource("upjet_resource", nil, nil, func(r *config.Resource) {
 					r.OperationTimeouts = config.OperationTimeouts{
 						Read:   30 * time.Second,
 						Update: 2 * time.Minute,
@@ -186,7 +186,7 @@ func TestWriteMainTF(t *testing.T) {
 						"obs": "obsval",
 					}},
 				},
-				cfg: config.DefaultResource("upjet_resource", nil),
+				cfg: config.DefaultResource("upjet_resource", nil, nil),
 				s: Setup{
 					Requirement: ProviderRequirement{
 						Source:  "hashicorp/provider-test",
@@ -219,7 +219,7 @@ func TestWriteMainTF(t *testing.T) {
 						"obs": "obsval",
 					}},
 				},
-				cfg: config.DefaultResource("upjet_resource", nil),
+				cfg: config.DefaultResource("upjet_resource", nil, nil),
 				s: Setup{
 					Requirement: ProviderRequirement{
 						Source:  "my-company/namespace/provider-test",
