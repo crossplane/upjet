@@ -46,7 +46,7 @@ func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
 	}
 
 	exampleGen := NewExampleGenerator(rootDir, pc.ModulePath, pc.ShortName, pc.Resources)
-	if err := exampleGen.SetReferenceTypes(); err != nil {
+	if err := exampleGen.SetReferenceTypes(pc.Resources); err != nil {
 		panic(errors.Wrap(err, "cannot set reference types for resources"))
 	}
 	// Add ProviderConfig API package to the list of API version packages.

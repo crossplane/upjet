@@ -30,8 +30,9 @@ var (
 // Generates example manifests for Terraform resources under examples-generated.
 type ExampleGenerator struct {
 	reference.Resolver
-	rootDir   string
-	resources map[string]*reference.PavedWithManifest
+	rootDir         string
+	configResources map[string]*config.Resource
+	resources       map[string]*reference.PavedWithManifest
 }
 
 // NewExampleGenerator returns a configured ExampleGenerator
@@ -39,11 +40,11 @@ func NewExampleGenerator(rootDir, modulePath, shortName string, configResources 
 	return &ExampleGenerator{
 		Resolver: reference.Resolver{
 			ModulePath:        modulePath,
-			ConfigResources:   configResources,
 			ProviderShortName: shortName,
 		},
-		rootDir:   rootDir,
-		resources: make(map[string]*reference.PavedWithManifest),
+		rootDir:         rootDir,
+		configResources: configResources,
+		resources:       make(map[string]*reference.PavedWithManifest),
 	}
 }
 
@@ -74,7 +75,7 @@ func (eg *ExampleGenerator) StoreExamples() error {
 
 // Generate generates an example manifest for the specified Terraform resource.
 func (eg *ExampleGenerator) Generate(group, version string, r *config.Resource, fieldTransformations map[string]tjtypes.Transformation) error {
-	rm := eg.ConfigResources[r.Name].MetaResource
+	rm := eg.configResources[r.Name].MetaResource
 	if rm == nil || len(rm.Examples) == 0 {
 		return nil
 	}

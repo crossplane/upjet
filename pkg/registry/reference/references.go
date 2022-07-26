@@ -20,16 +20,14 @@ const (
 
 // Resolver resolves references using provider metadata
 type Resolver struct {
-	ConfigResources   map[string]*config.Resource
 	ModulePath        string
 	ProviderShortName string
 }
 
 // NewResolver initializes a new Resolver
-func NewResolver(modulePath string, configResources map[string]*config.Resource) *Resolver {
+func NewResolver(modulePath string) *Resolver {
 	return &Resolver{
-		ConfigResources: configResources,
-		ModulePath:      modulePath,
+		ModulePath: modulePath,
 	}
 }
 
@@ -46,9 +44,9 @@ func getExtractorFuncPath(sourceAttr string) string {
 
 // InjectReferences injects cross-resource references using the
 // provider metadata scraped from the Terraform registry.
-func (rr *Resolver) InjectReferences() error { // nolint:gocyclo
-	for n, r := range rr.ConfigResources {
-		m := rr.ConfigResources[n].MetaResource
+func (rr *Resolver) InjectReferences(configResources map[string]*config.Resource) error { // nolint:gocyclo
+	for n, r := range configResources {
+		m := configResources[n].MetaResource
 		if m == nil {
 			continue
 		}
@@ -81,10 +79,10 @@ func (rr *Resolver) InjectReferences() error { // nolint:gocyclo
 						break
 					}
 				}
-				if resolved && skipReference(rr.ConfigResources[n].SkipReferencesTo, parts) {
+				if resolved && skipReference(configResources[n].SkipReferencesTo, parts) {
 					continue
 				}
-				if _, ok := rr.ConfigResources[parts.Resource]; !ok {
+				if _, ok := configResources[parts.Resource]; !ok {
 					continue
 				}
 				r.References[targetAttr] = config.Reference{
@@ -106,8 +104,8 @@ func skipReference(skippedRefs []string, parts *Parts) bool {
 	return false
 }
 
-func (rr *Resolver) getTypePath(tfName string) (string, error) {
-	r := rr.ConfigResources[tfName]
+func (rr *Resolver) getTypePath(tfName string, configResources map[string]*config.Resource) (string, error) {
+	r := configResources[tfName]
 	if r == nil {
 		return "", errors.Errorf("cannot find configuration for Terraform resource: %s", tfName)
 	}
@@ -120,11 +118,11 @@ func (rr *Resolver) getTypePath(tfName string) (string, error) {
 
 // SetReferenceTypes resolves reference types of configured references
 // using their TerraformNames.
-func (rr *Resolver) SetReferenceTypes() error {
-	for _, r := range rr.ConfigResources {
+func (rr *Resolver) SetReferenceTypes(configResources map[string]*config.Resource) error {
+	for _, r := range configResources {
 		for attr, ref := range r.References {
 			if ref.Type == "" && ref.TerraformName != "" {
-				crdTypePath, err := rr.getTypePath(ref.TerraformName)
+				crdTypePath, err := rr.getTypePath(ref.TerraformName, configResources)
 				if err != nil {
 					return errors.Wrap(err, "cannot set reference types")
 				}

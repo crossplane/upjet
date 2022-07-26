@@ -108,7 +108,7 @@ type Provider struct {
 // ReferenceResolver injects cross-resource references across the resources
 // of this Provider.
 type ReferenceResolver interface {
-	InjectReferences() error
+	InjectReferences(map[string]*Resource) error
 }
 
 // A ProviderOption configures a Provider.
@@ -222,7 +222,7 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadata []byt
 		panic(errors.Wrap(err, "cannot load provider metadata"))
 	}
 	for i, refResolver := range p.refResolvers {
-		if err := refResolver.InjectReferences(); err != nil {
+		if err := refResolver.InjectReferences(p.Resources); err != nil {
 			panic(errors.Wrapf(err, "cannot inject references using the configured ReferenceResolver at index %d", i))
 		}
 	}
