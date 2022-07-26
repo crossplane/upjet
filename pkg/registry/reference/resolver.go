@@ -57,11 +57,10 @@ func (parts *Parts) getResourceAttr() string {
 
 // PavedWithManifest represents an example manifest with a fieldpath.Paved
 type PavedWithManifest struct {
-	Paved          *fieldpath.Paved
-	ManifestPath   string
-	ParamsPrefix   []string
-	paramsResolved []string
-	refsResolved   bool
+	Paved        *fieldpath.Paved
+	ManifestPath string
+	ParamsPrefix []string
+	refsResolved bool
 }
 
 func paveExampleManifest(m string) (*PavedWithManifest, error) {
@@ -81,21 +80,16 @@ func (rr *Resolver) ResolveReferencesOfPaved(pm *PavedWithManifest, resolutionCo
 		return nil
 	}
 	pm.refsResolved = true
-	var err error
-	pm.paramsResolved, err = rr.resolveReferences(pm.Paved.UnstructuredContent(), resolutionContext)
-	return errors.Wrap(err, "failed to resolve references of paved")
+	return errors.Wrap(rr.resolveReferences(pm.Paved.UnstructuredContent(), resolutionContext), "failed to resolve references of paved")
 }
 
-func (rr *Resolver) resolveReferences(params map[string]interface{}, resolutionContext map[string]*PavedWithManifest) ([]string, error) { // nolint:gocyclo
-	var resolvedParams []string
+func (rr *Resolver) resolveReferences(params map[string]interface{}, resolutionContext map[string]*PavedWithManifest) error { // nolint:gocyclo
 	for k, v := range params {
 		switch t := v.(type) {
 		case map[string]interface{}:
-			rp, err := rr.resolveReferences(t, resolutionContext)
-			if err != nil {
-				return nil, err
+			if err := rr.resolveReferences(t, resolutionContext); err != nil {
+				return err
 			}
-			resolvedParams = append(resolvedParams, rp...)
 
 		case []interface{}:
 			for _, e := range t {
@@ -103,11 +97,9 @@ func (rr *Resolver) resolveReferences(params map[string]interface{}, resolutionC
 				if !ok {
 					continue
 				}
-				rp, err := rr.resolveReferences(eM, resolutionContext)
-				if err != nil {
-					return nil, err
+				if err := rr.resolveReferences(eM, resolutionContext); err != nil {
+					return err
 				}
-				resolvedParams = append(resolvedParams, rp...)
 			}
 
 		case string:
@@ -120,7 +112,7 @@ func (rr *Resolver) resolveReferences(params map[string]interface{}, resolutionC
 				continue
 			}
 			if err := rr.ResolveReferencesOfPaved(pm, resolutionContext); err != nil {
-				return nil, errors.Wrapf(err, "cannot recursively resolve references for %q", parts.Resource)
+				return errors.Wrapf(err, "cannot recursively resolve references for %q", parts.Resource)
 			}
 			pathStr := strings.Join(append(pm.ParamsPrefix, parts.Attribute), ".")
 			s, err := pm.Paved.GetString(pathStr)
@@ -128,13 +120,12 @@ func (rr *Resolver) resolveReferences(params map[string]interface{}, resolutionC
 				continue
 			}
 			if err != nil {
-				return nil, errors.Wrapf(err, "cannot get string value from paved: %s", pathStr)
+				return errors.Wrapf(err, "cannot get string value from paved: %s", pathStr)
 			}
 			params[k] = s
-			resolvedParams = append(resolvedParams, k)
 		}
 	}
-	return resolvedParams, nil
+	return nil
 }
 
 // PrepareLocalResolutionContext prepares a resolution context for resolving

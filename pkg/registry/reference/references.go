@@ -72,14 +72,7 @@ func (rr *Resolver) InjectReferences(configResources map[string]*config.Resource
 				if parts == nil {
 					continue
 				}
-				resolved := false
-				for _, p := range pm.paramsResolved {
-					if p == targetAttr {
-						resolved = true
-						break
-					}
-				}
-				if resolved && skipReference(configResources[n].SkipReferencesTo, parts) {
+				if skipReference(configResources[n].SkipReferencesTo, parts) {
 					continue
 				}
 				if _, ok := configResources[parts.Resource]; !ok {

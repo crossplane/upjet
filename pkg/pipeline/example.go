@@ -140,30 +140,31 @@ func transformFields(params map[string]interface{}, omittedFields []string, t ma
 		}
 	}
 
-	for hn, transform := range t {
-		for n, v := range params {
-			if hn == getHierarchicalName(namePrefix, n) {
-				delete(params, n)
-				if transform.IsRef {
-					if !transform.IsSensitive {
-						params[transform.TransformedName] = getRefField(v,
-							map[string]interface{}{
-								"name": "example",
-							})
-					} else {
-						secretName, secretKey := getSecretRef(v)
-						params[transform.TransformedName] = getRefField(v,
-							map[string]interface{}{
-								"name":      secretName,
-								"namespace": "crossplane-system",
-								"key":       secretKey,
-							})
-					}
-				} else {
-					params[transform.TransformedName] = v
-				}
-				break
+	for n, v := range params {
+		hName := getHierarchicalName(namePrefix, n)
+		for hn, transform := range t {
+			if hn != hName {
+				continue
 			}
+			delete(params, n)
+			switch {
+			case !transform.IsRef:
+				params[transform.TransformedName] = v
+			case transform.IsSensitive:
+				secretName, secretKey := getSecretRef(v)
+				params[transform.TransformedName] = getRefField(v,
+					map[string]interface{}{
+						"name":      secretName,
+						"namespace": "crossplane-system",
+						"key":       secretKey,
+					})
+			default:
+				params[transform.TransformedName] = getRefField(v,
+					map[string]interface{}{
+						"name": "example",
+					})
+			}
+			break
 		}
 	}
 }
