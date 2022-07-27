@@ -75,7 +75,7 @@ func paveExampleManifest(m string) (*PavedWithManifest, error) {
 
 // ResolveReferencesOfPaved resolves references of a PavedWithManifest
 // in the given resolution context.
-func (rr *Resolver) ResolveReferencesOfPaved(pm *PavedWithManifest, resolutionContext map[string]*PavedWithManifest) error {
+func (rr *Injector) ResolveReferencesOfPaved(pm *PavedWithManifest, resolutionContext map[string]*PavedWithManifest) error {
 	if pm.refsResolved {
 		return nil
 	}
@@ -83,9 +83,9 @@ func (rr *Resolver) ResolveReferencesOfPaved(pm *PavedWithManifest, resolutionCo
 	return errors.Wrap(rr.resolveReferences(pm.Paved.UnstructuredContent(), resolutionContext), "failed to resolve references of paved")
 }
 
-func (rr *Resolver) resolveReferences(params map[string]interface{}, resolutionContext map[string]*PavedWithManifest) error { // nolint:gocyclo
-	for k, v := range params {
-		switch t := v.(type) {
+func (rr *Injector) resolveReferences(params map[string]interface{}, resolutionContext map[string]*PavedWithManifest) error { // nolint:gocyclo
+	for paramName, paramValue := range params {
+		switch t := paramValue.(type) {
 		case map[string]interface{}:
 			if err := rr.resolveReferences(t, resolutionContext); err != nil {
 				return err
@@ -122,7 +122,7 @@ func (rr *Resolver) resolveReferences(params map[string]interface{}, resolutionC
 			if err != nil {
 				return errors.Wrapf(err, "cannot get string value from paved: %s", pathStr)
 			}
-			params[k] = s
+			params[paramName] = s
 		}
 	}
 	return nil

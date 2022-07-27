@@ -25,6 +25,9 @@ func ExtractResourceID() xpref.ExtractValueFn {
 
 // ExtractParamPath extracts the value of `sourceAttr`
 // from `spec.forProvider` allowing nested parameters.
+// An example argument to ExtractParamPath is
+// `key`, if `spec.forProvider.key` is to be extracted
+// from the referred resource.
 func ExtractParamPath(sourceAttr string) xpref.ExtractValueFn {
 	return func(mr xpresource.Managed) string {
 		tr, ok := mr.(Terraformed)

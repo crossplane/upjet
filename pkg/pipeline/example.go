@@ -29,7 +29,7 @@ var (
 // ExampleGenerator represents a pipeline for generating example manifests.
 // Generates example manifests for Terraform resources under examples-generated.
 type ExampleGenerator struct {
-	reference.Resolver
+	reference.Injector
 	rootDir         string
 	configResources map[string]*config.Resource
 	resources       map[string]*reference.PavedWithManifest
@@ -38,7 +38,7 @@ type ExampleGenerator struct {
 // NewExampleGenerator returns a configured ExampleGenerator
 func NewExampleGenerator(rootDir, modulePath, shortName string, configResources map[string]*config.Resource) *ExampleGenerator {
 	return &ExampleGenerator{
-		Resolver: reference.Resolver{
+		Injector: reference.Injector{
 			ModulePath:        modulePath,
 			ProviderShortName: shortName,
 		},

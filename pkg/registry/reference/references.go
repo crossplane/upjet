@@ -18,15 +18,15 @@ const (
 	fmtExtractParamFuncPath   = extractorPackagePath + `.ExtractParamPath("%s")`
 )
 
-// Resolver resolves references using provider metadata
-type Resolver struct {
+// Injector resolves references using provider metadata
+type Injector struct {
 	ModulePath        string
 	ProviderShortName string
 }
 
-// NewResolver initializes a new Resolver
-func NewResolver(modulePath string) *Resolver {
-	return &Resolver{
+// NewInjector initializes a new Injector
+func NewInjector(modulePath string) *Injector {
+	return &Injector{
 		ModulePath: modulePath,
 	}
 }
@@ -44,7 +44,7 @@ func getExtractorFuncPath(sourceAttr string) string {
 
 // InjectReferences injects cross-resource references using the
 // provider metadata scraped from the Terraform registry.
-func (rr *Resolver) InjectReferences(configResources map[string]*config.Resource) error { // nolint:gocyclo
+func (rr *Injector) InjectReferences(configResources map[string]*config.Resource) error { // nolint:gocyclo
 	for n, r := range configResources {
 		m := configResources[n].MetaResource
 		if m == nil {
@@ -97,7 +97,7 @@ func skipReference(skippedRefs []string, parts *Parts) bool {
 	return false
 }
 
-func (rr *Resolver) getTypePath(tfName string, configResources map[string]*config.Resource) (string, error) {
+func (rr *Injector) getTypePath(tfName string, configResources map[string]*config.Resource) (string, error) {
 	r := configResources[tfName]
 	if r == nil {
 		return "", errors.Errorf("cannot find configuration for Terraform resource: %s", tfName)
@@ -111,7 +111,7 @@ func (rr *Resolver) getTypePath(tfName string, configResources map[string]*confi
 
 // SetReferenceTypes resolves reference types of configured references
 // using their TerraformNames.
-func (rr *Resolver) SetReferenceTypes(configResources map[string]*config.Resource) error {
+func (rr *Injector) SetReferenceTypes(configResources map[string]*config.Resource) error {
 	for _, r := range configResources {
 		for attr, ref := range r.References {
 			if ref.Type == "" && ref.TerraformName != "" {

@@ -96,18 +96,18 @@ type Provider struct {
 	// resource name.
 	Resources map[string]*Resource
 
-	// refResolvers is an ordered list of `ReferenceResolver`s for
+	// refInjectors is an ordered list of `ReferenceInjector`s for
 	// injecting references across this Provider's resources.
-	refResolvers []ReferenceResolver
+	refInjectors []ReferenceInjector
 
 	// resourceConfigurators is a map holding resource configurators where key
 	// is Terraform resource name.
 	resourceConfigurators map[string]ResourceConfiguratorChain
 }
 
-// ReferenceResolver injects cross-resource references across the resources
+// ReferenceInjector injects cross-resource references across the resources
 // of this Provider.
-type ReferenceResolver interface {
+type ReferenceInjector interface {
 	InjectReferences(map[string]*Resource) error
 }
 
@@ -157,12 +157,12 @@ func WithDefaultResourceOptions(opts ...ResourceOption) ProviderOption {
 	}
 }
 
-// WithReferenceResolvers configures an ordered list of `ReferenceResolver`s
+// WithReferenceInjectors configures an ordered list of `ReferenceInjector`s
 // for this Provider. The configured reference resolvers are executed in order
 // to inject cross-resource references across this Provider's resources.
-func WithReferenceResolvers(refResolvers []ReferenceResolver) ProviderOption {
+func WithReferenceInjectors(refInjectors []ReferenceInjector) ProviderOption {
 	return func(p *Provider) {
-		p.refResolvers = refResolvers
+		p.refInjectors = refInjectors
 	}
 }
 
@@ -221,9 +221,9 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadata []byt
 	if err := p.loadMetadata(metadata); err != nil {
 		panic(errors.Wrap(err, "cannot load provider metadata"))
 	}
-	for i, refResolver := range p.refResolvers {
-		if err := refResolver.InjectReferences(p.Resources); err != nil {
-			panic(errors.Wrapf(err, "cannot inject references using the configured ReferenceResolver at index %d", i))
+	for i, refInjector := range p.refInjectors {
+		if err := refInjector.InjectReferences(p.Resources); err != nil {
+			panic(errors.Wrapf(err, "cannot inject references using the configured ReferenceInjector at index %d", i))
 		}
 	}
 	return p
