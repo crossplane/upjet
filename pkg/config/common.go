@@ -10,6 +10,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/errors"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 
+	"github.com/upbound/upjet/pkg/registry"
 	tjname "github.com/upbound/upjet/pkg/types/name"
 )
 
@@ -44,7 +45,7 @@ type ResourceOption func(*Resource)
 
 // DefaultResource keeps an initial default configuration for all resources of a
 // provider.
-func DefaultResource(name string, terraformSchema *schema.Resource, opts ...ResourceOption) *Resource {
+func DefaultResource(name string, terraformSchema *schema.Resource, terraformRegistry *registry.Resource, opts ...ResourceOption) *Resource {
 	words := strings.Split(name, "_")
 	// As group name we default to the second element if resource name
 	// has at least 3 elements, otherwise, we took the first element as
@@ -67,6 +68,7 @@ func DefaultResource(name string, terraformSchema *schema.Resource, opts ...Reso
 	r := &Resource{
 		Name:              name,
 		TerraformResource: terraformSchema,
+		MetaResource:      terraformRegistry,
 		ShortGroup:        group,
 		Kind:              kind,
 		Version:           "v1alpha1",
