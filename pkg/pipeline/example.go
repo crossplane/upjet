@@ -18,34 +18,33 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/upbound/upjet/pkg/config"
+	"github.com/upbound/upjet/pkg/registry/reference"
 	tjtypes "github.com/upbound/upjet/pkg/types"
 )
 
 var (
-	reRef  = regexp.MustCompile(`\${(.+)}`)
 	reFile = regexp.MustCompile(`file\("(.+)"\)`)
 )
-
-type pavedWithManifest struct {
-	manifestPath string
-	paved        *fieldpath.Paved
-	refsResolved bool
-}
 
 // ExampleGenerator represents a pipeline for generating example manifests.
 // Generates example manifests for Terraform resources under examples-generated.
 type ExampleGenerator struct {
-	rootDir        string
-	configResource map[string]*config.Resource
-	resources      map[string]*pavedWithManifest
+	reference.Injector
+	rootDir         string
+	configResources map[string]*config.Resource
+	resources       map[string]*reference.PavedWithManifest
 }
 
 // NewExampleGenerator returns a configured ExampleGenerator
-func NewExampleGenerator(rootDir string, configResource map[string]*config.Resource) *ExampleGenerator {
+func NewExampleGenerator(rootDir, modulePath, shortName string, configResources map[string]*config.Resource) *ExampleGenerator {
 	return &ExampleGenerator{
-		rootDir:        rootDir,
-		configResource: configResource,
-		resources:      make(map[string]*pavedWithManifest),
+		Injector: reference.Injector{
+			ModulePath:        modulePath,
+			ProviderShortName: shortName,
+		},
+		rootDir:         rootDir,
+		configResources: configResources,
+		resources:       make(map[string]*reference.PavedWithManifest),
 	}
 }
 
@@ -53,80 +52,22 @@ func NewExampleGenerator(rootDir string, configResource map[string]*config.Resou
 // their respective API groups.
 func (eg *ExampleGenerator) StoreExamples() error {
 	for n, pm := range eg.resources {
-		if err := eg.resolveReferencesOfPaved(pm); err != nil {
+		if err := eg.ResolveReferencesOfPaved(pm, eg.resources); err != nil {
 			return errors.Wrapf(err, "cannot resolve references for resource: %s", n)
 		}
-		u := pm.paved.UnstructuredContent()
+		u := pm.Paved.UnstructuredContent()
 		delete(u["spec"].(map[string]interface{})["forProvider"].(map[string]interface{}), "depends_on")
 		buff, err := yaml.Marshal(u)
 		if err != nil {
 			return errors.Wrapf(err, "cannot marshal example manifest for resource: %s", n)
 		}
-		manifestDir := filepath.Dir(pm.manifestPath)
+		manifestDir := filepath.Dir(pm.ManifestPath)
 		if err := os.MkdirAll(manifestDir, 0750); err != nil {
 			return errors.Wrapf(err, "cannot mkdir %s", manifestDir)
 		}
 		// no sensitive info in the example manifest
-		if err := ioutil.WriteFile(pm.manifestPath, buff, 0644); err != nil { // nolint:gosec
-			return errors.Wrapf(err, "cannot write example manifest file %s for resource %s", pm.manifestPath, n)
-		}
-	}
-	return nil
-}
-
-func (eg *ExampleGenerator) resolveReferencesOfPaved(pm *pavedWithManifest) error {
-	if pm.refsResolved {
-		return nil
-	}
-	pm.refsResolved = true
-	return errors.Wrap(eg.resolveReferences(pm.paved.UnstructuredContent()), "failed to resolve references of paved")
-}
-
-func (eg *ExampleGenerator) resolveReferences(params map[string]interface{}) error { // nolint:gocyclo
-	for k, v := range params {
-		switch t := v.(type) {
-		case map[string]interface{}:
-			if err := eg.resolveReferences(t); err != nil {
-				return err
-			}
-
-		case []interface{}:
-			for _, e := range t {
-				eM, ok := e.(map[string]interface{})
-				if !ok {
-					continue
-				}
-				if err := eg.resolveReferences(eM); err != nil {
-					return err
-				}
-			}
-
-		case string:
-			g := reRef.FindStringSubmatch(t)
-			if len(g) != 2 {
-				continue
-			}
-			path := strings.Split(g[1], ".")
-			// expected reference format is <resource type>.<resource name>.<field name>
-			if len(path) < 3 {
-				continue
-			}
-			pm := eg.resources[path[0]]
-			if pm == nil || pm.paved == nil {
-				continue
-			}
-			if err := eg.resolveReferencesOfPaved(pm); err != nil {
-				return errors.Wrapf(err, "cannot recursively resolve references for %q", path[0])
-			}
-			pathStr := strings.Join(append([]string{"spec", "forProvider"}, path[2:]...), ".")
-			s, err := pm.paved.GetString(pathStr)
-			if fieldpath.IsNotFound(err) {
-				continue
-			}
-			if err != nil {
-				return errors.Wrapf(err, "cannot get string value from paved: %s", pathStr)
-			}
-			params[k] = s
+		if err := ioutil.WriteFile(pm.ManifestPath, buff, 0600); err != nil {
+			return errors.Wrapf(err, "cannot write example manifest file %s for resource %s", pm.ManifestPath, n)
 		}
 	}
 	return nil
@@ -134,7 +75,7 @@ func (eg *ExampleGenerator) resolveReferences(params map[string]interface{}) err
 
 // Generate generates an example manifest for the specified Terraform resource.
 func (eg *ExampleGenerator) Generate(group, version string, r *config.Resource, fieldTransformations map[string]tjtypes.Transformation) error {
-	rm := eg.configResource[r.Name].MetaResource
+	rm := eg.configResources[r.Name].MetaResource
 	if rm == nil || len(rm.Examples) == 0 {
 		return nil
 	}
@@ -158,9 +99,10 @@ func (eg *ExampleGenerator) Generate(group, version string, r *config.Resource, 
 		},
 	}
 	manifestDir := filepath.Join(eg.rootDir, "examples-generated", strings.ToLower(strings.Split(group, ".")[0]))
-	eg.resources[r.Name] = &pavedWithManifest{
-		manifestPath: filepath.Join(manifestDir, fmt.Sprintf("%s.yaml", strings.ToLower(r.Kind))),
-		paved:        fieldpath.Pave(example),
+	eg.resources[r.Name] = &reference.PavedWithManifest{
+		ManifestPath: filepath.Join(manifestDir, fmt.Sprintf("%s.yaml", strings.ToLower(r.Kind))),
+		Paved:        fieldpath.Pave(example),
+		ParamsPrefix: []string{"spec", "forProvider"},
 	}
 	return nil
 }
@@ -198,30 +140,31 @@ func transformFields(params map[string]interface{}, omittedFields []string, t ma
 		}
 	}
 
-	for hn, transform := range t {
-		for n, v := range params {
-			if hn == getHierarchicalName(namePrefix, n) {
-				delete(params, n)
-				if transform.IsRef {
-					if !transform.IsSensitive {
-						params[transform.TransformedName] = getRefField(v,
-							map[string]interface{}{
-								"name": "example",
-							})
-					} else {
-						secretName, secretKey := getSecretRef(v)
-						params[transform.TransformedName] = getRefField(v,
-							map[string]interface{}{
-								"name":      secretName,
-								"namespace": "crossplane-system",
-								"key":       secretKey,
-							})
-					}
-				} else {
-					params[transform.TransformedName] = v
-				}
-				break
+	for n, v := range params {
+		hName := getHierarchicalName(namePrefix, n)
+		for hn, transform := range t {
+			if hn != hName {
+				continue
 			}
+			delete(params, n)
+			switch {
+			case !transform.IsRef:
+				params[transform.TransformedName] = v
+			case transform.IsSensitive:
+				secretName, secretKey := getSecretRef(v)
+				params[transform.TransformedName] = getRefField(v,
+					map[string]interface{}{
+						"name":      secretName,
+						"namespace": "crossplane-system",
+						"key":       secretKey,
+					})
+			default:
+				params[transform.TransformedName] = getRefField(v,
+					map[string]interface{}{
+						"name": "example",
+					})
+			}
+			break
 		}
 	}
 }
@@ -245,7 +188,7 @@ func getSecretRef(v interface{}) (string, string) {
 	if !ok {
 		return secretName, secretKey
 	}
-	g := reRef.FindStringSubmatch(s)
+	g := reference.ReRef.FindStringSubmatch(s)
 	if len(g) != 2 {
 		return secretName, secretKey
 	}

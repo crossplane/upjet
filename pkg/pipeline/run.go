@@ -1,17 +1,5 @@
 /*
- Copyright 2021 Upbound Inc.
-
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+Copyright 2022 Upbound Inc.
 */
 
 package pipeline
@@ -57,6 +45,10 @@ func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
 		resourcesGroups[group][resource.Version][name] = resource
 	}
 
+	exampleGen := NewExampleGenerator(rootDir, pc.ModulePath, pc.ShortName, pc.Resources)
+	if err := exampleGen.SetReferenceTypes(pc.Resources); err != nil {
+		panic(errors.Wrap(err, "cannot set reference types for resources"))
+	}
 	// Add ProviderConfig API package to the list of API version packages.
 	apiVersionPkgList := make([]string, 0)
 	for _, p := range pc.BasePackages.APIVersion {
@@ -68,7 +60,6 @@ func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
 		controllerPkgList = append(controllerPkgList, filepath.Join(pc.ModulePath, p))
 	}
 	count := 0
-	exampleGen := NewExampleGenerator(rootDir, pc.Resources)
 	for group, versions := range resourcesGroups {
 		for version, resources := range versions {
 			var tfResources []*terraformedInput

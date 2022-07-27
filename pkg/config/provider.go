@@ -96,9 +96,19 @@ type Provider struct {
 	// resource name.
 	Resources map[string]*Resource
 
+	// refInjectors is an ordered list of `ReferenceInjector`s for
+	// injecting references across this Provider's resources.
+	refInjectors []ReferenceInjector
+
 	// resourceConfigurators is a map holding resource configurators where key
 	// is Terraform resource name.
 	resourceConfigurators map[string]ResourceConfiguratorChain
+}
+
+// ReferenceInjector injects cross-resource references across the resources
+// of this Provider.
+type ReferenceInjector interface {
+	InjectReferences(map[string]*Resource) error
 }
 
 // A ProviderOption configures a Provider.
@@ -147,10 +157,19 @@ func WithDefaultResourceOptions(opts ...ResourceOption) ProviderOption {
 	}
 }
 
+// WithReferenceInjectors configures an ordered list of `ReferenceInjector`s
+// for this Provider. The configured reference resolvers are executed in order
+// to inject cross-resource references across this Provider's resources.
+func WithReferenceInjectors(refInjectors []ReferenceInjector) ProviderOption {
+	return func(p *Provider) {
+		p.refInjectors = refInjectors
+	}
+}
+
 // NewProvider builds and returns a new Provider from provider
 // tfjson schema, that is generated using Terraform CLI with:
 // `terraform providers schema --json`
-func NewProvider(schema []byte, prefix string, modulePath string, metadata []byte, opts ...ProviderOption) *Provider {
+func NewProvider(schema []byte, prefix string, modulePath string, metadata []byte, opts ...ProviderOption) *Provider { // nolint:gocyclo
 	ps := tfjson.ProviderSchemas{}
 	if err := ps.UnmarshalJSON(schema); err != nil {
 		panic(err)
@@ -203,6 +222,11 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadata []byt
 		}
 
 		p.Resources[name] = DefaultResource(name, terraformResource, providerMetadata.Resources[name], p.DefaultResourceOptions...)
+	}
+	for i, refInjector := range p.refInjectors {
+		if err := refInjector.InjectReferences(p.Resources); err != nil {
+			panic(errors.Wrapf(err, "cannot inject references using the configured ReferenceInjector at index %d", i))
+		}
 	}
 	return p
 }
