@@ -45,7 +45,7 @@ func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
 		resourcesGroups[group][resource.Version][name] = resource
 	}
 
-	exampleGen := NewExampleGenerator(rootDir, pc.ModulePath, pc.ShortName, pc.Resources)
+	exampleGen := NewExampleGenerator(rootDir, pc.ModulePath, pc.ShortName, pc.Resources, pc.ExampleManifestModifierChain)
 	if err := exampleGen.SetReferenceTypes(pc.Resources); err != nil {
 		panic(errors.Wrap(err, "cannot set reference types for resources"))
 	}

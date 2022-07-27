@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"regexp"
 
+	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 	tfjson "github.com/hashicorp/terraform-json"
 	"github.com/pkg/errors"
 
@@ -38,6 +39,24 @@ func (cc ResourceConfiguratorChain) Configure(r *Resource) {
 	for _, c := range cc {
 		c.Configure(r)
 	}
+}
+
+// ExampleManifestModifier can be used to modify an example manifest
+// from provider metadata.
+type ExampleManifestModifier func(object *fieldpath.Paved, r *Resource) error
+
+// A ExampleManifestModifierChain chains multiple ExampleManifestModifiers
+type ExampleManifestModifierChain []ExampleManifestModifier
+
+// Modify modifies a scraped example manifest by
+// calling each ExampleManifestModifier in the chain serially.
+func (c ExampleManifestModifierChain) Modify(object *fieldpath.Paved, r *Resource) error {
+	for _, m := range c {
+		if err := m(object, r); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // BasePackages keeps lists of base packages that needs to be registered as API
@@ -95,6 +114,10 @@ type Provider struct {
 	// Resources is a map holding resource configurations where key is Terraform
 	// resource name.
 	Resources map[string]*Resource
+
+	// ExampleManifestModifierChain is a chain of ExampleManifestModifiers
+	// to programmatically modify scraped example manifests.
+	ExampleManifestModifierChain ExampleManifestModifierChain
 
 	// refInjectors is an ordered list of `ReferenceInjector`s for
 	// injecting references across this Provider's resources.
@@ -163,6 +186,14 @@ func WithDefaultResourceOptions(opts ...ResourceOption) ProviderOption {
 func WithReferenceInjectors(refInjectors []ReferenceInjector) ProviderOption {
 	return func(p *Provider) {
 		p.refInjectors = refInjectors
+	}
+}
+
+// WithExampleManifestModifier adds a new ExampleManifestModifier to the
+// chain of modifiers to be run on the scraped example manifests.
+func WithExampleManifestModifier(m ExampleManifestModifier) ProviderOption {
+	return func(p *Provider) {
+		p.ExampleManifestModifierChain = append(p.ExampleManifestModifierChain, m)
 	}
 }
 
