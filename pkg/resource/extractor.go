@@ -25,16 +25,25 @@ func ExtractResourceID() xpref.ExtractValueFn {
 
 // ExtractParamPath extracts the value of `sourceAttr`
 // from `spec.forProvider` allowing nested parameters.
+// If `isObservation` is set, then referenced param
+// is retrieved from the status, if not, it's extracted
+// from the spec.
 // An example argument to ExtractParamPath is
 // `key`, if `spec.forProvider.key` is to be extracted
 // from the referred resource.
-func ExtractParamPath(sourceAttr string) xpref.ExtractValueFn {
+func ExtractParamPath(sourceAttr string, isObservation bool) xpref.ExtractValueFn {
 	return func(mr xpresource.Managed) string {
 		tr, ok := mr.(Terraformed)
 		if !ok {
 			return ""
 		}
-		params, err := tr.GetParameters()
+		var params map[string]interface{}
+		var err error
+		if isObservation {
+			params, err = tr.GetObservation()
+		} else {
+			params, err = tr.GetParameters()
+		}
 		// TODO: we had better log the error
 		if err != nil {
 			return ""
