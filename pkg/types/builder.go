@@ -294,8 +294,8 @@ func (r *resource) addObservationField(f *Field, field *types.Var) {
 	r.obsTags = append(r.obsTags, fmt.Sprintf(`json:"%s" tf:"%s"`, f.JSONTag, f.TFTag))
 }
 
-func (r *resource) addReferenceFields(g *Builder, paramName *types.TypeName, field *types.Var, f *Field) {
-	refFields, refTags := g.generateReferenceFields(paramName, field, f)
+func (r *resource) addReferenceFields(g *Builder, paramName *types.TypeName, field *Field) {
+	refFields, refTags := g.generateReferenceFields(paramName, field)
 	r.paramTags = append(r.paramTags, refTags...)
 	r.paramFields = append(r.paramFields, refFields...)
 }

@@ -151,7 +151,7 @@ func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames) {
 	}
 
 	if f.Reference != nil {
-		r.addReferenceFields(g, typeNames.ParameterTypeName, field, f)
+		r.addReferenceFields(g, typeNames.ParameterTypeName, f)
 	}
 
 	g.comments.AddFieldComment(typeNames.ParameterTypeName, f.FieldNameCamel, f.Comment.Build())
