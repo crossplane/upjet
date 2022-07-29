@@ -91,7 +91,8 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 	for _, snakeFieldName := range keys {
 		var reference *config.Reference
 		ref, ok := cfg.References[fieldPath(append(tfPath, snakeFieldName))]
-		if ok {
+		// if a reference is configured and the field does not belong to status
+		if ok && !isObservation(res.Schema[snakeFieldName]) {
 			reference = &ref
 		}
 
