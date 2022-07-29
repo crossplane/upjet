@@ -7,8 +7,6 @@ package config
 import (
 	"testing"
 
-	"github.com/crossplane/crossplane-runtime/pkg/errors"
-	"github.com/crossplane/crossplane-runtime/pkg/test"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -367,8 +365,7 @@ func TestGetSchema(t *testing.T) {
 		fieldpath string
 	}
 	type want struct {
-		sch      *schema.Schema
-		panicErr error
+		sch *schema.Schema
 	}
 	schLeaf := &schema.Schema{
 		Type: schema.TypeString,
@@ -415,8 +412,7 @@ func TestGetSchema(t *testing.T) {
 				sch:       res,
 			},
 			want: want{
-				sch:      schLeaf,
-				panicErr: errors.Errorf(errFmtFieldNotFound, "topB"),
+				sch: nil,
 			},
 		},
 		"LeafFieldNotFound": {
@@ -425,8 +421,7 @@ func TestGetSchema(t *testing.T) {
 				sch:       res,
 			},
 			want: want{
-				sch:      schLeaf,
-				panicErr: errors.Errorf(errFmtFieldNotFound, "topA.olala"),
+				sch: nil,
 			},
 		},
 		"TopFieldIsNotMap": {
@@ -439,8 +434,7 @@ func TestGetSchema(t *testing.T) {
 				},
 			},
 			want: want{
-				sch:      schLeaf,
-				panicErr: errors.Errorf(errFmtElemNil, "topA"),
+				sch: nil,
 			},
 		},
 		"MiddleFieldIsNotResource": {
@@ -461,19 +455,13 @@ func TestGetSchema(t *testing.T) {
 				},
 			},
 			want: want{
-				sch:      schLeaf,
-				panicErr: errors.Errorf(errFmtElemTypeNotResource, "topA.topB"),
+				sch: nil,
 			},
 		},
 	}
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			defer func() {
-				if diff := cmp.Diff(tc.want.panicErr, recover(), test.EquateErrors()); diff != "" {
-					t.Errorf("\n%s\nGetSchema(...): -want panic err, +got panic err:\n%s", tc.reason, diff)
-				}
-			}()
 			sch := GetSchema(tc.args.sch, tc.args.fieldpath)
 			if diff := cmp.Diff(tc.want.sch, sch); diff != "" {
 				t.Errorf("\n%s\nGetSchema(...): -want, +got:\n%s", tc.reason, diff)

@@ -92,7 +92,7 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 		var reference *config.Reference
 		ref, ok := cfg.References[fieldPath(append(tfPath, snakeFieldName))]
 		// if a reference is configured and the field does not belong to status
-		if ok && !isObservation(res.Schema[snakeFieldName]) {
+		if ok && !IsObservation(res.Schema[snakeFieldName]) {
 			reference = &ref
 		}
 
@@ -197,7 +197,7 @@ func (g *Builder) buildSchema(f *Field, cfg *config.Resource, t map[string]Trans
 			}
 
 			switch {
-			case isObservation(f.Schema):
+			case IsObservation(f.Schema):
 				if obsType == nil {
 					return nil, errors.Errorf("element type of %s is computed but the underlying schema does not return observation type", fieldPath(names))
 				}
@@ -326,7 +326,9 @@ func generateTypeName(suffix string, pkg *types.Package, names ...string) (strin
 	return "", errors.Errorf("could not generate a unique name for %s", n)
 }
 
-func isObservation(s *schema.Schema) bool {
+// IsObservation returns whether the specified Schema belongs to an observed
+// attribute, i.e., whether it's a required computed field.
+func IsObservation(s *schema.Schema) bool {
 	// NOTE(muvaf): If a field is not optional but computed, then it's
 	// definitely an observation field.
 	// If it's optional but also computed, then it means the field has a server
