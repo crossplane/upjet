@@ -6,16 +6,19 @@ package reference
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/pkg/errors"
 
 	"github.com/upbound/upjet/pkg/config"
+	"github.com/upbound/upjet/pkg/types"
+	"github.com/upbound/upjet/pkg/types/name"
 )
 
 const (
 	extractorPackagePath      = "github.com/upbound/upjet/pkg/resource"
 	extractResourceIDFuncPath = extractorPackagePath + ".ExtractResourceID()"
-	fmtExtractParamFuncPath   = extractorPackagePath + `.ExtractParamPath("%s")`
+	fmtExtractParamFuncPath   = extractorPackagePath + `.ExtractParamPath("%s",%t)`
 )
 
 // Injector resolves references using provider metadata
@@ -31,14 +34,23 @@ func NewInjector(modulePath string) *Injector {
 	}
 }
 
-func getExtractorFuncPath(sourceAttr string) string {
+func getExtractorFuncPath(r *config.Resource, sourceAttr string) string {
 	switch sourceAttr {
 	// value extractor from status.atProvider.id
 	case "id":
 		return extractResourceIDFuncPath
 	// value extractor from spec.forProvider.<attr>
 	default:
-		return fmt.Sprintf(fmtExtractParamFuncPath, sourceAttr)
+		for _, n := range r.ExternalName.OmittedFields {
+			if sourceAttr == n {
+				return ""
+			}
+		}
+		s, ok := r.TerraformResource.Schema[sourceAttr]
+		if !ok {
+			return ""
+		}
+		return fmt.Sprintf(fmtExtractParamFuncPath, name.NewFromSnake(sourceAttr).LowerCamelComputed, types.IsObservation(s))
 	}
 }
 
@@ -69,7 +81,8 @@ func (rr *Injector) InjectReferences(configResources map[string]*config.Resource
 					continue
 				}
 				parts := getRefParts(ref)
-				if parts == nil {
+				// if nil or a references to a nested configuration block
+				if parts == nil || strings.Contains(parts.Attribute, ".") || strings.Contains(parts.Attribute, "[") {
 					continue
 				}
 				if skipReference(configResources[n].SkipReferencesTo, parts) {
@@ -80,7 +93,7 @@ func (rr *Injector) InjectReferences(configResources map[string]*config.Resource
 				}
 				r.References[targetAttr] = config.Reference{
 					TerraformName: parts.Resource,
-					Extractor:     getExtractorFuncPath(parts.Attribute),
+					Extractor:     getExtractorFuncPath(configResources[parts.Resource], parts.Attribute),
 				}
 			}
 		}
