@@ -80,7 +80,7 @@ func (eg *ExampleGenerator) Generate(group, version string, r *config.Resource, 
 		return nil
 	}
 	exampleParams := rm.Examples[0].Paved.UnstructuredContent()
-	transformFields(exampleParams, r.ExternalName.OmittedFields, fieldTransformations, "")
+	transformFields(r, exampleParams, r.ExternalName.OmittedFields, fieldTransformations, "")
 
 	metadata := map[string]interface{}{
 		"name": "example",
@@ -114,10 +114,23 @@ func getHierarchicalName(prefix, name string) string {
 	return fmt.Sprintf("%s.%s", prefix, name)
 }
 
-func transformFields(params map[string]interface{}, omittedFields []string, t map[string]tjtypes.Transformation, namePrefix string) { // nolint:gocyclo
-	for _, hn := range omittedFields {
-		for n := range params {
-			if hn == getHierarchicalName(namePrefix, n) {
+func isStatus(r *config.Resource, attr string) bool {
+	s := config.GetSchema(r.TerraformResource, attr)
+	if s == nil {
+		return false
+	}
+	return !s.Optional && s.Computed
+}
+
+func transformFields(r *config.Resource, params map[string]interface{}, omittedFields []string, t map[string]tjtypes.Transformation, namePrefix string) { // nolint:gocyclo
+	for n := range params {
+		hName := getHierarchicalName(namePrefix, n)
+		if isStatus(r, hName) {
+			delete(params, n)
+			continue
+		}
+		for _, hn := range omittedFields {
+			if hn == hName {
 				delete(params, n)
 				break
 			}
@@ -127,7 +140,7 @@ func transformFields(params map[string]interface{}, omittedFields []string, t ma
 	for n, v := range params {
 		switch pT := v.(type) {
 		case map[string]interface{}:
-			transformFields(pT, omittedFields, t, getHierarchicalName(namePrefix, n))
+			transformFields(r, pT, omittedFields, t, getHierarchicalName(namePrefix, n))
 
 		case []interface{}:
 			for _, e := range pT {
@@ -135,7 +148,7 @@ func transformFields(params map[string]interface{}, omittedFields []string, t ma
 				if !ok {
 					continue
 				}
-				transformFields(eM, omittedFields, t, getHierarchicalName(namePrefix, n))
+				transformFields(r, eM, omittedFields, t, getHierarchicalName(namePrefix, n))
 			}
 		}
 	}

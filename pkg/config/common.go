@@ -7,7 +7,6 @@ package config
 import (
 	"strings"
 
-	"github.com/crossplane/crossplane-runtime/pkg/errors"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 
 	"github.com/upbound/upjet/pkg/registry"
@@ -117,31 +116,30 @@ func MarkAsRequired(sch *schema.Resource, fieldpaths ...string) {
 	}
 }
 
-// GetSchema returns the schema of the field whose fieldpath is given. It's
-// supposed to run in generation time, so it will panic if it cannot find the
-// field.
+// GetSchema returns the schema of the field whose fieldpath is given.
+// Returns nil if Schema is not found at the specified path.
 func GetSchema(sch *schema.Resource, fieldpath string) *schema.Schema {
 	current := sch
 	fields := strings.Split(fieldpath, ".")
 	final := fields[len(fields)-1]
 	formers := fields[:len(fields)-1]
-	for i, field := range formers {
+	for _, field := range formers {
 		s, ok := current.Schema[field]
 		if !ok {
-			panic(errors.Errorf(errFmtFieldNotFound, strings.Join(fields[:i+1], ".")))
+			return nil
 		}
 		if s.Elem == nil {
-			panic(errors.Errorf(errFmtElemNil, strings.Join(fields[:i+1], ".")))
+			return nil
 		}
 		res, rok := s.Elem.(*schema.Resource)
 		if !rok {
-			panic(errors.Errorf(errFmtElemTypeNotResource, strings.Join(fields[:i+1], ".")))
+			return nil
 		}
 		current = res
 	}
 	s, ok := current.Schema[final]
 	if !ok {
-		panic(errors.Errorf("field %s is not found", fieldpath))
+		return nil
 	}
 	return s
 }
