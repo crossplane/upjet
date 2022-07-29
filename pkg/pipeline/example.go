@@ -119,7 +119,7 @@ func isStatus(r *config.Resource, attr string) bool {
 	if s == nil {
 		return false
 	}
-	return !s.Optional && s.Computed
+	return tjtypes.IsObservation(s)
 }
 
 func transformFields(r *config.Resource, params map[string]interface{}, omittedFields []string, t map[string]tjtypes.Transformation, namePrefix string) { // nolint:gocyclo

@@ -13,12 +13,6 @@ import (
 	tjname "github.com/upbound/upjet/pkg/types/name"
 )
 
-const (
-	errFmtFieldNotFound       = "field %s is not found"
-	errFmtElemNil             = "field %s does not have an element type"
-	errFmtElemTypeNotResource = "element type of %s is not *schema.Resource"
-)
-
 // Commonly used resource configurations.
 var (
 	DefaultBasePackages = BasePackages{

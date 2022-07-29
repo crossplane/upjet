@@ -80,7 +80,7 @@ func NewSensitiveField(g *Builder, cfg *config.Resource, r *resource, sch *schem
 		return nil, false, err
 	}
 
-	if isObservation(f.Schema) {
+	if IsObservation(f.Schema) {
 		cfg.Sensitive.AddFieldPath(fieldPathWithWildcard(f.TerraformPaths), "status.atProvider."+fieldPathWithWildcard(f.CRDPaths))
 		// Drop an observation field from schema if it is sensitive.
 		// Data will be stored in connection details secret
@@ -141,7 +141,7 @@ func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames) {
 
 	field := types.NewField(token.NoPos, g.Package, f.FieldNameCamel, f.FieldType, false)
 	switch {
-	case isObservation(f.Schema):
+	case IsObservation(f.Schema):
 		r.addObservationField(f, field)
 	default:
 		if f.AsBlocksMode {
