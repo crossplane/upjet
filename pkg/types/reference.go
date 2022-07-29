@@ -26,38 +26,42 @@ var typeSelectorField types.Type
 var typeSecretKeySelector types.Type
 var commentOptional *comments.Comment
 
-func (g *Builder) generateReferenceFields(t *types.TypeName, f *types.Var, field *Field) (fields []*types.Var, tags []string) {
-	_, isSlice := f.Type().(*types.Slice)
+func (g *Builder) generateReferenceFields(t *types.TypeName, f *Field) (fields []*types.Var, tags []string) {
+	_, isSlice := f.FieldType.(*types.Slice)
 
-	rfn := field.Reference.RefFieldName
-	if rfn == "" {
-		rfn = f.Name() + "Ref"
+	// We try to rely on snake for name calculations because it is more accurate
+	// in cases where two words are all acronyms and full capital, i.e. APIID
+	// would be converted to apiid when you convert it to lower camel computed
+	// but if you start with api_id, then it becomes apiId as lower camel computed
+	// and APIID as camel, which is what we want.
+	rfn := name.NewFromCamel(f.Reference.RefFieldName)
+	if f.Reference.RefFieldName == "" {
+		temp := f.Name.Snake + "_ref"
 		if isSlice {
-			rfn += "s"
+			temp += "s"
 		}
+		rfn = name.NewFromSnake(temp)
 	}
 
-	sfn := field.Reference.SelectorFieldName
-	if sfn == "" {
-		sfn = f.Name() + "Selector"
+	sfn := name.NewFromCamel(f.Reference.SelectorFieldName)
+	if f.Reference.SelectorFieldName == "" {
+		sfn = name.NewFromSnake(f.Name.Snake + "_selector")
 	}
 
-	rn := name.NewFromCamel(rfn)
-	sn := name.NewFromCamel(sfn)
-	refTag := fmt.Sprintf(`json:"%s,omitempty" tf:"-"`, rn.LowerCamelComputed)
-	selTag := fmt.Sprintf(`json:"%s,omitempty" tf:"-"`, sn.LowerCamelComputed)
+	refTag := fmt.Sprintf(`json:"%s,omitempty" tf:"-"`, rfn.LowerCamelComputed)
+	selTag := fmt.Sprintf(`json:"%s,omitempty" tf:"-"`, sfn.LowerCamelComputed)
 
 	var tr types.Type
 	tr = types.NewPointer(typeReferenceField)
 	if isSlice {
 		tr = types.NewSlice(typeReferenceField)
 	}
-	ref := types.NewField(token.NoPos, g.Package, rfn, tr, false)
-	sel := types.NewField(token.NoPos, g.Package, sfn, types.NewPointer(typeSelectorField), false)
+	ref := types.NewField(token.NoPos, g.Package, rfn.Camel, tr, false)
+	sel := types.NewField(token.NoPos, g.Package, sfn.Camel, types.NewPointer(typeSelectorField), false)
 
-	g.comments.AddFieldComment(t, rfn, commentOptional.Build())
-	g.comments.AddFieldComment(t, sfn, commentOptional.Build())
-	field.TransformedName = rn.LowerCamelComputed
+	g.comments.AddFieldComment(t, rfn.Camel, commentOptional.Build())
+	g.comments.AddFieldComment(t, sfn.Camel, commentOptional.Build())
+	f.TransformedName = rfn.LowerCamelComputed
 
 	return []*types.Var{ref, sel}, []string{refTag, selTag}
 }

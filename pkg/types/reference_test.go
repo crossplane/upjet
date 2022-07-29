@@ -9,6 +9,7 @@ import (
 	twtypes "github.com/muvaf/typewriter/pkg/types"
 
 	"github.com/upbound/upjet/pkg/config"
+	"github.com/upbound/upjet/pkg/types/name"
 )
 
 func TestBuilder_generateReferenceFields(t *testing.T) {
@@ -16,8 +17,7 @@ func TestBuilder_generateReferenceFields(t *testing.T) {
 
 	type args struct {
 		t *types.TypeName
-		f *types.Var
-		r config.Reference
+		f *Field
 	}
 	type want struct {
 		outFields   []*types.Var
@@ -31,9 +31,12 @@ func TestBuilder_generateReferenceFields(t *testing.T) {
 		"OnlyRefType": {
 			args: args{
 				t: types.NewTypeName(token.NoPos, tp, "Params", types.Universe.Lookup("string").Type()),
-				f: types.NewField(token.NoPos, tp, "TestField", types.Universe.Lookup("string").Type(), false),
-				r: config.Reference{
-					Type: "testObject",
+				f: &Field{
+					Name: name.NewFromCamel("TestField"),
+					Reference: &config.Reference{
+						Type: "testObject",
+					},
+					FieldType: types.Universe.Lookup("string").Type(),
 				},
 			}, want: want{
 				outFields: []*types.Var{
@@ -53,9 +56,12 @@ func TestBuilder_generateReferenceFields(t *testing.T) {
 		"OnlyRefTypeSlice": {
 			args: args{
 				t: types.NewTypeName(token.NoPos, tp, "Params", types.Universe.Lookup("string").Type()),
-				f: types.NewField(token.NoPos, tp, "TestField", types.NewSlice(types.Universe.Lookup("string").Type()), false),
-				r: config.Reference{
-					Type: "testObject",
+				f: &Field{
+					Name: name.NewFromCamel("TestField"),
+					Reference: &config.Reference{
+						Type: "testObject",
+					},
+					FieldType: types.NewSlice(types.Universe.Lookup("string").Type()),
 				},
 			}, want: want{
 				outFields: []*types.Var{
@@ -75,10 +81,13 @@ func TestBuilder_generateReferenceFields(t *testing.T) {
 		"WithCustomFieldName": {
 			args: args{
 				t: types.NewTypeName(token.NoPos, tp, "Params", types.Universe.Lookup("string").Type()),
-				f: types.NewField(token.NoPos, tp, "TestField", types.Universe.Lookup("string").Type(), false),
-				r: config.Reference{
-					Type:         "TestObject",
-					RefFieldName: "CustomRef",
+				f: &Field{
+					Name: name.NewFromCamel("TestField"),
+					Reference: &config.Reference{
+						Type:         "TestObject",
+						RefFieldName: "CustomRef",
+					},
+					FieldType: types.Universe.Lookup("string").Type(),
 				},
 			}, want: want{
 				outFields: []*types.Var{
@@ -98,10 +107,13 @@ func TestBuilder_generateReferenceFields(t *testing.T) {
 		"WithCustomSelectorName": {
 			args: args{
 				t: types.NewTypeName(token.NoPos, tp, "Params", types.Universe.Lookup("string").Type()),
-				f: types.NewField(token.NoPos, tp, "TestField", types.Universe.Lookup("string").Type(), false),
-				r: config.Reference{
-					Type:              "TestObject",
-					SelectorFieldName: "CustomSelector",
+				f: &Field{
+					Name: name.NewFromCamel("TestField"),
+					Reference: &config.Reference{
+						Type:              "TestObject",
+						SelectorFieldName: "CustomSelector",
+					},
+					FieldType: types.Universe.Lookup("string").Type(),
 				},
 			}, want: want{
 				outFields: []*types.Var{
@@ -124,7 +136,7 @@ func TestBuilder_generateReferenceFields(t *testing.T) {
 			g := &Builder{
 				comments: twtypes.Comments{},
 			}
-			gotFields, gotTags := g.generateReferenceFields(tc.args.t, tc.args.f, &Field{Reference: &tc.args.r})
+			gotFields, gotTags := g.generateReferenceFields(tc.args.t, tc.args.f)
 			if diff := cmp.Diff(tc.want.outFields, gotFields, cmp.Comparer(func(a, b *types.Var) bool {
 				return a.String() == b.String()
 			})); diff != "" {
