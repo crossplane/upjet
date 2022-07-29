@@ -6,11 +6,13 @@ package reference
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/pkg/errors"
 
 	"github.com/upbound/upjet/pkg/config"
 	"github.com/upbound/upjet/pkg/types"
+	"github.com/upbound/upjet/pkg/types/name"
 )
 
 const (
@@ -48,7 +50,7 @@ func getExtractorFuncPath(r *config.Resource, sourceAttr string) string {
 		if !ok {
 			return ""
 		}
-		return fmt.Sprintf(fmtExtractParamFuncPath, sourceAttr, types.IsObservation(s))
+		return fmt.Sprintf(fmtExtractParamFuncPath, name.NewFromSnake(sourceAttr).LowerCamelComputed, types.IsObservation(s))
 	}
 }
 
@@ -79,7 +81,8 @@ func (rr *Injector) InjectReferences(configResources map[string]*config.Resource
 					continue
 				}
 				parts := getRefParts(ref)
-				if parts == nil {
+				// if nil or a references to a nested configuration block
+				if parts == nil || strings.Contains(parts.Attribute, ".") || strings.Contains(parts.Attribute, "[") {
 					continue
 				}
 				if skipReference(configResources[n].SkipReferencesTo, parts) {
