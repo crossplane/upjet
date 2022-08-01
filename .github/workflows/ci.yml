@@ -56,6 +56,10 @@ jobs:
         id: go
         run: echo "::set-output name=cache::$(go env GOCACHE)"
 
+      - name: Find the Go Build Cache
+        id: gomod
+        run: echo "::set-output name=cache::$(go env GOCACHE)"
+
       - name: Cache the Go Build Cache
         uses: actions/cache@v2
         with:
@@ -99,20 +103,22 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
 
       - name: Find the Go Build Cache
-        id: go
-        run: echo "::set-output name=cache::$(go env GOCACHE)"
+        id: go-cache-paths
+        run: |
+          echo "::set-output name=go-build::$(make go.cachedir)"
+          echo "::set-output name=go-mod::$(make go.mod.cachedir)"
 
       - name: Cache the Go Build Cache
         uses: actions/cache@v2
         with:
-          path: ${{ steps.go.outputs.cache }}
+          path: ${{ steps.go-cache-paths.outputs.go-build }}
           key: ${{ runner.os }}-build-check-diff-${{ hashFiles('**/go.sum') }}
           restore-keys: ${{ runner.os }}-build-check-diff-
 
       - name: Cache Go Dependencies
         uses: actions/cache@v2
         with:
-          path: .work/pkg
+          path: ${{ steps.go-cache-paths.outputs.go-mod }}
           key: ${{ runner.os }}-pkg-${{ hashFiles('**/go.sum') }}
           restore-keys: ${{ runner.os }}-pkg-
 
@@ -142,20 +148,22 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
 
       - name: Find the Go Build Cache
-        id: go
-        run: echo "::set-output name=cache::$(go env GOCACHE)"
+        id: go-cache-paths
+        run: |
+          echo "::set-output name=go-build::$(make go.cachedir)"
+          echo "::set-output name=go-mod::$(make go.mod.cachedir)"
 
       - name: Cache the Go Build Cache
         uses: actions/cache@v2
         with:
-          path: ${{ steps.go.outputs.cache }}
+          path: ${{ steps.go-cache-paths.outputs.go-build }}
           key: ${{ runner.os }}-build-unit-tests-${{ hashFiles('**/go.sum') }}
           restore-keys: ${{ runner.os }}-build-unit-tests-
 
       - name: Cache Go Dependencies
         uses: actions/cache@v2
         with:
-          path: .work/pkg
+          path: ${{ steps.go-cache-paths.outputs.go-mod }}
           key: ${{ runner.os }}-pkg-${{ hashFiles('**/go.sum') }}
           restore-keys: ${{ runner.os }}-pkg-
 
@@ -191,20 +199,22 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
 
       - name: Find the Go Build Cache
-        id: go
-        run: echo "::set-output name=cache::$(go env GOCACHE)"
+        id: go-cache-paths
+        run: |
+          echo "::set-output name=go-build::$(make go.cachedir)"
+          echo "::set-output name=go-mod::$(make go.mod.cachedir)"
 
       - name: Cache the Go Build Cache
         uses: actions/cache@v2
         with:
-          path: ${{ steps.go.outputs.cache }}
+          path: ${{ steps.go-cache-paths.outputs.go-build }}
           key: ${{ runner.os }}-build-e2e-tests-${{ hashFiles('**/go.sum') }}
           restore-keys: ${{ runner.os }}-build-e2e-tests-
 
       - name: Cache Go Dependencies
         uses: actions/cache@v2
         with:
-          path: .work/pkg
+          path: ${{ steps.go-cache-paths.outputs.go-mod }}
           key: ${{ runner.os }}-pkg-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-pkg-
