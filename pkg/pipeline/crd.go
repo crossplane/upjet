@@ -81,7 +81,7 @@ func (cg *CRDGenerator) Generate(cfg *config.Resource) (string, error) {
 	if err != nil {
 		return "", errors.Wrap(err, "cannot print the type list")
 	}
-	vars := map[string]interface{}{
+	vars := map[string]any{
 		"Types": typesStr,
 		"CRD": map[string]string{
 			"APIVersion":      cfg.Version,

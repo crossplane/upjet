@@ -12,8 +12,8 @@ import (
 
 func TestLateInitialize(t *testing.T) {
 	type args struct {
-		desiredObject  interface{}
-		observedObject interface{}
+		desiredObject  any
+		observedObject any
 		opts           []GenericLateInitializerOption
 	}
 
@@ -72,7 +72,7 @@ func TestLateInitialize(t *testing.T) {
 		args         args
 		wantModified bool
 		wantErr      bool
-		wantCRObject interface{}
+		wantCRObject any
 	}{
 		"TypeMismatch": {
 			args: args{

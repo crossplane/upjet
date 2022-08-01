@@ -10,9 +10,9 @@ on:
 
 env:
   # Common versions
-  GO_VERSION: '1.17'
-  GOLANGCI_VERSION: 'v1.31'
-  DOCKER_BUILDX_VERSION: 'v0.4.2'
+  GO_VERSION: '1.18'
+  GOLANGCI_VERSION: 'v1.47'
+  DOCKER_BUILDX_VERSION: 'v0.8.2'
 
   # Common users. We can't run a step 'if secrets.AWS_USR != ""' but we can run
   # a step 'if env.AWS_USR' != ""', so we copy these to succinctly test whether
@@ -22,7 +22,7 @@ env:
 
 jobs:
   detect-noop:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     outputs:
       noop: ${{ steps.noop.outputs.should_skip }}
     steps:
@@ -37,7 +37,7 @@ jobs:
 
 
   lint:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     needs: detect-noop
     if: needs.detect-noop.outputs.noop != 'true'
 
@@ -54,6 +54,10 @@ jobs:
 
       - name: Find the Go Build Cache
         id: go
+        run: echo "::set-output name=cache::$(go env GOCACHE)"
+
+      - name: Find the Go Build Cache
+        id: gomod
         run: echo "::set-output name=cache::$(go env GOCACHE)"
 
       - name: Cache the Go Build Cache
@@ -83,7 +87,7 @@ jobs:
           skip-go-installation: true
 
   check-diff:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     needs: detect-noop
     if: needs.detect-noop.outputs.noop != 'true'
 
@@ -99,20 +103,22 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
 
       - name: Find the Go Build Cache
-        id: go
-        run: echo "::set-output name=cache::$(go env GOCACHE)"
+        id: go-cache-paths
+        run: |
+          echo "::set-output name=go-build::$(make go.cachedir)"
+          echo "::set-output name=go-mod::$(make go.mod.cachedir)"
 
       - name: Cache the Go Build Cache
         uses: actions/cache@v2
         with:
-          path: ${{ steps.go.outputs.cache }}
+          path: ${{ steps.go-cache-paths.outputs.go-build }}
           key: ${{ runner.os }}-build-check-diff-${{ hashFiles('**/go.sum') }}
           restore-keys: ${{ runner.os }}-build-check-diff-
 
       - name: Cache Go Dependencies
         uses: actions/cache@v2
         with:
-          path: .work/pkg
+          path: ${{ steps.go-cache-paths.outputs.go-mod }}
           key: ${{ runner.os }}-pkg-${{ hashFiles('**/go.sum') }}
           restore-keys: ${{ runner.os }}-pkg-
 
@@ -123,7 +129,7 @@ jobs:
         run: make check-diff
 
   unit-tests:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     needs: detect-noop
     if: needs.detect-noop.outputs.noop != 'true'
 
@@ -142,20 +148,22 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
 
       - name: Find the Go Build Cache
-        id: go
-        run: echo "::set-output name=cache::$(go env GOCACHE)"
+        id: go-cache-paths
+        run: |
+          echo "::set-output name=go-build::$(make go.cachedir)"
+          echo "::set-output name=go-mod::$(make go.mod.cachedir)"
 
       - name: Cache the Go Build Cache
         uses: actions/cache@v2
         with:
-          path: ${{ steps.go.outputs.cache }}
+          path: ${{ steps.go-cache-paths.outputs.go-build }}
           key: ${{ runner.os }}-build-unit-tests-${{ hashFiles('**/go.sum') }}
           restore-keys: ${{ runner.os }}-build-unit-tests-
 
       - name: Cache Go Dependencies
         uses: actions/cache@v2
         with:
-          path: .work/pkg
+          path: ${{ steps.go-cache-paths.outputs.go-mod }}
           key: ${{ runner.os }}-pkg-${{ hashFiles('**/go.sum') }}
           restore-keys: ${{ runner.os }}-pkg-
 
@@ -172,7 +180,7 @@ jobs:
           file: _output/tests/linux_amd64/coverage.txt
 
   e2e-tests:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     needs: detect-noop
     if: needs.detect-noop.outputs.noop != 'true'
 
@@ -191,20 +199,22 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
 
       - name: Find the Go Build Cache
-        id: go
-        run: echo "::set-output name=cache::$(go env GOCACHE)"
+        id: go-cache-paths
+        run: |
+          echo "::set-output name=go-build::$(make go.cachedir)"
+          echo "::set-output name=go-mod::$(make go.mod.cachedir)"
 
       - name: Cache the Go Build Cache
         uses: actions/cache@v2
         with:
-          path: ${{ steps.go.outputs.cache }}
+          path: ${{ steps.go-cache-paths.outputs.go-build }}
           key: ${{ runner.os }}-build-e2e-tests-${{ hashFiles('**/go.sum') }}
           restore-keys: ${{ runner.os }}-build-e2e-tests-
 
       - name: Cache Go Dependencies
         uses: actions/cache@v2
         with:
-          path: .work/pkg
+          path: ${{ steps.go-cache-paths.outputs.go-mod }}
           key: ${{ runner.os }}-pkg-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-pkg-

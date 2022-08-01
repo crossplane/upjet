@@ -111,7 +111,7 @@ func TestWorkspaceApply(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			if err := tc.w.fs.WriteFile(directory+"terraform.tfstate", []byte(tfstate), 777); err != nil {
+			if err := tc.w.fs.WriteFile(directory+"terraform.tfstate", []byte(tfstate), 0777); err != nil {
 				panic(err)
 			}
 			r, err := tc.w.Apply(context.TODO())
@@ -219,7 +219,7 @@ func TestWorkspaceRefresh(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			if err := tc.w.fs.WriteFile(directory+"terraform.tfstate", []byte(tfstate), 777); err != nil {
+			if err := tc.w.fs.WriteFile(directory+"terraform.tfstate", []byte(tfstate), 0777); err != nil {
 				panic(err)
 			}
 			r, err := tc.w.Refresh(context.TODO())

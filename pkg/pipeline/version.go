@@ -40,7 +40,7 @@ type VersionGenerator struct {
 
 // Generate writes doc and group version info files to the disk.
 func (vg *VersionGenerator) Generate() error {
-	vars := map[string]interface{}{
+	vars := map[string]any{
 		"CRD": map[string]string{
 			"Version": vg.Version,
 			"Group":   vg.Group,

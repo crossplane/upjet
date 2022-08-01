@@ -42,7 +42,7 @@ func (cg *ControllerGenerator) Generate(cfg *config.Resource, typesPkgPath strin
 		wrapper.WithHeaderPath(cg.LicenseHeaderPath),
 	)
 
-	vars := map[string]interface{}{
+	vars := map[string]any{
 		"Package": strings.ToLower(cfg.Kind),
 		"CRD": map[string]string{
 			"Kind": cfg.Kind,

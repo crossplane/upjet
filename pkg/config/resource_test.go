@@ -86,7 +86,7 @@ func TestSetExternalTagsWithPaved(t *testing.T) {
 					xpresource.ExternalResourceTagKeyName:     name,
 					xpresource.ExternalResourceTagKeyProvider: provider,
 				},
-				paved:     fieldpath.Pave(map[string]interface{}{}),
+				paved:     fieldpath.Pave(map[string]any{}),
 				fieldName: "tags",
 			},
 			want: want{

@@ -49,7 +49,7 @@ type GenericLateInitializer struct {
 
 // SetCriticalAnnotations sets the critical annotations of the resource and reports
 // whether there has been a change.
-func SetCriticalAnnotations(tr metav1.Object, cfg *config.Resource, tfstate map[string]interface{}, privateRaw string) (bool, error) {
+func SetCriticalAnnotations(tr metav1.Object, cfg *config.Resource, tfstate map[string]any, privateRaw string) (bool, error) {
 	name, err := cfg.ExternalName.GetExternalNameFn(tfstate)
 	if err != nil {
 		return false, errors.Wrap(err, "cannot get external name")
@@ -179,7 +179,7 @@ func isZeroValueOmitted(tag string) bool {
 // Otherwise, an error will be returned. Returns `true` if at least one field has been stored
 // from source `responseObject` into a corresponding field of target `crObject`.
 // nolint:gocyclo
-func (li *GenericLateInitializer) LateInitialize(desiredObject, observedObject interface{}) (changed bool, err error) {
+func (li *GenericLateInitializer) LateInitialize(desiredObject, observedObject any) (changed bool, err error) {
 	if desiredObject == nil || reflect.ValueOf(desiredObject).IsNil() ||
 		observedObject == nil || reflect.ValueOf(observedObject).IsNil() {
 		return false, nil
@@ -205,7 +205,7 @@ func (li *GenericLateInitializer) LateInitialize(desiredObject, observedObject i
 }
 
 // nolint:gocyclo
-func (li *GenericLateInitializer) handleStruct(parentName string, desiredObject interface{}, observedObject interface{}) (bool, error) {
+func (li *GenericLateInitializer) handleStruct(parentName string, desiredObject any, observedObject any) (bool, error) {
 	typeOfDesiredObject, typeOfObservedObject := reflect.TypeOf(desiredObject), reflect.TypeOf(observedObject)
 	valueOfDesiredObject, valueOfObservedObject := reflect.ValueOf(desiredObject), reflect.ValueOf(observedObject).Elem()
 	typeOfDesiredObject, typeOfObservedObject = typeOfDesiredObject.Elem(), typeOfObservedObject.Elem()

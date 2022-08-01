@@ -75,7 +75,7 @@ type SecretClient interface {
 
 // GetConnectionDetails returns connection details including the sensitive
 // Terraform attributes and additions connection details configured.
-func GetConnectionDetails(attr map[string]interface{}, tr Terraformed, cfg *config.Resource) (managed.ConnectionDetails, error) {
+func GetConnectionDetails(attr map[string]any, tr Terraformed, cfg *config.Resource) (managed.ConnectionDetails, error) {
 	conn, err := GetSensitiveAttributes(attr, tr.GetConnectionDetailsMapping())
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot get connection details")
@@ -109,7 +109,7 @@ func GetConnectionDetails(attr map[string]interface{}, tr Terraformed, cfg *conf
 // GetSensitiveAttributes returns strings matching provided field paths in the
 // input data.
 // See the unit tests for examples.
-func GetSensitiveAttributes(from map[string]interface{}, mapping map[string]string) (map[string][]byte, error) { //nolint: gocyclo
+func GetSensitiveAttributes(from map[string]any, mapping map[string]string) (map[string][]byte, error) { //nolint: gocyclo
 	if len(mapping) == 0 {
 		return nil, nil
 	}
@@ -145,13 +145,13 @@ func GetSensitiveAttributes(from map[string]interface{}, mapping map[string]stri
 				vals = map[string][]byte{}
 			}
 			switch s := v.(type) {
-			case map[string]interface{}:
+			case map[string]any:
 				for i, e := range s {
 					if err := setSensitiveAttributesToValuesMap(e, i, k, fp, vals); err != nil {
 						return nil, err
 					}
 				}
-			case []interface{}:
+			case []any:
 				for i, e := range s {
 					if err := setSensitiveAttributesToValuesMap(e, i, k, fp, vals); err != nil {
 						return nil, err
@@ -169,7 +169,7 @@ func GetSensitiveAttributes(from map[string]interface{}, mapping map[string]stri
 
 // GetSensitiveParameters will collect sensitive information as terraform state
 // attributes by following secret references in the spec.
-func GetSensitiveParameters(ctx context.Context, client SecretClient, from runtime.Object, into map[string]interface{}, mapping map[string]string) error { //nolint: gocyclo
+func GetSensitiveParameters(ctx context.Context, client SecretClient, from runtime.Object, into map[string]any, mapping map[string]string) error { //nolint: gocyclo
 	// Note(turkenh): Cyclomatic complexity of this function is slightly higher
 	// than the threshold but preferred to use nolint directive for better
 	// readability and not to split the logic.
@@ -204,13 +204,13 @@ func GetSensitiveParameters(ctx context.Context, client SecretClient, from runti
 			}
 
 			switch k := v.(type) {
-			case map[string]interface{}:
+			case map[string]any:
 				if hasMapValue(k) {
 					sel := &map[string]v1.SecretKeySelector{}
 					if err = pavedJSON.GetValueInto(expandedJSONPath, sel); err != nil {
 						return errors.Wrapf(err, errFmtCannotGetSecretKeySelectorAsMap, expandedJSONPath)
 					}
-					sensitives := make(map[string]interface{})
+					sensitives := make(map[string]any)
 					for key, value := range *sel {
 						sensitive, err = client.GetSecretValue(ctx, value)
 						if resource.IgnoreNotFound(err) != nil {
@@ -240,12 +240,12 @@ func GetSensitiveParameters(ctx context.Context, client SecretClient, from runti
 						return err
 					}
 				}
-			case []interface{}:
+			case []any:
 				sel := &[]v1.SecretKeySelector{}
 				if err = pavedJSON.GetValueInto(expandedJSONPath, sel); err != nil {
 					return errors.Wrapf(err, errFmtCannotGetSecretKeySelectorAsList, expandedJSONPath)
 				}
-				var sensitives []interface{}
+				var sensitives []any
 				for _, s := range *sel {
 					sensitive, err = client.GetSecretValue(ctx, s)
 					if resource.IgnoreNotFound(err) != nil {
@@ -273,7 +273,7 @@ func GetSensitiveParameters(ctx context.Context, client SecretClient, from runti
 
 // GetSensitiveObservation will return sensitive information as terraform state
 // attributes by reading them from connection details.
-func GetSensitiveObservation(ctx context.Context, client SecretClient, from *v1.SecretReference, into map[string]interface{}) error {
+func GetSensitiveObservation(ctx context.Context, client SecretClient, from *v1.SecretReference, into map[string]any) error {
 	if from == nil {
 		// No secret reference set
 		return nil
@@ -397,7 +397,7 @@ func fieldPathToSecretKey(s string) (string, error) {
 	return strings.TrimPrefix(b.String(), "."), nil
 }
 
-func setSensitiveParametersWithPaved(pavedTF *fieldpath.Paved, expandedJSONPath, tfPath string, mapping map[string]string, sensitives interface{}) error {
+func setSensitiveParametersWithPaved(pavedTF *fieldpath.Paved, expandedJSONPath, tfPath string, mapping map[string]string, sensitives any) error {
 	expTF, err := expandedTFPath(expandedJSONPath, mapping)
 	if err != nil {
 		return err
@@ -408,7 +408,7 @@ func setSensitiveParametersWithPaved(pavedTF *fieldpath.Paved, expandedJSONPath,
 	return nil
 }
 
-func setSensitiveAttributesToValuesMap(e, i interface{}, k, fp string, vals map[string][]byte) error {
+func setSensitiveAttributesToValuesMap(e, i any, k, fp string, vals map[string][]byte) error {
 	k = strings.TrimSuffix(k, pluralSuffix)
 	value, ok := e.(string)
 	if !ok {
@@ -419,10 +419,10 @@ func setSensitiveAttributesToValuesMap(e, i interface{}, k, fp string, vals map[
 }
 
 // This for loop accesses the first value of selectorMap to determine the map's value type.
-func hasMapValue(selectorMap map[string]interface{}) bool {
+func hasMapValue(selectorMap map[string]any) bool {
 	for _, v := range selectorMap {
 		switch v.(type) {
-		case map[string]interface{}:
+		case map[string]any:
 			return true
 		case string:
 			return false

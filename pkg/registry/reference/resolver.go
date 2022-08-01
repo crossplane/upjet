@@ -64,7 +64,7 @@ type PavedWithManifest struct {
 }
 
 func paveExampleManifest(m string) (*PavedWithManifest, error) {
-	var exampleParams map[string]interface{}
+	var exampleParams map[string]any
 	if err := json.TFParser.Unmarshal([]byte(m), &exampleParams); err != nil {
 		return nil, errors.Wrapf(err, "cannot unmarshal example manifest: %s", m)
 	}
@@ -83,17 +83,17 @@ func (rr *Injector) ResolveReferencesOfPaved(pm *PavedWithManifest, resolutionCo
 	return errors.Wrap(rr.resolveReferences(pm.Paved.UnstructuredContent(), resolutionContext), "failed to resolve references of paved")
 }
 
-func (rr *Injector) resolveReferences(params map[string]interface{}, resolutionContext map[string]*PavedWithManifest) error { // nolint:gocyclo
+func (rr *Injector) resolveReferences(params map[string]any, resolutionContext map[string]*PavedWithManifest) error { // nolint:gocyclo
 	for paramName, paramValue := range params {
 		switch t := paramValue.(type) {
-		case map[string]interface{}:
+		case map[string]any:
 			if err := rr.resolveReferences(t, resolutionContext); err != nil {
 				return err
 			}
 
-		case []interface{}:
+		case []any:
 			for _, e := range t {
-				eM, ok := e.(map[string]interface{})
+				eM, ok := e.(map[string]any)
 				if !ok {
 					continue
 				}

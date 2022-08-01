@@ -56,7 +56,7 @@ func (eg *ExampleGenerator) StoreExamples() error {
 			return errors.Wrapf(err, "cannot resolve references for resource: %s", n)
 		}
 		u := pm.Paved.UnstructuredContent()
-		delete(u["spec"].(map[string]interface{})["forProvider"].(map[string]interface{}), "depends_on")
+		delete(u["spec"].(map[string]any)["forProvider"].(map[string]any), "depends_on")
 		buff, err := yaml.Marshal(u)
 		if err != nil {
 			return errors.Wrapf(err, "cannot marshal example manifest for resource: %s", n)
@@ -82,7 +82,7 @@ func (eg *ExampleGenerator) Generate(group, version string, r *config.Resource, 
 	exampleParams := rm.Examples[0].Paved.UnstructuredContent()
 	transformFields(r, exampleParams, r.ExternalName.OmittedFields, fieldTransformations, "")
 
-	metadata := map[string]interface{}{
+	metadata := map[string]any{
 		"name": "example",
 	}
 	if len(rm.ExternalName) != 0 {
@@ -90,11 +90,11 @@ func (eg *ExampleGenerator) Generate(group, version string, r *config.Resource, 
 			xpmeta.AnnotationKeyExternalName: rm.ExternalName,
 		}
 	}
-	example := map[string]interface{}{
+	example := map[string]any{
 		"apiVersion": fmt.Sprintf("%s/%s", group, version),
 		"kind":       r.Kind,
 		"metadata":   metadata,
-		"spec": map[string]interface{}{
+		"spec": map[string]any{
 			"forProvider": exampleParams,
 		},
 	}
@@ -122,7 +122,7 @@ func isStatus(r *config.Resource, attr string) bool {
 	return tjtypes.IsObservation(s)
 }
 
-func transformFields(r *config.Resource, params map[string]interface{}, omittedFields []string, t map[string]tjtypes.Transformation, namePrefix string) { // nolint:gocyclo
+func transformFields(r *config.Resource, params map[string]any, omittedFields []string, t map[string]tjtypes.Transformation, namePrefix string) { // nolint:gocyclo
 	for n := range params {
 		hName := getHierarchicalName(namePrefix, n)
 		if isStatus(r, hName) {
@@ -139,12 +139,12 @@ func transformFields(r *config.Resource, params map[string]interface{}, omittedF
 
 	for n, v := range params {
 		switch pT := v.(type) {
-		case map[string]interface{}:
+		case map[string]any:
 			transformFields(r, pT, omittedFields, t, getHierarchicalName(namePrefix, n))
 
-		case []interface{}:
+		case []any:
 			for _, e := range pT {
-				eM, ok := e.(map[string]interface{})
+				eM, ok := e.(map[string]any)
 				if !ok {
 					continue
 				}
@@ -166,14 +166,14 @@ func transformFields(r *config.Resource, params map[string]interface{}, omittedF
 			case transform.IsSensitive:
 				secretName, secretKey := getSecretRef(v)
 				params[transform.TransformedName] = getRefField(v,
-					map[string]interface{}{
+					map[string]any{
 						"name":      secretName,
 						"namespace": "crossplane-system",
 						"key":       secretKey,
 					})
 			default:
 				params[transform.TransformedName] = getRefField(v,
-					map[string]interface{}{
+					map[string]any{
 						"name": "example",
 					})
 			}
@@ -182,10 +182,10 @@ func transformFields(r *config.Resource, params map[string]interface{}, omittedF
 	}
 }
 
-func getRefField(v interface{}, ref map[string]interface{}) interface{} {
+func getRefField(v any, ref map[string]any) any {
 	switch v.(type) {
-	case []interface{}:
-		return []interface{}{
+	case []any:
+		return []any{
 			ref,
 		}
 
@@ -194,7 +194,7 @@ func getRefField(v interface{}, ref map[string]interface{}) interface{} {
 	}
 }
 
-func getSecretRef(v interface{}) (string, string) {
+func getSecretRef(v any) (string, string) {
 	secretName := "example-secret"
 	secretKey := "example-key"
 	s, ok := v.(string)

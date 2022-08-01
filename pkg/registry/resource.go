@@ -89,6 +89,6 @@ func NewProviderMetadataFromFile(providerMetadata []byte) (*ProviderMetadata, er
 
 // SetPathValue sets the field at the specified path to the given value
 // in the example manifest.
-func (re *ResourceExample) SetPathValue(fieldPath string, val interface{}) error {
+func (re *ResourceExample) SetPathValue(fieldPath string, val any) error {
 	return errors.Wrapf(re.Paved.SetValue(fieldPath, val), "cannot set example manifest path %q to value: %#v", fieldPath, val)
 }

@@ -87,7 +87,7 @@ func TestTimeoutsAsMetadata(t *testing.T) {
 		to timeouts
 	}
 	type want struct {
-		out map[string]interface{}
+		out map[string]any
 	}
 	cases := map[string]struct {
 		args
@@ -95,7 +95,7 @@ func TestTimeoutsAsMetadata(t *testing.T) {
 	}{
 		"NoTimeouts": {
 			want: want{
-				out: map[string]interface{}{},
+				out: map[string]any{},
 			},
 		},
 		"SomeTimeout": {
@@ -105,7 +105,7 @@ func TestTimeoutsAsMetadata(t *testing.T) {
 				},
 			},
 			want: want{
-				out: map[string]interface{}{
+				out: map[string]any{
 					"read": int64(180000000000),
 				},
 			},
@@ -120,7 +120,7 @@ func TestTimeoutsAsMetadata(t *testing.T) {
 				},
 			},
 			want: want{
-				out: map[string]interface{}{
+				out: map[string]any{
 					"create": int64(60000000000),
 					"update": int64(120000000000),
 					"read":   int64(180000000000),

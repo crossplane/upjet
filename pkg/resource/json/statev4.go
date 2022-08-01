@@ -48,9 +48,9 @@ type ResourceStateV4 struct {
 
 // InstanceObjectStateV4 represents a version 4 instance object state
 type InstanceObjectStateV4 struct {
-	IndexKey interface{} `json:"index_key,omitempty"`
-	Status   string      `json:"status,omitempty"`
-	Deposed  string      `json:"deposed,omitempty"`
+	IndexKey any    `json:"index_key,omitempty"`
+	Status   string `json:"status,omitempty"`
+	Deposed  string `json:"deposed,omitempty"`
 
 	SchemaVersion           uint64              `json:"schema_version"`
 	AttributesRaw           jsoniter.RawMessage `json:"attributes,omitempty"`

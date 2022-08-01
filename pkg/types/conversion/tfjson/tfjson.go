@@ -154,7 +154,7 @@ func schemaV2TypeFromCtyType(typ cty.Type, schema *schemav2.Schema) error { //no
 	case typ.IsPrimitiveType():
 		schema.Type = primitiveToV2SchemaType(typ)
 	case typ.IsCollectionType():
-		var elemType interface{}
+		var elemType any
 		et := typ.ElementType()
 		switch {
 		case et.IsPrimitiveType():
