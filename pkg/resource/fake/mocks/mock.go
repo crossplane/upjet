@@ -59,7 +59,7 @@ func (m *MockSecretClient) GetSecretData(arg0 context.Context, arg1 *v1.SecretRe
 }
 
 // GetSecretData indicates an expected call of GetSecretData.
-func (mr *MockSecretClientMockRecorder) GetSecretData(arg0, arg1 any) *gomock.Call {
+func (mr *MockSecretClientMockRecorder) GetSecretData(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSecretData", reflect.TypeOf((*MockSecretClient)(nil).GetSecretData), arg0, arg1)
 }
@@ -74,7 +74,7 @@ func (m *MockSecretClient) GetSecretValue(arg0 context.Context, arg1 v1.SecretKe
 }
 
 // GetSecretValue indicates an expected call of GetSecretValue.
-func (mr *MockSecretClientMockRecorder) GetSecretValue(arg0, arg1 any) *gomock.Call {
+func (mr *MockSecretClientMockRecorder) GetSecretValue(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSecretValue", reflect.TypeOf((*MockSecretClient)(nil).GetSecretValue), arg0, arg1)
 }
