@@ -2,7 +2,7 @@
 Copyright 2022 Upbound Inc.
 */
 
-package pipeline
+package examples
 
 import (
 	"bytes"
@@ -35,9 +35,9 @@ const (
 	defaultNamespace   = "upbound-system"
 )
 
-// ExampleGenerator represents a pipeline for generating example manifests.
+// Generator represents a pipeline for generating example manifests.
 // Generates example manifests for Terraform resources under examples-generated.
-type ExampleGenerator struct {
+type Generator struct {
 	reference.Injector
 	rootDir         string
 	configResources map[string]*config.Resource
@@ -45,9 +45,9 @@ type ExampleGenerator struct {
 	resources       map[string]*reference.PavedWithManifest
 }
 
-// NewExampleGenerator returns a configured ExampleGenerator
-func NewExampleGenerator(rootDir, modulePath, shortName string, configResources map[string]*config.Resource, modifiers config.ExampleManifestModifierChain) *ExampleGenerator {
-	return &ExampleGenerator{
+// NewGenerator returns a configured Generator
+func NewGenerator(rootDir, modulePath, shortName string, configResources map[string]*config.Resource, modifiers config.ExampleManifestModifierChain) *Generator {
+	return &Generator{
 		Injector: reference.Injector{
 			ModulePath:        modulePath,
 			ProviderShortName: shortName,
@@ -61,7 +61,7 @@ func NewExampleGenerator(rootDir, modulePath, shortName string, configResources 
 
 // StoreExamples stores the generated example manifests under examples-generated in
 // their respective API groups.
-func (eg *ExampleGenerator) StoreExamples() error { // nolint:gocyclo
+func (eg *Generator) StoreExamples() error { // nolint:gocyclo
 	for rn, pm := range eg.resources {
 		manifestDir := filepath.Dir(pm.ManifestPath)
 		if err := os.MkdirAll(manifestDir, 0750); err != nil {
@@ -137,7 +137,7 @@ func dns1123Name(name string) string {
 	return strings.ReplaceAll(strings.ToLower(name), "_", "-")
 }
 
-func (eg *ExampleGenerator) writeManifest(writer io.Writer, pm *reference.PavedWithManifest, resolutionContext *reference.ResolutionContext) error {
+func (eg *Generator) writeManifest(writer io.Writer, pm *reference.PavedWithManifest, resolutionContext *reference.ResolutionContext) error {
 	if err := eg.ResolveReferencesOfPaved(pm, resolutionContext); err != nil {
 		return errors.Wrap(err, "cannot resolve references of resource")
 	}
@@ -166,7 +166,7 @@ func (eg *ExampleGenerator) writeManifest(writer io.Writer, pm *reference.PavedW
 }
 
 // Generate generates an example manifest for the specified Terraform resource.
-func (eg *ExampleGenerator) Generate(group, version string, r *config.Resource, fieldTransformations map[string]tjtypes.Transformation) error {
+func (eg *Generator) Generate(group, version string, r *config.Resource, fieldTransformations map[string]tjtypes.Transformation) error {
 	rm := eg.configResources[r.Name].MetaResource
 	if rm == nil || len(rm.Examples) == 0 {
 		return nil
