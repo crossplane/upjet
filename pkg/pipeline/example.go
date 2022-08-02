@@ -86,15 +86,15 @@ func (eg *ExampleGenerator) StoreExamples() error { // nolint:gocyclo
 			}
 			sort.Strings(dKeys)
 			for _, dn := range dKeys {
-				dr := eg.resources[reference.NewRefPartsFromResourceName(dn).GetResourceName(true)]
-				if dr == nil {
+				dr, ok := eg.resources[reference.NewRefPartsFromResourceName(dn).GetResourceName(true)]
+				if !ok {
 					continue
 				}
 				var exampleParams map[string]any
 				if err := json.TFParser.Unmarshal([]byte(re.Dependencies[dn]), &exampleParams); err != nil {
 					return errors.Wrapf(err, "cannot unmarshal example manifest for resource: %s", dr.Config.Name)
 				}
-				pmd := paveCRDManifest(exampleParams, dr.FieldTransformations, dr.Config,
+				pmd := paveCRManifest(exampleParams, dr.FieldTransformations, dr.Config,
 					reference.NewRefPartsFromResourceName(dn).ExampleName, dr.Group, dr.Version)
 				if err := eg.writeManifest(&buff, pmd, context); err != nil {
 					return errors.Wrapf(err, "cannot store example manifest for %s dependency: %s", rn, dn)
@@ -109,11 +109,8 @@ func (eg *ExampleGenerator) StoreExamples() error { // nolint:gocyclo
 	return nil
 }
 
-func paveCRDManifest(exampleParams map[string]any, fieldTransformations map[string]tjtypes.Transformation, r *config.Resource, eName, group, version string) *reference.PavedWithManifest {
+func paveCRManifest(exampleParams map[string]any, fieldTransformations map[string]tjtypes.Transformation, r *config.Resource, eName, group, version string) *reference.PavedWithManifest {
 	transformFields(r, exampleParams, r.ExternalName.OmittedFields, fieldTransformations, "")
-	if len(eName) == 0 {
-		eName = defaultExampleName
-	}
 	example := map[string]any{
 		"apiVersion": fmt.Sprintf("%s/%s", group, version),
 		"kind":       r.Kind,
@@ -174,7 +171,7 @@ func (eg *ExampleGenerator) Generate(group, version string, r *config.Resource, 
 	if rm == nil || len(rm.Examples) == 0 {
 		return nil
 	}
-	pm := paveCRDManifest(rm.Examples[0].Paved.UnstructuredContent(), fieldTransformations, r, rm.Examples[0].Name, group, version)
+	pm := paveCRManifest(rm.Examples[0].Paved.UnstructuredContent(), fieldTransformations, r, rm.Examples[0].Name, group, version)
 	manifestDir := filepath.Join(eg.rootDir, "examples-generated", strings.ToLower(strings.Split(group, ".")[0]))
 	pm.ManifestPath = filepath.Join(manifestDir, fmt.Sprintf("%s.yaml", strings.ToLower(r.Kind)))
 	eg.resources[fmt.Sprintf("%s.%s", r.Name, reference.Wildcard)] = pm
