@@ -60,10 +60,6 @@ func getRefParts(ref string) *Parts {
 	}
 }
 
-func (parts *Parts) getResourceAttr() string {
-	return fmt.Sprintf("%s.%s", parts.Resource, parts.Attribute)
-}
-
 // GetResourceName returns the resource name or the wildcard
 // for this Parts.
 func (parts Parts) GetResourceName(wildcardName bool) string {

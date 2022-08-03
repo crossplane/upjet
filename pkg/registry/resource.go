@@ -8,6 +8,8 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
+
+	"github.com/upbound/upjet/pkg/resource/json"
 )
 
 const (
@@ -91,4 +93,29 @@ func NewProviderMetadataFromFile(providerMetadata []byte) (*ProviderMetadata, er
 // in the example manifest.
 func (re *ResourceExample) SetPathValue(fieldPath string, val any) error {
 	return errors.Wrapf(re.Paved.SetValue(fieldPath, val), "cannot set example manifest path %q to value: %#v", fieldPath, val)
+}
+
+// SetPathValue sets the field at the specified path to the given value
+// in the example manifest of the specified dependency. Key format is:
+// <Terraform resource type>.<configuration block name>, e.g.,
+// aws_subnet.subnet1
+func (d Dependencies) SetPathValue(dependencyKey string, fieldPath string, val any) error {
+	m, ok := d[dependencyKey]
+	if !ok {
+		return nil
+	}
+	var params map[string]any
+	if err := json.TFParser.Unmarshal([]byte(m), &params); err != nil {
+		return errors.Wrapf(err, "cannot unmarshal dependency %q as JSON", dependencyKey)
+	}
+	p := fieldpath.Pave(params)
+	if err := p.SetValue(fieldPath, val); err != nil {
+		return errors.Wrapf(err, "cannot set example dependency %q path %q to value: %#v", dependencyKey, fieldPath, val)
+	}
+	buff, err := p.MarshalJSON()
+	if err != nil {
+		return errors.Wrapf(err, "cannot marshal dependency %q as JSON", dependencyKey)
+	}
+	d[dependencyKey] = string(buff)
+	return nil
 }

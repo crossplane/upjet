@@ -89,9 +89,6 @@ func (rr *Injector) InjectReferences(configResources map[string]*config.Resource
 				if parts == nil || strings.Contains(parts.Attribute, ".") || strings.Contains(parts.Attribute, "[") {
 					continue
 				}
-				if skipReference(configResources[n].SkipReferencesTo, parts) {
-					continue
-				}
 				if _, ok := configResources[parts.Resource]; !ok {
 					continue
 				}
@@ -116,15 +113,6 @@ func (rr *Injector) storeResolvedDependencies(re *registry.ResourceExample, cont
 		}
 	}
 	return nil
-}
-
-func skipReference(skippedRefs []string, parts *Parts) bool {
-	for _, p := range skippedRefs {
-		if p == parts.getResourceAttr() {
-			return true
-		}
-	}
-	return false
 }
 
 func (rr *Injector) getTypePath(tfName string, configResources map[string]*config.Resource) (string, error) {

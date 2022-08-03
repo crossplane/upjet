@@ -41,12 +41,11 @@ type Generator struct {
 	reference.Injector
 	rootDir         string
 	configResources map[string]*config.Resource
-	modifiers       config.ExampleManifestModifierChain
 	resources       map[string]*reference.PavedWithManifest
 }
 
 // NewGenerator returns a configured Generator
-func NewGenerator(rootDir, modulePath, shortName string, configResources map[string]*config.Resource, modifiers config.ExampleManifestModifierChain) *Generator {
+func NewGenerator(rootDir, modulePath, shortName string, configResources map[string]*config.Resource) *Generator {
 	return &Generator{
 		Injector: reference.Injector{
 			ModulePath:        modulePath,
@@ -54,7 +53,6 @@ func NewGenerator(rootDir, modulePath, shortName string, configResources map[str
 		},
 		rootDir:         rootDir,
 		configResources: configResources,
-		modifiers:       modifiers,
 		resources:       make(map[string]*reference.PavedWithManifest),
 	}
 }
@@ -151,9 +149,6 @@ func (eg *Generator) writeManifest(writer io.Writer, pm *reference.PavedWithMani
 	}
 	u := pm.Paved.UnstructuredContent()
 	delete(u["spec"].(map[string]any)["forProvider"].(map[string]any), "depends_on")
-	if err := eg.modifiers.Modify(pm.Paved, pm.Config); err != nil {
-		return errors.Wrapf(err, "cannot call the configured example manifest modifiers for resource: %s", pm.Config.Name)
-	}
 	buff, err := yaml.Marshal(u)
 	if err != nil {
 		return errors.Wrap(err, "cannot marshal example resource manifest")
