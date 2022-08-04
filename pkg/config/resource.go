@@ -292,11 +292,6 @@ type Resource struct {
 	// References keeps the configuration to build cross resource references
 	References References
 
-	// SkipReferencesTo configures attributes for which
-	// references will not be injected. Expected format
-	// for each element is <Terraform resource name>.<attribute name>.
-	SkipReferencesTo []string
-
 	// Sensitive keeps the configuration to handle sensitive information
 	Sensitive Sensitive
 

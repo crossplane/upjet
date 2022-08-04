@@ -11,6 +11,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/upbound/upjet/pkg/config"
+	"github.com/upbound/upjet/pkg/registry"
 	"github.com/upbound/upjet/pkg/types"
 	"github.com/upbound/upjet/pkg/types/name"
 )
@@ -63,17 +64,20 @@ func (rr *Injector) InjectReferences(configResources map[string]*config.Resource
 			continue
 		}
 
-		for _, re := range m.Examples {
+		for i, re := range m.Examples {
 			pm, err := paveExampleManifest(re.Manifest)
 			if err != nil {
 				return errors.Wrapf(err, "cannot pave example manifest for resource: %s", n)
 			}
-			resolutionContext, err := PrepareLocalResolutionContext(re)
+			resolutionContext, err := PrepareLocalResolutionContext(re, NewRefParts(n, re.Name).GetResourceName(false))
 			if err != nil {
 				return errors.Wrapf(err, "cannot prepare local resolution context for resource: %s", n)
 			}
 			if err := rr.ResolveReferencesOfPaved(pm, resolutionContext); err != nil {
 				return errors.Wrapf(err, "cannot resolve references of resource with local examples context: %s", n)
+			}
+			if err := rr.storeResolvedDependencies(&m.Examples[i], resolutionContext.Context); err != nil {
+				return errors.Wrapf(err, "cannot store resolved dependencies for resource: %s", n)
 			}
 			for targetAttr, ref := range re.References {
 				// if a reference is already configured for the target attribute
@@ -83,9 +87,6 @@ func (rr *Injector) InjectReferences(configResources map[string]*config.Resource
 				parts := getRefParts(ref)
 				// if nil or a references to a nested configuration block
 				if parts == nil || strings.Contains(parts.Attribute, ".") || strings.Contains(parts.Attribute, "[") {
-					continue
-				}
-				if skipReference(configResources[n].SkipReferencesTo, parts) {
 					continue
 				}
 				if _, ok := configResources[parts.Resource]; !ok {
@@ -101,13 +102,17 @@ func (rr *Injector) InjectReferences(configResources map[string]*config.Resource
 	return nil
 }
 
-func skipReference(skippedRefs []string, parts *Parts) bool {
-	for _, p := range skippedRefs {
-		if p == parts.getResourceAttr() {
-			return true
+func (rr *Injector) storeResolvedDependencies(re *registry.ResourceExample, context map[string]*PavedWithManifest) error {
+	for rn, pm := range context {
+		buff, err := pm.Paved.MarshalJSON()
+		if err != nil {
+			return errors.Wrapf(err, "cannot marshal paved as JSON: %s", rn)
+		}
+		if _, ok := re.Dependencies[rn]; ok {
+			re.Dependencies[rn] = string(buff)
 		}
 	}
-	return false
+	return nil
 }
 
 func (rr *Injector) getTypePath(tfName string, configResources map[string]*config.Resource) (string, error) {

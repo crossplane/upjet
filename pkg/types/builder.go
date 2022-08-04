@@ -31,6 +31,7 @@ const (
 // transformations applied by the CRD generation pipeline.
 type Transformation struct {
 	TransformedName string
+	SelectorName    string
 	IsRef           bool
 	IsSensitive     bool
 }
@@ -124,6 +125,7 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 		}
 		f.AddToResource(g, r, typeNames)
 		tr.TransformedName = f.TransformedName
+		tr.SelectorName = f.SelectorName
 		t[fieldPath(f.TerraformPaths)] = tr
 	}
 

@@ -26,6 +26,7 @@ type Field struct {
 	AsBlocksMode                             bool
 	Reference                                *config.Reference
 	TransformedName                          string
+	SelectorName                             string
 }
 
 // NewField returns a constructed Field object.

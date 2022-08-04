@@ -14,6 +14,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/errors"
 
 	"github.com/upbound/upjet/pkg/config"
+	"github.com/upbound/upjet/pkg/examples"
 )
 
 type terraformedInput struct {
@@ -45,7 +46,7 @@ func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
 		resourcesGroups[group][resource.Version][name] = resource
 	}
 
-	exampleGen := NewExampleGenerator(rootDir, pc.ModulePath, pc.ShortName, pc.Resources)
+	exampleGen := examples.NewGenerator(rootDir, pc.ModulePath, pc.ShortName, pc.Resources)
 	if err := exampleGen.SetReferenceTypes(pc.Resources); err != nil {
 		panic(errors.Wrap(err, "cannot set reference types for resources"))
 	}

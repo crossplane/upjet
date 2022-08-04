@@ -7,13 +7,21 @@ package reference
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 	"github.com/pkg/errors"
 
+	"github.com/upbound/upjet/pkg/config"
 	"github.com/upbound/upjet/pkg/registry"
 	"github.com/upbound/upjet/pkg/resource/json"
+	tjtypes "github.com/upbound/upjet/pkg/types"
+)
+
+const (
+	// Wildcard denotes a wildcard resource name
+	Wildcard = "*"
 )
 
 var (
@@ -30,7 +38,8 @@ type Parts struct {
 	Attribute   string
 }
 
-func matchRefParts(ref string) *Parts {
+// MatchRefParts parses a Parts from an HCL reference string
+func MatchRefParts(ref string) *Parts {
 	g := ReRef.FindStringSubmatch(ref)
 	if len(g) != 2 {
 		return nil
@@ -51,16 +60,54 @@ func getRefParts(ref string) *Parts {
 	}
 }
 
-func (parts *Parts) getResourceAttr() string {
-	return fmt.Sprintf("%s.%s", parts.Resource, parts.Attribute)
+// GetResourceName returns the resource name or the wildcard
+// for this Parts.
+func (parts Parts) GetResourceName(wildcardName bool) string {
+	name := parts.ExampleName
+	if wildcardName || len(name) == 0 {
+		name = Wildcard
+	}
+	return fmt.Sprintf("%s.%s", parts.Resource, name)
+}
+
+// NewRefParts initializes a new Parts from the specified
+// resource and example names.
+func NewRefParts(resource, exampleName string) Parts {
+	return Parts{
+		Resource:    resource,
+		ExampleName: exampleName,
+	}
+}
+
+// NewRefPartsFromResourceName initializes a new Parts
+// from the specified <resource name>.<example name>
+// string.
+func NewRefPartsFromResourceName(rn string) Parts {
+	parts := strings.Split(rn, ".")
+	return Parts{
+		Resource:    parts[0],
+		ExampleName: parts[1],
+	}
 }
 
 // PavedWithManifest represents an example manifest with a fieldpath.Paved
 type PavedWithManifest struct {
-	Paved        *fieldpath.Paved
-	ManifestPath string
-	ParamsPrefix []string
-	refsResolved bool
+	Paved                *fieldpath.Paved
+	ManifestPath         string
+	ParamsPrefix         []string
+	refsResolved         bool
+	FieldTransformations map[string]tjtypes.Transformation
+	Config               *config.Resource
+	Group                string
+	Version              string
+	ExampleName          string
+}
+
+// ResolutionContext represents a reference resolution context where
+// wildcard or named references are used.
+type ResolutionContext struct {
+	WildcardNames bool
+	Context       map[string]*PavedWithManifest
 }
 
 func paveExampleManifest(m string) (*PavedWithManifest, error) {
@@ -75,7 +122,7 @@ func paveExampleManifest(m string) (*PavedWithManifest, error) {
 
 // ResolveReferencesOfPaved resolves references of a PavedWithManifest
 // in the given resolution context.
-func (rr *Injector) ResolveReferencesOfPaved(pm *PavedWithManifest, resolutionContext map[string]*PavedWithManifest) error {
+func (rr *Injector) ResolveReferencesOfPaved(pm *PavedWithManifest, resolutionContext *ResolutionContext) error {
 	if pm.refsResolved {
 		return nil
 	}
@@ -83,7 +130,7 @@ func (rr *Injector) ResolveReferencesOfPaved(pm *PavedWithManifest, resolutionCo
 	return errors.Wrap(rr.resolveReferences(pm.Paved.UnstructuredContent(), resolutionContext), "failed to resolve references of paved")
 }
 
-func (rr *Injector) resolveReferences(params map[string]any, resolutionContext map[string]*PavedWithManifest) error { // nolint:gocyclo
+func (rr *Injector) resolveReferences(params map[string]any, resolutionContext *ResolutionContext) error { // nolint:gocyclo
 	for paramName, paramValue := range params {
 		switch t := paramValue.(type) {
 		case map[string]any:
@@ -103,11 +150,11 @@ func (rr *Injector) resolveReferences(params map[string]any, resolutionContext m
 			}
 
 		case string:
-			parts := matchRefParts(t)
+			parts := MatchRefParts(t)
 			if parts == nil {
 				continue
 			}
-			pm := resolutionContext[parts.Resource]
+			pm := resolutionContext.Context[parts.GetResourceName(resolutionContext.WildcardNames)]
 			if pm == nil || pm.Paved == nil {
 				continue
 			}
@@ -115,7 +162,7 @@ func (rr *Injector) resolveReferences(params map[string]any, resolutionContext m
 				return errors.Wrapf(err, "cannot recursively resolve references for %q", parts.Resource)
 			}
 			pathStr := strings.Join(append(pm.ParamsPrefix, parts.Attribute), ".")
-			s, err := pm.Paved.GetString(pathStr)
+			s, err := pm.Paved.GetString(convertTFPathToFieldPath(pathStr))
 			if fieldpath.IsNotFound(err) {
 				continue
 			}
@@ -128,19 +175,41 @@ func (rr *Injector) resolveReferences(params map[string]any, resolutionContext m
 	return nil
 }
 
-// PrepareLocalResolutionContext prepares a resolution context for resolving
-// cross-resource references locally between a target resource and its
-// dependencies given as examples in the Terraform registry.
-func PrepareLocalResolutionContext(exampleMeta registry.ResourceExample) (map[string]*PavedWithManifest, error) {
-	resolutionContext := make(map[string]*PavedWithManifest, len(exampleMeta.Dependencies))
-	for rn, m := range exampleMeta.Dependencies {
-		// <Terraform resource>.<example name>
-		r := strings.Split(rn, ".")[0]
-		var err error
-		resolutionContext[r], err = paveExampleManifest(m)
-		if err != nil {
-			return nil, errors.Wrapf(err, "cannot pave example manifest for resource: %s", r)
+func convertTFPathToFieldPath(path string) string {
+	segments := strings.Split(path, ".")
+	result := make([]string, 0, len(segments))
+	for i, p := range segments {
+		d, err := strconv.Atoi(p)
+		switch {
+		case err != nil:
+			result = append(result, p)
+
+		case i > 0:
+			result[i-1] = fmt.Sprintf("%s[%d]", result[i-1], d)
 		}
 	}
-	return resolutionContext, nil
+	return strings.Join(result, ".")
+}
+
+// PrepareLocalResolutionContext returns a ResolutionContext that can be used
+// for resolving references between a target resource and its dependencies
+// that are exemplified together with the resource in Terraform registry.
+func PrepareLocalResolutionContext(exampleMeta registry.ResourceExample, rootName string) (*ResolutionContext, error) {
+	context := make(map[string]*PavedWithManifest, len(exampleMeta.Dependencies)+1)
+	var err error
+	for rn, m := range exampleMeta.Dependencies {
+		// <Terraform resource>.<example name>
+		context[rn], err = paveExampleManifest(m)
+		if err != nil {
+			return nil, errors.Wrapf(err, "cannot pave example manifest for resource: %s", rn)
+		}
+	}
+	context[rootName], err = paveExampleManifest(exampleMeta.Manifest)
+	if err != nil {
+		return nil, errors.Wrapf(err, "cannot pave example manifest for resource: %s", rootName)
+	}
+	return &ResolutionContext{
+		WildcardNames: false,
+		Context:       context,
+	}, nil
 }
