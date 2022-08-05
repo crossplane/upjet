@@ -83,6 +83,9 @@ func NewProviderMetadataFromFile(providerMetadata []byte) (*ProviderMetadata, er
 				return nil, errors.Wrapf(err, "cannot pave example manifest JSON: %s", re.Manifest)
 			}
 			rm.Examples[j] = re
+			if rm.Examples[j].Dependencies == nil {
+				rm.Examples[j].Dependencies = make(map[string]string)
+			}
 		}
 		metadata.Resources[name] = rm
 	}
