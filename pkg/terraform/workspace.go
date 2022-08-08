@@ -56,6 +56,12 @@ func WithAferoFs(fs afero.Fs) WorkspaceOption {
 	}
 }
 
+func WithFilterFn(filterFn func(string) string) WorkspaceOption {
+	return func(w *Workspace) {
+		w.filterFn = filterFn
+	}
+}
+
 // NewWorkspace returns a new Workspace object that operates in the given
 // directory.
 func NewWorkspace(dir string, opts ...WorkspaceOption) *Workspace {
@@ -87,6 +93,8 @@ type Workspace struct {
 	logger   logging.Logger
 	executor k8sExec.Interface
 	fs       afero.Afero
+
+	filterFn func(string) string
 }
 
 // ApplyAsync makes a terraform apply call without blocking and calls the given
@@ -104,7 +112,7 @@ func (w *Workspace) ApplyAsync(callback CallbackFn) error {
 		cmd.SetDir(w.dir)
 		out, err := cmd.CombinedOutput()
 		w.LastOperation.MarkEnd()
-		w.logger.Debug("apply async ended", "out", string(out))
+		w.logger.Debug("apply async ended", "out", w.filterFn(string(out)))
 		defer func() {
 			if cErr := callback(err, ctx); cErr != nil {
 				w.logger.Info("callback failed", "error", cErr.Error())
@@ -131,7 +139,7 @@ func (w *Workspace) Apply(ctx context.Context) (ApplyResult, error) {
 	cmd.SetEnv(append(os.Environ(), w.env...))
 	cmd.SetDir(w.dir)
 	out, err := cmd.CombinedOutput()
-	w.logger.Debug("apply ended", "out", string(out))
+	w.logger.Debug("apply ended", "out", w.filterFn(string(out)))
 	if err != nil {
 		return ApplyResult{}, tferrors.NewApplyFailed(out)
 	}
@@ -169,7 +177,7 @@ func (w *Workspace) DestroyAsync(callback CallbackFn) error {
 		cmd.SetDir(w.dir)
 		out, err := cmd.CombinedOutput()
 		w.LastOperation.MarkEnd()
-		w.logger.Debug("destroy async ended", "out", string(out))
+		w.logger.Debug("destroy async ended", "out", w.filterFn(string(out)))
 		defer func() {
 			if cErr := callback(err, ctx); cErr != nil {
 				w.logger.Info("callback failed", "error", cErr.Error())
@@ -191,7 +199,7 @@ func (w *Workspace) Destroy(ctx context.Context) error {
 	cmd.SetEnv(append(os.Environ(), w.env...))
 	cmd.SetDir(w.dir)
 	out, err := cmd.CombinedOutput()
-	w.logger.Debug("destroy ended", "out", string(out))
+	w.logger.Debug("destroy ended", "out", w.filterFn(string(out)))
 	if err != nil {
 		return tferrors.NewDestroyFailed(out)
 	}
@@ -222,7 +230,7 @@ func (w *Workspace) Refresh(ctx context.Context) (RefreshResult, error) {
 	cmd.SetEnv(append(os.Environ(), w.env...))
 	cmd.SetDir(w.dir)
 	out, err := cmd.CombinedOutput()
-	w.logger.Debug("refresh ended", "out", string(out))
+	w.logger.Debug("refresh ended", "out", w.filterFn(string(out)))
 	if err != nil {
 		return RefreshResult{}, tferrors.NewRefreshFailed(out)
 	}
@@ -257,7 +265,7 @@ func (w *Workspace) Plan(ctx context.Context) (PlanResult, error) {
 	cmd.SetEnv(append(os.Environ(), w.env...))
 	cmd.SetDir(w.dir)
 	out, err := cmd.CombinedOutput()
-	w.logger.Debug("plan ended", "out", string(out))
+	w.logger.Debug("plan ended", "out", w.filterFn(string(out)))
 	if err != nil {
 		return PlanResult{}, tferrors.NewPlanFailed(out)
 	}
