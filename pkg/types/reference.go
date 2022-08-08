@@ -6,10 +6,10 @@ import (
 	"go/types"
 	"reflect"
 
-	"github.com/pkg/errors"
-	"golang.org/x/tools/go/packages"
+	"k8s.io/utils/pointer"
 
 	"github.com/upbound/upjet/pkg/types/comments"
+	"github.com/upbound/upjet/pkg/types/markers"
 	"github.com/upbound/upjet/pkg/types/name"
 )
 
@@ -17,14 +17,33 @@ const (
 	// PackagePathXPCommonAPIs is the go path for the Crossplane Runtime package
 	// with common APIs
 	PackagePathXPCommonAPIs = "github.com/crossplane/crossplane-runtime/apis/common/v1"
-
-	loadMode = packages.NeedName | packages.NeedImports | packages.NeedTypes
 )
 
-var typeReferenceField types.Type
-var typeSelectorField types.Type
-var typeSecretKeySelector types.Type
-var commentOptional *comments.Comment
+// Types to use from by reference generator.
+var (
+	typeReferenceField types.Type = types.NewNamed(
+		types.NewTypeName(token.NoPos, types.NewPackage(PackagePathXPCommonAPIs, "v1"), "Reference", nil),
+		types.NewStruct(nil, nil),
+		nil,
+	)
+	typeSelectorField types.Type = types.NewNamed(
+		types.NewTypeName(token.NoPos, types.NewPackage(PackagePathXPCommonAPIs, "v1"), "Selector", nil),
+		types.NewStruct(nil, nil),
+		nil,
+	)
+	typeSecretKeySelector types.Type = types.NewNamed(
+		types.NewTypeName(token.NoPos, types.NewPackage(PackagePathXPCommonAPIs, "v1"), "SecretKeySelector", nil),
+		types.NewStruct(nil, nil),
+		nil,
+	)
+	commentOptional = &comments.Comment{
+		Options: markers.Options{
+			KubebuilderOptions: markers.KubebuilderOptions{
+				Required: pointer.Bool(false),
+			},
+		},
+	}
+)
 
 func (g *Builder) generateReferenceFields(t *types.TypeName, f *Field) (fields []*types.Var, tags []string) {
 	_, isSlice := f.FieldType.(*types.Slice)
@@ -65,26 +84,6 @@ func (g *Builder) generateReferenceFields(t *types.TypeName, f *Field) (fields [
 	f.SelectorName = sfn.LowerCamelComputed
 
 	return []*types.Var{ref, sel}, []string{refTag, selTag}
-}
-
-func init() {
-	pkgs, err := packages.Load(&packages.Config{Mode: loadMode}, PackagePathXPCommonAPIs)
-	if err != nil {
-		panic(errors.Wrap(err, "cannot load crossplane-runtime package to get reference types"))
-	}
-	if len(pkgs) != 1 && pkgs[0].Name != "v1" {
-		panic(errors.Errorf("unexpected package name %s", pkgs[0].Name))
-	}
-	typeReferenceField = pkgs[0].Types.Scope().Lookup("Reference").Type()
-	typeSelectorField = pkgs[0].Types.Scope().Lookup("Selector").Type()
-	typeSecretKeySelector = pkgs[0].Types.Scope().Lookup("SecretKeySelector").Type()
-
-	commentOptional, err = comments.New("")
-	if err != nil {
-		panic(errors.Errorf("cannot build new comment for reference fields"))
-	}
-	req := false
-	commentOptional.KubebuilderOptions.Required = &req
 }
 
 // TypePath returns go package path for the input type. This is a helper
