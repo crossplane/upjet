@@ -82,6 +82,9 @@ func DefaultResource(name string, terraformSchema *schema.Resource, terraformReg
 func MoveToStatus(sch *schema.Resource, fieldpaths ...string) {
 	for _, f := range fieldpaths {
 		s := GetSchema(sch, f)
+		if s == nil {
+			return
+		}
 		s.Optional = false
 		s.Computed = true
 
@@ -104,9 +107,10 @@ func MoveToStatus(sch *schema.Resource, fieldpaths ...string) {
 // schemas.
 func MarkAsRequired(sch *schema.Resource, fieldpaths ...string) {
 	for _, fieldpath := range fieldpaths {
-		s := GetSchema(sch, fieldpath)
-		s.Computed = false
-		s.Optional = false
+		if s := GetSchema(sch, fieldpath); s != nil {
+			s.Computed = false
+			s.Optional = false
+		}
 	}
 }
 
