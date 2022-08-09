@@ -48,24 +48,8 @@ var (
 func (g *Builder) generateReferenceFields(t *types.TypeName, f *Field) (fields []*types.Var, tags []string) {
 	_, isSlice := f.FieldType.(*types.Slice)
 
-	// We try to rely on snake for name calculations because it is more accurate
-	// in cases where two words are all acronyms and full capital, i.e. APIID
-	// would be converted to apiid when you convert it to lower camel computed
-	// but if you start with api_id, then it becomes apiId as lower camel computed
-	// and APIID as camel, which is what we want.
-	rfn := name.NewFromCamel(f.Reference.RefFieldName)
-	if f.Reference.RefFieldName == "" {
-		temp := f.Name.Snake + "_ref"
-		if isSlice {
-			temp += "s"
-		}
-		rfn = name.NewFromSnake(temp)
-	}
-
-	sfn := name.NewFromCamel(f.Reference.SelectorFieldName)
-	if f.Reference.SelectorFieldName == "" {
-		sfn = name.NewFromSnake(f.Name.Snake + "_selector")
-	}
+	rfn := name.ReferenceFieldName(f.Name, isSlice, f.Reference.RefFieldName)
+	sfn := name.SelectorFieldName(f.Name, f.Reference.SelectorFieldName)
 
 	refTag := fmt.Sprintf(`json:"%s,omitempty" tf:"-"`, rfn.LowerCamelComputed)
 	selTag := fmt.Sprintf(`json:"%s,omitempty" tf:"-"`, sfn.LowerCamelComputed)

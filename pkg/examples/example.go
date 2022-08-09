@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/pkg/errors"
 	"sigs.k8s.io/yaml"
 
@@ -23,6 +24,7 @@ import (
 	"github.com/upbound/upjet/pkg/registry/reference"
 	"github.com/upbound/upjet/pkg/resource/json"
 	tjtypes "github.com/upbound/upjet/pkg/types"
+	"github.com/upbound/upjet/pkg/types/name"
 )
 
 var (
@@ -92,7 +94,7 @@ func (eg *Generator) StoreExamples() error { // nolint:gocyclo
 				if err := json.TFParser.Unmarshal([]byte(re.Dependencies[dn]), &exampleParams); err != nil {
 					return errors.Wrapf(err, "cannot unmarshal example manifest for resource: %s", dr.Config.Name)
 				}
-				pmd := paveCRManifest(exampleParams, dr.FieldTransformations, dr.Config,
+				pmd := paveCRManifest(exampleParams, dr.Config,
 					reference.NewRefPartsFromResourceName(dn).ExampleName, dr.Group, dr.Version)
 				if err := eg.writeManifest(&buff, pmd, context); err != nil {
 					return errors.Wrapf(err, "cannot store example manifest for %s dependency: %s", rn, dn)
@@ -107,8 +109,10 @@ func (eg *Generator) StoreExamples() error { // nolint:gocyclo
 	return nil
 }
 
-func paveCRManifest(exampleParams map[string]any, fieldTransformations map[string]tjtypes.Transformation, r *config.Resource, eName, group, version string) *reference.PavedWithManifest {
-	transformFields(r, exampleParams, r.ExternalName.OmittedFields, fieldTransformations, "")
+func paveCRManifest(exampleParams map[string]any, r *config.Resource, eName, group, version string) *reference.PavedWithManifest {
+	delete(exampleParams, "depends_on")
+	delete(exampleParams, "lifecycle")
+	transformFields(r, exampleParams, r.ExternalName.OmittedFields, "")
 	example := map[string]any{
 		"apiVersion": fmt.Sprintf("%s/%s", group, version),
 		"kind":       r.Kind,
@@ -122,12 +126,11 @@ func paveCRManifest(exampleParams map[string]any, fieldTransformations map[strin
 		},
 	}
 	return &reference.PavedWithManifest{
-		Paved:                fieldpath.Pave(example),
-		ParamsPrefix:         []string{"spec", "forProvider"},
-		FieldTransformations: fieldTransformations,
-		Config:               r,
-		Group:                group,
-		Version:              version,
+		Paved:        fieldpath.Pave(example),
+		ParamsPrefix: []string{"spec", "forProvider"},
+		Config:       r,
+		Group:        group,
+		Version:      version,
 	}
 }
 
@@ -148,7 +151,6 @@ func (eg *Generator) writeManifest(writer io.Writer, pm *reference.PavedWithMani
 		return errors.Wrapf(err, `cannot set "metadata.name" for resource %q:%s`, pm.Config.Name, pm.ExampleName)
 	}
 	u := pm.Paved.UnstructuredContent()
-	delete(u["spec"].(map[string]any)["forProvider"].(map[string]any), "depends_on")
 	buff, err := yaml.Marshal(u)
 	if err != nil {
 		return errors.Wrap(err, "cannot marshal example resource manifest")
@@ -161,12 +163,12 @@ func (eg *Generator) writeManifest(writer io.Writer, pm *reference.PavedWithMani
 }
 
 // Generate generates an example manifest for the specified Terraform resource.
-func (eg *Generator) Generate(group, version string, r *config.Resource, fieldTransformations map[string]tjtypes.Transformation) error {
+func (eg *Generator) Generate(group, version string, r *config.Resource) error {
 	rm := eg.configResources[r.Name].MetaResource
 	if rm == nil || len(rm.Examples) == 0 {
 		return nil
 	}
-	pm := paveCRManifest(rm.Examples[0].Paved.UnstructuredContent(), fieldTransformations, r, rm.Examples[0].Name, group, version)
+	pm := paveCRManifest(rm.Examples[0].Paved.UnstructuredContent(), r, rm.Examples[0].Name, group, version)
 	manifestDir := filepath.Join(eg.rootDir, "examples-generated", strings.ToLower(strings.Split(group, ".")[0]))
 	pm.ManifestPath = filepath.Join(manifestDir, fmt.Sprintf("%s.yaml", strings.ToLower(r.Kind)))
 	eg.resources[fmt.Sprintf("%s.%s", r.Name, reference.Wildcard)] = pm
@@ -188,7 +190,7 @@ func isStatus(r *config.Resource, attr string) bool {
 	return tjtypes.IsObservation(s)
 }
 
-func transformFields(r *config.Resource, params map[string]any, omittedFields []string, t map[string]tjtypes.Transformation, namePrefix string) { // nolint:gocyclo
+func transformFields(r *config.Resource, params map[string]any, omittedFields []string, namePrefix string) { // nolint:gocyclo
 	for n := range params {
 		hName := getHierarchicalName(namePrefix, n)
 		if isStatus(r, hName) {
@@ -206,7 +208,7 @@ func transformFields(r *config.Resource, params map[string]any, omittedFields []
 	for n, v := range params {
 		switch pT := v.(type) {
 		case map[string]any:
-			transformFields(r, pT, omittedFields, t, getHierarchicalName(namePrefix, n))
+			transformFields(r, pT, omittedFields, getHierarchicalName(namePrefix, n))
 
 		case []any:
 			for _, e := range pT {
@@ -214,38 +216,41 @@ func transformFields(r *config.Resource, params map[string]any, omittedFields []
 				if !ok {
 					continue
 				}
-				transformFields(r, eM, omittedFields, t, getHierarchicalName(namePrefix, n))
+				transformFields(r, eM, omittedFields, getHierarchicalName(namePrefix, n))
 			}
 		}
 	}
 
 	for n, v := range params {
-		hName := getHierarchicalName(namePrefix, n)
-		for hn, transform := range t {
-			if hn != hName {
-				continue
-			}
-			delete(params, n)
-			switch {
-			case !transform.IsRef:
-				params[transform.TransformedName] = v
-			case transform.IsSensitive:
-				secretName, secretKey := getSecretRef(v)
-				params[transform.TransformedName] = getRefField(v,
-					map[string]any{
-						"name":      secretName,
-						"namespace": defaultNamespace,
-						"key":       secretKey,
-					})
+		fieldPath := getHierarchicalName(namePrefix, n)
+		sch := config.GetSchema(r.TerraformResource, fieldPath)
+		if sch == nil {
+			continue
+		}
+		// At this point, we confirmed that the field is part of the schema,
+		// so we'll need to perform at least name change on it.
+		delete(params, n)
+		fn := name.NewFromSnake(n)
+		switch {
+		case sch.Sensitive:
+			secretName, secretKey := getSecretRef(v)
+			params[fn.LowerCamelComputed+"SecretRef"] = getRefField(v, map[string]any{
+				"name":      secretName,
+				"namespace": defaultNamespace,
+				"key":       secretKey,
+			})
+		case r.References[fieldPath] != config.Reference{}:
+			switch v.(type) {
+			case []any:
+				l := sch.Type == schema.TypeList || sch.Type == schema.TypeSet
+				ref := name.ReferenceFieldName(fn, l, r.References[fieldPath].RefFieldName)
+				params[ref.LowerCamelComputed] = getNameRefField(v)
 			default:
-				switch v.(type) {
-				case []any:
-					params[transform.TransformedName] = getNameRefField(v)
-				default:
-					params[transform.SelectorName] = getSelectorField(v)
-				}
+				sel := name.SelectorFieldName(fn, r.References[fieldPath].SelectorFieldName)
+				params[sel.LowerCamelComputed] = getSelectorField(v)
 			}
-			break
+		default:
+			params[fn.LowerCamelComputed] = v
 		}
 	}
 }

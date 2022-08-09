@@ -135,6 +135,27 @@ func TestMoveToStatus(t *testing.T) {
 		args
 		want
 	}{
+		"DoesNotExist": {
+			args: args{
+				fields: []string{"topD"},
+				sch: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"topA": {Type: schema.TypeString},
+						"topB": {Type: schema.TypeInt},
+						"topC": {Type: schema.TypeString, Optional: true},
+					},
+				},
+			},
+			want: want{
+				sch: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"topA": {Type: schema.TypeString},
+						"topB": {Type: schema.TypeInt},
+						"topC": {Type: schema.TypeString, Optional: true},
+					},
+				},
+			},
+		},
 		"TopLevelBasicFields": {
 			args: args{
 				fields: []string{"topA", "topB"},
@@ -263,6 +284,27 @@ func TestMarkAsRequired(t *testing.T) {
 		args
 		want
 	}{
+		"DoesNotExist": {
+			args: args{
+				fields: []string{"topD"},
+				sch: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"topA": {Type: schema.TypeString},
+						"topB": {Type: schema.TypeInt, Computed: true},
+						"topC": {Type: schema.TypeString, Optional: true},
+					},
+				},
+			},
+			want: want{
+				sch: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"topA": {Type: schema.TypeString},
+						"topB": {Type: schema.TypeInt, Computed: true},
+						"topC": {Type: schema.TypeString, Optional: true},
+					},
+				},
+			},
+		},
 		"TopLevelBasicFields": {
 			args: args{
 				fields: []string{"topB", "topC"},

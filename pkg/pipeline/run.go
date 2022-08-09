@@ -83,7 +83,7 @@ func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
 					panic(errors.Wrapf(err, "cannot generate controller for resource %s", name))
 				}
 				controllerPkgList = append(controllerPkgList, ctrlPkgPath)
-				if err := exampleGen.Generate(group, version, resources[name], crdGen.Generated.FieldTransformations); err != nil {
+				if err := exampleGen.Generate(group, version, resources[name]); err != nil {
 					panic(errors.Wrapf(err, "cannot generate example manifest for resource %s", name))
 				}
 				count++

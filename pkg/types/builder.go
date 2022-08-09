@@ -26,16 +26,6 @@ const (
 	emptyStruct = "struct{}"
 )
 
-// Transformation represents a transformation applied to a
-// Terraform resource attribute. It's used to record any
-// transformations applied by the CRD generation pipeline.
-type Transformation struct {
-	TransformedName string
-	SelectorName    string
-	IsRef           bool
-	IsSensitive     bool
-}
-
 // Generated is a struct that holds generated types
 type Generated struct {
 	Types    []*types.Named
@@ -43,8 +33,6 @@ type Generated struct {
 
 	ForProviderType *types.Named
 	AtProviderType  *types.Named
-
-	FieldTransformations map[string]Transformation
 }
 
 // Builder is used to generate Go type equivalence of given Terraform schema.
@@ -65,18 +53,16 @@ func NewBuilder(pkg *types.Package) *Builder {
 
 // Build returns parameters and observation types built out of Terraform schema.
 func (g *Builder) Build(cfg *config.Resource) (Generated, error) {
-	fieldTransformations := make(map[string]Transformation)
-	fp, ap, err := g.buildResource(cfg.TerraformResource, cfg, nil, nil, false, fieldTransformations, cfg.Kind)
+	fp, ap, err := g.buildResource(cfg.TerraformResource, cfg, nil, nil, false, cfg.Kind)
 	return Generated{
-		Types:                g.genTypes,
-		Comments:             g.comments,
-		ForProviderType:      fp,
-		AtProviderType:       ap,
-		FieldTransformations: fieldTransformations,
+		Types:           g.genTypes,
+		Comments:        g.comments,
+		ForProviderType: fp,
+		AtProviderType:  ap,
 	}, errors.Wrapf(err, "cannot build the Types")
 }
 
-func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPath []string, xpPath []string, asBlocksMode bool, t map[string]Transformation, names ...string) (*types.Named, *types.Named, error) { //nolint:gocyclo
+func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPath []string, xpPath []string, asBlocksMode bool, names ...string) (*types.Named, *types.Named, error) { //nolint:gocyclo
 	// NOTE(muvaf): There can be fields in the same CRD with same name but in
 	// different types. Since we generate the type using the field name, there
 	// can be collisions. In order to be able to generate unique names consistently,
@@ -98,35 +84,28 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 		}
 
 		var f *Field
-		tr := Transformation{}
 		switch {
 		case res.Schema[snakeFieldName].Sensitive:
 			var drop bool
-			f, drop, err = NewSensitiveField(g, cfg, r, res.Schema[snakeFieldName], snakeFieldName, tfPath, xpPath, names, asBlocksMode, t)
+			f, drop, err = NewSensitiveField(g, cfg, r, res.Schema[snakeFieldName], snakeFieldName, tfPath, xpPath, names, asBlocksMode)
 			if err != nil {
 				return nil, nil, err
 			}
 			if drop {
 				continue
 			}
-			tr.IsSensitive = true
-			tr.IsRef = true
 		case reference != nil:
-			f, err = NewReferenceField(g, cfg, r, res.Schema[snakeFieldName], reference, snakeFieldName, tfPath, xpPath, names, asBlocksMode, t)
+			f, err = NewReferenceField(g, cfg, r, res.Schema[snakeFieldName], reference, snakeFieldName, tfPath, xpPath, names, asBlocksMode)
 			if err != nil {
 				return nil, nil, err
 			}
-			tr.IsRef = true
 		default:
-			f, err = NewField(g, cfg, r, res.Schema[snakeFieldName], snakeFieldName, tfPath, xpPath, names, asBlocksMode, t)
+			f, err = NewField(g, cfg, r, res.Schema[snakeFieldName], snakeFieldName, tfPath, xpPath, names, asBlocksMode)
 			if err != nil {
 				return nil, nil, err
 			}
 		}
 		f.AddToResource(g, r, typeNames)
-		tr.TransformedName = f.TransformedName
-		tr.SelectorName = f.SelectorName
-		t[fieldPath(f.TerraformPaths)] = tr
 	}
 
 	paramType, obsType := g.AddToBuilder(typeNames, r)
@@ -151,7 +130,7 @@ func (g *Builder) AddToBuilder(typeNames *TypeNames, r *resource) (*types.Named,
 	return paramType, obsType
 }
 
-func (g *Builder) buildSchema(f *Field, cfg *config.Resource, t map[string]Transformation, names []string, r *resource) (types.Type, error) { // nolint:gocyclo
+func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, r *resource) (types.Type, error) { // nolint:gocyclo
 	switch f.Schema.Type {
 	case schema.TypeBool:
 		return types.NewPointer(types.Universe.Lookup("bool").Type()), nil
@@ -181,7 +160,7 @@ func (g *Builder) buildSchema(f *Field, cfg *config.Resource, t map[string]Trans
 				return nil, errors.Errorf("element type of %s is basic but not one of known basic types", fieldPath(names))
 			}
 		case *schema.Schema:
-			newf, err := NewField(g, cfg, r, et, f.Name.Snake, f.TerraformPaths, f.CRDPaths, names, false, t)
+			newf, err := NewField(g, cfg, r, et, f.Name.Snake, f.TerraformPaths, f.CRDPaths, names, false)
 			if err != nil {
 				return nil, err
 			}
@@ -193,7 +172,7 @@ func (g *Builder) buildSchema(f *Field, cfg *config.Resource, t map[string]Trans
 			if f.Schema.ConfigMode == schema.SchemaConfigModeAttr {
 				asBlocksMode = true
 			}
-			paramType, obsType, err := g.buildResource(et, cfg, f.TerraformPaths, f.CRDPaths, asBlocksMode, t, names...)
+			paramType, obsType, err := g.buildResource(et, cfg, f.TerraformPaths, f.CRDPaths, asBlocksMode, names...)
 			if err != nil {
 				return nil, errors.Wrapf(err, "cannot infer type from resource schema of element type of %s", fieldPath(names))
 			}
