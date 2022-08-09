@@ -110,6 +110,8 @@ func (eg *Generator) StoreExamples() error { // nolint:gocyclo
 }
 
 func paveCRManifest(exampleParams map[string]any, r *config.Resource, eName, group, version string) *reference.PavedWithManifest {
+	delete(exampleParams, "depends_on")
+	delete(exampleParams, "lifecycle")
 	transformFields(r, exampleParams, r.ExternalName.OmittedFields, "")
 	example := map[string]any{
 		"apiVersion": fmt.Sprintf("%s/%s", group, version),
@@ -149,7 +151,6 @@ func (eg *Generator) writeManifest(writer io.Writer, pm *reference.PavedWithMani
 		return errors.Wrapf(err, `cannot set "metadata.name" for resource %q:%s`, pm.Config.Name, pm.ExampleName)
 	}
 	u := pm.Paved.UnstructuredContent()
-	delete(u["spec"].(map[string]any)["forProvider"].(map[string]any), "depends_on")
 	buff, err := yaml.Marshal(u)
 	if err != nil {
 		return errors.Wrap(err, "cannot marshal example resource manifest")
