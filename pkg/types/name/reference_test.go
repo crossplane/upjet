@@ -5,8 +5,9 @@ Copyright 2022 Upbound Inc.
 package name
 
 import (
-	"github.com/google/go-cmp/cmp"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestReferenceFieldName(t *testing.T) {

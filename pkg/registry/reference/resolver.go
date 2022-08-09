@@ -16,7 +16,6 @@ import (
 	"github.com/upbound/upjet/pkg/config"
 	"github.com/upbound/upjet/pkg/registry"
 	"github.com/upbound/upjet/pkg/resource/json"
-	tjtypes "github.com/upbound/upjet/pkg/types"
 )
 
 const (
@@ -92,15 +91,14 @@ func NewRefPartsFromResourceName(rn string) Parts {
 
 // PavedWithManifest represents an example manifest with a fieldpath.Paved
 type PavedWithManifest struct {
-	Paved                *fieldpath.Paved
-	ManifestPath         string
-	ParamsPrefix         []string
-	refsResolved         bool
-	FieldTransformations map[string]tjtypes.Transformation
-	Config               *config.Resource
-	Group                string
-	Version              string
-	ExampleName          string
+	Paved        *fieldpath.Paved
+	ManifestPath string
+	ParamsPrefix []string
+	refsResolved bool
+	Config       *config.Resource
+	Group        string
+	Version      string
+	ExampleName  string
 }
 
 // ResolutionContext represents a reference resolution context where
