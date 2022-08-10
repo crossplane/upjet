@@ -242,8 +242,10 @@ func (r *Resource) scrapeFieldDocs(doc *html.Node, fieldXPath string) {
 		if r.ArgumentDocs == nil {
 			r.ArgumentDocs = make(map[string]string)
 		}
+		if r.ArgumentDocs[attrName] != "" && r.ArgumentDocs[attrName] != strings.TrimSpace(docStr) {
+			continue
+		}
 		r.ArgumentDocs[attrName] = strings.TrimSpace(docStr)
-
 	}
 }
 

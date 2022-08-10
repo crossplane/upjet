@@ -143,7 +143,7 @@ resources:
             expected_bucket_owner: '- (Optional, Forces new resource) The account ID of the expected bucket owner.'
             grant: '- (Required) Set of grant configuration blocks documented below.'
             grantee: '- (Required) Configuration block for the person being granted permissions documented below.'
-            id: '- The bucket, expected_bucket_owner (if configured), and acl (if configured) separated by commas (,).'
+            id: '- (Required) The ID of the owner.'
             owner: '- (Required) Configuration block of the bucket owner''s display name and ID documented below.'
             permission: '- (Required) Logging permissions assigned to the grantee for the bucket.'
             type: '- (Required) Type of grantee. Valid values: CanonicalUser, AmazonCustomerByEmail, Group.'

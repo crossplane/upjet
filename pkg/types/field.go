@@ -156,4 +156,5 @@ func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames) {
 	}
 
 	g.comments.AddFieldComment(typeNames.ParameterTypeName, f.FieldNameCamel, f.Comment.Build())
+	g.comments.AddFieldComment(typeNames.ObservationTypeName, f.FieldNameCamel, f.Comment.Build())
 }
