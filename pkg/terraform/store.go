@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
@@ -129,7 +130,7 @@ func (ws *WorkspaceStore) Workspace(ctx context.Context, c resource.SecretClient
 	ws.mu.Lock()
 	w, ok := ws.store[tr.GetUID()]
 	if !ok {
-		ws.store[tr.GetUID()] = NewWorkspace(dir, WithLogger(l), WithExecutor(ws.executor))
+		ws.store[tr.GetUID()] = NewWorkspace(dir, WithLogger(l), WithExecutor(ws.executor), WithFilterFn(ts.filterSensitiveInformation))
 		w = ws.store[tr.GetUID()]
 	}
 	ws.mu.Unlock()
@@ -139,6 +140,7 @@ func (ws *WorkspaceStore) Workspace(ctx context.Context, c resource.SecretClient
 	}
 	w.env = ts.Env
 	w.env = append(w.env, fmt.Sprintf(fmtEnv, envReattachConfig, attachmentConfig))
+
 	// We need to initialize only if the workspace hasn't been initialized yet.
 	if !os.IsNotExist(err) {
 		return w, nil
@@ -164,4 +166,13 @@ func (ws *WorkspaceStore) Remove(obj xpresource.Object) error {
 	}
 	delete(ws.store, obj.GetUID())
 	return nil
+}
+
+func (ts Setup) filterSensitiveInformation(s string) string {
+	for _, v := range ts.Configuration {
+		if str, ok := v.(string); ok && str != "" {
+			s = strings.ReplaceAll(s, str, "REDACTED")
+		}
+	}
+	return s
 }

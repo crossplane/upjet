@@ -32,6 +32,8 @@ var (
 	changeSummaryAdd      = `{"@level":"info","@message":"Plan: 1 to add, 0 to change, 0 to destroy.","@module":"terraform.ui","@timestamp":"0000-00-00T00:00:00.000000+03:00","changes":{"add":1,"change":0,"remove":0,"operation":"plan"},"type":"change_summary"}`
 	changeSummaryUpdate   = `{"@level":"info","@message":"Plan: 0 to add, 1 to change, 0 to destroy.","@module":"terraform.ui","@timestamp":"0000-00-00T00:00:00.000000+03:00","changes":{"add":0,"change":1,"remove":0,"operation":"plan"},"type":"change_summary"}`
 	changeSummaryNoAction = `{"@level":"info","@message":"Plan: 0 to add, 0 to change, 0 to destroy.","@module":"terraform.ui","@timestamp":"0000-00-00T00:00:00.000000+03:00","changes":{"add":0,"change":0,"remove":0,"operation":"plan"},"type":"change_summary"}`
+	filter                = `{"@level":"info","@message":"Terraform 1.2.1","@module":"terraform.ui","@timestamp":"2022-08-08T14:42:59.377073+03:00","terraform":"1.2.1","type":"version","ui":"1.0"}
+{"@level":"error","@message":"Error: error configuring Terraform AWS Provider: error validating provider credentials: error calling sts:GetCallerIdentity: operation error STS: GetCallerIdentity, https response error StatusCode: 403, RequestID: *****, api error InvalidClientTokenId: The security token included in the request is invalid.","@module":"terraform.ui","@timestamp":"2022-08-08T14:43:00.808602+03:00","diagnostic":{"severity":"error","summary":"error configuring Terraform AWS Provider: error validating provider credentials: error calling sts:GetCallerIdentity: operation error STS: GetCallerIdentity, https response error StatusCode: 403, RequestID: *****, api error InvalidClientTokenId: The security token included in the request is invalid.","detail":"","address":"provider[\"registry.terraform.io/hashicorp/aws\"]","range":{"filename":"main.tf.json","start":{"line":1,"column":173,"byte":172},"end":{"line":1,"column":174,"byte":173}},"snippet":{"context":"provider.aws","code":"{\"provider\":{\"aws\":{\"access_key\":\"*****\",\"region\":\"us-east-1\",\"secret_key\":\"/*****\",\"skip_region_validation\":true,\"token\":\"\"}},\"resource\":{\"aws_iam_user\":{\"sample-user\":{\"lifecycle\":{\"prevent_destroy\":true},\"name\":\"sample-user\",\"tags\":{\"crossplane-kind\":\"user.iam.aws.upbound.io\",\"crossplane-name\":\"sample-user\",\"crossplane-providerconfig\":\"default\"}}}},\"terraform\":{\"required_providers\":{\"aws\":{\"source\":\"hashicorp/aws\",\"version\":\"4.15.1\"}}}}","start_line":1,"highlight_start_offset":172,"highlight_end_offset":173,"values":[]}},"type":"diagnostic"}`
 
 	state = &json.StateV4{
 		Version:          uint64(version),
@@ -49,6 +51,10 @@ var (
 	}
 
 	tfstate = `{"version": 1,"terraform_version": "1.0.10","serial": 3,"lineage": "very-cool-lineage","outputs": {},"resources": []}`
+
+	filterFn = func(s string) string {
+		return ""
+	}
 )
 
 func newFakeExec(stdOut string, err error) *testingexec.FakeExec {
@@ -83,7 +89,7 @@ func TestWorkspaceApply(t *testing.T) {
 		"Running": {
 			args: args{
 				w: NewWorkspace(directory, WithLastOperation(&Operation{Type: testType, startTime: &now, endTime: nil}),
-					WithAferoFs(fs)),
+					WithAferoFs(fs), WithFilterFn(filterFn)),
 			},
 			want: want{
 				err: errors.Errorf("%s operation that started at %s is still running", testType, now.String()),
@@ -91,7 +97,8 @@ func TestWorkspaceApply(t *testing.T) {
 		},
 		"Success": {
 			args: args{
-				w: NewWorkspace(directory, WithExecutor(&testingexec.FakeExec{DisableScripts: true}), WithAferoFs(fs)),
+				w: NewWorkspace(directory, WithExecutor(&testingexec.FakeExec{DisableScripts: true}), WithAferoFs(fs),
+					WithFilterFn(filterFn)),
 			},
 			want: want{
 				r: ApplyResult{
@@ -101,10 +108,20 @@ func TestWorkspaceApply(t *testing.T) {
 		},
 		"Failure": {
 			args: args{
-				w: NewWorkspace(directory, WithExecutor(newFakeExec(errBoom.Error(), errBoom)), WithAferoFs(fs)),
+				w: NewWorkspace(directory, WithExecutor(newFakeExec(errBoom.Error(), errBoom)), WithAferoFs(fs),
+					WithFilterFn(filterFn)),
 			},
 			want: want{
 				err: tferrors.NewApplyFailed([]byte(errBoom.Error())),
+			},
+		},
+		"Filter": {
+			args: args{
+				w: NewWorkspace(directory, WithExecutor(newFakeExec(filter, errors.New(filter))), WithAferoFs(fs),
+					WithFilterFn(filterFn)),
+			},
+			want: want{
+				err: tferrors.NewApplyFailed([]byte(filter)),
 			},
 		},
 	}
@@ -139,7 +156,8 @@ func TestWorkspaceDestroy(t *testing.T) {
 	}{
 		"Running": {
 			args: args{
-				w: NewWorkspace(directory, WithLastOperation(&Operation{Type: testType, startTime: &now, endTime: nil})),
+				w: NewWorkspace(directory, WithLastOperation(&Operation{Type: testType, startTime: &now, endTime: nil}),
+					WithFilterFn(filterFn)),
 			},
 			want: want{
 				err: errors.Errorf("%s operation that started at %s is still running", testType, now.String()),
@@ -148,16 +166,25 @@ func TestWorkspaceDestroy(t *testing.T) {
 		"Success": {
 			args: args{
 				w: NewWorkspace(
-					directory, WithExecutor(&testingexec.FakeExec{DisableScripts: true})),
+					directory, WithExecutor(&testingexec.FakeExec{DisableScripts: true}), WithFilterFn(filterFn)),
 			},
 			want: want{},
 		},
 		"Failure": {
 			args: args{
-				w: NewWorkspace(directory, WithExecutor(newFakeExec(errBoom.Error(), errBoom))),
+				w: NewWorkspace(directory, WithExecutor(newFakeExec(errBoom.Error(), errBoom)), WithFilterFn(filterFn)),
 			},
 			want: want{
 				err: tferrors.NewDestroyFailed([]byte(errBoom.Error())),
+			},
+		},
+		"Filter": {
+			args: args{
+				w: NewWorkspace(directory, WithExecutor(newFakeExec(filter, errors.New(filter))), WithAferoFs(fs),
+					WithFilterFn(filterFn)),
+			},
+			want: want{
+				err: tferrors.NewDestroyFailed([]byte(filter)),
 			},
 		},
 	}
@@ -188,7 +215,7 @@ func TestWorkspaceRefresh(t *testing.T) {
 		"Running": {
 			args: args{
 				w: NewWorkspace(directory, WithLastOperation(&Operation{Type: applyType, startTime: &now, endTime: nil}),
-					WithAferoFs(fs)),
+					WithAferoFs(fs), WithFilterFn(filterFn)),
 			},
 			want: want{
 				r: RefreshResult{
@@ -199,7 +226,8 @@ func TestWorkspaceRefresh(t *testing.T) {
 		"Success": {
 			args: args{
 				w: NewWorkspace(
-					directory, WithExecutor(&testingexec.FakeExec{DisableScripts: true}), WithAferoFs(fs)),
+					directory, WithExecutor(&testingexec.FakeExec{DisableScripts: true}), WithAferoFs(fs),
+					WithFilterFn(filterFn)),
 			},
 			want: want{
 				r: RefreshResult{
@@ -209,10 +237,20 @@ func TestWorkspaceRefresh(t *testing.T) {
 		},
 		"Failure": {
 			args: args{
-				w: NewWorkspace(directory, WithExecutor(newFakeExec(errBoom.Error(), errBoom)), WithAferoFs(fs)),
+				w: NewWorkspace(directory, WithExecutor(newFakeExec(errBoom.Error(), errBoom)), WithAferoFs(fs),
+					WithFilterFn(filterFn)),
 			},
 			want: want{
 				err: tferrors.NewRefreshFailed([]byte(errBoom.Error())),
+			},
+		},
+		"Filter": {
+			args: args{
+				w: NewWorkspace(directory, WithExecutor(newFakeExec(filter, errors.New(filter))), WithAferoFs(fs),
+					WithFilterFn(filterFn)),
+			},
+			want: want{
+				err: tferrors.NewRefreshFailed([]byte(filter)),
 			},
 		},
 	}
@@ -256,7 +294,7 @@ func TestWorkspacePlan(t *testing.T) {
 		},
 		"NoChangeSummary": {
 			args: args{
-				w: NewWorkspace(directory, WithExecutor(&testingexec.FakeExec{DisableScripts: true})),
+				w: NewWorkspace(directory, WithExecutor(&testingexec.FakeExec{DisableScripts: true}), WithFilterFn(filterFn)),
 			},
 			want: want{
 				err: errors.Errorf("cannot find the change summary line in plan log: "),
@@ -264,7 +302,7 @@ func TestWorkspacePlan(t *testing.T) {
 		},
 		"ChangeSummaryAdd": {
 			args: args{
-				w: NewWorkspace(directory, WithExecutor(newFakeExec(changeSummaryAdd, nil))),
+				w: NewWorkspace(directory, WithExecutor(newFakeExec(changeSummaryAdd, nil)), WithFilterFn(filterFn)),
 			},
 			want: want{
 				r: PlanResult{
@@ -275,7 +313,7 @@ func TestWorkspacePlan(t *testing.T) {
 		},
 		"ChangeSummaryUpdate": {
 			args: args{
-				w: NewWorkspace(directory, WithExecutor(newFakeExec(changeSummaryUpdate, nil))),
+				w: NewWorkspace(directory, WithExecutor(newFakeExec(changeSummaryUpdate, nil)), WithFilterFn(filterFn)),
 			},
 			want: want{
 				r: PlanResult{
@@ -286,7 +324,7 @@ func TestWorkspacePlan(t *testing.T) {
 		},
 		"ChangeSummaryNoAction": {
 			args: args{
-				w: NewWorkspace(directory, WithExecutor(newFakeExec(changeSummaryNoAction, nil))),
+				w: NewWorkspace(directory, WithExecutor(newFakeExec(changeSummaryNoAction, nil)), WithFilterFn(filterFn)),
 			},
 			want: want{
 				r: PlanResult{
@@ -297,10 +335,18 @@ func TestWorkspacePlan(t *testing.T) {
 		},
 		"Failure": {
 			args: args{
-				w: NewWorkspace(directory, WithExecutor(newFakeExec(errBoom.Error(), errBoom))),
+				w: NewWorkspace(directory, WithExecutor(newFakeExec(errBoom.Error(), errBoom)), WithFilterFn(filterFn)),
 			},
 			want: want{
 				err: tferrors.NewPlanFailed([]byte(errBoom.Error())),
+			},
+		},
+		"Filter": {
+			args: args{
+				w: NewWorkspace(directory, WithExecutor(newFakeExec(filter, errors.New(filter))), WithAferoFs(fs), WithFilterFn(filterFn)),
+			},
+			want: want{
+				err: tferrors.NewPlanFailed([]byte(filter)),
 			},
 		},
 	}
@@ -336,7 +382,8 @@ func TestWorkspaceApplyAsync(t *testing.T) {
 	}{
 		"Running": {
 			args: args{
-				w: NewWorkspace(directory, WithLastOperation(&Operation{Type: testType, startTime: &now, endTime: nil})),
+				w: NewWorkspace(directory, WithLastOperation(&Operation{Type: testType, startTime: &now, endTime: nil}),
+					WithFilterFn(filterFn)),
 			},
 			want: want{
 				err: errors.Errorf("%s operation that started at %s is still running", testType, now.String()),
@@ -344,7 +391,7 @@ func TestWorkspaceApplyAsync(t *testing.T) {
 		},
 		"Callback": {
 			args: args{
-				w: NewWorkspace(directory, WithExecutor(&testingexec.FakeExec{DisableScripts: true})),
+				w: NewWorkspace(directory, WithExecutor(&testingexec.FakeExec{DisableScripts: true}), WithFilterFn(filterFn)),
 				c: func(err error, ctx context.Context) error {
 					calls <- true
 					return nil
@@ -391,7 +438,8 @@ func TestWorkspaceDestroyAsync(t *testing.T) {
 	}{
 		"Running": {
 			args: args{
-				w: NewWorkspace(directory, WithLastOperation(&Operation{Type: testType, startTime: &now, endTime: nil})),
+				w: NewWorkspace(directory, WithLastOperation(&Operation{Type: testType, startTime: &now, endTime: nil}),
+					WithFilterFn(filterFn)),
 			},
 			want: want{
 				err: errors.Errorf("%s operation that started at %s is still running", testType, now.String()),
@@ -399,7 +447,7 @@ func TestWorkspaceDestroyAsync(t *testing.T) {
 		},
 		"Callback": {
 			args: args{
-				w: NewWorkspace(directory, WithExecutor(&testingexec.FakeExec{DisableScripts: true})),
+				w: NewWorkspace(directory, WithExecutor(&testingexec.FakeExec{DisableScripts: true}), WithFilterFn(filterFn)),
 				c: func(err error, ctx context.Context) error {
 					calls <- true
 					return nil
