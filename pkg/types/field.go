@@ -38,9 +38,17 @@ func NewField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema,
 		AsBlocksMode:   asBlocksMode,
 	}
 
-	comment, err := comments.New(f.Schema.Description)
+	// Use registry descriptions for fields if exists
+	// Otherwise, use schema as source
+	var commentText string
+	if cfg.MetaResource != nil && cfg.MetaResource.ArgumentDocs[f.Name.Snake] != "" {
+		commentText = cfg.MetaResource.ArgumentDocs[f.Name.Snake]
+	} else {
+		commentText = f.Schema.Description
+	}
+	comment, err := comments.New(commentText)
 	if err != nil {
-		return nil, errors.Wrapf(err, "cannot build comment for description: %s", f.Schema.Description)
+		return nil, errors.Wrapf(err, "cannot build comment for description: %s", commentText)
 	}
 	f.Comment = comment
 	f.TFTag = fmt.Sprintf("%s,omitempty", f.Name.Snake)

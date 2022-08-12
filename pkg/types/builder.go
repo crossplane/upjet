@@ -105,9 +105,6 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 				return nil, nil, err
 			}
 		}
-		if cfg.MetaResource != nil && f.Comment.Text == "" {
-			f.Comment.Text = cfg.MetaResource.ArgumentDocs[f.Name.Snake]
-		}
 		f.AddToResource(g, r, typeNames)
 	}
 
