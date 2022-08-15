@@ -41,11 +41,11 @@ func NewField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema,
 	// Use registry descriptions for fields if exists
 	// Otherwise, use schema as source
 	var commentText string
-	if cfg.MetaResource != nil && cfg.MetaResource.ArgumentDocs[f.Name.Snake] != "" {
-		commentText = cfg.MetaResource.ArgumentDocs[f.Name.Snake]
-	} else {
-		commentText = f.Schema.Description
+	if cfg.MetaResource != nil {
+		commentText = cfg.MetaResource.ArgumentDocs[f.Name.Snake] + "\n"
 	}
+	commentText += f.Schema.Description
+
 	comment, err := comments.New(commentText)
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot build comment for description: %s", commentText)
