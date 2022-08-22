@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
+	xpmeta "github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/pkg/errors"
 	"sigs.k8s.io/yaml"
@@ -113,17 +114,23 @@ func paveCRManifest(exampleParams map[string]any, r *config.Resource, eName, gro
 	delete(exampleParams, "depends_on")
 	delete(exampleParams, "lifecycle")
 	transformFields(r, exampleParams, r.ExternalName.OmittedFields, "")
+	metadata := map[string]any{
+		"labels": map[string]string{
+			labelExampleName: eName,
+		},
+	}
 	example := map[string]any{
 		"apiVersion": fmt.Sprintf("%s/%s", group, version),
 		"kind":       r.Kind,
-		"metadata": map[string]any{
-			"labels": map[string]string{
-				labelExampleName: eName,
-			},
-		},
+		"metadata":   metadata,
 		"spec": map[string]any{
 			"forProvider": exampleParams,
 		},
+	}
+	if len(r.MetaResource.ExternalName) != 0 {
+		metadata["annotations"] = map[string]string{
+			xpmeta.AnnotationKeyExternalName: r.MetaResource.ExternalName,
+		}
 	}
 	return &reference.PavedWithManifest{
 		Paved:        fieldpath.Pave(example),
