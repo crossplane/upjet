@@ -33,7 +33,7 @@ var (
 
 const (
 	labelExampleName       = "testing.upbound.io/example-name"
-	annotationExampleGroup = "meta.upbound.io/example-group"
+	annotationExampleGroup = "meta.upbound.io/example-gvk"
 	defaultExampleName     = "example"
 	defaultNamespace       = "upbound-system"
 )
@@ -95,8 +95,8 @@ func (eg *Generator) StoreExamples() error { // nolint:gocyclo
 				if err := json.TFParser.Unmarshal([]byte(re.Dependencies[dn]), &exampleParams); err != nil {
 					return errors.Wrapf(err, "cannot unmarshal example manifest for resource: %s", dr.Config.Name)
 				}
-				a := strings.Split(pm.ManifestPath, "/")
-				eGroup := strings.Split(a[len(a)-1], ".")[0]
+				// e.g. meta.upbound.io/example-group: ec2/v1beta1/instance
+				eGroup := fmt.Sprintf("%s/%s/%s", strings.ToLower(r.ShortGroup), r.Version, strings.ToLower(r.Kind))
 				pmd := paveCRManifest(exampleParams, dr.Config,
 					reference.NewRefPartsFromResourceName(dn).ExampleName, dr.Group, dr.Version, eGroup)
 				if err := eg.writeManifest(&buff, pmd, context); err != nil {
@@ -174,8 +174,10 @@ func (eg *Generator) Generate(group, version string, r *config.Resource) error {
 	if rm == nil || len(rm.Examples) == 0 {
 		return nil
 	}
-	pm := paveCRManifest(rm.Examples[0].Paved.UnstructuredContent(), r, rm.Examples[0].Name, group, version, strings.ToLower(r.Kind))
-	manifestDir := filepath.Join(eg.rootDir, "examples-generated", strings.ToLower(strings.Split(group, ".")[0]))
+	groupPrefix := strings.ToLower(strings.Split(group, ".")[0])
+	gvk := fmt.Sprintf("%s/%s/%s", groupPrefix, version, strings.ToLower(r.Kind))
+	pm := paveCRManifest(rm.Examples[0].Paved.UnstructuredContent(), r, rm.Examples[0].Name, group, version, gvk)
+	manifestDir := filepath.Join(eg.rootDir, "examples-generated", groupPrefix)
 	pm.ManifestPath = filepath.Join(manifestDir, fmt.Sprintf("%s.yaml", strings.ToLower(r.Kind)))
 	eg.resources[fmt.Sprintf("%s.%s", r.Name, reference.Wildcard)] = pm
 	return nil
