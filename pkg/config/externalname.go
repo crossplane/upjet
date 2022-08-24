@@ -102,11 +102,11 @@ func TemplatedStringAsIdentifier(nameFieldPath, tmpl string) ExternalName {
 			nameFieldPath,
 			nameFieldPath + "_prefix",
 		},
-		GetIDFn: func(ctx context.Context, externalName string, parameters map[string]any, terraformProviderConfig map[string]any) (string, error) {
+		GetIDFn: func(ctx context.Context, externalName string, parameters map[string]any, setup map[string]any) (string, error) {
 			o := map[string]any{
-				"externalName":            externalName,
-				"parameters":              parameters,
-				"terraformProviderConfig": terraformProviderConfig,
+				"externalName": externalName,
+				"parameters":   parameters,
+				"setup":        setup,
 			}
 			b := bytes.Buffer{}
 			if err := t.Execute(&b, o); err != nil {

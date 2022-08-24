@@ -88,7 +88,7 @@ func (fp *FileProducer) WriteTFState(ctx context.Context) error {
 	for k, v := range fp.observation {
 		base[k] = v
 	}
-	id, err := fp.Config.ExternalName.GetIDFn(ctx, meta.GetExternalName(fp.Resource), fp.parameters, fp.Setup.Configuration)
+	id, err := fp.Config.ExternalName.GetIDFn(ctx, meta.GetExternalName(fp.Resource), fp.parameters, fp.Setup.Map())
 	if err != nil {
 		return errors.Wrap(err, "cannot get id")
 	}
