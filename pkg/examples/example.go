@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
+	xpmeta "github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/pkg/errors"
 	"sigs.k8s.io/yaml"
@@ -33,7 +34,7 @@ var (
 
 const (
 	labelExampleName       = "testing.upbound.io/example-name"
-	annotationExampleGroup = "meta.upbound.io/example-gvk"
+	annotationExampleGroup = "meta.upbound.io/example-id"
 	defaultExampleName     = "example"
 	defaultNamespace       = "upbound-system"
 )
@@ -95,7 +96,7 @@ func (eg *Generator) StoreExamples() error { // nolint:gocyclo
 				if err := json.TFParser.Unmarshal([]byte(re.Dependencies[dn]), &exampleParams); err != nil {
 					return errors.Wrapf(err, "cannot unmarshal example manifest for resource: %s", dr.Config.Name)
 				}
-				// e.g. meta.upbound.io/example-group: ec2/v1beta1/instance
+				// e.g. meta.upbound.io/example-id: ec2/v1beta1/instance
 				eGroup := fmt.Sprintf("%s/%s/%s", strings.ToLower(r.ShortGroup), r.Version, strings.ToLower(r.Kind))
 				pmd := paveCRManifest(exampleParams, dr.Config,
 					reference.NewRefPartsFromResourceName(dn).ExampleName, dr.Group, dr.Version, eGroup)
@@ -116,20 +117,26 @@ func paveCRManifest(exampleParams map[string]any, r *config.Resource, eName, gro
 	delete(exampleParams, "depends_on")
 	delete(exampleParams, "lifecycle")
 	transformFields(r, exampleParams, r.ExternalName.OmittedFields, "")
+	metadata := map[string]any{
+		"labels": map[string]string{
+			labelExampleName: eName,
+		},
+		"annotations": map[string]string{
+			annotationExampleGroup: eGroup,
+		},
+	}
 	example := map[string]any{
 		"apiVersion": fmt.Sprintf("%s/%s", group, version),
 		"kind":       r.Kind,
-		"metadata": map[string]any{
-			"labels": map[string]string{
-				labelExampleName: eName,
-			},
-			"annotations": map[string]string{
-				annotationExampleGroup: eGroup,
-			},
-		},
+		"metadata":   metadata,
 		"spec": map[string]any{
 			"forProvider": exampleParams,
 		},
+	}
+	if len(r.MetaResource.ExternalName) != 0 {
+		metadata["annotations"] = map[string]string{
+			xpmeta.AnnotationKeyExternalName: r.MetaResource.ExternalName,
+		}
 	}
 	return &reference.PavedWithManifest{
 		Paved:        fieldpath.Pave(example),
@@ -175,6 +182,7 @@ func (eg *Generator) Generate(group, version string, r *config.Resource) error {
 		return nil
 	}
 	groupPrefix := strings.ToLower(strings.Split(group, ".")[0])
+	// e.g. gvk = ec2/v1beta1/instance
 	gvk := fmt.Sprintf("%s/%s/%s", groupPrefix, version, strings.ToLower(r.Kind))
 	pm := paveCRManifest(rm.Examples[0].Paved.UnstructuredContent(), r, rm.Examples[0].Name, group, version, gvk)
 	manifestDir := filepath.Join(eg.rootDir, "examples-generated", groupPrefix)
