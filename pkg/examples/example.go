@@ -134,9 +134,7 @@ func paveCRManifest(exampleParams map[string]any, r *config.Resource, eName, gro
 		},
 	}
 	if len(r.MetaResource.ExternalName) != 0 {
-		metadata["annotations"] = map[string]string{
-			xpmeta.AnnotationKeyExternalName: r.MetaResource.ExternalName,
-		}
+		metadata["annotations"].(map[string]string)[xpmeta.AnnotationKeyExternalName] = r.MetaResource.ExternalName
 	}
 	return &reference.PavedWithManifest{
 		Paved:        fieldpath.Pave(example),
