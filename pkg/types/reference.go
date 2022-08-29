@@ -5,6 +5,7 @@ import (
 	"go/token"
 	"go/types"
 	"reflect"
+	"strings"
 
 	"k8s.io/utils/pointer"
 
@@ -56,14 +57,22 @@ func (g *Builder) generateReferenceFields(t *types.TypeName, f *Field) (fields [
 
 	var tr types.Type
 	tr = types.NewPointer(typeReferenceField)
+	refComment := fmt.Sprintf("Reference to a %s to populate %s.\n%s",
+		friendlyTypeDescription(f.Reference.Type), f.Name.LowerCamelComputed, commentOptional.Build())
+	selComment := fmt.Sprintf("Selector for a %s to populate %s.\n%s",
+		friendlyTypeDescription(f.Reference.Type), f.Name.LowerCamelComputed, commentOptional.Build())
 	if isSlice {
 		tr = types.NewSlice(typeReferenceField)
+		refComment = fmt.Sprintf("References to %s to populate %s.\n%s",
+			friendlyTypeDescription(f.Reference.Type), f.Name.LowerCamelComputed, commentOptional.Build())
+		selComment = fmt.Sprintf("Selector for a list of %s to populate %s.\n%s",
+			friendlyTypeDescription(f.Reference.Type), f.Name.LowerCamelComputed, commentOptional.Build())
 	}
 	ref := types.NewField(token.NoPos, g.Package, rfn.Camel, tr, false)
 	sel := types.NewField(token.NoPos, g.Package, sfn.Camel, types.NewPointer(typeSelectorField), false)
 
-	g.comments.AddFieldComment(t, rfn.Camel, commentOptional.Build())
-	g.comments.AddFieldComment(t, sfn.Camel, commentOptional.Build())
+	g.comments.AddFieldComment(t, rfn.Camel, refComment)
+	g.comments.AddFieldComment(t, sfn.Camel, selComment)
 	f.TransformedName = rfn.LowerCamelComputed
 	f.SelectorName = sfn.LowerCamelComputed
 
@@ -76,4 +85,14 @@ func (g *Builder) generateReferenceFields(t *types.TypeName, f *Field) (fields [
 // the caller.
 func TypePath(i any) string {
 	return reflect.TypeOf(i).PkgPath() + "." + reflect.TypeOf(i).Name()
+}
+
+func friendlyTypeDescription(path string) string {
+	if !strings.Contains(path, ".") {
+		return path
+	}
+	typeName := path[strings.LastIndex(path, ".")+1:]
+	dirs := strings.Split(path, "/")
+	groupName := dirs[len(dirs)-2]
+	return fmt.Sprintf("%s in %s", typeName, groupName)
 }

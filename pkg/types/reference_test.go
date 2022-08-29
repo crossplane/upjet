@@ -48,8 +48,8 @@ func TestBuilder_generateReferenceFields(t *testing.T) {
 					`json:"testFieldSelector,omitempty" tf:"-"`,
 				},
 				outComments: twtypes.Comments{
-					"github.com/upbound/upjet/pkg/types.Params:TestFieldRef":      "// +kubebuilder:validation:Optional\n",
-					"github.com/upbound/upjet/pkg/types.Params:TestFieldSelector": "// +kubebuilder:validation:Optional\n",
+					"github.com/upbound/upjet/pkg/types.Params:TestFieldRef":      "Reference to a testObject to populate testField.\n// +kubebuilder:validation:Optional\n",
+					"github.com/upbound/upjet/pkg/types.Params:TestFieldSelector": "Selector for a testObject to populate testField.\n// +kubebuilder:validation:Optional\n",
 				},
 			},
 		},
@@ -73,8 +73,8 @@ func TestBuilder_generateReferenceFields(t *testing.T) {
 					`json:"testFieldSelector,omitempty" tf:"-"`,
 				},
 				outComments: twtypes.Comments{
-					"github.com/upbound/upjet/pkg/types.Params:TestFieldRefs":     "// +kubebuilder:validation:Optional\n",
-					"github.com/upbound/upjet/pkg/types.Params:TestFieldSelector": "// +kubebuilder:validation:Optional\n",
+					"github.com/upbound/upjet/pkg/types.Params:TestFieldRefs":     "References to testObject to populate testField.\n// +kubebuilder:validation:Optional\n",
+					"github.com/upbound/upjet/pkg/types.Params:TestFieldSelector": "Selector for a list of testObject to populate testField.\n// +kubebuilder:validation:Optional\n",
 				},
 			},
 		},
@@ -99,8 +99,8 @@ func TestBuilder_generateReferenceFields(t *testing.T) {
 					`json:"testFieldSelector,omitempty" tf:"-"`,
 				},
 				outComments: twtypes.Comments{
-					"github.com/upbound/upjet/pkg/types.Params:CustomRef":         "// +kubebuilder:validation:Optional\n",
-					"github.com/upbound/upjet/pkg/types.Params:TestFieldSelector": "// +kubebuilder:validation:Optional\n",
+					"github.com/upbound/upjet/pkg/types.Params:CustomRef":         "Reference to a TestObject to populate testField.\n// +kubebuilder:validation:Optional\n",
+					"github.com/upbound/upjet/pkg/types.Params:TestFieldSelector": "Selector for a TestObject to populate testField.\n// +kubebuilder:validation:Optional\n",
 				},
 			},
 		},
@@ -125,8 +125,33 @@ func TestBuilder_generateReferenceFields(t *testing.T) {
 					`json:"customSelector,omitempty" tf:"-"`,
 				},
 				outComments: twtypes.Comments{
-					"github.com/upbound/upjet/pkg/types.Params:TestFieldRef":   "// +kubebuilder:validation:Optional\n",
-					"github.com/upbound/upjet/pkg/types.Params:CustomSelector": "// +kubebuilder:validation:Optional\n",
+					"github.com/upbound/upjet/pkg/types.Params:TestFieldRef":   "Reference to a TestObject to populate testField.\n// +kubebuilder:validation:Optional\n",
+					"github.com/upbound/upjet/pkg/types.Params:CustomSelector": "Selector for a TestObject to populate testField.\n// +kubebuilder:validation:Optional\n",
+				},
+			},
+		},
+		"ReferenceToAnotherPackage": {
+			args: args{
+				t: types.NewTypeName(token.NoPos, tp, "Params", types.Universe.Lookup("string").Type()),
+				f: &Field{
+					Name: name.NewFromCamel("TestField"),
+					Reference: &config.Reference{
+						Type: "github.com/upbound/official-providers/provider-aws/apis/somepackage/v1beta1.TestObject",
+					},
+					FieldType: types.Universe.Lookup("string").Type(),
+				},
+			}, want: want{
+				outFields: []*types.Var{
+					types.NewField(token.NoPos, tp, "TestFieldRef", types.NewPointer(typeReferenceField), false),
+					types.NewField(token.NoPos, tp, "TestFieldSelector", types.NewPointer(typeSelectorField), false),
+				},
+				outTags: []string{
+					`json:"testFieldRef,omitempty" tf:"-"`,
+					`json:"testFieldSelector,omitempty" tf:"-"`,
+				},
+				outComments: twtypes.Comments{
+					"github.com/upbound/upjet/pkg/types.Params:TestFieldRef":      "Reference to a TestObject in somepackage to populate testField.\n// +kubebuilder:validation:Optional\n",
+					"github.com/upbound/upjet/pkg/types.Params:TestFieldSelector": "Selector for a TestObject in somepackage to populate testField.\n// +kubebuilder:validation:Optional\n",
 				},
 			},
 		},
@@ -140,13 +165,13 @@ func TestBuilder_generateReferenceFields(t *testing.T) {
 			if diff := cmp.Diff(tc.want.outFields, gotFields, cmp.Comparer(func(a, b *types.Var) bool {
 				return a.String() == b.String()
 			})); diff != "" {
-				t.Errorf("generateReferenceFields() fields = %v, want %v", gotFields, tc.want.outFields)
+				t.Errorf("generateReferenceFields(): fields: +got, -want: %s", diff)
 			}
 			if diff := cmp.Diff(tc.want.outTags, gotTags); diff != "" {
-				t.Errorf("generateReferenceFields() tags = %v, want %v", gotTags, tc.want.outTags)
+				t.Errorf("generateReferenceFields(): tags: +got, -want: %s", diff)
 			}
 			if diff := cmp.Diff(tc.want.outComments, g.comments); diff != "" {
-				t.Errorf("generateReferenceFields() comments = %v, want %v", g.comments, tc.want.outComments)
+				t.Errorf("generateReferenceFields(): comments: +got, -want: %s", diff)
 			}
 		})
 	}
