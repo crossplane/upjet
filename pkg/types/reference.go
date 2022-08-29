@@ -57,15 +57,15 @@ func (g *Builder) generateReferenceFields(t *types.TypeName, f *Field) (fields [
 
 	var tr types.Type
 	tr = types.NewPointer(typeReferenceField)
-	refComment := fmt.Sprintf("Reference to a %s to populate %s.\n%s",
+	refComment := fmt.Sprintf("// Reference to a %s to populate %s.\n%s",
 		friendlyTypeDescription(f.Reference.Type), f.Name.LowerCamelComputed, commentOptional.Build())
-	selComment := fmt.Sprintf("Selector for a %s to populate %s.\n%s",
+	selComment := fmt.Sprintf("// Selector for a %s to populate %s.\n%s",
 		friendlyTypeDescription(f.Reference.Type), f.Name.LowerCamelComputed, commentOptional.Build())
 	if isSlice {
 		tr = types.NewSlice(typeReferenceField)
-		refComment = fmt.Sprintf("References to %s to populate %s.\n%s",
+		refComment = fmt.Sprintf("// References to %s to populate %s.\n%s",
 			friendlyTypeDescription(f.Reference.Type), f.Name.LowerCamelComputed, commentOptional.Build())
-		selComment = fmt.Sprintf("Selector for a list of %s to populate %s.\n%s",
+		selComment = fmt.Sprintf("// Selector for a list of %s to populate %s.\n%s",
 			friendlyTypeDescription(f.Reference.Type), f.Name.LowerCamelComputed, commentOptional.Build())
 	}
 	ref := types.NewField(token.NoPos, g.Package, rfn.Camel, tr, false)
