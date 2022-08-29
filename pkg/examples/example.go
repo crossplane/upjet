@@ -33,9 +33,10 @@ var (
 )
 
 const (
-	labelExampleName   = "testing.upbound.io/example-name"
-	defaultExampleName = "example"
-	defaultNamespace   = "upbound-system"
+	labelExampleName       = "testing.upbound.io/example-name"
+	annotationExampleGroup = "meta.upbound.io/example-id"
+	defaultExampleName     = "example"
+	defaultNamespace       = "upbound-system"
 )
 
 // Generator represents a pipeline for generating example manifests.
@@ -95,8 +96,10 @@ func (eg *Generator) StoreExamples() error { // nolint:gocyclo
 				if err := json.TFParser.Unmarshal([]byte(re.Dependencies[dn]), &exampleParams); err != nil {
 					return errors.Wrapf(err, "cannot unmarshal example manifest for resource: %s", dr.Config.Name)
 				}
+				// e.g. meta.upbound.io/example-id: ec2/v1beta1/instance
+				eGroup := fmt.Sprintf("%s/%s/%s", strings.ToLower(r.ShortGroup), r.Version, strings.ToLower(r.Kind))
 				pmd := paveCRManifest(exampleParams, dr.Config,
-					reference.NewRefPartsFromResourceName(dn).ExampleName, dr.Group, dr.Version)
+					reference.NewRefPartsFromResourceName(dn).ExampleName, dr.Group, dr.Version, eGroup)
 				if err := eg.writeManifest(&buff, pmd, context); err != nil {
 					return errors.Wrapf(err, "cannot store example manifest for %s dependency: %s", rn, dn)
 				}
@@ -110,13 +113,16 @@ func (eg *Generator) StoreExamples() error { // nolint:gocyclo
 	return nil
 }
 
-func paveCRManifest(exampleParams map[string]any, r *config.Resource, eName, group, version string) *reference.PavedWithManifest {
+func paveCRManifest(exampleParams map[string]any, r *config.Resource, eName, group, version, eGroup string) *reference.PavedWithManifest {
 	delete(exampleParams, "depends_on")
 	delete(exampleParams, "lifecycle")
 	transformFields(r, exampleParams, r.ExternalName.OmittedFields, "")
 	metadata := map[string]any{
 		"labels": map[string]string{
 			labelExampleName: eName,
+		},
+		"annotations": map[string]string{
+			annotationExampleGroup: eGroup,
 		},
 	}
 	example := map[string]any{
@@ -175,8 +181,11 @@ func (eg *Generator) Generate(group, version string, r *config.Resource) error {
 	if rm == nil || len(rm.Examples) == 0 {
 		return nil
 	}
-	pm := paveCRManifest(rm.Examples[0].Paved.UnstructuredContent(), r, rm.Examples[0].Name, group, version)
-	manifestDir := filepath.Join(eg.rootDir, "examples-generated", strings.ToLower(strings.Split(group, ".")[0]))
+	groupPrefix := strings.ToLower(strings.Split(group, ".")[0])
+	// e.g. gvk = ec2/v1beta1/instance
+	gvk := fmt.Sprintf("%s/%s/%s", groupPrefix, version, strings.ToLower(r.Kind))
+	pm := paveCRManifest(rm.Examples[0].Paved.UnstructuredContent(), r, rm.Examples[0].Name, group, version, gvk)
+	manifestDir := filepath.Join(eg.rootDir, "examples-generated", groupPrefix)
 	pm.ManifestPath = filepath.Join(manifestDir, fmt.Sprintf("%s.yaml", strings.ToLower(r.Kind)))
 	eg.resources[fmt.Sprintf("%s.%s", r.Name, reference.Wildcard)] = pm
 	return nil
