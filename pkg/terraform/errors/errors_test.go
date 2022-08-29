@@ -218,7 +218,7 @@ func TestNewApplyFailed(t *testing.T) {
 			args: args{
 				logs: errorLog,
 			},
-			wantErrMessage: "apply failed: Missing required argument: The argument \"location\" is required, but no definition was found.: File name: main.tf.json\nMissing required argument: The argument \"name\" is required, but no definition was found.: File name: main.tf.json",
+			wantErrMessage: "apply failed: Missing required argument: The argument \"location\" is required, but no definition was found.\nMissing required argument: The argument \"name\" is required, but no definition was found.",
 		},
 	}
 	for name, tt := range tests {
@@ -247,7 +247,7 @@ func TestNewDestroyFailed(t *testing.T) {
 			args: args{
 				logs: errorLog,
 			},
-			wantErrMessage: "destroy failed: Missing required argument: The argument \"location\" is required, but no definition was found.: File name: main.tf.json\nMissing required argument: The argument \"name\" is required, but no definition was found.: File name: main.tf.json",
+			wantErrMessage: "destroy failed: Missing required argument: The argument \"location\" is required, but no definition was found.\nMissing required argument: The argument \"name\" is required, but no definition was found.",
 		},
 	}
 	for name, tt := range tests {
@@ -276,7 +276,7 @@ func TestNewRefreshFailed(t *testing.T) {
 			args: args{
 				logs: errorLog,
 			},
-			wantErrMessage: "refresh failed: Missing required argument: The argument \"location\" is required, but no definition was found.: File name: main.tf.json\nMissing required argument: The argument \"name\" is required, but no definition was found.: File name: main.tf.json",
+			wantErrMessage: "refresh failed: Missing required argument: The argument \"location\" is required, but no definition was found.\nMissing required argument: The argument \"name\" is required, but no definition was found.",
 		},
 	}
 	for name, tt := range tests {
@@ -305,7 +305,7 @@ func TestNewPlanFailed(t *testing.T) {
 			args: args{
 				logs: errorLog,
 			},
-			wantErrMessage: "plan failed: Missing required argument: The argument \"location\" is required, but no definition was found.: File name: main.tf.json\nMissing required argument: The argument \"name\" is required, but no definition was found.: File name: main.tf.json",
+			wantErrMessage: "plan failed: Missing required argument: The argument \"location\" is required, but no definition was found.\nMissing required argument: The argument \"name\" is required, but no definition was found.",
 		},
 	}
 	for name, tt := range tests {
