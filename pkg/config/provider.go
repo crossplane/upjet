@@ -214,7 +214,6 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadata []byt
 			continue
 		}
 		if matches(name, p.SkipList) {
-			fmt.Printf("Skipping resource %s because it is in SkipList\n", name)
 			continue
 		}
 		if !matches(name, p.IncludeList) {
