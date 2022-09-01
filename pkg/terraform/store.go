@@ -34,7 +34,10 @@ type SetupFn func(ctx context.Context, client client.Client, mg xpresource.Manag
 
 // ProviderRequirement holds values for the Terraform HCL setup requirements
 type ProviderRequirement struct {
-	Source  string
+	// Source of the provider. An example value is "hashicorp/aws".
+	Source string
+
+	// Version of the provider. An example value is "4.0"
 	Version string
 }
 
@@ -44,10 +47,39 @@ type ProviderConfiguration map[string]any
 // Setup holds values for the Terraform version and setup
 // requirements and configuration body
 type Setup struct {
-	Version       string
-	Requirement   ProviderRequirement
+	// Version is the version of Terraform that this workspace would require as
+	// minimum.
+	Version string
+
+	// Requirement contains the provider requirements of the workspace to work,
+	// which is mostly the version and source of the provider.
+	Requirement ProviderRequirement
+
+	// Configuration contains the provider configuration parameters of the given
+	// Terraform provider, such as access token.
 	Configuration ProviderConfiguration
-	Env           []string
+
+	// ClientMetadata contains arbitrary metadata that the provider would like
+	// to pass but not available as part of Terraform's provider configuration.
+	// For example, AWS account id is needed for certain ID calculations but is
+	// not part of the Terraform AWS Provider configuration, so it could be
+	// made available only by this map.
+	ClientMetadata map[string]string
+}
+
+// Map returns the Setup object in map form. The initial reason was so that
+// we don't import the terraform package in places where GetIDFn is overridden
+// because it can cause circular dependency.
+func (s Setup) Map() map[string]any {
+	return map[string]any{
+		"version": s.Version,
+		"requirement": map[string]string{
+			"source":  s.Requirement.Source,
+			"version": s.Requirement.Version,
+		},
+		"configuration":   s.Configuration,
+		"client_metadata": s.ClientMetadata,
+	}
 }
 
 // WorkspaceStoreOption lets you configure the workspace store.
@@ -138,7 +170,6 @@ func (ws *WorkspaceStore) Workspace(ctx context.Context, c resource.SecretClient
 	if xpresource.Ignore(os.IsNotExist, err) != nil {
 		return nil, errors.Wrap(err, "cannot stat init lock file")
 	}
-	w.env = ts.Env
 	w.env = append(w.env, fmt.Sprintf(fmtEnv, envReattachConfig, attachmentConfig))
 
 	// We need to initialize only if the workspace hasn't been initialized yet.

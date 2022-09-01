@@ -20,7 +20,7 @@ const (
 )
 
 var (
-	externalNameRegex = regexp.MustCompile(`{{\ *\.externalName\b\ *}}`)
+	externalNameRegex = regexp.MustCompile(`{{\ *\.external_name\b\ *}}`)
 )
 
 var (
@@ -73,13 +73,13 @@ func ParameterAsIdentifier(param string) ExternalName {
 //                 take a look at the TF registry provider configuration object
 //                 to see what's available. Not to be confused with ProviderConfig
 //                 custom resource of the Crossplane provider.
-// externalName: The value of external name annotation of the custom resource.
+// external_name: The value of external name annotation of the custom resource.
 //               It is required to use this as part of the template.
 //
 // Example usages:
-// TemplatedStringAsIdentifier("index_name", "/subscriptions/{{ .terraformProviderConfig.subscription }}/{{ .externalName }}")
-// TemplatedStringAsIdentifier("index.name", "/resource/{{ .externalName }}/static")
-// TemplatedStringAsIdentifier("index.name", "{{ .parameters.cluster_id }}:{{ .parameters.node_id }}:{{ .externalName }}")
+// TemplatedStringAsIdentifier("index_name", "/subscriptions/{{ .terraformProviderConfig.subscription }}/{{ .external_name }}")
+// TemplatedStringAsIdentifier("index.name", "/resource/{{ .external_name }}/static")
+// TemplatedStringAsIdentifier("index.name", "{{ .parameters.cluster_id }}:{{ .parameters.node_id }}:{{ .external_name }}")
 func TemplatedStringAsIdentifier(nameFieldPath, tmpl string) ExternalName {
 	t, err := template.New("getid").Parse(tmpl)
 	if err != nil {
@@ -102,11 +102,11 @@ func TemplatedStringAsIdentifier(nameFieldPath, tmpl string) ExternalName {
 			nameFieldPath,
 			nameFieldPath + "_prefix",
 		},
-		GetIDFn: func(ctx context.Context, externalName string, parameters map[string]any, terraformProviderConfig map[string]any) (string, error) {
+		GetIDFn: func(ctx context.Context, externalName string, parameters map[string]any, setup map[string]any) (string, error) {
 			o := map[string]any{
-				"externalName":            externalName,
-				"parameters":              parameters,
-				"terraformProviderConfig": terraformProviderConfig,
+				"external_name": externalName,
+				"parameters":    parameters,
+				"setup":         setup,
 			}
 			b := bytes.Buffer{}
 			if err := t.Execute(&b, o); err != nil {
@@ -126,7 +126,7 @@ func TemplatedStringAsIdentifier(nameFieldPath, tmpl string) ExternalName {
 
 // GetExternalNameFromTemplated takes a Terraform ID and the template it's produced
 // from and reverse it to get the external name. For example, you can supply
-// "/subscription/{{ .paramters.some }}/{{ .externalName }}" with
+// "/subscription/{{ .paramters.some }}/{{ .external_name }}" with
 // "/subscription/someval/myname" and get "myname" returned.
 func GetExternalNameFromTemplated(tmpl, val string) (string, error) { //nolint:gocyclo
 	// gocyclo: I couldn't find any more room.
@@ -148,13 +148,13 @@ func GetExternalNameFromTemplated(tmpl, val string) (string, error) { //nolint:g
 	}
 
 	switch {
-	// {{ .externalName }}
+	// {{ .external_name }}
 	case leftSeparator == "" && rightSeparator == "":
 		return val, nil
-	// {{ .externalName }}/someother
+	// {{ .external_name }}/someother
 	case leftSeparator == "" && rightSeparator != "":
 		return strings.Split(val, rightSeparator)[0], nil
-	// /another/{{ .externalName }}/someother
+	// /another/{{ .external_name }}/someother
 	case leftSeparator != "" && rightSeparator != "":
 		leftSeparatorCount := strings.Count(tmpl[:leftIndex+1], leftSeparator)
 		// ["", "another","myname/someother"]
@@ -163,7 +163,7 @@ func GetExternalNameFromTemplated(tmpl, val string) (string, error) { //nolint:g
 		rightString := separatedLeft[len(separatedLeft)-1]
 		// myname
 		return strings.Split(rightString, rightSeparator)[0], nil
-	// /another/{{ .externalName }}
+	// /another/{{ .external_name }}
 	case leftSeparator != "" && rightSeparator == "":
 		separated := strings.Split(val, leftSeparator)
 		return separated[len(separated)-1], nil

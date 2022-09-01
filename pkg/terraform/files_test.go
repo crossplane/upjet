@@ -160,7 +160,6 @@ func TestWriteMainTF(t *testing.T) {
 						Version: "1.2.3",
 					},
 					Configuration: nil,
-					Env:           nil,
 				},
 			},
 			want: want{
@@ -193,7 +192,6 @@ func TestWriteMainTF(t *testing.T) {
 						Version: "1.2.3",
 					},
 					Configuration: nil,
-					Env:           nil,
 				},
 			},
 			want: want{
@@ -226,7 +224,6 @@ func TestWriteMainTF(t *testing.T) {
 						Version: "1.2.3",
 					},
 					Configuration: nil,
-					Env:           nil,
 				},
 			},
 			want: want{

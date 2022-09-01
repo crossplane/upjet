@@ -31,7 +31,7 @@ func TestGetExternalNameFromTemplated(t *testing.T) {
 		"OnlyExternalName": {
 			reason: "Should work with bare external name.",
 			args: args{
-				tmpl: "{{ .externalName }}",
+				tmpl: "{{ .external_name }}",
 				val:  "myname",
 			},
 			want: want{
@@ -41,7 +41,7 @@ func TestGetExternalNameFromTemplated(t *testing.T) {
 		"ExternalNameWithPrefix": {
 			reason: "Should work with prefixed external names.",
 			args: args{
-				tmpl: "/some:other/prefix:{{ .externalName }}",
+				tmpl: "/some:other/prefix:{{ .external_name }}",
 				val:  "/some:other/prefix:myname",
 			},
 			want: want{
@@ -51,7 +51,7 @@ func TestGetExternalNameFromTemplated(t *testing.T) {
 		"ExternalNameWithSuffix": {
 			reason: "Should work with suffixed external name.",
 			args: args{
-				tmpl: "{{ .externalName }}/olala:{{ .another }}/ola",
+				tmpl: "{{ .external_name }}/olala:{{ .another }}/ola",
 				val:  "myname/olala:omama/ola",
 			},
 			want: want{
@@ -61,7 +61,7 @@ func TestGetExternalNameFromTemplated(t *testing.T) {
 		"ExternalNameInTheMiddle": {
 			reason: "Should work with external name that is both prefixed and suffixed.",
 			args: args{
-				tmpl: "olala:{{ .externalName }}:omama:{{ .someOther }}",
+				tmpl: "olala:{{ .external_name }}:omama:{{ .someOther }}",
 				val:  "olala:myname:omama:okaka",
 			},
 			want: want{
@@ -72,7 +72,7 @@ func TestGetExternalNameFromTemplated(t *testing.T) {
 		"ExternalNameInTheMiddleWithLessSpaceInTemplateVar": {
 			reason: "Should work with external name that is both prefixed and suffixed.",
 			args: args{
-				tmpl: "olala:{{.externalName}}:omama:{{ .someOther }}",
+				tmpl: "olala:{{.external_name}}:omama:{{ .someOther }}",
 				val:  "olala:myname:omama:okaka",
 			},
 			want: want{
@@ -149,7 +149,7 @@ func TestTemplatedSetIdentifierArgumentFn(t *testing.T) {
 	}
 	for n, tc := range cases {
 		t.Run(n, func(t *testing.T) {
-			TemplatedStringAsIdentifier(tc.args.nameFieldPath, "{{ .externalName }}").SetIdentifierArgumentFn(tc.args.base, tc.args.externalName)
+			TemplatedStringAsIdentifier(tc.args.nameFieldPath, "{{ .external_name }}").SetIdentifierArgumentFn(tc.args.base, tc.args.externalName)
 			if diff := cmp.Diff(tc.want.base, tc.args.base); diff != "" {
 				t.Fatalf("TemplatedStringAsIdentifier.SetIdentifierArgumentFn(...): -want, +got: %s", diff)
 			}
@@ -159,10 +159,10 @@ func TestTemplatedSetIdentifierArgumentFn(t *testing.T) {
 
 func TestTemplatedGetIDFn(t *testing.T) {
 	type args struct {
-		tmpl                    string
-		externalName            string
-		parameters              map[string]any
-		terraformProviderConfig map[string]any
+		tmpl         string
+		externalName string
+		parameters   map[string]any
+		setup        map[string]any
 	}
 	type want struct {
 		id  string
@@ -174,7 +174,7 @@ func TestTemplatedGetIDFn(t *testing.T) {
 		want   want
 	}{
 		"NoExternalName": {
-			reason: "Should work when only externalName is used.",
+			reason: "Should work when only external_name is used.",
 			args: args{
 				tmpl: "olala/{{ .parameters.somethingElse }}",
 				parameters: map[string]any{
@@ -186,9 +186,9 @@ func TestTemplatedGetIDFn(t *testing.T) {
 			},
 		},
 		"OnlyExternalName": {
-			reason: "Should work when only externalName is used.",
+			reason: "Should work when only external_name is used.",
 			args: args{
-				tmpl:         "olala/{{ .externalName }}",
+				tmpl:         "olala/{{ .external_name }}",
 				externalName: "myname",
 			},
 			want: want{
@@ -198,13 +198,15 @@ func TestTemplatedGetIDFn(t *testing.T) {
 		"MultipleParameters": {
 			reason: "Should work when parameters and terraformProviderConfig are used as well.",
 			args: args{
-				tmpl:         "olala/{{ .parameters.ola }}:{{ .externalName }}/{{ .terraformProviderConfig.oma }}",
+				tmpl:         "olala/{{ .parameters.ola }}:{{ .external_name }}/{{ .setup.configuration.oma }}",
 				externalName: "myname",
 				parameters: map[string]any{
 					"ola": "paramval",
 				},
-				terraformProviderConfig: map[string]any{
-					"oma": "configval",
+				setup: map[string]any{
+					"configuration": map[string]any{
+						"oma": "configval",
+					},
 				},
 			},
 			want: want{
@@ -218,7 +220,7 @@ func TestTemplatedGetIDFn(t *testing.T) {
 				GetIDFn(context.TODO(),
 					tc.args.externalName,
 					tc.args.parameters,
-					tc.args.terraformProviderConfig,
+					tc.args.setup,
 				)
 			if diff := cmp.Diff(tc.want.err, err); diff != "" {
 				t.Fatalf("TemplatedStringAsIdentifier.GetIDFn(...): -want, +got: %s", diff)
@@ -245,7 +247,7 @@ func TestTemplatedGetExternalNameFn(t *testing.T) {
 		want   want
 	}{
 		"NoExternalName": {
-			reason: "Should work when no externalName is used.",
+			reason: "Should work when no external_name is used.",
 			args: args{
 				tmpl: "olala/{{ .parameters.somethingElse }}",
 				tfstate: map[string]any{
@@ -257,9 +259,9 @@ func TestTemplatedGetExternalNameFn(t *testing.T) {
 			},
 		},
 		"BareExternalName": {
-			reason: "Should work when only externalName is used in template.",
+			reason: "Should work when only external_name is used in template.",
 			args: args{
-				tmpl: "{{ .externalName }}",
+				tmpl: "{{ .external_name }}",
 				tfstate: map[string]any{
 					"id": "myname",
 				},
@@ -269,9 +271,9 @@ func TestTemplatedGetExternalNameFn(t *testing.T) {
 			},
 		},
 		"ExternalNameSpaces": {
-			reason: "Should work when externalName variable has random space characters.",
+			reason: "Should work when external_name variable has random space characters.",
 			args: args{
-				tmpl: "another/thing:{{  .externalName         }}/something",
+				tmpl: "another/thing:{{  .external_name         }}/something",
 				tfstate: map[string]any{
 					"id": "another/thing:myname/something",
 				},
@@ -281,9 +283,9 @@ func TestTemplatedGetExternalNameFn(t *testing.T) {
 			},
 		},
 		"DifferentLeftRightSeparators": {
-			reason: "Should work when externalName has different left and right separators.",
+			reason: "Should work when external_name has different left and right separators.",
 			args: args{
-				tmpl: "another/{{ .parameters.another }}:{{ .externalName }}/somethingelse",
+				tmpl: "another/{{ .parameters.another }}:{{ .external_name }}/somethingelse",
 				tfstate: map[string]any{
 					"id": "another/thing:myname/somethingelse",
 				},
@@ -295,7 +297,7 @@ func TestTemplatedGetExternalNameFn(t *testing.T) {
 		"NoID": {
 			reason: "Should not work when ID cannot be found.",
 			args: args{
-				tmpl: "{{ .externalName }}",
+				tmpl: "{{ .external_name }}",
 				tfstate: map[string]any{
 					"another": "myname",
 				},
