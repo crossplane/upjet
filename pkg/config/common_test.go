@@ -511,3 +511,96 @@ func TestGetSchema(t *testing.T) {
 		})
 	}
 }
+
+func TestManipulateAllFieldsInSchema(t *testing.T) {
+	type args struct {
+		sch *schema.Resource
+		op  func(sch *schema.Schema)
+	}
+	type want struct {
+		sch *schema.Resource
+	}
+
+	cases := map[string]struct {
+		reason string
+		args
+		want
+	}{
+		"SetEmptyDescription": {
+			args: args{
+				sch: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"topA": {
+							Description: "topADescription",
+							Type:        schema.TypeMap,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"leafA": {
+										Description: "leafADescription",
+										Type:        schema.TypeMap,
+										Elem: &schema.Resource{
+											Schema: map[string]*schema.Schema{
+												"leafB": {
+													Description: "",
+													Type:        schema.TypeString,
+												},
+												"leafC": {
+													Description: "leafCDescription",
+													Type:        schema.TypeString,
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+						"topB": {Type: schema.TypeString},
+					},
+				},
+				op: func(sch *schema.Schema) {
+					sch.Description = ""
+				},
+			},
+			want: want{
+				sch: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"topA": {
+							Description: "",
+							Type:        schema.TypeMap,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"leafA": {
+										Description: "",
+										Type:        schema.TypeMap,
+										Elem: &schema.Resource{
+											Schema: map[string]*schema.Schema{
+												"leafB": {
+													Description: "",
+													Type:        schema.TypeString,
+												},
+												"leafC": {
+													Description: "",
+													Type:        schema.TypeString,
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+						"topB": {Type: schema.TypeString, Description: ""},
+					},
+				},
+			},
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			ManipulateEveryField(tc.args.sch, tc.args.op)
+			if diff := cmp.Diff(tc.want.sch, tc.args.sch); diff != "" {
+				t.Errorf("\n%s\nMoveToStatus(...): -want, +got:\n%s", tc.reason, diff)
+			}
+		})
+	}
+}

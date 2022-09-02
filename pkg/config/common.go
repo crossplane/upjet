@@ -141,3 +141,17 @@ func GetSchema(sch *schema.Resource, fieldpath string) *schema.Schema {
 	}
 	return s
 }
+
+// ManipulateEveryField manipulates all fields in the schema by
+// input function.
+func ManipulateEveryField(r *schema.Resource, op func(sch *schema.Schema)) {
+	for _, s := range r.Schema {
+		if s == nil {
+			return
+		}
+		op(s)
+		if el, ok := s.Elem.(*schema.Resource); ok {
+			ManipulateEveryField(el, op)
+		}
+	}
+}
