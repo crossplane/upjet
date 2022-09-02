@@ -597,7 +597,7 @@ func TestManipulateAllFieldsInSchema(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			ManipulateAllFieldsInSchema(tc.args.sch, tc.args.op)
+			ManipulateEveryField(tc.args.sch, tc.args.op)
 			if diff := cmp.Diff(tc.want.sch, tc.args.sch); diff != "" {
 				t.Errorf("\n%s\nMoveToStatus(...): -want, +got:\n%s", tc.reason, diff)
 			}
