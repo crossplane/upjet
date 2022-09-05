@@ -68,6 +68,7 @@ func DefaultResource(name string, terraformSchema *schema.Resource, terraformReg
 		ExternalName:      NameAsIdentifier,
 		References:        map[string]Reference{},
 		Sensitive:         NopSensitive,
+		UseAsync:          true,
 	}
 	for _, f := range opts {
 		f(r)

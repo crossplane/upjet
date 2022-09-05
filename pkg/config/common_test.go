@@ -40,6 +40,7 @@ func TestDefaultResource(t *testing.T) {
 				ExternalName: NameAsIdentifier,
 				References:   map[string]Reference{},
 				Sensitive:    NopSensitive,
+				UseAsync:     true,
 			},
 		},
 		"TwoSectionsName": {
@@ -55,6 +56,7 @@ func TestDefaultResource(t *testing.T) {
 				ExternalName: NameAsIdentifier,
 				References:   map[string]Reference{},
 				Sensitive:    NopSensitive,
+				UseAsync:     true,
 			},
 		},
 		"NameWithPrefixAcronym": {
@@ -70,6 +72,7 @@ func TestDefaultResource(t *testing.T) {
 				ExternalName: NameAsIdentifier,
 				References:   map[string]Reference{},
 				Sensitive:    NopSensitive,
+				UseAsync:     true,
 			},
 		},
 		"NameWithSuffixAcronym": {
@@ -85,6 +88,7 @@ func TestDefaultResource(t *testing.T) {
 				ExternalName: NameAsIdentifier,
 				References:   map[string]Reference{},
 				Sensitive:    NopSensitive,
+				UseAsync:     true,
 			},
 		},
 		"NameWithMultipleAcronyms": {
@@ -100,6 +104,7 @@ func TestDefaultResource(t *testing.T) {
 				ExternalName: NameAsIdentifier,
 				References:   map[string]Reference{},
 				Sensitive:    NopSensitive,
+				UseAsync:     true,
 			},
 		},
 	}
