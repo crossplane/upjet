@@ -268,12 +268,14 @@ func getRootPath(n *html.Node) string { // nolint: gocyclo
 	if ulNode == nil {
 		return ""
 	}
-	for pNode = ulNode; pNode != nil && (pNode.Data != "p" || !checkBlockParagraph(pNode)); pNode = pNode.PrevSibling {
+	for pNode = ulNode.PrevSibling; pNode != nil && (pNode.Data != "p" || !checkBlockParagraph(pNode)); pNode = pNode.PrevSibling {
+		// intentionally left empty
 	}
 	if pNode == nil {
 		return ""
 	}
 	for codeNode = pNode.FirstChild; codeNode != nil && codeNode.Data != "code"; codeNode = codeNode.NextSibling {
+		// intentionally left empty
 	}
 	if codeNode == nil || codeNode.FirstChild == nil {
 		return ""

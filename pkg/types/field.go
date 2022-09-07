@@ -33,6 +33,39 @@ type Field struct {
 	SelectorName                             string
 }
 
+func getDocString(cfg *config.Resource, f *Field, tfPath []string) string {
+	hName := f.Name.Snake
+	if len(tfPath) > 0 {
+		hName = fieldPath(append(tfPath, hName))
+	}
+	docString := ""
+	if cfg.MetaResource != nil {
+		lm := 0
+		match := ""
+		for k := range cfg.MetaResource.ArgumentDocs {
+			parts := strings.Split(k, ".")
+			if parts[len(parts)-1] == f.Name.Snake {
+				lm = len(f.Name.Snake)
+				match = k
+			}
+		}
+		if lm == 0 {
+			for k := range cfg.MetaResource.ArgumentDocs {
+				if strings.HasSuffix(hName, k) {
+					if len(k) > lm {
+						lm = len(k)
+						match = k
+					}
+				}
+			}
+		}
+		if lm > 0 {
+			docString = strings.TrimSpace(getDescription(cfg.MetaResource.ArgumentDocs[match]))
+		}
+	}
+	return docString
+}
+
 // NewField returns a constructed Field object.
 func NewField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema, snakeFieldName string, tfPath, xpPath, names []string, asBlocksMode bool) (*Field, error) {
 	f := &Field{
@@ -43,8 +76,9 @@ func NewField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema,
 	}
 
 	var commentText string
-	if cfg.MetaResource != nil {
-		commentText = getDescription(cfg.MetaResource.ArgumentDocs[f.Name.Snake]) + "\n"
+	docString := getDocString(cfg, f, tfPath)
+	if len(docString) > 0 {
+		commentText = docString + "\n"
 	}
 	commentText += f.Schema.Description
 	commentText = pkg.FilterDescription(commentText, pkg.TerraformKeyword)
