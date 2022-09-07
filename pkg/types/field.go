@@ -5,6 +5,7 @@ import (
 	"go/token"
 	"go/types"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -33,7 +34,10 @@ type Field struct {
 	SelectorName                             string
 }
 
-func getDocString(cfg *config.Resource, f *Field, tfPath []string) string {
+// getDocString first tries to match hierarchical argument names with
+// the longest suffix matching. If this is not successful, looks for
+// the name in a flat hierarchy.
+func getDocString(cfg *config.Resource, f *Field, tfPath []string) string { //nolint:gocyclo
 	hName := f.Name.Snake
 	if len(tfPath) > 0 {
 		hName = fieldPath(append(tfPath, hName))
@@ -42,20 +46,25 @@ func getDocString(cfg *config.Resource, f *Field, tfPath []string) string {
 	if cfg.MetaResource != nil {
 		lm := 0
 		match := ""
+		sortedKeys := make([]string, 0, len(cfg.MetaResource.ArgumentDocs))
 		for k := range cfg.MetaResource.ArgumentDocs {
-			parts := strings.Split(k, ".")
-			if parts[len(parts)-1] == f.Name.Snake {
-				lm = len(f.Name.Snake)
-				match = k
+			sortedKeys = append(sortedKeys, k)
+		}
+		sort.Strings(sortedKeys)
+		for _, k := range sortedKeys {
+			if strings.HasSuffix(hName, k) {
+				if len(k) > lm {
+					lm = len(k)
+					match = k
+				}
 			}
 		}
 		if lm == 0 {
-			for k := range cfg.MetaResource.ArgumentDocs {
-				if strings.HasSuffix(hName, k) {
-					if len(k) > lm {
-						lm = len(k)
-						match = k
-					}
+			for _, k := range sortedKeys {
+				parts := strings.Split(k, ".")
+				if parts[len(parts)-1] == f.Name.Snake {
+					lm = len(f.Name.Snake)
+					match = k
 				}
 			}
 		}

@@ -252,7 +252,7 @@ func (r *Resource) scrapeFieldDocs(doc *html.Node, fieldXPath string) {
 			conflictedFields[attrName] = true
 			continue
 		}
-		r.ArgumentDocs[attrName] = docStr
+		r.ArgumentDocs[attrName] = strings.TrimSpace(docStr)
 	}
 
 	// Remove descriptions for repeating fields in the registry.
