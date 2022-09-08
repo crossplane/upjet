@@ -16,6 +16,7 @@ import (
 	"github.com/muvaf/typewriter/pkg/wrapper"
 	"github.com/pkg/errors"
 
+	tjpkg "github.com/upbound/upjet/pkg"
 	"github.com/upbound/upjet/pkg/config"
 	"github.com/upbound/upjet/pkg/pipeline/templates"
 	tjtypes "github.com/upbound/upjet/pkg/types"
@@ -96,7 +97,7 @@ func (cg *CRDGenerator) Generate(cfg *config.Resource) (string, error) {
 		"XPCommonAPIsPackageAlias": file.Imports.UsePackage(tjtypes.PackagePathXPCommonAPIs),
 	}
 	if cfg.MetaResource != nil {
-		vars["CRD"].(map[string]string)["Description"] = cfg.MetaResource.Description
+		vars["CRD"].(map[string]string)["Description"] = tjpkg.FilterDescription(cfg.MetaResource.Description, tjpkg.TerraformKeyword)
 	}
 	filePath := filepath.Join(cg.LocalDirectoryPath, fmt.Sprintf("zz_%s_types.go", strings.ToLower(cfg.Kind)))
 	return gen.ForProviderType.Obj().Name(), errors.Wrap(file.Write(filePath, vars, os.ModePerm), "cannot write crd file")

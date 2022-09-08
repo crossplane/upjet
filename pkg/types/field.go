@@ -9,6 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/pkg/errors"
 
+	"github.com/upbound/upjet/pkg"
 	"github.com/upbound/upjet/pkg/config"
 	"github.com/upbound/upjet/pkg/types/comments"
 	"github.com/upbound/upjet/pkg/types/name"
@@ -38,14 +39,12 @@ func NewField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema,
 		AsBlocksMode:   asBlocksMode,
 	}
 
-	// Use registry descriptions for fields if exists
-	// Otherwise, use schema as source
 	var commentText string
 	if cfg.MetaResource != nil {
 		commentText = cfg.MetaResource.ArgumentDocs[f.Name.Snake] + "\n"
 	}
 	commentText += f.Schema.Description
-
+	commentText = pkg.FilterDescription(commentText, pkg.TerraformKeyword)
 	comment, err := comments.New(commentText)
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot build comment for description: %s", commentText)
