@@ -3,7 +3,7 @@ package pkg
 import "strings"
 
 const (
-	DescriptionSeparator = "."
+	descriptionSeparator = "."
 	TerraformKeyword     = "terraform"
 )
 
@@ -11,11 +11,11 @@ const (
 // sentence.
 func FilterDescription(description, keyword string) string {
 	var result []string
-	sentences := strings.Split(description, DescriptionSeparator)
+	sentences := strings.Split(description, descriptionSeparator)
 	for _, s := range sentences {
 		if !strings.Contains(strings.ToLower(s), keyword) {
 			result = append(result, s)
 		}
 	}
-	return strings.Join(result, DescriptionSeparator)
+	return strings.Join(result, descriptionSeparator)
 }

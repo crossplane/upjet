@@ -8,32 +8,32 @@ resources:
         examples:
             - name: example
               manifest: |-
-                {
-                  "country_code": "US",
-                  "data_residency_location": "United States",
-                  "display_name": "example-b2c-tenant",
-                  "domain_name": "exampleb2ctenant.onmicrosoft.com",
-                  "resource_group_name": "example-rg",
-                  "sku_name": "PremiumP1"
-                }
+                  {
+                    "country_code": "US",
+                    "data_residency_location": "United States",
+                    "display_name": "example-b2c-tenant",
+                    "domain_name": "exampleb2ctenant.onmicrosoft.com",
+                    "resource_group_name": "example-rg",
+                    "sku_name": "PremiumP1"
+                  }
               references: {}
               dependencies: {}
         argumentDocs:
-            billing_type: 'The type of billing for the AAD B2C tenant. Possible values include: MAU or Auths.'
-            country_code: ' Country code of the B2C tenant. The country_code should be valid for the specified data_residency_location. See official docs for valid country codes. Required when creating a new resource. Changing this forces a new AAD B2C Directory to be created.'
-            create: ' Used when creating the AAD B2C Directory.'
-            data_residency_location: ' Location in which the B2C tenant is hosted and data resides. The data_residency_location should be valid for the specified country_code. See official docs for more information. Changing this forces a new AAD B2C Directory to be created.'
-            delete: ' Used when deleting the AAD B2C Directory.'
-            display_name: ' The initial display name of the B2C tenant. Required when creating a new resource. Changing this forces a new AAD B2C Directory to be created.'
-            domain_name: ' Domain name of the B2C tenant, including the .onmicrosoft.com suffix. Changing this forces a new AAD B2C Directory to be created.'
-            effective_start_date: The date from which the billing type took effect. May not be populated until after the first billing cycle.
-            id: The ID of the AAD B2C Directory.
-            read: ' Used when retrieving the AAD B2C Directory.'
-            resource_group_name: ' The name of the Resource Group where the AAD B2C Directory should exist. Changing this forces a new AAD B2C Directory to be created.'
-            sku_name: ' Billing SKU for the B2C tenant. Must be one of: PremiumP1 or PremiumP2 . See official docs for more information.'
-            tags: ' A mapping of tags which should be assigned to the AAD B2C Directory.'
-            tenant_id: The Tenant ID for the AAD B2C tenant.
-            update: ' Used when updating the AAD B2C Directory.'
+            billing_type: ' - The type of billing for the AAD B2C tenant. Possible values include: MAU or Auths.'
+            country_code: ' - (Optional) Country code of the B2C tenant. The country_code should be valid for the specified data_residency_location. See official docs for valid country codes. Required when creating a new resource. Changing this forces a new AAD B2C Directory to be created.'
+            create: ' - (Defaults to 30 minutes) Used when creating the AAD B2C Directory.'
+            data_residency_location: ' - (Required) Location in which the B2C tenant is hosted and data resides. The data_residency_location should be valid for the specified country_code. See official docs for more information. Changing this forces a new AAD B2C Directory to be created.'
+            delete: ' - (Defaults to 30 minutes) Used when deleting the AAD B2C Directory.'
+            display_name: ' - (Optional) The initial display name of the B2C tenant. Required when creating a new resource. Changing this forces a new AAD B2C Directory to be created.'
+            domain_name: ' - (Required) Domain name of the B2C tenant, including the .onmicrosoft.com suffix. Changing this forces a new AAD B2C Directory to be created.'
+            effective_start_date: ' - The date from which the billing type took effect. May not be populated until after the first billing cycle.'
+            id: ' - The ID of the AAD B2C Directory.'
+            read: ' - (Defaults to 5 minutes) Used when retrieving the AAD B2C Directory.'
+            resource_group_name: ' - (Required) The name of the Resource Group where the AAD B2C Directory should exist. Changing this forces a new AAD B2C Directory to be created.'
+            sku_name: ' - (Required) Billing SKU for the B2C tenant. Must be one of: PremiumP1 or PremiumP2 (Standard is not supported). See official docs for more information.'
+            tags: ' - (Optional) A mapping of tags which should be assigned to the AAD B2C Directory.'
+            tenant_id: ' - The Tenant ID for the AAD B2C tenant.'
+            update: ' - (Defaults to 30 minutes) Used when updating the AAD B2C Directory.'
         importStatements:
             - terraform import azurerm_aadb2c_directory.example /subscriptions/12345678-1234-9876-4563-123456789012/resourceGroups/example-resource-group/providers/Microsoft.AzureActiveDirectory/b2cDirectories/directory-name
     azurerm_attestation_provider:
@@ -44,34 +44,34 @@ resources:
         examples:
             - name: example
               manifest: |-
-                {
-                  "location": "${azurerm_resource_group.example.location}",
-                  "name": "example-attestationprovider",
-                  "policy_signing_certificate_data": "${file(\"./example/cert.pem\")}",
-                  "resource_group_name": "${azurerm_resource_group.example.name}"
-                }
+                  {
+                    "location": "${azurerm_resource_group.example.location}",
+                    "name": "example-attestationprovider",
+                    "policy_signing_certificate_data": "${file(\"./example/cert.pem\")}",
+                    "resource_group_name": "${azurerm_resource_group.example.name}"
+                  }
               references:
-                location: azurerm_resource_group.example.location
-                resource_group_name: azurerm_resource_group.example.name
+                  location: azurerm_resource_group.example.location
+                  resource_group_name: azurerm_resource_group.example.name
               dependencies:
-                azurerm_resource_group.example: |-
-                    {
-                      "location": "West Europe",
-                      "name": "example-resources"
-                    }
+                  azurerm_resource_group.example: |-
+                      {
+                        "location": "West Europe",
+                        "name": "example-resources"
+                      }
         argumentDocs:
-            attestation_uri: The URI of the Attestation Service.
-            create: ' Used when creating the Attestation Provider.'
-            delete: ' Used when deleting the Attestation Provider.'
-            id: The ID of the Attestation Provider.
-            location: ' The Azure Region where the Attestation Provider should exist. Changing this forces a new resource to be created.'
-            name: ' The name which should be used for this Attestation Provider. Changing this forces a new resource to be created.'
-            policy_signing_certificate_data: ' A valid X.509 certificate . Changing this forces a new resource to be created.'
-            read: ' Used when retrieving the Attestation Provider.'
-            resource_group_name: ' The name of the Resource Group where the attestation provider should exist. Changing this forces a new resource to be created.'
-            tags: ' A mapping of tags which should be assigned to the Attestation Provider.'
-            trust_model: Trust model used for the Attestation Service.
-            update: ' Used when updating the Attestation Provider.'
+            attestation_uri: ' - The URI of the Attestation Service.'
+            create: ' - (Defaults to 30 minutes) Used when creating the Attestation Provider.'
+            delete: ' - (Defaults to 30 minutes) Used when deleting the Attestation Provider.'
+            id: ' - The ID of the Attestation Provider.'
+            location: ' - (Required) The Azure Region where the Attestation Provider should exist. Changing this forces a new resource to be created.'
+            name: ' - (Required) The name which should be used for this Attestation Provider. Changing this forces a new resource to be created.'
+            policy_signing_certificate_data: ' - (Optional) A valid X.509 certificate (Section 4 of RFC4648). Changing this forces a new resource to be created.'
+            read: ' - (Defaults to 5 minutes) Used when retrieving the Attestation Provider.'
+            resource_group_name: ' - (Required) The name of the Resource Group where the attestation provider should exist. Changing this forces a new resource to be created.'
+            tags: ' - (Optional) A mapping of tags which should be assigned to the Attestation Provider.'
+            trust_model: ' - Trust model used for the Attestation Service.'
+            update: ' - (Defaults to 30 minutes) Used when updating the Attestation Provider.'
         importStatements:
             - terraform import azurerm_attestation_provider.example /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/group1/providers/Microsoft.Attestation/attestationProviders/provider1
     azurerm_kubernetes_cluster:
@@ -82,224 +82,224 @@ resources:
         examples:
             - name: example
               manifest: |-
-                {
-                  "default_node_pool": [
-                    {
-                      "name": "default",
-                      "node_count": 1,
-                      "vm_size": "Standard_D2_v2"
+                  {
+                    "default_node_pool": [
+                      {
+                        "name": "default",
+                        "node_count": 1,
+                        "vm_size": "Standard_D2_v2"
+                      }
+                    ],
+                    "dns_prefix": "exampleaks1",
+                    "identity": [
+                      {
+                        "type": "SystemAssigned"
+                      }
+                    ],
+                    "location": "${azurerm_resource_group.example.location}",
+                    "name": "example-aks1",
+                    "resource_group_name": "${azurerm_resource_group.example.name}",
+                    "tags": {
+                      "Environment": "Production"
                     }
-                  ],
-                  "dns_prefix": "exampleaks1",
-                  "identity": [
-                    {
-                      "type": "SystemAssigned"
-                    }
-                  ],
-                  "location": "${azurerm_resource_group.example.location}",
-                  "name": "example-aks1",
-                  "resource_group_name": "${azurerm_resource_group.example.name}",
-                  "tags": {
-                    "Environment": "Production"
                   }
-                }
               references:
-                location: azurerm_resource_group.example.location
-                resource_group_name: azurerm_resource_group.example.name
+                  location: azurerm_resource_group.example.location
+                  resource_group_name: azurerm_resource_group.example.name
               dependencies:
-                azurerm_resource_group.example: |-
-                    {
-                      "location": "West Europe",
-                      "name": "example-resources"
-                    }
+                  azurerm_resource_group.example: |-
+                      {
+                        "location": "West Europe",
+                        "name": "example-resources"
+                      }
         argumentDocs:
-            aci_connector_linux: ' A aci_connector_linux block as defined below. For more details, please visit Create and configure an AKS cluster to use virtual nodes.'
-            admin_group_object_ids: ' A list of Object IDs of Azure Active Directory Groups which should have Admin Role on the Cluster.'
-            admin_password: ' The Admin Password for Windows VMs. Length must be between 14 and 123 characters.'
-            allowed: ' One or more allowed block as defined below.'
-            allowed_unsafe_sysctls: ' Specifies the allow list of unsafe sysctls command or patterns . Changing this forces a new resource to be created.'
-            api_server_authorized_ip_ranges: ' The IP ranges to allow for incoming traffic to the server nodes.'
-            auto_scaler_profile: ' A auto_scaler_profile block as defined below.'
-            automatic_channel_upgrade: ' The upgrade channel for this Kubernetes Cluster. Possible values are patch, rapid, node-image and stable. Omitting this field sets this value to none.'
-            azure_active_directory_role_based_access_control: ' - A azure_active_directory_role_based_access_control block as defined below.'
-            azure_policy_enabled: ' Should the Azure Policy Add-On be enabled? For more details please visit Understand Azure Policy for Azure Kubernetes Service'
-            azure_rbac_enabled: ' Is Role Based Access Control based on Azure AD enabled?'
-            balance_similar_node_groups: Detect similar node groups and balance the number of nodes between them. Defaults to false.
-            client_app_id: ' The Client ID of an Azure Active Directory Application.'
-            client_certificate: Base64 encoded public certificate used by clients to authenticate to the Kubernetes cluster.
-            client_key: Base64 encoded private key used by clients to authenticate to the Kubernetes cluster.
-            client_secret: ' The Client Secret for the Service Principal.'
-            cluster_ca_certificate: Base64 encoded public CA certificate used as the root of trust for the Kubernetes cluster.
-            container_log_max_line: ' Specifies the maximum number of container log files that can be present for a container. must be at least 2. Changing this forces a new resource to be created.'
-            container_log_max_size_mb: ' Specifies the maximum size  of container log file before it is rotated. Changing this forces a new resource to be created.'
-            cpu_cfs_quota_enabled: ' Is CPU CFS quota enforcement for containers enabled? Changing this forces a new resource to be created.'
-            cpu_cfs_quota_period: ' Specifies the CPU CFS quota period value. Changing this forces a new resource to be created.'
-            cpu_manager_policy: ' Specifies the CPU Manager policy to use. Possible values are none and static, Changing this forces a new resource to be created.'
-            create: ' Used when creating the Kubernetes Cluster.'
-            day: ' A day in a week. Possible values are Sunday, Monday, Tuesday, Wednesday, Thursday, Friday and Saturday.'
-            default_node_pool: ' A default_node_pool block as defined below.'
-            delete: ' Used when deleting the Kubernetes Cluster.'
-            disk_encryption_set_id: ' The ID of the Disk Encryption Set which should be used for the Nodes and Volumes. More information can be found in the documentation.'
-            dns_prefix: ' DNS prefix specified when creating the managed cluster. Changing this forces a new resource to be created.'
-            dns_prefix_private_cluster: ' Specifies the DNS prefix to use with private clusters. Changing this forces a new resource to be created.'
-            dns_service_ip: ' IP address within the Kubernetes service address range that will be used by cluster service discovery . Changing this forces a new resource to be created.'
-            docker_bridge_cidr: ' IP address  used as the Docker bridge IP address on nodes. Changing this forces a new resource to be created.'
-            effective_gateway_id: The ID of the Application Gateway associated with the ingress controller deployed to this Kubernetes Cluster.
-            empty_bulk_delete_max: Maximum number of empty nodes that can be deleted at the same time. Defaults to 10.
-            enable_auto_scaling: ' Should the Kubernetes Auto Scaler be enabled for this Node Pool? Defaults to false.'
-            enable_host_encryption: ' Should the nodes in the Default Node Pool have host encryption enabled? Defaults to false.'
-            enable_node_public_ip: ' Should nodes in this Node Pool have a Public IP Address? Defaults to false. Changing this forces a new resource to be created.'
-            end: ' The end of a time span, formatted as an RFC3339 string.'
-            expander: Expander to use. Possible values are least-waste, priority, most-pods and random. Defaults to random.
-            fips_enabled: ' Should the nodes in this Node Pool have Federal Information Processing Standard enabled? Changing this forces a new resource to be created.'
-            fqdn: The FQDN of the Azure Kubernetes Managed Cluster.
-            fs_aio_max_nr: ' The sysctl setting fs.aio-max-nr. Must be between 65536 and 6553500. Changing this forces a new resource to be created.'
-            fs_file_max: ' The sysctl setting fs.file-max. Must be between 8192 and 12000500. Changing this forces a new resource to be created.'
-            fs_inotify_max_user_watches: ' The sysctl setting fs.inotify.max_user_watches. Must be between 781250 and 2097152. Changing this forces a new resource to be created.'
-            fs_nr_open: ' The sysctl setting fs.nr_open. Must be between 8192 and 20000500. Changing this forces a new resource to be created.'
-            gateway_id: ' The ID of the Application Gateway to integrate with the ingress controller of this Kubernetes Cluster. See this page for further details.'
-            gateway_name: ' The name of the Application Gateway to be used or created in the Nodepool Resource Group, which in turn will be integrated with the ingress controller of this Kubernetes Cluster. See this page for further details.'
-            host: The Kubernetes cluster server host.
-            hours: ' An array of hour slots in a day. For example, specifying 1 will allow maintenance from 1:00am to 2:00am. Specifying 1, 2 will allow maintenance from 1:00am to 3:00m. Possible values are between 0 and 23.'
-            http_application_routing_enabled: ' Should HTTP Application Routing be enabled?'
-            http_application_routing_zone_name: The Zone Name of the HTTP Application Routing.
-            http_proxy: ' The proxy address to be used when communicating over HTTP.'
-            http_proxy_config: ' A http_proxy_config block as defined below.'
-            https_proxy: ' The proxy address to be used when communicating over HTTPS.'
-            id: The Kubernetes Managed Cluster ID.
-            identity: ' An identity block as defined below. One of either identity or service_principal must be specified.'
-            identity_ids: ' Specifies a list of User Assigned Managed Identity IDs to be assigned to this Kubernetes Cluster.'
-            image_gc_high_threshold: ' Specifies the percent of disk usage above which image garbage collection is always run. Must be between 0 and 100. Changing this forces a new resource to be created.'
-            image_gc_low_threshold: ' Specifies the percent of disk usage lower than which image garbage collection is never run. Must be between 0 and 100. Changing this forces a new resource to be created.'
-            ingress_application_gateway: ' A ingress_application_gateway block as defined below.'
-            ingress_application_gateway_identity: An ingress_application_gateway_identity block is exported. The exported attributes are defined below.
-            ip_versions: ' Specifies a list of IP versions the Kubernetes Cluster will use to assign IP addresses to its nodes and pods. Possible values are IPv4 and/or IPv6. IPv4 must always be specified. Changing this forces a new resource to be created.'
-            kernel_threads_max: ' The sysctl setting kernel.threads-max. Must be between 20 and 513785. Changing this forces a new resource to be created.'
-            key_data: ' The Public SSH Key used to access the cluster. Changing this forces a new resource to be created.'
-            key_vault_secrets_provider: ' A key_vault_secrets_provider block as defined below. For more details, please visit Azure Keyvault Secrets Provider for AKS.'
-            kube_admin_config: A kube_admin_config block as defined below. This is only available when Role Based Access Control with Azure Active Directory is enabled and local accounts enabled.
-            kube_admin_config_raw: Raw Kubernetes config for the admin account to be used by kubectl and other compatible tools. This is only available when Role Based Access Control with Azure Active Directory is enabled and local accounts enabled.
-            kube_config: A kube_config block as defined below.
-            kube_config_raw: Raw Kubernetes config to be used by kubectl and other compatible tools.
-            kubelet_config: ' A kubelet_config block as defined below.'
-            kubelet_disk_type: ' The type of disk used by kubelet. Possible values are OS and Temporary.'
-            kubelet_identity: A kubelet_identity block as defined below. Changing this forces a new resource to be created.
-            kubernetes_version: ' Version of Kubernetes specified when creating the AKS managed cluster. If not specified, the latest recommended version will be used at provisioning time .'
-            license: ' Specifies the type of on-premise license which should be used for Node Pool Windows Virtual Machine. At this time the only possible value is Windows_Server.'
-            linux_os_config: ' A linux_os_config block as defined below.'
-            linux_profile: ' A linux_profile block as defined below.'
-            load_balancer_profile: ' A load_balancer_profile block. This can only be specified when load_balancer_sku is set to standard.'
-            load_balancer_sku: ' Specifies the SKU of the Load Balancer used for this Kubernetes Cluster. Possible values are basic and standard. Defaults to standard.'
-            local_account_disabled: ' - If true local accounts will be disabled. Defaults to false. See the documentation for more information.'
-            location: ' The location where the Managed Kubernetes Cluster should be created. Changing this forces a new resource to be created.'
-            maintenance_window: ' A maintenance_window block as defined below.'
-            managed: ' Is the Azure Active Directory integration Managed, meaning that Azure will create/manage the Service Principal used for integration.'
-            max_count: ' The maximum number of nodes which should exist in this Node Pool. If specified this must be between 1 and 1000.'
-            max_graceful_termination_sec: Maximum number of seconds the cluster autoscaler waits for pod termination when trying to scale down a node. Defaults to 600.
-            max_node_provisioning_time: Maximum time the autoscaler waits for a node to be provisioned. Defaults to 15m.
-            max_pods: ' The maximum number of pods that can run on each agent. Changing this forces a new resource to be created.'
-            max_surge: ' The maximum number or percentage of nodes which will be added to the Node Pool size during an upgrade.'
-            max_unready_nodes: Maximum Number of allowed unready nodes. Defaults to 3.
-            max_unready_percentage: Maximum percentage of unready nodes the cluster autoscaler will stop if the percentage is exceeded. Defaults to 45.
-            microsoft_defender: ' A microsoft_defender block as defined below.'
-            min_count: ' The minimum number of nodes which should exist in this Node Pool. If specified this must be between 1 and 1000.'
-            nat_gateway_profile: ' A nat_gateway_profile block. This can only be specified when load_balancer_sku is set to standard and outbound_type is set to managedNATGateway or userAssignedNATGateway.'
-            net_core_netdev_max_backlog: ' The sysctl setting net.core.netdev_max_backlog. Must be between 1000 and 3240000. Changing this forces a new resource to be created.'
-            net_core_optmem_max: ' The sysctl setting net.core.optmem_max. Must be between 20480 and 4194304. Changing this forces a new resource to be created.'
-            net_core_rmem_default: ' The sysctl setting net.core.rmem_default. Must be between 212992 and 134217728. Changing this forces a new resource to be created.'
-            net_core_rmem_max: ' The sysctl setting net.core.rmem_max. Must be between 212992 and 134217728. Changing this forces a new resource to be created.'
-            net_core_somaxconn: ' The sysctl setting net.core.somaxconn. Must be between 4096 and 3240000. Changing this forces a new resource to be created.'
-            net_core_wmem_default: ' The sysctl setting net.core.wmem_default. Must be between 212992 and 134217728. Changing this forces a new resource to be created.'
-            net_core_wmem_max: ' The sysctl setting net.core.wmem_max. Must be between 212992 and 134217728. Changing this forces a new resource to be created.'
-            net_ipv4_ip_local_port_range_max: ' The sysctl setting net.ipv4.ip_local_port_range max value. Must be between 1024 and 60999. Changing this forces a new resource to be created.'
-            net_ipv4_ip_local_port_range_min: ' The sysctl setting net.ipv4.ip_local_port_range min value. Must be between 1024 and 60999. Changing this forces a new resource to be created.'
-            net_ipv4_neigh_default_gc_thresh1: ' The sysctl setting net.ipv4.neigh.default.gc_thresh1. Must be between 128 and 80000. Changing this forces a new resource to be created.'
-            net_ipv4_neigh_default_gc_thresh2: ' The sysctl setting net.ipv4.neigh.default.gc_thresh2. Must be between 512 and 90000. Changing this forces a new resource to be created.'
-            net_ipv4_neigh_default_gc_thresh3: ' The sysctl setting net.ipv4.neigh.default.gc_thresh3. Must be between 1024 and 100000. Changing this forces a new resource to be created.'
-            net_ipv4_tcp_fin_timeout: ' The sysctl setting net.ipv4.tcp_fin_timeout. Must be between 5 and 120. Changing this forces a new resource to be created.'
-            net_ipv4_tcp_keepalive_intvl: ' The sysctl setting net.ipv4.tcp_keepalive_intvl. Must be between 10 and 75. Changing this forces a new resource to be created.'
-            net_ipv4_tcp_keepalive_probes: ' The sysctl setting net.ipv4.tcp_keepalive_probes. Must be between 1 and 15. Changing this forces a new resource to be created.'
-            net_ipv4_tcp_keepalive_time: ' The sysctl setting net.ipv4.tcp_keepalive_time. Must be between 30 and 432000. Changing this forces a new resource to be created.'
-            net_ipv4_tcp_max_syn_backlog: ' The sysctl setting net.ipv4.tcp_max_syn_backlog. Must be between 128 and 3240000. Changing this forces a new resource to be created.'
-            net_ipv4_tcp_max_tw_buckets: ' The sysctl setting net.ipv4.tcp_max_tw_buckets. Must be between 8000 and 1440000. Changing this forces a new resource to be created.'
-            net_ipv4_tcp_tw_reuse: ' The sysctl setting net.ipv4.tcp_tw_reuse. Changing this forces a new resource to be created.'
-            net_netfilter_nf_conntrack_buckets: ' The sysctl setting net.netfilter.nf_conntrack_buckets. Must be between 65536 and 147456. Changing this forces a new resource to be created.'
-            net_netfilter_nf_conntrack_max: ' The sysctl setting net.netfilter.nf_conntrack_max. Must be between 131072 and 1048576. Changing this forces a new resource to be created.'
-            network_mode: ' Network mode to be used with Azure CNI. Possible values are bridge and transparent. Changing this forces a new resource to be created.'
-            network_plugin: ' Network plugin to use for networking. Currently supported values are azure, kubenet and none. Changing this forces a new resource to be created.'
-            network_policy: ' Sets up network policy to be used with Azure CNI. Network policy allows us to control the traffic flow between pods. Currently supported values are calico and azure. Changing this forces a new resource to be created.'
-            network_profile: ' A network_profile block as defined below.'
-            new_pod_scale_up_delay: For scenarios like burst/batch scale where you don't want CA to act before the kubernetes scheduler could schedule all the pods, you can tell CA to ignore unscheduled pods before they're a certain age. Defaults to 10s.
-            no_proxy: ' The list of domains that will not use the proxy for communication.'
-            node_labels: ' A map of Kubernetes labels which should be applied to nodes in the Default Node Pool.'
-            node_public_ip_prefix_id: ' Resource ID for the Public IP Addresses Prefix for the nodes in this Node Pool. enable_node_public_ip should be true. Changing this forces a new resource to be created.'
-            not_allowed: ' One or more not_allowed block as defined below.'
-            oidc_issuer_enabled: ' Enable or Disable the OIDC issuer URL'
-            oidc_issuer_url: The OIDC issuer URL that is associated with the cluster.
-            oms_agent: ' A oms_agent block as defined below.'
-            oms_agent_identity: An oms_agent_identity block is exported. The exported attributes are defined below.
-            only_critical_addons_enabled: ' Enabling this option will taint default node pool with CriticalAddonsOnly=true:NoSchedule taint. Changing this forces a new resource to be created.'
-            open_service_mesh_enabled: ' Is Open Service Mesh enabled? For more details, please visit Open Service Mesh for AKS.'
-            orchestrator_version: ' Version of Kubernetes used for the Agents. If not specified, the default node pool will be created with the version specified by kubernetes_version. If both are unspecified, the latest recommended version will be used at provisioning time '
-            os_disk_size_gb: ' The size of the OS Disk which should be used for each agent in the Node Pool. Changing this forces a new resource to be created.'
-            os_disk_type: ' The type of disk which should be used for the Operating System. Possible values are Ephemeral and Managed. Defaults to Managed. Changing this forces a new resource to be created.'
-            os_sku: ' OsSKU to be used to specify Linux OSType. Not applicable to Windows OSType. Possible values include: Ubuntu, CBLMariner. Defaults to Ubuntu. Changing this forces a new resource to be created.'
-            outbound_ip_address_ids: ' The ID of the Public IP Addresses which should be used for outbound communication for the cluster load balancer.'
-            outbound_ip_prefix_ids: ' The ID of the outbound Public IP Address Prefixes which should be used for the cluster load balancer.'
-            outbound_ports_allocated: ' Number of desired SNAT port for each VM in the clusters load balancer. Must be between 0 and 64000 inclusive. Defaults to 0.'
-            outbound_type: ' The outbound  routing method which should be used for this Kubernetes Cluster. Possible values are loadBalancer, userDefinedRouting, managedNATGateway and userAssignedNATGateway. Defaults to loadBalancer.'
-            password: A password or token used to authenticate to the Kubernetes cluster.
-            pod_cidr: ' The CIDR to use for pod IP addresses. This field can only be set when network_plugin is set to kubenet. Changing this forces a new resource to be created.'
-            pod_max_pid: ' Specifies the maximum number of processes per pod. Changing this forces a new resource to be created.'
-            pod_subnet_id: ' The ID of the Subnet where the pods in the default Node Pool should exist. Changing this forces a new resource to be created.'
-            portal_fqdn: The FQDN for the Azure Portal resources when private link has been enabled, which is only resolvable inside the Virtual Network used by the Kubernetes Cluster.
-            principal_id: The Principal ID associated with this Managed Service Identity.
-            private_cluster_enabled: ' Should this Kubernetes Cluster have its API server only exposed on internal IP addresses? This provides a Private IP Address for the Kubernetes API on the Virtual Network where the Kubernetes Cluster is located. Defaults to false. Changing this forces a new resource to be created.'
-            private_cluster_public_fqdn_enabled: ' Specifies whether a Public FQDN for this Private Cluster should be added. Defaults to false.'
-            private_dns_zone_id: ' Either the ID of Private DNS Zone which should be delegated to this Cluster, System to have AKS manage this or None. In case of None you will need to bring your own DNS server and set up resolving, otherwise cluster will have issues after provisioning. Changing this forces a new resource to be created.'
-            private_fqdn: The FQDN for the Kubernetes Cluster when private link has been enabled, which is only resolvable inside the Virtual Network used by the Kubernetes Cluster.
-            read: ' Used when retrieving the Kubernetes Cluster.'
-            resource_group_name: ' Specifies the Resource Group where the Managed Kubernetes Cluster should exist. Changing this forces a new resource to be created.'
-            role_based_access_control_enabled: Whether Role Based Access Control for the Kubernetes Cluster should be enabled. Defaults to true. Changing this forces a new resource to be created.
-            run_command_enabled: ' Whether to enable run command for the cluster or not. Defaults to true.'
-            scale_down_delay_after_add: How long after the scale up of AKS nodes the scale down evaluation resumes. Defaults to 10m.
-            scale_down_delay_after_delete: How long after node deletion that scale down evaluation resumes. Defaults to the value used for scan_interval.
-            scale_down_delay_after_failure: How long after scale down failure that scale down evaluation resumes. Defaults to 3m.
-            scale_down_unneeded: How long a node should be unneeded before it is eligible for scale down. Defaults to 10m.
-            scale_down_unready: How long an unready node should be unneeded before it is eligible for scale down. Defaults to 20m.
-            scale_down_utilization_threshold: Node utilization level, defined as sum of requested resources divided by capacity, below which a node can be considered for scale down. Defaults to 0.5.
-            scan_interval: How often the AKS Cluster should be re-evaluated for scale up/down. Defaults to 10s.
-            secret_identity: An secret_identity block is exported. The exported attributes are defined below.
-            secret_rotation_enabled: ' Is secret rotation enabled?'
-            secret_rotation_interval: ' The interval to poll for secret rotation. This attribute is only set when secret_rotation is true and defaults to 2m.'
-            server_app_id: ' The Server ID of an Azure Active Directory Application.'
-            server_app_secret: ' The Server Secret of an Azure Active Directory Application.'
-            service_cidr: ' The Network Range used by the Kubernetes service. Changing this forces a new resource to be created.'
-            service_principal: ' A service_principal block as documented below. One of either identity or service_principal must be specified.'
-            skip_nodes_with_local_storage: If true cluster autoscaler will never delete nodes with pods with local storage, for example, EmptyDir or HostPath. Defaults to true.
-            skip_nodes_with_system_pods: If true cluster autoscaler will never delete nodes with pods from kube-system . Defaults to true.
-            sku_tier: ' The SKU Tier that should be used for this Kubernetes Cluster. Possible values are Free and Paid . Defaults to Free.'
-            ssh_key: ' An ssh_key block. Only one is currently allowed. Changing this forces a new resource to be created.'
-            start: ' The start of a time span, formatted as an RFC3339 string.'
-            subnet_cidr: ' The subnet CIDR to be used to create an Application Gateway, which in turn will be integrated with the ingress controller of this Kubernetes Cluster. See this page for further details.'
-            subnet_id: ' The ID of the subnet on which to create an Application Gateway, which in turn will be integrated with the ingress controller of this Kubernetes Cluster. See this page for further details.'
-            subnet_name: ' The subnet name for the virtual nodes to run.'
-            swap_file_size_mb: ' Specifies the size of swap file on each node in MB. Changing this forces a new resource to be created.'
-            sysctl_config: ' A sysctl_config block as defined below. Changing this forces a new resource to be created.'
-            topology_manager_policy: ' Specifies the Topology Manager policy to use. Possible values are none, best-effort, restricted or single-numa-node. Changing this forces a new resource to be created.'
-            transparent_huge_page_defrag: ' specifies the defrag configuration for Transparent Huge Page. Possible values are always, defer, defer+madvise, madvise and never. Changing this forces a new resource to be created.'
-            transparent_huge_page_enabled: ' Specifies the Transparent Huge Page enabled configuration. Possible values are always, madvise and never. Changing this forces a new resource to be created.'
-            trusted_ca: ' The base64 encoded alternative CA certificate content in PEM format.'
-            ultra_ssd_enabled: ' Used to specify whether the UltraSSD is enabled in the Default Node Pool. Defaults to false. See the documentation for more information.'
-            update: ' Used when updating the Kubernetes Cluster.'
-            upgrade_settings: ' A upgrade_settings block as documented below.'
-            username: A username used to authenticate to the Kubernetes cluster.
-            vm_max_map_count: ' The sysctl setting vm.max_map_count. Must be between 65530 and 262144. Changing this forces a new resource to be created.'
-            vm_size: ' The size of the Virtual Machine, such as Standard_DS2_v2. Changing this forces a new resource to be created.'
-            vm_swappiness: ' The sysctl setting vm.swappiness. Must be between 0 and 100. Changing this forces a new resource to be created.'
-            vm_vfs_cache_pressure: ' The sysctl setting vm.vfs_cache_pressure. Must be between 0 and 100. Changing this forces a new resource to be created.'
-            vnet_subnet_id: ' The ID of a Subnet where the Kubernetes Node Pool should exist. Changing this forces a new resource to be created.'
-            windows_profile: ' A windows_profile block as defined below.'
-            zones: ' Specifies a list of Availability Zones in which this Kubernetes Cluster should be located. Changing this forces a new Kubernetes Cluster to be created.'
+            aci_connector_linux: ' - (Optional) A aci_connector_linux block as defined below. For more details, please visit Create and configure an AKS cluster to use virtual nodes.'
+            admin_group_object_ids: ' - (Optional) A list of Object IDs of Azure Active Directory Groups which should have Admin Role on the Cluster.'
+            admin_password: ' - (Required) The Admin Password for Windows VMs. Length must be between 14 and 123 characters.'
+            allowed: ' - (Optional) One or more allowed block as defined below.'
+            allowed_unsafe_sysctls: ' - (Optional) Specifies the allow list of unsafe sysctls command or patterns (ending in *). Changing this forces a new resource to be created.'
+            api_server_authorized_ip_ranges: ' - (Optional) The IP ranges to allow for incoming traffic to the server nodes.'
+            auto_scaler_profile: ' - (Optional) A auto_scaler_profile block as defined below.'
+            automatic_channel_upgrade: ' - (Optional) The upgrade channel for this Kubernetes Cluster. Possible values are patch, rapid, node-image and stable. Omitting this field sets this value to none.'
+            azure_active_directory_role_based_access_control: ' - (Optional) - A azure_active_directory_role_based_access_control block as defined below.'
+            azure_policy_enabled: ' - (Optional) Should the Azure Policy Add-On be enabled? For more details please visit Understand Azure Policy for Azure Kubernetes Service'
+            azure_rbac_enabled: ' - (Optional) Is Role Based Access Control based on Azure AD enabled?'
+            balance_similar_node_groups: ' - Detect similar node groups and balance the number of nodes between them. Defaults to false.'
+            client_app_id: ' - (Required) The Client ID of an Azure Active Directory Application.'
+            client_certificate: ' - Base64 encoded public certificate used by clients to authenticate to the Kubernetes cluster.'
+            client_key: ' - Base64 encoded private key used by clients to authenticate to the Kubernetes cluster.'
+            client_secret: ' - (Required) The Client Secret for the Service Principal.'
+            cluster_ca_certificate: ' - Base64 encoded public CA certificate used as the root of trust for the Kubernetes cluster.'
+            container_log_max_line: ' - (Optional) Specifies the maximum number of container log files that can be present for a container. must be at least 2. Changing this forces a new resource to be created.'
+            container_log_max_size_mb: ' - (Optional) Specifies the maximum size (e.g. 10MB) of container log file before it is rotated. Changing this forces a new resource to be created.'
+            cpu_cfs_quota_enabled: ' - (Optional) Is CPU CFS quota enforcement for containers enabled? Changing this forces a new resource to be created.'
+            cpu_cfs_quota_period: ' - (Optional) Specifies the CPU CFS quota period value. Changing this forces a new resource to be created.'
+            cpu_manager_policy: ' - (Optional) Specifies the CPU Manager policy to use. Possible values are none and static, Changing this forces a new resource to be created.'
+            create: ' - (Defaults to 90 minutes) Used when creating the Kubernetes Cluster.'
+            day: ' - (Required) A day in a week. Possible values are Sunday, Monday, Tuesday, Wednesday, Thursday, Friday and Saturday.'
+            default_node_pool: ' - (Required) A default_node_pool block as defined below.'
+            delete: ' - (Defaults to 90 minutes) Used when deleting the Kubernetes Cluster.'
+            disk_encryption_set_id: ' - (Optional) The ID of the Disk Encryption Set which should be used for the Nodes and Volumes. More information can be found in the documentation.'
+            dns_prefix: ' - (Optional) DNS prefix specified when creating the managed cluster. Changing this forces a new resource to be created.'
+            dns_prefix_private_cluster: ' - (Optional) Specifies the DNS prefix to use with private clusters. Changing this forces a new resource to be created.'
+            dns_service_ip: ' - (Optional) IP address within the Kubernetes service address range that will be used by cluster service discovery (kube-dns). Changing this forces a new resource to be created.'
+            docker_bridge_cidr: ' - (Optional) IP address (in CIDR notation) used as the Docker bridge IP address on nodes. Changing this forces a new resource to be created.'
+            effective_gateway_id: ' - The ID of the Application Gateway associated with the ingress controller deployed to this Kubernetes Cluster.'
+            empty_bulk_delete_max: ' - Maximum number of empty nodes that can be deleted at the same time. Defaults to 10.'
+            enable_auto_scaling: ' - (Optional) Should the Kubernetes Auto Scaler be enabled for this Node Pool? Defaults to false.'
+            enable_host_encryption: ' - (Optional) Should the nodes in the Default Node Pool have host encryption enabled? Defaults to false.'
+            enable_node_public_ip: ' - (Optional) Should nodes in this Node Pool have a Public IP Address? Defaults to false. Changing this forces a new resource to be created.'
+            end: ' - (Required) The end of a time span, formatted as an RFC3339 string.'
+            expander: ' - Expander to use. Possible values are least-waste, priority, most-pods and random. Defaults to random.'
+            fips_enabled: ' - (Optional) Should the nodes in this Node Pool have Federal Information Processing Standard enabled? Changing this forces a new resource to be created.'
+            fqdn: ' - The FQDN of the Azure Kubernetes Managed Cluster.'
+            fs_aio_max_nr: ' - (Optional) The sysctl setting fs.aio-max-nr. Must be between 65536 and 6553500. Changing this forces a new resource to be created.'
+            fs_file_max: ' - (Optional) The sysctl setting fs.file-max. Must be between 8192 and 12000500. Changing this forces a new resource to be created.'
+            fs_inotify_max_user_watches: ' - (Optional) The sysctl setting fs.inotify.max_user_watches. Must be between 781250 and 2097152. Changing this forces a new resource to be created.'
+            fs_nr_open: ' - (Optional) The sysctl setting fs.nr_open. Must be between 8192 and 20000500. Changing this forces a new resource to be created.'
+            gateway_id: ' - (Optional) The ID of the Application Gateway to integrate with the ingress controller of this Kubernetes Cluster. See this page for further details.'
+            gateway_name: ' - (Optional) The name of the Application Gateway to be used or created in the Nodepool Resource Group, which in turn will be integrated with the ingress controller of this Kubernetes Cluster. See this page for further details.'
+            host: ' - The Kubernetes cluster server host.'
+            hours: ' - (Required) An array of hour slots in a day. For example, specifying 1 will allow maintenance from 1:00am to 2:00am. Specifying 1, 2 will allow maintenance from 1:00am to 3:00m. Possible values are between 0 and 23.'
+            http_application_routing_enabled: ' - (Optional) Should HTTP Application Routing be enabled?'
+            http_application_routing_zone_name: ' - The Zone Name of the HTTP Application Routing.'
+            http_proxy: ' - (Optional) The proxy address to be used when communicating over HTTP.'
+            http_proxy_config: ' - (Optional) A http_proxy_config block as defined below.'
+            https_proxy: ' - (Optional) The proxy address to be used when communicating over HTTPS.'
+            id: ' - The Kubernetes Managed Cluster ID.'
+            identity: ' - (Optional) An identity block as defined below. One of either identity or service_principal must be specified.'
+            identity_ids: ' - (Optional) Specifies a list of User Assigned Managed Identity IDs to be assigned to this Kubernetes Cluster.'
+            image_gc_high_threshold: ' - (Optional) Specifies the percent of disk usage above which image garbage collection is always run. Must be between 0 and 100. Changing this forces a new resource to be created.'
+            image_gc_low_threshold: ' - (Optional) Specifies the percent of disk usage lower than which image garbage collection is never run. Must be between 0 and 100. Changing this forces a new resource to be created.'
+            ingress_application_gateway: ' - (Optional) A ingress_application_gateway block as defined below.'
+            ingress_application_gateway_identity: ' - An ingress_application_gateway_identity block is exported. The exported attributes are defined below.'
+            ip_versions: ' - (Optional) Specifies a list of IP versions the Kubernetes Cluster will use to assign IP addresses to its nodes and pods. Possible values are IPv4 and/or IPv6. IPv4 must always be specified. Changing this forces a new resource to be created.'
+            kernel_threads_max: ' - (Optional) The sysctl setting kernel.threads-max. Must be between 20 and 513785. Changing this forces a new resource to be created.'
+            key_data: ' - (Required) The Public SSH Key used to access the cluster. Changing this forces a new resource to be created.'
+            key_vault_secrets_provider: ' - (Optional) A key_vault_secrets_provider block as defined below. For more details, please visit Azure Keyvault Secrets Provider for AKS.'
+            kube_admin_config: ' - A kube_admin_config block as defined below. This is only available when Role Based Access Control with Azure Active Directory is enabled and local accounts enabled.'
+            kube_admin_config_raw: ' - Raw Kubernetes config for the admin account to be used by kubectl and other compatible tools. This is only available when Role Based Access Control with Azure Active Directory is enabled and local accounts enabled.'
+            kube_config: ' - A kube_config block as defined below.'
+            kube_config_raw: ' - Raw Kubernetes config to be used by kubectl and other compatible tools.'
+            kubelet_config: ' - (Optional) A kubelet_config block as defined below.'
+            kubelet_disk_type: ' - (Optional) The type of disk used by kubelet. Possible values are OS and Temporary.'
+            kubelet_identity: ' - A kubelet_identity block as defined below. Changing this forces a new resource to be created.'
+            kubernetes_version: ' - (Optional) Version of Kubernetes specified when creating the AKS managed cluster. If not specified, the latest recommended version will be used at provisioning time (but won''t auto-upgrade).'
+            license: ' - (Optional) Specifies the type of on-premise license which should be used for Node Pool Windows Virtual Machine. At this time the only possible value is Windows_Server.'
+            linux_os_config: ' - (Optional) A linux_os_config block as defined below.'
+            linux_profile: ' - (Optional) A linux_profile block as defined below.'
+            load_balancer_profile: ' - (Optional) A load_balancer_profile block. This can only be specified when load_balancer_sku is set to standard.'
+            load_balancer_sku: ' - (Optional) Specifies the SKU of the Load Balancer used for this Kubernetes Cluster. Possible values are basic and standard. Defaults to standard.'
+            local_account_disabled: ' - (Optional) - If true local accounts will be disabled. Defaults to false. See the documentation for more information.'
+            location: ' - (Required) The location where the Managed Kubernetes Cluster should be created. Changing this forces a new resource to be created.'
+            maintenance_window: ' - (Optional) A maintenance_window block as defined below.'
+            managed: ' - (Optional) Is the Azure Active Directory integration Managed, meaning that Azure will create/manage the Service Principal used for integration.'
+            max_count: ' - (Required) The maximum number of nodes which should exist in this Node Pool. If specified this must be between 1 and 1000.'
+            max_graceful_termination_sec: ' - Maximum number of seconds the cluster autoscaler waits for pod termination when trying to scale down a node. Defaults to 600.'
+            max_node_provisioning_time: ' - Maximum time the autoscaler waits for a node to be provisioned. Defaults to 15m.'
+            max_pods: ' - (Optional) The maximum number of pods that can run on each agent. Changing this forces a new resource to be created.'
+            max_surge: ' - (Required) The maximum number or percentage of nodes which will be added to the Node Pool size during an upgrade.'
+            max_unready_nodes: ' - Maximum Number of allowed unready nodes. Defaults to 3.'
+            max_unready_percentage: ' - Maximum percentage of unready nodes the cluster autoscaler will stop if the percentage is exceeded. Defaults to 45.'
+            microsoft_defender: ' - (Optional) A microsoft_defender block as defined below.'
+            min_count: ' - (Required) The minimum number of nodes which should exist in this Node Pool. If specified this must be between 1 and 1000.'
+            nat_gateway_profile: ' - (Optional) A nat_gateway_profile block. This can only be specified when load_balancer_sku is set to standard and outbound_type is set to managedNATGateway or userAssignedNATGateway.'
+            net_core_netdev_max_backlog: ' - (Optional) The sysctl setting net.core.netdev_max_backlog. Must be between 1000 and 3240000. Changing this forces a new resource to be created.'
+            net_core_optmem_max: ' - (Optional) The sysctl setting net.core.optmem_max. Must be between 20480 and 4194304. Changing this forces a new resource to be created.'
+            net_core_rmem_default: ' - (Optional) The sysctl setting net.core.rmem_default. Must be between 212992 and 134217728. Changing this forces a new resource to be created.'
+            net_core_rmem_max: ' - (Optional) The sysctl setting net.core.rmem_max. Must be between 212992 and 134217728. Changing this forces a new resource to be created.'
+            net_core_somaxconn: ' - (Optional) The sysctl setting net.core.somaxconn. Must be between 4096 and 3240000. Changing this forces a new resource to be created.'
+            net_core_wmem_default: ' - (Optional) The sysctl setting net.core.wmem_default. Must be between 212992 and 134217728. Changing this forces a new resource to be created.'
+            net_core_wmem_max: ' - (Optional) The sysctl setting net.core.wmem_max. Must be between 212992 and 134217728. Changing this forces a new resource to be created.'
+            net_ipv4_ip_local_port_range_max: ' - (Optional) The sysctl setting net.ipv4.ip_local_port_range max value. Must be between 1024 and 60999. Changing this forces a new resource to be created.'
+            net_ipv4_ip_local_port_range_min: ' - (Optional) The sysctl setting net.ipv4.ip_local_port_range min value. Must be between 1024 and 60999. Changing this forces a new resource to be created.'
+            net_ipv4_neigh_default_gc_thresh1: ' - (Optional) The sysctl setting net.ipv4.neigh.default.gc_thresh1. Must be between 128 and 80000. Changing this forces a new resource to be created.'
+            net_ipv4_neigh_default_gc_thresh2: ' - (Optional) The sysctl setting net.ipv4.neigh.default.gc_thresh2. Must be between 512 and 90000. Changing this forces a new resource to be created.'
+            net_ipv4_neigh_default_gc_thresh3: ' - (Optional) The sysctl setting net.ipv4.neigh.default.gc_thresh3. Must be between 1024 and 100000. Changing this forces a new resource to be created.'
+            net_ipv4_tcp_fin_timeout: ' - (Optional) The sysctl setting net.ipv4.tcp_fin_timeout. Must be between 5 and 120. Changing this forces a new resource to be created.'
+            net_ipv4_tcp_keepalive_intvl: ' - (Optional) The sysctl setting net.ipv4.tcp_keepalive_intvl. Must be between 10 and 75. Changing this forces a new resource to be created.'
+            net_ipv4_tcp_keepalive_probes: ' - (Optional) The sysctl setting net.ipv4.tcp_keepalive_probes. Must be between 1 and 15. Changing this forces a new resource to be created.'
+            net_ipv4_tcp_keepalive_time: ' - (Optional) The sysctl setting net.ipv4.tcp_keepalive_time. Must be between 30 and 432000. Changing this forces a new resource to be created.'
+            net_ipv4_tcp_max_syn_backlog: ' - (Optional) The sysctl setting net.ipv4.tcp_max_syn_backlog. Must be between 128 and 3240000. Changing this forces a new resource to be created.'
+            net_ipv4_tcp_max_tw_buckets: ' - (Optional) The sysctl setting net.ipv4.tcp_max_tw_buckets. Must be between 8000 and 1440000. Changing this forces a new resource to be created.'
+            net_ipv4_tcp_tw_reuse: ' - (Optional) The sysctl setting net.ipv4.tcp_tw_reuse. Changing this forces a new resource to be created.'
+            net_netfilter_nf_conntrack_buckets: ' - (Optional) The sysctl setting net.netfilter.nf_conntrack_buckets. Must be between 65536 and 147456. Changing this forces a new resource to be created.'
+            net_netfilter_nf_conntrack_max: ' - (Optional) The sysctl setting net.netfilter.nf_conntrack_max. Must be between 131072 and 1048576. Changing this forces a new resource to be created.'
+            network_mode: ' - (Optional) Network mode to be used with Azure CNI. Possible values are bridge and transparent. Changing this forces a new resource to be created.'
+            network_plugin: ' - (Required) Network plugin to use for networking. Currently supported values are azure, kubenet and none. Changing this forces a new resource to be created.'
+            network_policy: ' - (Optional) Sets up network policy to be used with Azure CNI. Network policy allows us to control the traffic flow between pods. Currently supported values are calico and azure. Changing this forces a new resource to be created.'
+            network_profile: ' - (Optional) A network_profile block as defined below.'
+            new_pod_scale_up_delay: ' - For scenarios like burst/batch scale where you don''t want CA to act before the kubernetes scheduler could schedule all the pods, you can tell CA to ignore unscheduled pods before they''re a certain age. Defaults to 10s.'
+            no_proxy: ' - (Optional) The list of domains that will not use the proxy for communication.'
+            node_labels: ' - (Optional) A map of Kubernetes labels which should be applied to nodes in the Default Node Pool.'
+            node_public_ip_prefix_id: ' - (Optional) Resource ID for the Public IP Addresses Prefix for the nodes in this Node Pool. enable_node_public_ip should be true. Changing this forces a new resource to be created.'
+            not_allowed: ' - (Optional) One or more not_allowed block as defined below.'
+            oidc_issuer_enabled: ' - (Required) Enable or Disable the OIDC issuer URL'
+            oidc_issuer_url: ' - The OIDC issuer URL that is associated with the cluster.'
+            oms_agent: ' - (Optional) A oms_agent block as defined below.'
+            oms_agent_identity: ' - An oms_agent_identity block is exported. The exported attributes are defined below.'
+            only_critical_addons_enabled: ' - (Optional) Enabling this option will taint default node pool with CriticalAddonsOnly=true:NoSchedule taint. Changing this forces a new resource to be created.'
+            open_service_mesh_enabled: ' - (Optional) Is Open Service Mesh enabled? For more details, please visit Open Service Mesh for AKS.'
+            orchestrator_version: ' - (Optional) Version of Kubernetes used for the Agents. If not specified, the default node pool will be created with the version specified by kubernetes_version. If both are unspecified, the latest recommended version will be used at provisioning time (but won''t auto-upgrade)'
+            os_disk_size_gb: ' - (Optional) The size of the OS Disk which should be used for each agent in the Node Pool. Changing this forces a new resource to be created.'
+            os_disk_type: ' - (Optional) The type of disk which should be used for the Operating System. Possible values are Ephemeral and Managed. Defaults to Managed. Changing this forces a new resource to be created.'
+            os_sku: ' - (Optional) OsSKU to be used to specify Linux OSType. Not applicable to Windows OSType. Possible values include: Ubuntu, CBLMariner. Defaults to Ubuntu. Changing this forces a new resource to be created.'
+            outbound_ip_address_ids: ' - (Optional) The ID of the Public IP Addresses which should be used for outbound communication for the cluster load balancer.'
+            outbound_ip_prefix_ids: ' - (Optional) The ID of the outbound Public IP Address Prefixes which should be used for the cluster load balancer.'
+            outbound_ports_allocated: ' - (Optional) Number of desired SNAT port for each VM in the clusters load balancer. Must be between 0 and 64000 inclusive. Defaults to 0.'
+            outbound_type: ' - (Optional) The outbound (egress) routing method which should be used for this Kubernetes Cluster. Possible values are loadBalancer, userDefinedRouting, managedNATGateway and userAssignedNATGateway. Defaults to loadBalancer.'
+            password: ' - A password or token used to authenticate to the Kubernetes cluster.'
+            pod_cidr: ' - (Optional) The CIDR to use for pod IP addresses. This field can only be set when network_plugin is set to kubenet. Changing this forces a new resource to be created.'
+            pod_max_pid: ' - (Optional) Specifies the maximum number of processes per pod. Changing this forces a new resource to be created.'
+            pod_subnet_id: ' - (Optional) The ID of the Subnet where the pods in the default Node Pool should exist. Changing this forces a new resource to be created.'
+            portal_fqdn: ' - The FQDN for the Azure Portal resources when private link has been enabled, which is only resolvable inside the Virtual Network used by the Kubernetes Cluster.'
+            principal_id: ' - The Principal ID associated with this Managed Service Identity.'
+            private_cluster_enabled: ' - (Optional) Should this Kubernetes Cluster have its API server only exposed on internal IP addresses? This provides a Private IP Address for the Kubernetes API on the Virtual Network where the Kubernetes Cluster is located. Defaults to false. Changing this forces a new resource to be created.'
+            private_cluster_public_fqdn_enabled: ' - (Optional) Specifies whether a Public FQDN for this Private Cluster should be added. Defaults to false.'
+            private_dns_zone_id: ' - (Optional) Either the ID of Private DNS Zone which should be delegated to this Cluster, System to have AKS manage this or None. In case of None you will need to bring your own DNS server and set up resolving, otherwise cluster will have issues after provisioning. Changing this forces a new resource to be created.'
+            private_fqdn: ' - The FQDN for the Kubernetes Cluster when private link has been enabled, which is only resolvable inside the Virtual Network used by the Kubernetes Cluster.'
+            read: ' - (Defaults to 5 minutes) Used when retrieving the Kubernetes Cluster.'
+            resource_group_name: ' - (Required) Specifies the Resource Group where the Managed Kubernetes Cluster should exist. Changing this forces a new resource to be created.'
+            role_based_access_control_enabled: ' (Optional) - Whether Role Based Access Control for the Kubernetes Cluster should be enabled. Defaults to true. Changing this forces a new resource to be created.'
+            run_command_enabled: ' - (Optional) Whether to enable run command for the cluster or not. Defaults to true.'
+            scale_down_delay_after_add: ' - How long after the scale up of AKS nodes the scale down evaluation resumes. Defaults to 10m.'
+            scale_down_delay_after_delete: ' - How long after node deletion that scale down evaluation resumes. Defaults to the value used for scan_interval.'
+            scale_down_delay_after_failure: ' - How long after scale down failure that scale down evaluation resumes. Defaults to 3m.'
+            scale_down_unneeded: ' - How long a node should be unneeded before it is eligible for scale down. Defaults to 10m.'
+            scale_down_unready: ' - How long an unready node should be unneeded before it is eligible for scale down. Defaults to 20m.'
+            scale_down_utilization_threshold: ' - Node utilization level, defined as sum of requested resources divided by capacity, below which a node can be considered for scale down. Defaults to 0.5.'
+            scan_interval: ' - How often the AKS Cluster should be re-evaluated for scale up/down. Defaults to 10s.'
+            secret_identity: ' - An secret_identity block is exported. The exported attributes are defined below.'
+            secret_rotation_enabled: ' - (Required) Is secret rotation enabled?'
+            secret_rotation_interval: ' - (Required) The interval to poll for secret rotation. This attribute is only set when secret_rotation is true and defaults to 2m.'
+            server_app_id: ' - (Required) The Server ID of an Azure Active Directory Application.'
+            server_app_secret: ' - (Required) The Server Secret of an Azure Active Directory Application.'
+            service_cidr: ' - (Optional) The Network Range used by the Kubernetes service. Changing this forces a new resource to be created.'
+            service_principal: ' - (Optional) A service_principal block as documented below. One of either identity or service_principal must be specified.'
+            skip_nodes_with_local_storage: ' - If true cluster autoscaler will never delete nodes with pods with local storage, for example, EmptyDir or HostPath. Defaults to true.'
+            skip_nodes_with_system_pods: ' - If true cluster autoscaler will never delete nodes with pods from kube-system (except for DaemonSet or mirror pods). Defaults to true.'
+            sku_tier: ' - (Optional) The SKU Tier that should be used for this Kubernetes Cluster. Possible values are Free and Paid (which includes the Uptime SLA). Defaults to Free.'
+            ssh_key: ' - (Required) An ssh_key block. Only one is currently allowed. Changing this forces a new resource to be created.'
+            start: ' - (Required) The start of a time span, formatted as an RFC3339 string.'
+            subnet_cidr: ' - (Optional) The subnet CIDR to be used to create an Application Gateway, which in turn will be integrated with the ingress controller of this Kubernetes Cluster. See this page for further details.'
+            subnet_id: ' - (Optional) The ID of the subnet on which to create an Application Gateway, which in turn will be integrated with the ingress controller of this Kubernetes Cluster. See this page for further details.'
+            subnet_name: ' - (Required) The subnet name for the virtual nodes to run.'
+            swap_file_size_mb: ' - (Optional) Specifies the size of swap file on each node in MB. Changing this forces a new resource to be created.'
+            sysctl_config: ' - (Optional) A sysctl_config block as defined below. Changing this forces a new resource to be created.'
+            topology_manager_policy: ' - (Optional) Specifies the Topology Manager policy to use. Possible values are none, best-effort, restricted or single-numa-node. Changing this forces a new resource to be created.'
+            transparent_huge_page_defrag: ' - (Optional) specifies the defrag configuration for Transparent Huge Page. Possible values are always, defer, defer+madvise, madvise and never. Changing this forces a new resource to be created.'
+            transparent_huge_page_enabled: ' - (Optional) Specifies the Transparent Huge Page enabled configuration. Possible values are always, madvise and never. Changing this forces a new resource to be created.'
+            trusted_ca: ' - (Optional) The base64 encoded alternative CA certificate content in PEM format.'
+            ultra_ssd_enabled: ' - (Optional) Used to specify whether the UltraSSD is enabled in the Default Node Pool. Defaults to false. See the documentation for more information.'
+            update: ' - (Defaults to 90 minutes) Used when updating the Kubernetes Cluster.'
+            upgrade_settings: ' - (Optional) A upgrade_settings block as documented below.'
+            username: ' - A username used to authenticate to the Kubernetes cluster.'
+            vm_max_map_count: ' - (Optional) The sysctl setting vm.max_map_count. Must be between 65530 and 262144. Changing this forces a new resource to be created.'
+            vm_size: ' - (Required) The size of the Virtual Machine, such as Standard_DS2_v2. Changing this forces a new resource to be created.'
+            vm_swappiness: ' - (Optional) The sysctl setting vm.swappiness. Must be between 0 and 100. Changing this forces a new resource to be created.'
+            vm_vfs_cache_pressure: ' - (Optional) The sysctl setting vm.vfs_cache_pressure. Must be between 0 and 100. Changing this forces a new resource to be created.'
+            vnet_subnet_id: ' - (Optional) The ID of a Subnet where the Kubernetes Node Pool should exist. Changing this forces a new resource to be created.'
+            windows_profile: ' - (Optional) A windows_profile block as defined below.'
+            zones: ' - (Optional) Specifies a list of Availability Zones in which this Kubernetes Cluster should be located. Changing this forces a new Kubernetes Cluster to be created.'
         importStatements:
             - terraform import azurerm_kubernetes_cluster.cluster1 /subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/group1/providers/Microsoft.ContainerService/managedClusters/cluster1

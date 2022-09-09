@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go/token"
 	"go/types"
+	"regexp"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -14,6 +15,8 @@ import (
 	"github.com/upbound/upjet/pkg/types/comments"
 	"github.com/upbound/upjet/pkg/types/name"
 )
+
+var parentheses = regexp.MustCompile(`\(([^\)]+)\)`)
 
 // Field represents a field that is built from the Terraform schema.
 // It contains the go field related information such as tags, field type, comment.
@@ -41,7 +44,7 @@ func NewField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema,
 
 	var commentText string
 	if cfg.MetaResource != nil {
-		commentText = cfg.MetaResource.ArgumentDocs[f.Name.Snake] + "\n"
+		commentText = getDescription(cfg.MetaResource.ArgumentDocs[f.Name.Snake]) + "\n"
 	}
 	commentText += f.Schema.Description
 	commentText = pkg.FilterDescription(commentText, pkg.TerraformKeyword)
@@ -164,4 +167,18 @@ func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames) {
 
 	g.comments.AddFieldComment(typeNames.ParameterTypeName, f.FieldNameCamel, f.Comment.Build())
 	g.comments.AddFieldComment(typeNames.ObservationTypeName, f.FieldNameCamel, f.Comment.Build())
+}
+
+func getDescription(s string) string {
+	// Remove dash
+	s = strings.TrimSpace(s)[strings.Index(s, "-")+1:]
+
+	// Remove 'Reqiured' || 'Optional' information
+	matches := parentheses.FindAllString(s, -1)
+	for _, m := range matches {
+		if strings.HasPrefix(strings.ToLower(m), "(optional") || strings.HasPrefix(strings.ToLower(m), "(required") {
+			s = strings.ReplaceAll(s, m, "")
+		}
+	}
+	return s
 }
