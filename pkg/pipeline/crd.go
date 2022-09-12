@@ -97,6 +97,7 @@ func (cg *CRDGenerator) Generate(cfg *config.Resource) (string, error) {
 		"XPCommonAPIsPackageAlias": file.Imports.UsePackage(tjtypes.PackagePathXPCommonAPIs),
 	}
 	if cfg.MetaResource != nil {
+		// remove sentences with the `terraform` keyword in them
 		vars["CRD"].(map[string]string)["Description"] = tjpkg.FilterDescription(cfg.MetaResource.Description, tjpkg.TerraformKeyword)
 	}
 	filePath := filepath.Join(cg.LocalDirectoryPath, fmt.Sprintf("zz_%s_types.go", strings.ToLower(cfg.Kind)))
