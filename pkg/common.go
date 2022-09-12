@@ -17,5 +17,8 @@ func FilterDescription(description, keyword string) string {
 			result = append(result, s)
 		}
 	}
+	if len(result) == 0 {
+		return strings.ReplaceAll(strings.ToLower(description), keyword, "Upbound official provider")
+	}
 	return strings.Join(result, descriptionSeparator)
 }

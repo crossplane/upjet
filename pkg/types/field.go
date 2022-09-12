@@ -5,6 +5,7 @@ import (
 	"go/token"
 	"go/types"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -33,6 +34,47 @@ type Field struct {
 	SelectorName                             string
 }
 
+// getDocString first tries to match hierarchical argument names with
+// the longest suffix matching. If this is not successful, looks for
+// the name in a flat hierarchy.
+func getDocString(cfg *config.Resource, f *Field, tfPath []string) string { //nolint:gocyclo
+	hName := f.Name.Snake
+	if len(tfPath) > 0 {
+		hName = fieldPath(append(tfPath, hName))
+	}
+	docString := ""
+	if cfg.MetaResource != nil {
+		lm := 0
+		match := ""
+		sortedKeys := make([]string, 0, len(cfg.MetaResource.ArgumentDocs))
+		for k := range cfg.MetaResource.ArgumentDocs {
+			sortedKeys = append(sortedKeys, k)
+		}
+		sort.Strings(sortedKeys)
+		for _, k := range sortedKeys {
+			if strings.HasSuffix(hName, k) {
+				if len(k) > lm {
+					lm = len(k)
+					match = k
+				}
+			}
+		}
+		if lm == 0 {
+			for _, k := range sortedKeys {
+				parts := strings.Split(k, ".")
+				if parts[len(parts)-1] == f.Name.Snake {
+					lm = len(f.Name.Snake)
+					match = k
+				}
+			}
+		}
+		if lm > 0 {
+			docString = strings.TrimSpace(getDescription(cfg.MetaResource.ArgumentDocs[match]))
+		}
+	}
+	return docString
+}
+
 // NewField returns a constructed Field object.
 func NewField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema, snakeFieldName string, tfPath, xpPath, names []string, asBlocksMode bool) (*Field, error) {
 	f := &Field{
@@ -43,8 +85,9 @@ func NewField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema,
 	}
 
 	var commentText string
-	if cfg.MetaResource != nil {
-		commentText = getDescription(cfg.MetaResource.ArgumentDocs[f.Name.Snake]) + "\n"
+	docString := getDocString(cfg, f, tfPath)
+	if len(docString) > 0 {
+		commentText = docString + "\n"
 	}
 	commentText += f.Schema.Description
 	commentText = pkg.FilterDescription(commentText, pkg.TerraformKeyword)

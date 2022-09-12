@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"io/ioutil"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/antchfx/htmlquery"
@@ -30,6 +31,10 @@ const (
 	keySubCategory = "subcategory"
 	keyDescription = "description"
 	keyPageTitle   = "page_title"
+)
+
+var (
+	regexConfigurationBlock = regexp.MustCompile(`block.*support`)
 )
 
 // NewProviderMetadata initializes a new ProviderMetadata for
@@ -247,13 +252,70 @@ func (r *Resource) scrapeFieldDocs(doc *html.Node, fieldXPath string) {
 			conflictedFields[attrName] = true
 			continue
 		}
-		r.ArgumentDocs[attrName] = docStr
+		r.ArgumentDocs[attrName] = strings.TrimSpace(docStr)
 	}
 
 	// Remove descriptions for repeating fields in the registry.
 	for cf := range conflictedFields {
 		delete(r.ArgumentDocs, cf)
 	}
+}
+
+func getRootPath(n *html.Node) string { // nolint: gocyclo
+	var ulNode, pNode, codeNode *html.Node
+	for ulNode = n.Parent; ulNode != nil && ulNode.Data != "ul"; ulNode = ulNode.Parent {
+	}
+	if ulNode == nil {
+		return ""
+	}
+	for pNode = ulNode.PrevSibling; pNode != nil && (pNode.Data != "p" || !checkBlockParagraph(pNode)); pNode = pNode.PrevSibling {
+		// intentionally left empty
+	}
+	if pNode == nil {
+		return ""
+	}
+	for codeNode = pNode.FirstChild; codeNode != nil && codeNode.Data != "code"; codeNode = codeNode.NextSibling {
+		// intentionally left empty
+	}
+	if codeNode == nil || codeNode.FirstChild == nil {
+		return ""
+	}
+	prevLiNode := getPrevLiWithCodeText(codeNode.FirstChild.Data, pNode)
+	if prevLiNode == nil {
+		return codeNode.FirstChild.Data
+	}
+	root := getRootPath(prevLiNode)
+	if len(root) == 0 {
+		return codeNode.FirstChild.Data
+	}
+	return fmt.Sprintf("%s.%s", root, codeNode.FirstChild.Data)
+}
+
+// returns the list item node (in an UL) with a code child with text `codeText`
+func getPrevLiWithCodeText(codeText string, pNode *html.Node) *html.Node {
+	var ulNode, liNode *html.Node
+	for ulNode = pNode.PrevSibling; ulNode != nil && ulNode.Data != "ul"; ulNode = ulNode.PrevSibling {
+	}
+	if ulNode == nil {
+		return nil
+	}
+	for liNode = ulNode.FirstChild; liNode != nil; liNode = liNode.NextSibling {
+		if liNode.Data != "li" || liNode.FirstChild == nil || liNode.FirstChild.Data != "code" || liNode.FirstChild.FirstChild.Data != codeText {
+			continue
+		}
+		return liNode
+	}
+	return nil
+}
+
+func checkBlockParagraph(p *html.Node) bool {
+	// traverse children of the paragraph node
+	for c := p.FirstChild; c != nil; c = c.NextSibling {
+		if regexConfigurationBlock.MatchString(c.Data) {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *Resource) scrapeDocString(n *html.Node, attrName *string, processed map[*html.Node]struct{}) string {
@@ -269,6 +331,9 @@ func (r *Resource) scrapeDocString(n *html.Node, attrName *string, processed map
 	sb := strings.Builder{}
 	if *attrName == "" {
 		*attrName = n.Data
+		if root := getRootPath(n); len(root) != 0 {
+			*attrName = fmt.Sprintf("%s.%s", root, *attrName)
+		}
 	} else {
 		sb.WriteString(n.Data)
 	}

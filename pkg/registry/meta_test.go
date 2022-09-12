@@ -93,6 +93,28 @@ func TestScrapeRepo(t *testing.T) {
 			if err := yaml.Unmarshal(buff, &pmExpected); err != nil {
 				t.Errorf("Failed to unmarshal expected ProviderMetadata from file: %s", tc.want.pmPath)
 			}
+			// upcoming cmp.Diff fails if
+			// resources[*].examples[*].dependencies or
+			// resources[*].examples[*].references is not present in the expected
+			// metadata document (and is thus nil when decoded). One way to handle
+			// this would be not to initialize them to empty maps/slices while
+			// populating the `ProviderMetadata` struct but this is good to eliminate
+			// nil checks elsewhere. Thus, for the test cases, instead of having to manually
+			// initialize them in the testcase YAML documents, we do so programmatically below
+			for _, r := range pmExpected.Resources {
+				for eKey, e := range r.Examples {
+					if e.Dependencies == nil {
+						e.Dependencies = make(Dependencies)
+					}
+					if e.References == nil {
+						e.References = make(map[string]string)
+					}
+					r.Examples[eKey] = e
+				}
+				if len(r.ImportStatements) == 0 {
+					r.ImportStatements = nil
+				}
+			}
 			if diff := cmp.Diff(&pmExpected, pm, cmpopts.IgnoreUnexported(fieldpath.Paved{})); diff != "" {
 				t.Errorf("\n%s\nScrapeRepo(ProviderConfig): -want, +got:\n%s", tc.reason, diff)
 			}
