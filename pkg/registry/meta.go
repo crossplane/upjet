@@ -11,7 +11,6 @@ import (
 	"io/fs"
 	"io/ioutil"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/antchfx/htmlquery"
@@ -32,8 +31,6 @@ const (
 	keyDescription = "description"
 	keyPageTitle   = "page_title"
 )
-
-var parentheses = regexp.MustCompile(`\(([^\)]+)\)`)
 
 // NewProviderMetadata initializes a new ProviderMetadata for
 // extracting metadata from the Terraform registry.
@@ -250,25 +247,13 @@ func (r *Resource) scrapeFieldDocs(doc *html.Node, fieldXPath string) {
 			conflictedFields[attrName] = true
 			continue
 		}
-		r.ArgumentDocs[attrName] = getDescription(docStr)
+		r.ArgumentDocs[attrName] = docStr
 	}
 
 	// Remove descriptions for repeating fields in the registry.
 	for cf := range conflictedFields {
 		delete(r.ArgumentDocs, cf)
 	}
-}
-
-func getDescription(s string) string {
-	// Remove dash
-	s = strings.TrimSpace(s)[strings.Index(s, "-")+1:]
-
-	// Remove parentheses and their contents
-	matches := parentheses.FindAllString(s, -1)
-	for _, m := range matches {
-		s = strings.ReplaceAll(s, m, "")
-	}
-	return s
 }
 
 func (r *Resource) scrapeDocString(n *html.Node, attrName *string, processed map[*html.Node]struct{}) string {
