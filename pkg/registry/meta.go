@@ -12,6 +12,7 @@ import (
 	"io/ioutil"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/antchfx/htmlquery"
@@ -34,7 +35,8 @@ const (
 )
 
 var (
-	regexConfigurationBlock = regexp.MustCompile(`block.*support`)
+	regexConfigurationBlock = regexp.MustCompile(`block.*(support)?`)
+	regexHeaderNode         = regexp.MustCompile(`h\d`)
 )
 
 // NewProviderMetadata initializes a new ProviderMetadata for
@@ -236,7 +238,6 @@ func (r *Resource) scrapePrelude(doc *html.Node, preludeXPath string) error {
 }
 
 func (r *Resource) scrapeFieldDocs(doc *html.Node, fieldXPath string) {
-	conflictedFields := make(map[string]bool)
 	processed := make(map[*html.Node]struct{})
 	codeNodes := htmlquery.Find(doc, fieldXPath)
 	for _, n := range codeNodes {
@@ -249,31 +250,71 @@ func (r *Resource) scrapeFieldDocs(doc *html.Node, fieldXPath string) {
 			r.ArgumentDocs = make(map[string]string)
 		}
 		if r.ArgumentDocs[attrName] != "" && r.ArgumentDocs[attrName] != strings.TrimSpace(docStr) {
-			conflictedFields[attrName] = true
 			continue
 		}
 		r.ArgumentDocs[attrName] = strings.TrimSpace(docStr)
 	}
-
-	// Remove descriptions for repeating fields in the registry.
-	for cf := range conflictedFields {
-		delete(r.ArgumentDocs, cf)
-	}
 }
 
-func getRootPath(n *html.Node) string { // nolint: gocyclo
-	var ulNode, pNode, codeNode *html.Node
+// getRootPath extracts the root attribute name for the specified HTML node n,
+// from the preceding paragraph or header HTML nodes.
+func (r *Resource) getRootPath(n *html.Node) string {
+	var ulNode, pNode *html.Node
 	for ulNode = n.Parent; ulNode != nil && ulNode.Data != "ul"; ulNode = ulNode.Parent {
 	}
 	if ulNode == nil {
 		return ""
 	}
-	for pNode = ulNode.PrevSibling; pNode != nil && (pNode.Data != "p" || !checkBlockParagraph(pNode)); pNode = pNode.PrevSibling {
-		// intentionally left empty
+	for pNode = ulNode.PrevSibling; pNode != nil && (pNode.Data != "p" || !regexConfigurationBlock.MatchString(strings.ToLower(extractText(pNode)))); pNode = pNode.PrevSibling {
+		// if it's an HTML header node
+		if regexHeaderNode.MatchString(pNode.Data) {
+			return r.extractRootFromHeader(pNode)
+		}
 	}
 	if pNode == nil {
 		return ""
 	}
+	return r.extractRootFromParagraph(pNode)
+}
+
+// extractRootFromHeader extracts the root Terraform attribute name
+// from the children of the specified header HTML node.
+func (r *Resource) extractRootFromHeader(pNode *html.Node) string {
+	headerText := extractText(pNode)
+	if _, ok := r.ArgumentDocs[headerText]; ok {
+		return headerText
+	}
+	sortedKeys := make([]string, 0, len(r.ArgumentDocs))
+	for k := range r.ArgumentDocs {
+		sortedKeys = append(sortedKeys, k)
+	}
+	sort.Strings(sortedKeys)
+	for _, k := range sortedKeys {
+		parts := strings.Split(k, ".")
+		if headerText == parts[len(parts)-1] {
+			return k
+		}
+	}
+	// try to convert header text to a hierarchical attribute name.
+	// For certain headers, the header text is attribute's relative (partial)
+	// hierarchical name separated with spaces.
+	if _, ok := r.ArgumentDocs[strings.ReplaceAll(headerText, " ", ".")]; ok {
+		return strings.ReplaceAll(headerText, " ", ".")
+	}
+	if regexConfigurationBlock.MatchString(strings.ToLower(extractText(pNode))) {
+		for _, s := range strings.Split(headerText, " ") {
+			if _, ok := r.ArgumentDocs[s]; ok {
+				return s
+			}
+		}
+	}
+	return ""
+}
+
+// extractRootFromParagraph extracts the root Terraform attribute name
+// from the children of the specified paragraph HTML node.
+func (r *Resource) extractRootFromParagraph(pNode *html.Node) string {
+	var codeNode *html.Node
 	for codeNode = pNode.FirstChild; codeNode != nil && codeNode.Data != "code"; codeNode = codeNode.NextSibling {
 		// intentionally left empty
 	}
@@ -284,14 +325,15 @@ func getRootPath(n *html.Node) string { // nolint: gocyclo
 	if prevLiNode == nil {
 		return codeNode.FirstChild.Data
 	}
-	root := getRootPath(prevLiNode)
+	root := r.getRootPath(prevLiNode)
 	if len(root) == 0 {
 		return codeNode.FirstChild.Data
 	}
 	return fmt.Sprintf("%s.%s", root, codeNode.FirstChild.Data)
 }
 
-// returns the list item node (in an UL) with a code child with text `codeText`
+// getPrevLiWithCodeText returns the list item node (in an UL) with
+// a code child with text `codeText`.
 func getPrevLiWithCodeText(codeText string, pNode *html.Node) *html.Node {
 	var ulNode, liNode *html.Node
 	for ulNode = pNode.PrevSibling; ulNode != nil && ulNode.Data != "ul"; ulNode = ulNode.PrevSibling {
@@ -308,14 +350,29 @@ func getPrevLiWithCodeText(codeText string, pNode *html.Node) *html.Node {
 	return nil
 }
 
-func checkBlockParagraph(p *html.Node) bool {
-	// traverse children of the paragraph node
-	for c := p.FirstChild; c != nil; c = c.NextSibling {
-		if regexConfigurationBlock.MatchString(c.Data) {
-			return true
+// extractText extracts text from the children of an element node,
+// removing any HTML tags and leaving only text data.
+func extractText(n *html.Node) string {
+	switch n.Type { // nolint:exhaustive
+	case html.TextNode:
+		return n.Data
+	case html.ElementNode:
+		sb := strings.Builder{}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			s := ""
+			if c.Type != html.TextNode {
+				s = extractText(c)
+			} else {
+				s = c.Data
+			}
+			if len(s) != 0 {
+				sb.WriteString(s)
+			}
 		}
+		return sb.String()
+	default:
+		return ""
 	}
-	return false
 }
 
 func (r *Resource) scrapeDocString(n *html.Node, attrName *string, processed map[*html.Node]struct{}) string {
@@ -331,7 +388,7 @@ func (r *Resource) scrapeDocString(n *html.Node, attrName *string, processed map
 	sb := strings.Builder{}
 	if *attrName == "" {
 		*attrName = n.Data
-		if root := getRootPath(n); len(root) != 0 {
+		if root := r.getRootPath(n); len(root) != 0 {
 			*attrName = fmt.Sprintf("%s.%s", root, *attrName)
 		}
 	} else {

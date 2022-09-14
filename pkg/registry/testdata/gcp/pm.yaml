@@ -113,6 +113,7 @@ resources:
                 does not exist is an error. All access levels listed must be
                 granted for the Condition to be true.
                 Format: accessPolicies/{policy_id}/accessLevels/{short_name}
+            create: '- Default is 20 minutes.'
             custom: |-
                 -
                 (Optional)
@@ -126,8 +127,6 @@ resources:
                 This page details the objects and attributes that are used to the build the CEL expressions for
                 custom access levels - https://cloud.google.com/access-context-manager/docs/custom-access-level-spec.
                 Structure is documented below.
-            custom.expr.create: '- Default is 20 minutes.'
-            custom.expr.delete: '- Default is 20 minutes.'
             custom.expr.description: |-
                 -
                 (Optional)
@@ -136,7 +135,6 @@ resources:
                 -
                 (Required)
                 Textual representation of an expression in Common Expression Language syntax.
-            custom.expr.id: '- an identifier for the resource with format {{name}}'
             custom.expr.location: |-
                 -
                 (Optional)
@@ -145,7 +143,7 @@ resources:
                 -
                 (Optional)
                 Title for the expression, i.e. a short string describing its purpose.
-            custom.expr.update: '- Default is 20 minutes.'
+            delete: '- Default is 20 minutes.'
             description: |-
                 -
                 (Optional)
@@ -181,6 +179,7 @@ resources:
                 (Optional)
                 Whether or not screenlock is required for the DevicePolicy
                 to be true. Defaults to false.
+            id: '- an identifier for the resource with format {{name}}'
             name: |-
                 -
                 (Required)
@@ -211,6 +210,7 @@ resources:
                 -
                 (Required)
                 Human readable title. Must be unique within the Policy.
+            update: '- Default is 20 minutes.'
         importStatements: []
     google_container_cluster:
         subCategory: Kubernetes (Container) Engine
@@ -386,6 +386,7 @@ resources:
                 SYSTEM_ONLY (Only system components are monitored and logged) is only available in GKE versions 1.15 and later.
             confidential_nodes: '- Configuration for Confidential Nodes feature. Structure is documented below documented below.'
             confidential_nodes.enabled: (Required) - Enable Confidential Nodes for this cluster.
+            create: '- Default is 40 minutes.'
             database_encryption: |-
                 - (Optional)
                 Structure is documented below.
@@ -403,6 +404,7 @@ resources:
                 - (Optional)
                 GKE SNAT DefaultSnatStatus contains the desired state of whether default sNAT should be disabled on the cluster, API doc. Structure is documented below
             default_snat_status.disabled: '- (Required) Whether the cluster disables default in-node sNAT rules. In-node sNAT rules will be disabled when defaultSnatStatus is disabled.When disabled is set to false, default IP masquerade rules will be applied to the nodes to prevent sNAT on cluster internal traffic'
+            delete: '- Default is 40 minutes.'
             description: '- (Optional) Description of the cluster.'
             dns_config: |-
                 - (Optional)
@@ -410,40 +412,6 @@ resources:
             dns_config.cluster_dns: '- (Optional) Which in-cluster DNS provider should be used. PROVIDER_UNSPECIFIED (default) or PLATFORM_DEFAULT or CLOUD_DNS.'
             dns_config.cluster_dns_domain: '- (Optional) The suffix used for all cluster service records.'
             dns_config.cluster_dns_scope: '- (Optional) The scope of access to cluster DNS records. DNS_SCOPE_UNSPECIFIED (default) or CLUSTER_SCOPE or VPC_SCOPE.'
-            dns_config.create: '- Default is 40 minutes.'
-            dns_config.delete: '- Default is 40 minutes.'
-            dns_config.endpoint: '- The IP address of this cluster''s Kubernetes master.'
-            dns_config.id: '- an identifier for the resource with format projects/{{project}}/locations/{{zone}}/clusters/{{name}}'
-            dns_config.label_fingerprint: '- The fingerprint of the set of labels for this cluster.'
-            dns_config.maintenance_policy.0.daily_maintenance_window.0.duration: |-
-                - Duration of the time window, automatically chosen to be
-                smallest possible in the given scenario.
-                Duration will be in RFC3339 format "PTnHnMnS".
-            dns_config.master_auth.0.client_certificate: |-
-                - Base64 encoded public certificate
-                used by clients to authenticate to the cluster endpoint.
-            dns_config.master_auth.0.client_key: |-
-                - Base64 encoded private key used by clients
-                to authenticate to the cluster endpoint.
-            dns_config.master_auth.0.cluster_ca_certificate: |-
-                - Base64 encoded public certificate
-                that is the root certificate of the cluster.
-            dns_config.master_version: |-
-                - The current version of the master in the cluster. This may
-                be different than the min_master_version set in the config if the master
-                has been updated by GKE.
-            dns_config.read: '- Default is 40 minutes.'
-            dns_config.self_link: '- The server-defined URL for the resource.'
-            dns_config.services_ipv4_cidr: |-
-                - The IP address range of the Kubernetes services in this
-                cluster, in CIDR
-                notation (e.g. 1.2.3.4/29). Service addresses are typically put in the last
-                /16 from the container CIDR.
-            dns_config.tpu_ipv4_cidr_block: |-
-                - The IP address range of the Cloud TPUs in this cluster, in
-                CIDR
-                notation (e.g. 1.2.3.4/29).
-            dns_config.update: '- Default is 60 minutes.'
             enable_autopilot: |-
                 - (Optional) Enable Autopilot for this cluster. Defaults to false.
                 Note that when this option is enabled, certain features of Standard GKE are not available.
@@ -471,12 +439,14 @@ resources:
             enable_tpu: |-
                 - (Optional) Whether to enable Cloud TPU resources in this cluster.
                 See the official documentation.
+            endpoint: '- The IP address of this cluster''s Kubernetes master.'
             ephemeral_storage_config.local_ssd_count: (Required) - Number of local SSDs to use to back ephemeral storage. Uses NVMe interfaces. Each local SSD is 375 GB in size. If zero, it means to disable using local SSDs as ephemeral storage.
             gcfs_config.enabled: (Required) - Whether or not the Google Container Filesystem (GCFS) is enabled
             guest_accelerator.count: (Required) - The number of the guest accelerator cards exposed to this instance.
             guest_accelerator.gpu_partition_size: (Optional) - Size of partitions to create on the GPU. Valid values are described in the NVIDIA mig user guide.
             guest_accelerator.type: (Required) - The accelerator type resource to expose to this instance. E.g. nvidia-tesla-k80.
             gvnic.enabled: (Required) - Whether or not the Google Virtual NIC (gVNIC) is enabled
+            id: '- an identifier for the resource with format projects/{{project}}/locations/{{zone}}/clusters/{{name}}'
             identity_service_config.enabled: '- (Optional) Whether to enable the Identity Service component. It is disabled by default. Set enabled=true to enable.'
             initial_node_count: |-
                 - (Optional) The number of nodes to create in this
@@ -527,6 +497,7 @@ resources:
                 - (Required) The CPU management policy on the node. See
                 K8S CPU Management Policies.
                 One of "none" or "static". Defaults to none when kubelet_config is unset.
+            label_fingerprint: '- The fingerprint of the set of labels for this cluster.'
             linux_node_config.sysctls: |-
                 - (Required)  The Linux kernel parameters to be applied to the nodes
                 and all pods running on the nodes. Specified as a map from the key, such as
@@ -551,8 +522,21 @@ resources:
             maintenance_policy: |-
                 - (Optional) The maintenance policy to use for the cluster. Structure is
                 documented below.
-            maintenance_policy.maintenance_exclusion.exclusion_options: '- (Optional) MaintenanceExclusionOptions provides maintenance exclusion related options.'
-            maintenance_policy.maintenance_exclusion.exclusion_options.scope: '- (Required) The scope of automatic upgrades to restrict in the exclusion window. One of: NO_UPGRADES | NO_MINOR_UPGRADES | NO_MINOR_OR_NODE_UPGRADES'
+            maintenance_policy.0.daily_maintenance_window.0.duration: |-
+                - Duration of the time window, automatically chosen to be
+                smallest possible in the given scenario.
+                Duration will be in RFC3339 format "PTnHnMnS".
+            maintenance_policy.daily_maintenance_window: '- (Optional) structure documented below.'
+            maintenance_policy.maintenance_exclusion: '- (Optional) structure documented below'
+            maintenance_policy.recurring_window: '- (Optional) structure documented below'
+            maintenance_policy.recurring_window.daily_maintenance_window: |-
+                - Time window specified for daily maintenance operations.
+                Specify start_time in RFC3339 format "HH:MM”,
+                where HH : [00-23] and MM : [00-59] GMT. For example:
+            maintenance_policy.recurring_window.maintenance_exclusion: '- Exceptions to maintenance window. Non-emergency maintenance should not occur in these windows. A cluster can have up to three maintenance exclusions at a time Maintenance Window and Exclusions'
+            maintenance_policy.recurring_window.maintenance_exclusion.exclusion_options: '- (Optional) MaintenanceExclusionOptions provides maintenance exclusion related options.'
+            maintenance_policy.recurring_window.maintenance_exclusion.exclusion_options.scope: '- (Required) The scope of automatic upgrades to restrict in the exclusion window. One of: NO_UPGRADES | NO_MINOR_UPGRADES | NO_MINOR_OR_NODE_UPGRADES'
+            maintenance_policy.recurring_window.recurring_window: '- Time window for recurring maintenance operations.'
             master_auth: |-
                 - (Optional) The authentication information for accessing the
                 Kubernetes master. Some values in this block are only returned by the API if
@@ -560,6 +544,15 @@ resources:
                 you see an unexpected diff unsetting your client cert, ensure you have the
                 container.clusters.getCredentials permission.
                 Structure is documented below.
+            master_auth.0.client_certificate: |-
+                - Base64 encoded public certificate
+                used by clients to authenticate to the cluster endpoint.
+            master_auth.0.client_key: |-
+                - Base64 encoded private key used by clients
+                to authenticate to the cluster endpoint.
+            master_auth.0.cluster_ca_certificate: |-
+                - Base64 encoded public certificate
+                that is the root certificate of the cluster.
             master_auth.client_certificate_config: '- (Required) Whether client certificate authorization is enabled for this cluster.  For example:'
             master_authorized_networks_config: |-
                 - (Optional) The desired
@@ -574,6 +567,10 @@ resources:
                 - (Optional) External network that can access Kubernetes master through HTTPS.
                 Must be specified in CIDR notation.
             master_authorized_networks_config.cidr_blocks.display_name: '- (Optional) Field for users to identify CIDR blocks.'
+            master_version: |-
+                - The current version of the master in the cluster. This may
+                be different than the min_master_version set in the config if the master
+                has been updated by GKE.
             min_master_version: |-
                 - (Optional) The minimum version of the master. GKE
                 will auto-update the master to new versions, so this does not guarantee the
@@ -790,6 +787,7 @@ resources:
             project: |-
                 - (Optional) The ID of the project in which the resource belongs. If it
                 is not provided, the provider project is used.
+            read: '- Default is 40 minutes.'
             release_channel: |-
                 - (Optional)
                 Configuration options for the Release channel
@@ -834,6 +832,12 @@ resources:
             sandbox_config.sandbox_type: |-
                 (Required) Which sandbox to use for pods in the node pool.
                 Accepted values are:
+            self_link: '- The server-defined URL for the resource.'
+            services_ipv4_cidr: |-
+                - The IP address range of the Kubernetes services in this
+                cluster, in CIDR
+                notation (e.g. 1.2.3.4/29). Service addresses are typically put in the last
+                /16 from the container CIDR.
             shielded_instance_config.enable_integrity_monitoring: (Optional) - Defines if the instance has integrity monitoring enabled.
             shielded_instance_config.enable_secure_boot: (Optional) - Defines if the instance has Secure Boot enabled.
             subnetwork: |-
@@ -842,6 +846,11 @@ resources:
             taint.effect: (Required) Effect for taint. Accepted values are NO_SCHEDULE, PREFER_NO_SCHEDULE, and NO_EXECUTE.
             taint.key: (Required) Key for taint.
             taint.value: (Required) Value for taint.
+            tpu_ipv4_cidr_block: |-
+                - The IP address range of the Cloud TPUs in this cluster, in
+                CIDR
+                notation (e.g. 1.2.3.4/29).
+            update: '- Default is 60 minutes.'
             vertical_pod_autoscaling: |-
                 - (Optional, Beta)
                 Vertical Pod Autoscaling automatically adjusts the resources of pods controlled by it.
@@ -933,17 +942,13 @@ resources:
             cors.method: '- (Optional) The list of HTTP methods on which to include CORS response headers, (GET, OPTIONS, POST, etc) Note: "*" is permitted in the list of methods, and means "any method".'
             cors.origin: '- (Optional) The list of Origins eligible to receive CORS response headers. Note: "*" is permitted in the list of origins, and means "any Origin".'
             cors.response_header: '- (Optional) The list of HTTP headers other than the simple response headers to give permission for the user-agent to share across domains.'
+            create: '- Default is 4 minutes.'
             default_event_based_hold: '- (Optional) Whether or not to automatically apply an eventBasedHold to new objects added to the bucket.'
             encryption: '- (Optional) The bucket''s encryption configuration. Structure is documented below.'
-            encryption.create: '- Default is 4 minutes.'
             encryption.default_kms_key_name: |-
                 : The id of a Cloud KMS key that will be used to encrypt objects inserted into this bucket, if no encryption method is specified.
                 You must pay attention to whether the crypto key is available in the location that this bucket is created in.
                 See the docs for more details.
-            encryption.read: '- Default is 4 minutes.'
-            encryption.self_link: '- The URI of the created resource.'
-            encryption.update: '- Default is 4 minutes.'
-            encryption.url: '- The base URL of the bucket, in the format gs://<bucket-name>.'
             force_destroy: |-
                 - (Optional, Default: false) When deleting a bucket, this
                 boolean option will delete all contained objects. If you try to delete a
@@ -962,12 +967,16 @@ resources:
             project: |-
                 - (Optional) The ID of the project in which the resource belongs. If it
                 is not provided, the provider project is used.
+            read: '- Default is 4 minutes.'
             requester_pays: '- (Optional, Default: false) Enables Requester Pays on a storage bucket.'
             retention_policy: '- (Optional) Configuration of the bucket''s data retention policy for how long objects in the bucket should be retained. Structure is documented below.'
             retention_policy.is_locked: '- (Optional) If set to true, the bucket will be locked and permanently restrict edits to the bucket''s retention policy.  Caution: Locking a bucket is an irreversible action.'
             retention_policy.retention_period: '- (Required) The period of time, in seconds, that objects in the bucket must be retained and cannot be deleted, overwritten, or archived. The value must be less than 2,147,483,647 seconds.'
+            self_link: '- The URI of the created resource.'
             storage_class: '- (Optional, Default: ''STANDARD'') The Storage Class of the new bucket. Supported values include: STANDARD, MULTI_REGIONAL, REGIONAL, NEARLINE, COLDLINE, ARCHIVE.'
             uniform_bucket_level_access: '- (Optional, Default: false) Enables Uniform bucket-level access access to a bucket.'
+            update: '- Default is 4 minutes.'
+            url: '- The base URL of the bucket, in the format gs://<bucket-name>.'
             versioning: '- (Optional) The bucket''s Versioning configuration.  Structure is documented below.'
             versioning.enabled: '- (Required) While set to true, versioning is fully enabled for this bucket.'
             website: '- (Optional) Configuration if the bucket acts as a website. Structure is documented below.'

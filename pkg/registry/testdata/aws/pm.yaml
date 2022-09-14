@@ -141,8 +141,10 @@ resources:
             bucket: '- (Required, Forces new resource) The name of the bucket.'
             expected_bucket_owner: '- (Optional, Forces new resource) The account ID of the expected bucket owner.'
             grantee.email_address: '- (Optional) Email address of the grantee. See Regions and Endpoints for supported AWS regions where this argument can be specified.'
+            grantee.id: '- (Optional) The canonical user ID of the grantee.'
             grantee.type: '- (Required) Type of grantee. Valid values: CanonicalUser, AmazonCustomerByEmail, Group.'
             grantee.uri: '- (Optional) URI of the grantee group.'
+            id: '- The bucket, expected_bucket_owner (if configured), and acl (if configured) separated by commas (,).'
             owner.display_name: '- (Optional) The display name of the owner.'
             owner.id: '- (Required) The ID of the owner.'
         importStatements: []
