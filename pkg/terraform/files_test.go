@@ -31,6 +31,7 @@ func TestWriteTFState(t *testing.T) {
 		tr  resource.Terraformed
 		cfg *config.Resource
 		s   Setup
+		fs  afero.Afero
 	}
 	type want struct {
 		tfstate string
@@ -41,8 +42,8 @@ func TestWriteTFState(t *testing.T) {
 		args
 		want
 	}{
-		"Success": {
-			reason: "Standard resources should be able to write everything it has into tfstate file",
+		"SuccessWrite": {
+			reason: "Standard resources should be able to write everything it has into tfstate file when it does not exist",
 			args: args{
 				tr: &fake.Terraformed{
 					Managed: xpfake.Managed{
@@ -61,6 +62,7 @@ func TestWriteTFState(t *testing.T) {
 					}},
 				},
 				cfg: config.DefaultResource("upjet_resource", nil, nil),
+				fs:  afero.Afero{Fs: afero.NewMemMapFs()},
 			},
 			want: want{
 				tfstate: `{"version":4,"terraform_version":"","serial":1,"lineage":"","outputs":null,"resources":[{"mode":"managed","type":"","name":"","provider":"provider[\"registry.terraform.io/\"]","instances":[{"schema_version":0,"attributes":{"id":"some-id","name":"some-id","obs":"obsval","param":"paramval"},"private":"cHJpdmF0ZXJhdw=="}]}]}`,
@@ -88,6 +90,7 @@ func TestWriteTFState(t *testing.T) {
 				cfg: config.DefaultResource("upjet_resource", nil, nil, func(r *config.Resource) {
 					r.OperationTimeouts.Read = 2 * time.Minute
 				}),
+				fs: afero.Afero{Fs: afero.NewMemMapFs()},
 			},
 			want: want{
 				tfstate: `{"version":4,"terraform_version":"","serial":1,"lineage":"","outputs":null,"resources":[{"mode":"managed","type":"","name":"","provider":"provider[\"registry.terraform.io/\"]","instances":[{"schema_version":0,"attributes":{"id":"some-id","name":"some-id","obs":"obsval","param":"paramval"},"private":"eyJlMmJmYjczMC1lY2FhLTExZTYtOGY4OC0zNDM2M2JjN2M0YzAiOnsicmVhZCI6MTIwMDAwMDAwMDAwfX0="}]}]}`,
@@ -96,17 +99,16 @@ func TestWriteTFState(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			fs := afero.NewMemMapFs()
 			ctx := context.TODO()
-			fp, err := NewFileProducer(ctx, nil, dir, tc.args.tr, tc.args.s, tc.args.cfg, WithFileSystem(fs))
+			fp, err := NewFileProducer(ctx, nil, dir, tc.args.tr, tc.args.s, tc.args.cfg, WithFileSystem(tc.args.fs))
 			if err != nil {
 				t.Errorf("cannot initialize a file producer: %s", err.Error())
 			}
-			err = fp.WriteTFState(ctx)
+			err = fp.EnsureTFState(ctx)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nWriteTFState(...): -want error, +got error:\n%s", tc.reason, diff)
 			}
-			s, _ := afero.Afero{Fs: fs}.ReadFile(filepath.Join(dir, "terraform.tfstate"))
+			s, _ := tc.args.fs.ReadFile(filepath.Join(dir, "terraform.tfstate"))
 			if diff := cmp.Diff(tc.want.tfstate, string(s)); diff != "" {
 				t.Errorf("\n%s\nWriteTFState(...): -want tfstate, +got tfstate:\n%s", tc.reason, diff)
 			}

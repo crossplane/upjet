@@ -7,6 +7,7 @@ package terraform
 import (
 	"context"
 	"fmt"
+	iofs "io/fs"
 	"path/filepath"
 	"strings"
 
@@ -76,9 +77,16 @@ type FileProducer struct {
 	fs          afero.Afero
 }
 
-// WriteTFState writes the Terraform state that should exist in the filesystem to
-// start any Terraform operation.
-func (fp *FileProducer) WriteTFState(ctx context.Context) error {
+// EnsureTFState writes the Terraform state that should exist in the filesystem
+// to start any Terraform operation.
+func (fp *FileProducer) EnsureTFState(ctx context.Context) error {
+	empty, err := fp.isStateEmpty()
+	if err != nil {
+		return errors.Wrap(err, "cannot check whether the state is empty")
+	}
+	if !empty {
+		return nil
+	}
 	base := make(map[string]any)
 	// NOTE(muvaf): Since we try to produce the current state, observation
 	// takes precedence over parameters.
@@ -172,4 +180,28 @@ func (fp *FileProducer) WriteMainTF() error {
 		return errors.Wrap(err, "cannot marshal main hcl object")
 	}
 	return errors.Wrap(fp.fs.WriteFile(filepath.Join(fp.Dir, "main.tf.json"), rawMainTF, 0600), "cannot write tfstate file")
+}
+
+// isStateEmpty returns whether the Terraform state includes a resource or not.
+func (fp *FileProducer) isStateEmpty() (bool, error) {
+	data, err := fp.fs.ReadFile(filepath.Join(fp.Dir, "terraform.tfstate"))
+	if errors.Is(err, iofs.ErrNotExist) {
+		return true, nil
+	}
+	if err != nil {
+		return false, errors.Wrap(err, "cannot read terraform.tfstate file")
+	}
+	s := &json.StateV4{}
+	if err := json.JSParser.Unmarshal(data, s); err != nil {
+		return false, errors.Wrap(err, "cannot unmarshal tfstate file")
+	}
+	attr := s.GetAttributes()
+	if attr == nil {
+		return true, nil
+	}
+	tfstate := map[string]any{}
+	if err := json.JSParser.Unmarshal(attr, &tfstate); err != nil {
+		return false, errors.Wrap(err, "cannot unmarshal state attributes")
+	}
+	return tfstate["id"] == "", nil
 }
