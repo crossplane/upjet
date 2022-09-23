@@ -7,13 +7,12 @@ package terraform
 import (
 	"context"
 	"fmt"
-	iofs "io/fs"
-	"path/filepath"
-	"strings"
-
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/pkg/errors"
 	"github.com/spf13/afero"
+	iofs "io/fs"
+	"path/filepath"
+	"strings"
 
 	"github.com/upbound/upjet/pkg/config"
 	"github.com/upbound/upjet/pkg/resource"
@@ -77,6 +76,48 @@ type FileProducer struct {
 	fs          afero.Afero
 }
 
+// WriteMainTF writes the content main configuration file that has the desired
+// state configuration for Terraform.
+func (fp *FileProducer) WriteMainTF() error {
+	// If the resource is in a deletion process, we need to remove the deletion
+	// protection.
+	fp.parameters["lifecycle"] = map[string]bool{
+		"prevent_destroy": !meta.WasDeleted(fp.Resource),
+	}
+
+	// Add operation timeouts if any timeout configured for the resource
+	if tp := timeouts(fp.Config.OperationTimeouts).asParameter(); len(tp) != 0 {
+		fp.parameters["timeouts"] = tp
+	}
+
+	// Note(turkenh): To use third party providers, we need to configure
+	// provider name in required_providers.
+	providerSource := strings.Split(fp.Setup.Requirement.Source, "/")
+	m := map[string]any{
+		"terraform": map[string]any{
+			"required_providers": map[string]any{
+				providerSource[len(providerSource)-1]: map[string]string{
+					"source":  fp.Setup.Requirement.Source,
+					"version": fp.Setup.Requirement.Version,
+				},
+			},
+		},
+		"provider": map[string]any{
+			providerSource[len(providerSource)-1]: fp.Setup.Configuration,
+		},
+		"resource": map[string]any{
+			fp.Resource.GetTerraformResourceType(): map[string]any{
+				fp.Resource.GetName(): fp.parameters,
+			},
+		},
+	}
+	rawMainTF, err := json.JSParser.Marshal(m)
+	if err != nil {
+		return errors.Wrap(err, "cannot marshal main hcl object")
+	}
+	return errors.Wrap(fp.fs.WriteFile(filepath.Join(fp.Dir, "main.tf.json"), rawMainTF, 0600), "cannot write tfstate file")
+}
+
 // EnsureTFState writes the Terraform state that should exist in the filesystem
 // to start any Terraform operation.
 func (fp *FileProducer) EnsureTFState(ctx context.Context) error {
@@ -138,48 +179,6 @@ func (fp *FileProducer) EnsureTFState(ctx context.Context) error {
 		return errors.Wrap(err, "cannot marshal state object")
 	}
 	return errors.Wrap(fp.fs.WriteFile(filepath.Join(fp.Dir, "terraform.tfstate"), rawState, 0600), "cannot write tfstate file")
-}
-
-// WriteMainTF writes the content main configuration file that has the desired
-// state configuration for Terraform.
-func (fp *FileProducer) WriteMainTF() error {
-	// If the resource is in a deletion process, we need to remove the deletion
-	// protection.
-	fp.parameters["lifecycle"] = map[string]bool{
-		"prevent_destroy": !meta.WasDeleted(fp.Resource),
-	}
-
-	// Add operation timeouts if any timeout configured for the resource
-	if tp := timeouts(fp.Config.OperationTimeouts).asParameter(); len(tp) != 0 {
-		fp.parameters["timeouts"] = tp
-	}
-
-	// Note(turkenh): To use third party providers, we need to configure
-	// provider name in required_providers.
-	providerSource := strings.Split(fp.Setup.Requirement.Source, "/")
-	m := map[string]any{
-		"terraform": map[string]any{
-			"required_providers": map[string]any{
-				providerSource[len(providerSource)-1]: map[string]string{
-					"source":  fp.Setup.Requirement.Source,
-					"version": fp.Setup.Requirement.Version,
-				},
-			},
-		},
-		"provider": map[string]any{
-			providerSource[len(providerSource)-1]: fp.Setup.Configuration,
-		},
-		"resource": map[string]any{
-			fp.Resource.GetTerraformResourceType(): map[string]any{
-				fp.Resource.GetName(): fp.parameters,
-			},
-		},
-	}
-	rawMainTF, err := json.JSParser.Marshal(m)
-	if err != nil {
-		return errors.Wrap(err, "cannot marshal main hcl object")
-	}
-	return errors.Wrap(fp.fs.WriteFile(filepath.Join(fp.Dir, "main.tf.json"), rawMainTF, 0600), "cannot write tfstate file")
 }
 
 // isStateEmpty returns whether the Terraform state includes a resource or not.
