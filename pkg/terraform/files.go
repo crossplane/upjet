@@ -7,16 +7,31 @@ package terraform
 import (
 	"context"
 	"fmt"
-	"github.com/crossplane/crossplane-runtime/pkg/meta"
-	"github.com/pkg/errors"
-	"github.com/spf13/afero"
 	iofs "io/fs"
 	"path/filepath"
 	"strings"
 
+	"github.com/crossplane/crossplane-runtime/pkg/meta"
+	"github.com/pkg/errors"
+	"github.com/spf13/afero"
+
 	"github.com/upbound/upjet/pkg/config"
 	"github.com/upbound/upjet/pkg/resource"
 	"github.com/upbound/upjet/pkg/resource/json"
+)
+
+const (
+	errWriteTFStateFile  = "cannot write terraform.tfstate file"
+	errWriteMainTFFile   = "cannot write main.tf.json file"
+	errCheckIfStateEmpty = "cannot check whether the state is empty"
+	errGetID             = "cannot get id"
+	errMarshalAttributes = "cannot marshal produced state attributes"
+	errInsertTimeouts    = "cannot insert timeouts metadata to private raw"
+	errReadTFState       = "cannot read terraform.tfstate file"
+	errMarshalState      = "cannot marshal state object"
+	errUnmarshalAttr     = "cannot unmarshal state attributes"
+	errUnmarshalTFState  = "cannot unmarshal tfstate file"
+	errFmtNonString      = "cannot work with a non-string id: %s"
 )
 
 // FileProducerOption allows you to configure FileProducer
@@ -115,7 +130,7 @@ func (fp *FileProducer) WriteMainTF() error {
 	if err != nil {
 		return errors.Wrap(err, "cannot marshal main hcl object")
 	}
-	return errors.Wrap(fp.fs.WriteFile(filepath.Join(fp.Dir, "main.tf.json"), rawMainTF, 0600), "cannot write tfstate file")
+	return errors.Wrap(fp.fs.WriteFile(filepath.Join(fp.Dir, "main.tf.json"), rawMainTF, 0600), errWriteMainTFFile)
 }
 
 // EnsureTFState writes the Terraform state that should exist in the filesystem
@@ -123,7 +138,7 @@ func (fp *FileProducer) WriteMainTF() error {
 func (fp *FileProducer) EnsureTFState(ctx context.Context) error {
 	empty, err := fp.isStateEmpty()
 	if err != nil {
-		return errors.Wrap(err, "cannot check whether the state is empty")
+		return errors.Wrap(err, errCheckIfStateEmpty)
 	}
 	if !empty {
 		return nil
@@ -139,19 +154,19 @@ func (fp *FileProducer) EnsureTFState(ctx context.Context) error {
 	}
 	id, err := fp.Config.ExternalName.GetIDFn(ctx, meta.GetExternalName(fp.Resource), fp.parameters, fp.Setup.Map())
 	if err != nil {
-		return errors.Wrap(err, "cannot get id")
+		return errors.Wrap(err, errGetID)
 	}
 	base["id"] = id
 	attr, err := json.JSParser.Marshal(base)
 	if err != nil {
-		return errors.Wrap(err, "cannot marshal produced state attributes")
+		return errors.Wrap(err, errMarshalAttributes)
 	}
 	var privateRaw []byte
 	if pr, ok := fp.Resource.GetAnnotations()[resource.AnnotationKeyPrivateRawAttribute]; ok {
 		privateRaw = []byte(pr)
 	}
 	if privateRaw, err = insertTimeoutsMeta(privateRaw, timeouts(fp.Config.OperationTimeouts)); err != nil {
-		return errors.Wrap(err, "cannot insert timeouts metadata to private raw")
+		return errors.Wrap(err, errInsertTimeouts)
 	}
 	s := json.NewStateV4()
 	s.TerraformVersion = fp.Setup.Version
@@ -176,9 +191,9 @@ func (fp *FileProducer) EnsureTFState(ctx context.Context) error {
 
 	rawState, err := json.JSParser.Marshal(s)
 	if err != nil {
-		return errors.Wrap(err, "cannot marshal state object")
+		return errors.Wrap(err, errMarshalState)
 	}
-	return errors.Wrap(fp.fs.WriteFile(filepath.Join(fp.Dir, "terraform.tfstate"), rawState, 0600), "cannot write tfstate file")
+	return errors.Wrap(fp.fs.WriteFile(filepath.Join(fp.Dir, "terraform.tfstate"), rawState, 0600), errWriteTFStateFile)
 }
 
 // isStateEmpty returns whether the Terraform state includes a resource or not.
@@ -188,19 +203,27 @@ func (fp *FileProducer) isStateEmpty() (bool, error) {
 		return true, nil
 	}
 	if err != nil {
-		return false, errors.Wrap(err, "cannot read terraform.tfstate file")
+		return false, errors.Wrap(err, errReadTFState)
 	}
 	s := &json.StateV4{}
 	if err := json.JSParser.Unmarshal(data, s); err != nil {
-		return false, errors.Wrap(err, "cannot unmarshal tfstate file")
+		return false, errors.Wrap(err, errUnmarshalTFState)
 	}
-	attr := s.GetAttributes()
-	if attr == nil {
+	attrData := s.GetAttributes()
+	if attrData == nil {
 		return true, nil
 	}
-	tfstate := map[string]any{}
-	if err := json.JSParser.Unmarshal(attr, &tfstate); err != nil {
-		return false, errors.Wrap(err, "cannot unmarshal state attributes")
+	attr := map[string]any{}
+	if err := json.JSParser.Unmarshal(attrData, &attr); err != nil {
+		return false, errors.Wrap(err, errUnmarshalAttr)
 	}
-	return tfstate["id"] == "", nil
+	id, ok := attr["id"]
+	if !ok {
+		return true, nil
+	}
+	sid, ok := id.(string)
+	if !ok {
+		return false, errors.Errorf(errFmtNonString, fmt.Sprint(id))
+	}
+	return sid == "", nil
 }

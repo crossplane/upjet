@@ -6,6 +6,7 @@ package terraform
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -14,19 +15,21 @@ import (
 	xpfake "github.com/crossplane/crossplane-runtime/pkg/resource/fake"
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
 	"github.com/spf13/afero"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/upbound/upjet/pkg/config"
 	"github.com/upbound/upjet/pkg/resource"
 	"github.com/upbound/upjet/pkg/resource/fake"
+	"github.com/upbound/upjet/pkg/resource/json"
 )
 
 const (
 	dir = "random-dir"
 )
 
-func TestWriteTFState(t *testing.T) {
+func TestEnsureTFState(t *testing.T) {
 	type args struct {
 		tr  resource.Terraformed
 		cfg *config.Resource
@@ -43,7 +46,7 @@ func TestWriteTFState(t *testing.T) {
 		want
 	}{
 		"SuccessWrite": {
-			reason: "Standard resources should be able to write everything it has into tfstate file when it does not exist",
+			reason: "Standard resources should be able to write everything it has into tfstate file when state is empty",
 			args: args{
 				tr: &fake.Terraformed{
 					Managed: xpfake.Managed{
@@ -111,6 +114,139 @@ func TestWriteTFState(t *testing.T) {
 			s, _ := tc.args.fs.ReadFile(filepath.Join(dir, "terraform.tfstate"))
 			if diff := cmp.Diff(tc.want.tfstate, string(s)); diff != "" {
 				t.Errorf("\n%s\nWriteTFState(...): -want tfstate, +got tfstate:\n%s", tc.reason, diff)
+			}
+		})
+	}
+}
+
+func TestIsStateEmpty(t *testing.T) {
+	type args struct {
+		fs func() afero.Afero
+	}
+	type want struct {
+		empty bool
+		err   error
+	}
+	cases := map[string]struct {
+		reason string
+		args
+		want
+	}{
+		"FileDoesNotExist": {
+			reason: "If the tfstate file is not there, it should return true.",
+			args: args{
+				fs: func() afero.Afero {
+					return afero.Afero{Fs: afero.NewMemMapFs()}
+				},
+			},
+			want: want{
+				empty: true,
+			},
+		},
+		"NoAttributes": {
+			reason: "If there is no attributes, that means the state is empty.",
+			args: args{
+				fs: func() afero.Afero {
+					f := afero.Afero{Fs: afero.NewMemMapFs()}
+					s := json.NewStateV4()
+					s.Resources = []json.ResourceStateV4{}
+					d, _ := json.JSParser.Marshal(s)
+					_ = f.WriteFile(filepath.Join(dir, "terraform.tfstate"), d, 0600)
+					return f
+				},
+			},
+			want: want{
+				empty: true,
+			},
+		},
+		"NoID": {
+			reason: "If there is no ID in the state, that means state is empty",
+			args: args{
+				fs: func() afero.Afero {
+					f := afero.Afero{Fs: afero.NewMemMapFs()}
+					s := json.NewStateV4()
+					s.Resources = []json.ResourceStateV4{
+						{
+							Instances: []json.InstanceObjectStateV4{
+								{
+									AttributesRaw: []byte(`{}`),
+								},
+							},
+						},
+					}
+					d, _ := json.JSParser.Marshal(s)
+					_ = f.WriteFile(filepath.Join(dir, "terraform.tfstate"), d, 0600)
+					return f
+				},
+			},
+			want: want{
+				empty: true,
+			},
+		},
+		"NonStringID": {
+			reason: "If the ID is there but not string, return true.",
+			args: args{
+				fs: func() afero.Afero {
+					f := afero.Afero{Fs: afero.NewMemMapFs()}
+					s := json.NewStateV4()
+					s.Resources = []json.ResourceStateV4{
+						{
+							Instances: []json.InstanceObjectStateV4{
+								{
+									AttributesRaw: []byte(`{"id": 0}`),
+								},
+							},
+						},
+					}
+					d, _ := json.JSParser.Marshal(s)
+					_ = f.WriteFile(filepath.Join(dir, "terraform.tfstate"), d, 0600)
+					return f
+				},
+			},
+			want: want{
+				err: errors.Errorf(errFmtNonString, fmt.Sprint(0)),
+			},
+		},
+		"NotEmpty": {
+			reason: "If there is a string ID at minimum, state file is workable",
+			args: args{
+				fs: func() afero.Afero {
+					f := afero.Afero{Fs: afero.NewMemMapFs()}
+					s := json.NewStateV4()
+					s.Resources = []json.ResourceStateV4{
+						{
+							Instances: []json.InstanceObjectStateV4{
+								{
+									AttributesRaw: []byte(`{"id": "someid"}`),
+								},
+							},
+						},
+					}
+					d, _ := json.JSParser.Marshal(s)
+					_ = f.WriteFile(filepath.Join(dir, "terraform.tfstate"), d, 0600)
+					return f
+				},
+			},
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			fp, _ := NewFileProducer(
+				context.TODO(),
+				nil,
+				dir,
+				&fake.Terraformed{
+					Parameterizable: fake.Parameterizable{Parameters: map[string]any{}},
+				},
+				Setup{},
+				config.DefaultResource("upjet_resource", nil, nil), WithFileSystem(tc.args.fs()),
+			)
+			empty, err := fp.isStateEmpty()
+			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
+				t.Errorf("\n%s\nisStateEmpty(...): -want error, +got error:\n%s", tc.reason, diff)
+			}
+			if diff := cmp.Diff(tc.want.empty, empty); diff != "" {
+				t.Errorf("\n%s\nisStateEmpty(...): -want empty, +got empty:\n%s", tc.reason, diff)
 			}
 		})
 	}
