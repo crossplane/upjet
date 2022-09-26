@@ -17,7 +17,7 @@ import (
 	"github.com/upbound/upjet/pkg/types/name"
 )
 
-var parentheses = regexp.MustCompile(`\(([^\)]+)\)`)
+var parentheses = regexp.MustCompile(`\(([^)]+)\)`)
 
 // Field represents a field that is built from the Terraform schema.
 // It contains the go field related information such as tags, field type, comment.
@@ -34,9 +34,13 @@ type Field struct {
 	SelectorName                             string
 }
 
-// getDocString first tries to match hierarchical argument names with
-// the longest suffix matching. If this is not successful, looks for
-// the name in a flat hierarchy.
+// getDocString tries to extract the documentation string for the specified
+// field by:
+// - first, looking up the field's hierarchical name in
+// the dictionary of extracted doc strings
+// - second, looking up the terminal name in the same dictionary
+// - and third, tries to match hierarchical name with
+// the longest suffix matching
 func getDocString(cfg *config.Resource, f *Field, tfPath []string) string { //nolint:gocyclo
 	hName := f.Name.Snake
 	if len(tfPath) > 0 {
@@ -44,6 +48,10 @@ func getDocString(cfg *config.Resource, f *Field, tfPath []string) string { //no
 	}
 	docString := ""
 	if cfg.MetaResource != nil {
+		// 1st, look up the hierarchical name
+		if s, ok := cfg.MetaResource.ArgumentDocs[hName]; ok {
+			return getDescription(s)
+		}
 		lm := 0
 		match := ""
 		sortedKeys := make([]string, 0, len(cfg.MetaResource.ArgumentDocs))
@@ -51,25 +59,27 @@ func getDocString(cfg *config.Resource, f *Field, tfPath []string) string { //no
 			sortedKeys = append(sortedKeys, k)
 		}
 		sort.Strings(sortedKeys)
+		// look up the terminal name
 		for _, k := range sortedKeys {
-			if strings.HasSuffix(hName, k) {
-				if len(k) > lm {
-					lm = len(k)
-					match = k
-				}
+			parts := strings.Split(k, ".")
+			if parts[len(parts)-1] == f.Name.Snake {
+				lm = len(f.Name.Snake)
+				match = k
 			}
 		}
 		if lm == 0 {
+			// do longest suffix matching
 			for _, k := range sortedKeys {
-				parts := strings.Split(k, ".")
-				if parts[len(parts)-1] == f.Name.Snake {
-					lm = len(f.Name.Snake)
-					match = k
+				if strings.HasSuffix(hName, k) {
+					if len(k) > lm {
+						lm = len(k)
+						match = k
+					}
 				}
 			}
 		}
 		if lm > 0 {
-			docString = strings.TrimSpace(getDescription(cfg.MetaResource.ArgumentDocs[match]))
+			docString = getDescription(cfg.MetaResource.ArgumentDocs[match])
 		}
 	}
 	return docString
@@ -223,5 +233,5 @@ func getDescription(s string) string {
 			s = strings.ReplaceAll(s, m, "")
 		}
 	}
-	return s
+	return strings.TrimSpace(s)
 }
