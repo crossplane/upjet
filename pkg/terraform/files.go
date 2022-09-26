@@ -135,7 +135,9 @@ func (fp *FileProducer) WriteMainTF() error {
 
 // EnsureTFState writes the Terraform state that should exist in the filesystem
 // to start any Terraform operation.
-func (fp *FileProducer) EnsureTFState(ctx context.Context) error {
+func (fp *FileProducer) EnsureTFState(ctx context.Context) error { //nolint:gocyclo
+	// TODO(muvaf): Reduce the cyclomatic complexity by separating the attributes
+	// generation into its own function/interface.
 	empty, err := fp.isStateEmpty()
 	if err != nil {
 		return errors.Wrap(err, errCheckIfStateEmpty)

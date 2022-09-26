@@ -34,12 +34,14 @@ func TestEnsureTFState(t *testing.T) {
 		tr  resource.Terraformed
 		cfg *config.Resource
 		s   Setup
-		fs  afero.Afero
+		fs  func() afero.Afero
 	}
 	type want struct {
 		tfstate string
 		err     error
 	}
+	empty := `{"version":4,"terraform_version":"","serial":1,"lineage":"","outputs":null,"resources":[]}`
+	now := metav1.Now()
 	cases := map[string]struct {
 		reason string
 		args
@@ -65,7 +67,9 @@ func TestEnsureTFState(t *testing.T) {
 					}},
 				},
 				cfg: config.DefaultResource("upjet_resource", nil, nil),
-				fs:  afero.Afero{Fs: afero.NewMemMapFs()},
+				fs: func() afero.Afero {
+					return afero.Afero{Fs: afero.NewMemMapFs()}
+				},
 			},
 			want: want{
 				tfstate: `{"version":4,"terraform_version":"","serial":1,"lineage":"","outputs":null,"resources":[{"mode":"managed","type":"","name":"","provider":"provider[\"registry.terraform.io/\"]","instances":[{"schema_version":0,"attributes":{"id":"some-id","name":"some-id","obs":"obsval","param":"paramval"},"private":"cHJpdmF0ZXJhdw=="}]}]}`,
@@ -93,17 +97,51 @@ func TestEnsureTFState(t *testing.T) {
 				cfg: config.DefaultResource("upjet_resource", nil, nil, func(r *config.Resource) {
 					r.OperationTimeouts.Read = 2 * time.Minute
 				}),
-				fs: afero.Afero{Fs: afero.NewMemMapFs()},
+				fs: func() afero.Afero {
+					return afero.Afero{Fs: afero.NewMemMapFs()}
+				},
 			},
 			want: want{
 				tfstate: `{"version":4,"terraform_version":"","serial":1,"lineage":"","outputs":null,"resources":[{"mode":"managed","type":"","name":"","provider":"provider[\"registry.terraform.io/\"]","instances":[{"schema_version":0,"attributes":{"id":"some-id","name":"some-id","obs":"obsval","param":"paramval"},"private":"eyJlMmJmYjczMC1lY2FhLTExZTYtOGY4OC0zNDM2M2JjN2M0YzAiOnsicmVhZCI6MTIwMDAwMDAwMDAwfX0="}]}]}`,
+			},
+		},
+		"SuccessSkipDuringDeletion": {
+			reason: "During an ongoing deletion, tfstate file should not be touched since its emptiness signals success.",
+			args: args{
+				tr: &fake.Terraformed{
+					Managed: xpfake.Managed{
+						ObjectMeta: metav1.ObjectMeta{
+							DeletionTimestamp: &now,
+							Annotations: map[string]string{
+								resource.AnnotationKeyPrivateRawAttribute: "privateraw",
+								meta.AnnotationKeyExternalName:            "some-id",
+							},
+						},
+					},
+					Parameterizable: fake.Parameterizable{Parameters: map[string]any{
+						"param": "paramval",
+					}},
+					Observable: fake.Observable{Observation: map[string]any{
+						"obs": "obsval",
+					}},
+				},
+				cfg: config.DefaultResource("upjet_resource", nil, nil),
+				fs: func() afero.Afero {
+					fss := afero.Afero{Fs: afero.NewMemMapFs()}
+					_ = fss.WriteFile(filepath.Join(dir, "terraform.tfstate"), []byte(empty), 0600)
+					return fss
+				},
+			},
+			want: want{
+				tfstate: empty,
 			},
 		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			ctx := context.TODO()
-			fp, err := NewFileProducer(ctx, nil, dir, tc.args.tr, tc.args.s, tc.args.cfg, WithFileSystem(tc.args.fs))
+			files := tc.args.fs()
+			fp, err := NewFileProducer(ctx, nil, dir, tc.args.tr, tc.args.s, tc.args.cfg, WithFileSystem(files))
 			if err != nil {
 				t.Errorf("cannot initialize a file producer: %s", err.Error())
 			}
@@ -111,7 +149,7 @@ func TestEnsureTFState(t *testing.T) {
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nWriteTFState(...): -want error, +got error:\n%s", tc.reason, diff)
 			}
-			s, _ := tc.args.fs.ReadFile(filepath.Join(dir, "terraform.tfstate"))
+			s, _ := files.ReadFile(filepath.Join(dir, "terraform.tfstate"))
 			if diff := cmp.Diff(tc.want.tfstate, string(s)); diff != "" {
 				t.Errorf("\n%s\nWriteTFState(...): -want tfstate, +got tfstate:\n%s", tc.reason, diff)
 			}
