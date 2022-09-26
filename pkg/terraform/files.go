@@ -140,7 +140,12 @@ func (fp *FileProducer) EnsureTFState(ctx context.Context) error {
 	if err != nil {
 		return errors.Wrap(err, errCheckIfStateEmpty)
 	}
-	if !empty {
+	// We don't fill up the TF state during deletion because Terraform's removal
+	// of them from the TF state file signals that the deletion was successful.
+	// This is especially useful for resources whose deletion are scheduled for
+	// a long period of time, where if we fill the ID, the queries would actually
+	// succeed, i.e. GCP KMS KeyRing.
+	if !empty || meta.WasDeleted(fp.Resource) {
 		return nil
 	}
 	base := make(map[string]any)
