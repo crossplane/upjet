@@ -135,12 +135,19 @@ func (fp *FileProducer) WriteMainTF() error {
 
 // EnsureTFState writes the Terraform state that should exist in the filesystem
 // to start any Terraform operation.
-func (fp *FileProducer) EnsureTFState(ctx context.Context) error {
+func (fp *FileProducer) EnsureTFState(ctx context.Context) error { //nolint:gocyclo
+	// TODO(muvaf): Reduce the cyclomatic complexity by separating the attributes
+	// generation into its own function/interface.
 	empty, err := fp.isStateEmpty()
 	if err != nil {
 		return errors.Wrap(err, errCheckIfStateEmpty)
 	}
-	if !empty {
+	// We don't fill up the TF state during deletion because Terraform's removal
+	// of them from the TF state file signals that the deletion was successful.
+	// This is especially useful for resources whose deletion are scheduled for
+	// a long period of time, where if we fill the ID, the queries would actually
+	// succeed, i.e. GCP KMS KeyRing.
+	if !empty || meta.WasDeleted(fp.Resource) {
 		return nil
 	}
 	base := make(map[string]any)
