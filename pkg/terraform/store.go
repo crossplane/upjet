@@ -138,34 +138,33 @@ func (ws *WorkspaceStore) Workspace(ctx context.Context, c resource.SecretClient
 	if err := ws.fs.MkdirAll(dir, os.ModePerm); err != nil {
 		return nil, errors.Wrap(err, "cannot create directory for workspace")
 	}
-	fp, err := NewFileProducer(ctx, c, dir, tr, ts, cfg)
-	if err != nil {
-		return nil, errors.Wrap(err, "cannot create a new file producer")
-	}
-	_, err = ws.fs.Stat(filepath.Join(fp.Dir, "terraform.tfstate"))
-	if xpresource.Ignore(os.IsNotExist, err) != nil {
-		return nil, errors.Wrap(err, "cannot stat terraform.tfstate file")
-	}
-	if os.IsNotExist(err) {
-		if err := fp.WriteTFState(ctx); err != nil {
-			return nil, errors.Wrap(err, "cannot reproduce tfstate file")
-		}
-	}
-	if err := fp.WriteMainTF(); err != nil {
-		return nil, errors.Wrap(err, "cannot write main tf file")
-	}
-	l := ws.logger.WithValues("workspace", dir)
-	attachmentConfig, err := ws.providerRunner.Start()
-	if err != nil {
-		return nil, err
-	}
 	ws.mu.Lock()
 	w, ok := ws.store[tr.GetUID()]
 	if !ok {
+		l := ws.logger.WithValues("workspace", dir)
 		ws.store[tr.GetUID()] = NewWorkspace(dir, WithLogger(l), WithExecutor(ws.executor), WithFilterFn(ts.filterSensitiveInformation))
 		w = ws.store[tr.GetUID()]
 	}
 	ws.mu.Unlock()
+	// If there is an ongoing operation, no changes should be made in the
+	// workspace files.
+	if w.LastOperation.IsRunning() {
+		return w, nil
+	}
+	fp, err := NewFileProducer(ctx, c, dir, tr, ts, cfg)
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot create a new file producer")
+	}
+	if err := fp.EnsureTFState(ctx); err != nil {
+		return nil, errors.Wrap(err, "cannot ensure tfstate file")
+	}
+	if err := fp.WriteMainTF(); err != nil {
+		return nil, errors.Wrap(err, "cannot write main tf file")
+	}
+	attachmentConfig, err := ws.providerRunner.Start()
+	if err != nil {
+		return nil, err
+	}
 	_, err = ws.fs.Stat(filepath.Join(dir, ".terraform.lock.hcl"))
 	if xpresource.Ignore(os.IsNotExist, err) != nil {
 		return nil, errors.Wrap(err, "cannot stat init lock file")
@@ -179,7 +178,7 @@ func (ws *WorkspaceStore) Workspace(ctx context.Context, c resource.SecretClient
 	cmd := w.executor.CommandContext(ctx, "terraform", "init", "-input=false")
 	cmd.SetDir(w.dir)
 	out, err := cmd.CombinedOutput()
-	l.Debug("init ended", "out", string(out))
+	w.logger.Debug("init ended", "out", string(out))
 	return w, errors.Wrapf(err, "cannot init workspace: %s", string(out))
 }
 

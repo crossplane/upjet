@@ -7,6 +7,7 @@ package terraform
 import (
 	"context"
 	"fmt"
+	iofs "io/fs"
 	"path/filepath"
 	"strings"
 
@@ -17,6 +18,20 @@ import (
 	"github.com/upbound/upjet/pkg/config"
 	"github.com/upbound/upjet/pkg/resource"
 	"github.com/upbound/upjet/pkg/resource/json"
+)
+
+const (
+	errWriteTFStateFile  = "cannot write terraform.tfstate file"
+	errWriteMainTFFile   = "cannot write main.tf.json file"
+	errCheckIfStateEmpty = "cannot check whether the state is empty"
+	errGetID             = "cannot get id"
+	errMarshalAttributes = "cannot marshal produced state attributes"
+	errInsertTimeouts    = "cannot insert timeouts metadata to private raw"
+	errReadTFState       = "cannot read terraform.tfstate file"
+	errMarshalState      = "cannot marshal state object"
+	errUnmarshalAttr     = "cannot unmarshal state attributes"
+	errUnmarshalTFState  = "cannot unmarshal tfstate file"
+	errFmtNonString      = "cannot work with a non-string id: %s"
 )
 
 // FileProducerOption allows you to configure FileProducer
@@ -76,62 +91,6 @@ type FileProducer struct {
 	fs          afero.Afero
 }
 
-// WriteTFState writes the Terraform state that should exist in the filesystem to
-// start any Terraform operation.
-func (fp *FileProducer) WriteTFState(ctx context.Context) error {
-	base := make(map[string]any)
-	// NOTE(muvaf): Since we try to produce the current state, observation
-	// takes precedence over parameters.
-	for k, v := range fp.parameters {
-		base[k] = v
-	}
-	for k, v := range fp.observation {
-		base[k] = v
-	}
-	id, err := fp.Config.ExternalName.GetIDFn(ctx, meta.GetExternalName(fp.Resource), fp.parameters, fp.Setup.Map())
-	if err != nil {
-		return errors.Wrap(err, "cannot get id")
-	}
-	base["id"] = id
-	attr, err := json.JSParser.Marshal(base)
-	if err != nil {
-		return errors.Wrap(err, "cannot marshal produced state attributes")
-	}
-	var privateRaw []byte
-	if pr, ok := fp.Resource.GetAnnotations()[resource.AnnotationKeyPrivateRawAttribute]; ok {
-		privateRaw = []byte(pr)
-	}
-	if privateRaw, err = insertTimeoutsMeta(privateRaw, timeouts(fp.Config.OperationTimeouts)); err != nil {
-		return errors.Wrap(err, "cannot insert timeouts metadata to private raw")
-	}
-	s := json.NewStateV4()
-	s.TerraformVersion = fp.Setup.Version
-	s.Lineage = string(fp.Resource.GetUID())
-	s.Resources = []json.ResourceStateV4{
-		{
-			Mode: "managed",
-			Type: fp.Resource.GetTerraformResourceType(),
-			Name: fp.Resource.GetName(),
-			// TODO(muvaf): we should get the full URL from Dockerfile since
-			// providers don't have to be hosted in registry.terraform.io
-			ProviderConfig: fmt.Sprintf(`provider["registry.terraform.io/%s"]`, fp.Setup.Requirement.Source),
-			Instances: []json.InstanceObjectStateV4{
-				{
-					SchemaVersion: uint64(fp.Resource.GetTerraformSchemaVersion()),
-					PrivateRaw:    privateRaw,
-					AttributesRaw: attr,
-				},
-			},
-		},
-	}
-
-	rawState, err := json.JSParser.Marshal(s)
-	if err != nil {
-		return errors.Wrap(err, "cannot marshal state object")
-	}
-	return errors.Wrap(fp.fs.WriteFile(filepath.Join(fp.Dir, "terraform.tfstate"), rawState, 0600), "cannot write tfstate file")
-}
-
 // WriteMainTF writes the content main configuration file that has the desired
 // state configuration for Terraform.
 func (fp *FileProducer) WriteMainTF() error {
@@ -171,5 +130,100 @@ func (fp *FileProducer) WriteMainTF() error {
 	if err != nil {
 		return errors.Wrap(err, "cannot marshal main hcl object")
 	}
-	return errors.Wrap(fp.fs.WriteFile(filepath.Join(fp.Dir, "main.tf.json"), rawMainTF, 0600), "cannot write tfstate file")
+	return errors.Wrap(fp.fs.WriteFile(filepath.Join(fp.Dir, "main.tf.json"), rawMainTF, 0600), errWriteMainTFFile)
+}
+
+// EnsureTFState writes the Terraform state that should exist in the filesystem
+// to start any Terraform operation.
+func (fp *FileProducer) EnsureTFState(ctx context.Context) error {
+	empty, err := fp.isStateEmpty()
+	if err != nil {
+		return errors.Wrap(err, errCheckIfStateEmpty)
+	}
+	if !empty {
+		return nil
+	}
+	base := make(map[string]any)
+	// NOTE(muvaf): Since we try to produce the current state, observation
+	// takes precedence over parameters.
+	for k, v := range fp.parameters {
+		base[k] = v
+	}
+	for k, v := range fp.observation {
+		base[k] = v
+	}
+	id, err := fp.Config.ExternalName.GetIDFn(ctx, meta.GetExternalName(fp.Resource), fp.parameters, fp.Setup.Map())
+	if err != nil {
+		return errors.Wrap(err, errGetID)
+	}
+	base["id"] = id
+	attr, err := json.JSParser.Marshal(base)
+	if err != nil {
+		return errors.Wrap(err, errMarshalAttributes)
+	}
+	var privateRaw []byte
+	if pr, ok := fp.Resource.GetAnnotations()[resource.AnnotationKeyPrivateRawAttribute]; ok {
+		privateRaw = []byte(pr)
+	}
+	if privateRaw, err = insertTimeoutsMeta(privateRaw, timeouts(fp.Config.OperationTimeouts)); err != nil {
+		return errors.Wrap(err, errInsertTimeouts)
+	}
+	s := json.NewStateV4()
+	s.TerraformVersion = fp.Setup.Version
+	s.Lineage = string(fp.Resource.GetUID())
+	s.Resources = []json.ResourceStateV4{
+		{
+			Mode: "managed",
+			Type: fp.Resource.GetTerraformResourceType(),
+			Name: fp.Resource.GetName(),
+			// TODO(muvaf): we should get the full URL from Dockerfile since
+			// providers don't have to be hosted in registry.terraform.io
+			ProviderConfig: fmt.Sprintf(`provider["registry.terraform.io/%s"]`, fp.Setup.Requirement.Source),
+			Instances: []json.InstanceObjectStateV4{
+				{
+					SchemaVersion: uint64(fp.Resource.GetTerraformSchemaVersion()),
+					PrivateRaw:    privateRaw,
+					AttributesRaw: attr,
+				},
+			},
+		},
+	}
+
+	rawState, err := json.JSParser.Marshal(s)
+	if err != nil {
+		return errors.Wrap(err, errMarshalState)
+	}
+	return errors.Wrap(fp.fs.WriteFile(filepath.Join(fp.Dir, "terraform.tfstate"), rawState, 0600), errWriteTFStateFile)
+}
+
+// isStateEmpty returns whether the Terraform state includes a resource or not.
+func (fp *FileProducer) isStateEmpty() (bool, error) {
+	data, err := fp.fs.ReadFile(filepath.Join(fp.Dir, "terraform.tfstate"))
+	if errors.Is(err, iofs.ErrNotExist) {
+		return true, nil
+	}
+	if err != nil {
+		return false, errors.Wrap(err, errReadTFState)
+	}
+	s := &json.StateV4{}
+	if err := json.JSParser.Unmarshal(data, s); err != nil {
+		return false, errors.Wrap(err, errUnmarshalTFState)
+	}
+	attrData := s.GetAttributes()
+	if attrData == nil {
+		return true, nil
+	}
+	attr := map[string]any{}
+	if err := json.JSParser.Unmarshal(attrData, &attr); err != nil {
+		return false, errors.Wrap(err, errUnmarshalAttr)
+	}
+	id, ok := attr["id"]
+	if !ok {
+		return true, nil
+	}
+	sid, ok := id.(string)
+	if !ok {
+		return false, errors.Errorf(errFmtNonString, fmt.Sprint(id))
+	}
+	return sid == "", nil
 }
