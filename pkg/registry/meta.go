@@ -9,7 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -425,7 +425,7 @@ func (r *Resource) scrapeImportStatements(doc *html.Node, importXPath string) {
 // filename is not always the precise resource name, hence,
 // it returns the resource name scraped from the doc.
 func (r *Resource) scrape(path string, config *ScrapeConfiguration) error {
-	source, err := ioutil.ReadFile(filepath.Clean(path))
+	source, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		return errors.Wrap(err, "failed to read markdown file")
 	}
@@ -491,5 +491,5 @@ func (pm *ProviderMetadata) Store(path string) error {
 	if err != nil {
 		return errors.Wrap(err, "failed to marshal provider metadata to YAML")
 	}
-	return errors.Wrapf(ioutil.WriteFile(path, out, 0600), "failed to write provider metada file: %s", path)
+	return errors.Wrapf(os.WriteFile(path, out, 0600), "failed to write provider metada file: %s", path)
 }
