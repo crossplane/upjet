@@ -67,6 +67,7 @@ func init() {
 }
 
 // SecretClient is the client to get sensitive data from kubernetes secrets
+//
 //go:generate go run github.com/golang/mock/mockgen -copyright_file ../../hack/boilerplate.txt -destination ./fake/mocks/mock.go -package mocks github.com/upbound/upjet/pkg/resource SecretClient
 type SecretClient interface {
 	GetSecretData(ctx context.Context, ref *v1.SecretReference) (map[string][]byte, error)

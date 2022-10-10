@@ -4,6 +4,9 @@
 PROJECT_NAME := upjet
 PROJECT_REPO := github.com/upbound/$(PROJECT_NAME)
 
+GOLANGCILINT_VERSION ?= 1.50.0
+GO_REQUIRED_VERSION ?= 1.19
+
 PLATFORMS ?= linux_amd64 linux_arm64
 # -include will silently skip missing files, which allows us
 # to load those files with a target in the Makefile. If only

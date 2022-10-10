@@ -5,7 +5,7 @@ Copyright 2022 Upbound Inc.
 package registry
 
 import (
-	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
@@ -86,7 +86,7 @@ func TestScrapeRepo(t *testing.T) {
 				return
 			}
 			pmExpected := ProviderMetadata{}
-			buff, err := ioutil.ReadFile(tc.want.pmPath)
+			buff, err := os.ReadFile(tc.want.pmPath)
 			if err != nil {
 				t.Errorf("Failed to load expected ProviderMetadata from file: %s", tc.want.pmPath)
 			}

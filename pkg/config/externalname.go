@@ -67,14 +67,19 @@ func ParameterAsIdentifier(param string) ExternalName {
 // ID and lets you provide a field path for the argument you're using as external
 // name. The available variables you can use in the template are as follows:
 // parameters: A tree of parameters that you'd normally see in a Terraform HCL
-//             file. You can use TF registry documentation of given resource to
-//             see what's available.
+//
+//	file. You can use TF registry documentation of given resource to
+//	see what's available.
+//
 // terraformProviderConfig: The Terraform configuration object of the provider. You can
-//                 take a look at the TF registry provider configuration object
-//                 to see what's available. Not to be confused with ProviderConfig
-//                 custom resource of the Crossplane provider.
+//
+//	take a look at the TF registry provider configuration object
+//	to see what's available. Not to be confused with ProviderConfig
+//	custom resource of the Crossplane provider.
+//
 // external_name: The value of external name annotation of the custom resource.
-//               It is required to use this as part of the template.
+//
+//	It is required to use this as part of the template.
 //
 // Example usages:
 // TemplatedStringAsIdentifier("index_name", "/subscriptions/{{ .terraformProviderConfig.subscription }}/{{ .external_name }}")
