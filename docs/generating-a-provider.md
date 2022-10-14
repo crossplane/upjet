@@ -9,7 +9,7 @@ be quite similar for any other Terraform provider.
 ## Generate
 
 1. Generate a GitHub repository for the Crossplane provider by hitting the
-   "**Use this template**" button in [provider-jet-template] repository.
+   "**Use this template**" button in [upjet-provider-template] repository.
 2. Clone the repository to your local and `cd` into the repository directory.
    Fetch the [upbound/build] submodule by running the following:
 
@@ -49,7 +49,7 @@ be quite similar for any other Terraform provider.
    variables are used to build the provider plugin binary.
 
 
-5. Implement `ProviderConfig` logic. In `provider-jet-template`, there is already
+5. Implement `ProviderConfig` logic. In `upjet-provider-template`, there is already
    a boilerplate code in file `internal/clients/${ProviderNameLower}.go` which
    takes care of properly fetching secret data referenced from `ProviderConfig`
    resource.
@@ -235,7 +235,7 @@ Now let's test our generated resources.
    ```
 
    Create example for `repository` resource, which will use
-   `provider-jet-template` repo as template for the repository
+   `upjet-provider-template` repo as template for the repository
    to be created:
 
    ```bash
@@ -250,7 +250,7 @@ Now let's test our generated resources.
        visibility: public
        template:
          - owner: crossplane-contrib
-           repository: provider-jet-template
+           repository: upjet-provider-template
      providerConfigRef:
        name: default
    EOF
@@ -339,13 +339,11 @@ Now let's test our generated resources.
    plane.
 
 
-[comment]: <> (References)
-
 [Terraform GitHub provider]: https://registry.terraform.io/providers/integrations/github/latest/docs
-[provider-jet-template]: https://github.com/crossplane-contrib/provider-jet-template
+[upjet-provider-template]: https://github.com/upbound/upjet-provider-template
 [upbound/build]: https://github.com/upbound/build
 [Terraform documentation for provider configuration]: https://registry.terraform.io/providers/integrations/github/latest/docs#argument-reference
 [github_repository]: https://registry.terraform.io/providers/integrations/github/latest/docs/resources/repository
 [github_branch]: https://registry.terraform.io/providers/integrations/github/latest/docs/resources/branch
-[this line in controller Dockerfile]: https://github.com/crossplane-contrib/provider-jet-template/blob/d9a793dd8a304f09bb2e9694c47c1bade1b6b057/cluster/images/provider-jet-template-controller/Dockerfile#L18-L25
+[this line in controller Dockerfile]: https://github.com/upbound/upjet-provider-template/blob/main/cluster/images/official-provider-template-controller/Dockerfile#L18-L26
 [terraform-plugin-sdk]: https://github.com/hashicorp/terraform-plugin-sdk

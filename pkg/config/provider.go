@@ -47,7 +47,7 @@ type BasePackages struct {
 	Controller []string
 }
 
-// Provider holds configuration for a provider to be generated with Terrajet.
+// Provider holds configuration for a provider to be generated with Upjet.
 type Provider struct {
 	// TerraformResourcePrefix is the prefix used in all resources of this
 	// Terraform provider, e.g. "aws_". Defaults to "<prefix>_". This is being

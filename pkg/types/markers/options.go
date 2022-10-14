@@ -1,15 +1,15 @@
 package markers
 
-// Options represents marker options that Terrajet need to parse or set.
+// Options represents marker options that Upjet need to parse or set.
 type Options struct {
-	TerrajetOptions
+	UpjetOptions
 	CrossplaneOptions
 	KubebuilderOptions
 }
 
 // String returns a string representation of this Options object.
 func (o Options) String() string {
-	return o.TerrajetOptions.String() +
+	return o.UpjetOptions.String() +
 		o.CrossplaneOptions.String() +
 		o.KubebuilderOptions.String()
 }

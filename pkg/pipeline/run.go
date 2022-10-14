@@ -22,7 +22,7 @@ type terraformedInput struct {
 	ParametersTypeName string
 }
 
-// Run runs the Terrajet code generation pipelines.
+// Run runs the Upjet code generation pipelines.
 func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
 	// Note(turkenh): nolint reasoning - this is the main function of the code
 	// generation pipeline. We didn't want to split it into multiple functions
