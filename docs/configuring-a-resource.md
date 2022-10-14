@@ -706,7 +706,7 @@ So, an interface must be passed to the related configuration field for adding in
 [tags_all for jet AWS resources]: https://github.com/crossplane-contrib/provider-jet-aws/blob/c045bae7736da4a9cc80e7fc0fc4cfcd78de60df/config/overrides.go#L86
 [boot_disk.initialize_params.labels]: https://github.com/crossplane-contrib/provider-jet-gcp/blob/f90456c4fc032c021c8179ef061f4803bc01b488/config/compute/config.go#L157
 [AWS region]: https://github.com/crossplane-contrib/provider-jet-aws/blob/a5b6a6fea65634c475a84583e1e1776a048a0df9/config/overrides.go#L325
-[this figure]: images/terrajet-externalname.png
+[this figure]: images/upjet-externalname.png
 [Initializers]: #initializers
 [InitializerFns]: https://github.com/upbound/upjet/blob/ae78a0a4c438f01717002e00fac761524aa6e951/pkg/config/resource.go#L289
 [NewInitializerFn]: https://github.com/upbound/upjet/blob/ae78a0a4c438f01717002e00fac761524aa6e951/pkg/config/resource.go#L207
