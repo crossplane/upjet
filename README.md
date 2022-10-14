@@ -14,10 +14,6 @@ Feel free to test the following Crossplane providers built using Upjet:
 * [Provider Azure](https://github.com/upbound/provider-azure/releases)
 * [Provider GCP](https://github.com/upbound/provider-gcp/releases)
 
-**NOTE**: Upjet is in its very early stages and we're making many changes that
-can affect the output and the runtime. Please check the generated code before
-running in production.
-
 ## Generating a New Provider Using Upjet
 
 Please see [this guide](docs/generating-a-provider.md) for detailed steps on how
@@ -56,11 +52,16 @@ license restrictions.
 * [Kubeform](https://github.com/kubeform/kubeform)
 * [Terraform Operator](https://github.com/isaaguilar/terraform-operator)
 
-## Code of Conduct
 
-upjet adheres to the [Code of
-Conduct](https://github.com/crossplane/crossplane/blob/master/CODE_OF_CONDUCT.md)
-as the core Crossplane project.
+## Contributing
+
+* [Generating a Provider](docs/generating-a-provider.md)
+* [Configuring a Resource](docs/configuring-a-resource.md)
+* [Reference Generation](docs/reference-generation.md)
+* [New v1beta1 Resources](docs/new-v1beta1-resource.md)
+* [Moving Resources to v1beta1](docs/moving-resources-to-v1beta1.md)
+* [Testing Instructions](docs/testing-instructions.md)
+* [Testing Resources by Using Uptest](docs/testing-resources-by-using-uptest.md)
 
 ## Licensing
 

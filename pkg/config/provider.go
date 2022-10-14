@@ -67,7 +67,7 @@ type Provider struct {
 	ShortName string
 
 	// ModulePath is the go module path for the Crossplane provider repo, e.g.
-	// "github.com/crossplane-contrib/provider-jet-aws"
+	// "github.com/upbound/provider-aws"
 	ModulePath string
 
 	// BasePackages keeps lists of base packages that needs to be registered as
