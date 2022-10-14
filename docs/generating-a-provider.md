@@ -183,7 +183,7 @@ be quite similar for any other Terraform provider.
    ```
 
    **_To learn more about custom resource configurations (in step 7), please see
-   the [Configuring a Resource](/docs/configuring-a-resource.md) document._**
+   the [Configuring a Resource](/docs/add-new-resource-long.md) document._**
 
 
 8. Now we can generate our Upjet Provider:
