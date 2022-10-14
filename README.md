@@ -10,13 +10,9 @@ See [design document][design-doc] for more details.
 
 Feel free to test the following Crossplane providers built using Upjet:
 
-* [Provider Jet AWS](https://github.com/crossplane-contrib/provider-jet-aws/releases)
-* [Provider Jet Azure](https://github.com/crossplane-contrib/provider-jet-azure/releases)
-* [Provider Jet GCP](https://github.com/crossplane-contrib/provider-jet-gcp/releases)
-
-**NOTE**: Upjet is in its very early stages and we're making many changes that
-can affect the output and the runtime. Please check the generated code before
-running in production.
+* [Provider AWS](https://github.com/upbound/provider-aws/releases)
+* [Provider Azure](https://github.com/upbound/provider-azure/releases)
+* [Provider GCP](https://github.com/upbound/provider-gcp/releases)
 
 ## Generating a New Provider Using Upjet
 
@@ -56,17 +52,20 @@ license restrictions.
 * [Kubeform](https://github.com/kubeform/kubeform)
 * [Terraform Operator](https://github.com/isaaguilar/terraform-operator)
 
-## Code of Conduct
 
-terrajet adheres to the [Code of
-Conduct](https://github.com/crossplane/crossplane/blob/master/CODE_OF_CONDUCT.md)
-as the core Crossplane project.
+## Contributing
+
+* [Generating a Provider](docs/generating-a-provider.md)
+* [Configuring a Resource](docs/configuring-a-resource.md)
+* [Reference Generation](docs/reference-generation.md)
+* [New v1beta1 Resources](docs/new-v1beta1-resource.md)
+* [Moving Resources to v1beta1](docs/moving-resources-to-v1beta1.md)
+* [Testing Instructions](docs/testing-instructions.md)
+* [Testing Resources by Using Uptest](docs/testing-resources-by-using-uptest.md)
 
 ## Licensing
 
 All rights of upjet belongs to Upbound Inc.
-
-[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fcrossplane%2Fterrajet.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2Fcrossplane%2Fterrajet?ref=badge_large)
 
 [design-doc]: https://github.com/crossplane/crossplane/blob/master/design/design-doc-terrajet.md
 [provider-template]: https://github.com/crossplane/provider-template
