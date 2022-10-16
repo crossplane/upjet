@@ -25,14 +25,14 @@ import (
 
 // GetV2ResourceMap converts input resource schemas with
 // "terraform-json" representation to terraform-plugin-sdk representation which
-// is what Terrajet expects today.
+// is what Upjet expects today.
 //
 // What we are trying to achieve here is to convert a lower level
 // representation of resource schema map, e.g. output of `terraform providers schema -json`
 // to plugin sdk representation. This is mostly the opposite of what the
 // following method is doing: https://github.com/hashicorp/terraform-plugin-sdk/blob/7e0a333644f1971a936995677b7a106140a0659f/helper/schema/core_schema.go#L43
 //
-// Ideally, we should not rely on plugin SDK types in Terrajet at all but only
+// Ideally, we should not rely on plugin SDK types in Upjet at all but only
 // work with types in https://github.com/hashicorp/terraform-json which is
 // there exactly for this purpose, an external representation of Terraform
 // schemas. This conversion aims to be an intermediate step for that ultimate

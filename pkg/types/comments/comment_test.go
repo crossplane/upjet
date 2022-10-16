@@ -51,18 +51,18 @@ yes, this is a test`,
 				mopts: markers.Options{},
 			},
 		},
-		"TextWithTerrajetMarker": {
+		"TextWithUpjetMarker": {
 			args: args{
 				text: `hello world!
-+terrajet:crd:field:TFTag=-
++upjet:crd:field:TFTag=-
 `,
 			},
 			want: want{
 				out: `// hello world!
-// +terrajet:crd:field:TFTag=-
+// +upjet:crd:field:TFTag=-
 `,
 				mopts: markers.Options{
-					TerrajetOptions: markers.TerrajetOptions{
+					UpjetOptions: markers.UpjetOptions{
 						FieldTFTag: &tftag,
 					},
 				},
@@ -81,7 +81,7 @@ yes, this is a test`,
 				mopts: markers.Options{},
 			},
 		},
-		"CommentWithTerrajetOptions": {
+		"CommentWithUpjetOptions": {
 			args: args{
 				text: `hello world!`,
 				opts: []Option{
@@ -90,10 +90,10 @@ yes, this is a test`,
 			},
 			want: want{
 				out: `// hello world!
-// +terrajet:crd:field:TFTag=-
+// +upjet:crd:field:TFTag=-
 `,
 				mopts: markers.Options{
-					TerrajetOptions: markers.TerrajetOptions{
+					UpjetOptions: markers.UpjetOptions{
 						FieldTFTag: &tftag,
 					},
 				},
@@ -111,11 +111,11 @@ yes, this is a test`,
 			},
 			want: want{
 				out: `// hello world!
-// +terrajet:crd:field:TFTag=-
+// +upjet:crd:field:TFTag=-
 // +crossplane:generate:reference:type=comments.Comment
 `,
 				mopts: markers.Options{
-					TerrajetOptions: markers.TerrajetOptions{
+					UpjetOptions: markers.UpjetOptions{
 						FieldTFTag: &tftag,
 					},
 					CrossplaneOptions: markers.CrossplaneOptions{
@@ -126,15 +126,15 @@ yes, this is a test`,
 				},
 			},
 		},
-		"CommentWithUnsupportedTerrajetMarker": {
+		"CommentWithUnsupportedUpjetMarker": {
 			args: args{
 				text: `hello world!
-+terrajet:crd:field:TFTag=-
-+terrajet:unsupported:key=value
++upjet:crd:field:TFTag=-
++upjet:unsupported:key=value
 `,
 			},
 			want: want{
-				err: errors.New("cannot parse as a terrajet prefix: +terrajet:unsupported:key=value"),
+				err: errors.New("cannot parse as a upjet prefix: +upjet:unsupported:key=value"),
 			},
 		},
 	}

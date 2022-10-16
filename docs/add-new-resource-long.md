@@ -363,7 +363,7 @@ Crossplane stores sensitive information of a managed resource in a Kubernetes
 secret, together with some additional fields that would help consumption of the
 resource, a.k.a. [connection details].
 
-In Upjet, we already [handle sensitive fields] that are marked as sensitive
+In Upjet, we already handle sensitive fields that are marked as sensitive
 in Terraform schema and no further action required for them. Upjet will
 properly hide these fields from CRD spec and status by converting to a secret
 reference or storing in connection details secret respectively. However, we
@@ -690,7 +690,6 @@ So, an interface must be passed to the related configuration field for adding in
 [iam_access_key]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_access_key#argument-reference
 [kms key]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ebs_volume#kms_key_id
 [connection details]: https://crossplane.io/docs/v1.7/concepts/managed-resources.html#connection-details
-[handle sensitive fields]: https://github.com/crossplane/terrajet/pull/77
 [id]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_access_key#id
 [secret]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_access_key#secret
 [`external.Observe`]: https://github.com/upbound/upjet/blob/874bb6ad5cff9741241fb790a3a5d71166900860/pkg/controller/external.go#L149

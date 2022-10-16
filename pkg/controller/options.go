@@ -12,7 +12,7 @@ import (
 	"github.com/upbound/upjet/pkg/terraform"
 )
 
-// Options contains incriminating options for a given Terrajet controller instance.
+// Options contains incriminating options for a given Upjet controller instance.
 type Options struct {
 	controller.Options
 
