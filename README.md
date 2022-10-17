@@ -28,13 +28,11 @@ open an [issue](https://github.com/upbound/upjet/issues).
 
 ## Contact
 
-Please use the following to reach members of the community:
-
-* Slack: Join our [slack channel](https://slack.crossplane.io)
-* Forums:
-  [crossplane-dev](https://groups.google.com/forum/#!forum/crossplane-dev)
-* Twitter: [@crossplane_io](https://twitter.com/crossplane_io)
-* Email: [info@crossplane.io](mailto:info@crossplane.io)
+Please open a Github issue for all requests. If you need to reach out to Upbound,
+you can do so via the following channels:
+* Slack: [#upbound](https://crossplane.slack.com/archives/C01TRKD4623) channel in [Crossplane Slack](https://slack.crossplane.io)
+* Twitter: [@upbound_io](https://twitter.com/upbound_io)
+* Email: [support@upbound.io](mailto:support@upbound.io)
 
 ## Prior Art
 
@@ -43,7 +41,7 @@ Upjet originates from the [Terrajet][terrajet] project. See the original
 
 ## Licensing
 
-Provider AWS is under [the Apache 2.0 license](LICENSE) with [notice](NOTICE).
+Upjet is under [the Apache 2.0 license](LICENSE) with [notice](NOTICE).
 
 [terrajet-design-doc]: https://github.com/crossplane/crossplane/blob/master/design/design-doc-terrajet.md
 [terrajet]: https://github.com/crossplane/terrajet
