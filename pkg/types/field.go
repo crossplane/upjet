@@ -196,11 +196,11 @@ func NewReferenceField(g *Builder, cfg *config.Resource, r *resource, sch *schem
 
 // AddToResource adds built field to the resource.
 func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames) {
-	if f.Comment.TerrajetOptions.FieldTFTag != nil {
-		f.TFTag = *f.Comment.TerrajetOptions.FieldTFTag
+	if f.Comment.UpjetOptions.FieldTFTag != nil {
+		f.TFTag = *f.Comment.UpjetOptions.FieldTFTag
 	}
-	if f.Comment.TerrajetOptions.FieldJSONTag != nil {
-		f.JSONTag = *f.Comment.TerrajetOptions.FieldJSONTag
+	if f.Comment.UpjetOptions.FieldJSONTag != nil {
+		f.JSONTag = *f.Comment.UpjetOptions.FieldJSONTag
 	}
 
 	field := types.NewField(token.NoPos, g.Package, f.FieldNameCamel, f.FieldType, false)

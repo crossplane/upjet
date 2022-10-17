@@ -9,16 +9,16 @@ import (
 	"github.com/pkg/errors"
 )
 
-func Test_parseAsTerrajetOption(t *testing.T) {
+func Test_parseAsUpjetOption(t *testing.T) {
 	customTF := "custom-tf"
 	customJSON := "custom-json"
 
 	type args struct {
-		opts *TerrajetOptions
+		opts *UpjetOptions
 		line string
 	}
 	type want struct {
-		opts   *TerrajetOptions
+		opts   *UpjetOptions
 		parsed bool
 		err    error
 	}
@@ -28,11 +28,11 @@ func Test_parseAsTerrajetOption(t *testing.T) {
 	}{
 		"CRDTagTFOnly": {
 			args: args{
-				opts: &TerrajetOptions{},
+				opts: &UpjetOptions{},
 				line: fmt.Sprintf("%s%s", markerPrefixCRDTFTag, customTF),
 			},
 			want: want{
-				opts: &TerrajetOptions{
+				opts: &UpjetOptions{
 					FieldTFTag: &customTF,
 				},
 				parsed: true,
@@ -40,13 +40,13 @@ func Test_parseAsTerrajetOption(t *testing.T) {
 		},
 		"CRDBothTags": {
 			args: args{
-				opts: &TerrajetOptions{
+				opts: &UpjetOptions{
 					FieldTFTag: &customTF,
 				},
 				line: fmt.Sprintf("%s%s\n", markerPrefixCRDJSONTag, customJSON),
 			},
 			want: want{
-				opts: &TerrajetOptions{
+				opts: &UpjetOptions{
 					FieldTFTag:   &customTF,
 					FieldJSONTag: &customJSON,
 				},
@@ -55,42 +55,42 @@ func Test_parseAsTerrajetOption(t *testing.T) {
 		},
 		"UnknownMarker": {
 			args: args{
-				opts: &TerrajetOptions{},
+				opts: &UpjetOptions{},
 				line: "+some:other:marker:key=value",
 			},
 			want: want{
-				opts:   &TerrajetOptions{},
+				opts:   &UpjetOptions{},
 				parsed: false,
 				err:    nil,
 			},
 		},
 		"CannotParse": {
 			args: args{
-				opts: &TerrajetOptions{},
-				line: "+terrajet:unknownmarker:key=value",
+				opts: &UpjetOptions{},
+				line: "+upjet:unknownmarker:key=value",
 			},
 			want: want{
-				opts:   &TerrajetOptions{},
+				opts:   &UpjetOptions{},
 				parsed: false,
-				err:    errors.Errorf(errFmtCannotParseAsTerrajet, "+terrajet:unknownmarker:key=value"),
+				err:    errors.Errorf(errFmtCannotParseAsUpjet, "+upjet:unknownmarker:key=value"),
 			},
 		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			opts := tc.args.opts
-			gotParsed, gotErr := ParseAsTerrajetOption(opts, tc.args.line)
+			gotParsed, gotErr := ParseAsUpjetOption(opts, tc.args.line)
 
 			if diff := cmp.Diff(tc.want.err, gotErr, test.EquateErrors()); diff != "" {
-				t.Fatalf("ParseAsTerrajetOption(...): -want error, +got error: %s", diff)
+				t.Fatalf("ParseAsUpjetOption(...): -want error, +got error: %s", diff)
 			}
 
 			if diff := cmp.Diff(tc.want.parsed, gotParsed); diff != "" {
-				t.Errorf("ParseAsTerrajetOption() parsed = %v, wantParsed %v", gotParsed, tc.want.parsed)
+				t.Errorf("ParseAsUpjetOption() parsed = %v, wantParsed %v", gotParsed, tc.want.parsed)
 			}
 
 			if diff := cmp.Diff(tc.want.opts, opts); diff != "" {
-				t.Errorf("ParseAsTerrajetOption() opts = %v, wantOpts %v", opts, tc.want.opts)
+				t.Errorf("ParseAsUpjetOption() opts = %v, wantOpts %v", opts, tc.want.opts)
 			}
 		})
 	}

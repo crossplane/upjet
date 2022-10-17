@@ -8,24 +8,24 @@ import (
 )
 
 const (
-	markerPrefixTerrajet = "+terrajet:"
+	markerPrefixUpjet = "+upjet:"
 
-	errFmtCannotParseAsTerrajet = "cannot parse as a terrajet prefix: %s"
+	errFmtCannotParseAsUpjet = "cannot parse as a upjet prefix: %s"
 )
 
 var (
-	markerPrefixCRDTFTag   = fmt.Sprintf("%scrd:field:TFTag=", markerPrefixTerrajet)
-	markerPrefixCRDJSONTag = fmt.Sprintf("%scrd:field:JSONTag=", markerPrefixTerrajet)
+	markerPrefixCRDTFTag   = fmt.Sprintf("%scrd:field:TFTag=", markerPrefixUpjet)
+	markerPrefixCRDJSONTag = fmt.Sprintf("%scrd:field:JSONTag=", markerPrefixUpjet)
 )
 
-// TerrajetOptions represents the whole upjet options that could be
+// UpjetOptions represents the whole upjet options that could be
 // controlled with markers.
-type TerrajetOptions struct {
+type UpjetOptions struct {
 	FieldTFTag   *string
 	FieldJSONTag *string
 }
 
-func (o TerrajetOptions) String() string {
+func (o UpjetOptions) String() string {
 	m := ""
 
 	if o.FieldTFTag != nil {
@@ -38,10 +38,10 @@ func (o TerrajetOptions) String() string {
 	return m
 }
 
-// ParseAsTerrajetOption parses input line as a upjet option, if it is a
-// valid Terrajet Option. Returns whether it is parsed or not.
-func ParseAsTerrajetOption(opts *TerrajetOptions, line string) (bool, error) {
-	if !strings.HasPrefix(line, markerPrefixTerrajet) {
+// ParseAsUpjetOption parses input line as a upjet option, if it is a
+// valid Upjet Option. Returns whether it is parsed or not.
+func ParseAsUpjetOption(opts *UpjetOptions, line string) (bool, error) {
+	if !strings.HasPrefix(line, markerPrefixUpjet) {
 		return false, nil
 	}
 	ln := strings.TrimSpace(line)
@@ -55,5 +55,5 @@ func ParseAsTerrajetOption(opts *TerrajetOptions, line string) (bool, error) {
 		opts.FieldJSONTag = &t
 		return true, nil
 	}
-	return false, errors.Errorf(errFmtCannotParseAsTerrajet, line)
+	return false, errors.Errorf(errFmtCannotParseAsUpjet, line)
 }
