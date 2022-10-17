@@ -48,6 +48,7 @@ func Setup(mgr ctrl.Manager, o tjcontroller.Options) error {
 		managed.WithTimeout(3*time.Minute),
 		managed.WithInitializers(initializers),
 		managed.WithConnectionPublishers(cps...),
+		managed.WithPollInterval(o.PollInterval),
 		)
 
 	return ctrl.NewControllerManagedBy(mgr).
