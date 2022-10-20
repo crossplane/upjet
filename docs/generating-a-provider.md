@@ -35,9 +35,9 @@ example organization name to be used.
     export TERRAFORM_PROVIDER_SOURCE := integrations/github
     export TERRAFORM_PROVIDER_REPO := https://github.com/integrations/terraform-provider-github
     export TERRAFORM_PROVIDER_VERSION := 5.5.0
-    export TERRAFORM_PROVIDER_DOWNLOAD_NAME := terraform-provider-github
-    export TERRAFORM_PROVIDER_DOWNLOAD_URL_PREFIX := https://releases.hashicorp.com/terraform-provider-github/5.5.0
-    export TERRAFORM_DOCS_PATH ?= website/docs/r
+    export TERRAFORM_PROVIDER_DOWNLOAD_NAME := terraform-provider-githubexport
+    export TERRAFORM_NATIVE_PROVIDER_BINARY := terraform-provider-github_v5.5.0_x5
+    export TERRAFORM_DOCS_PATH := website/docs/r
     ```
 
    You can find `TERRAFORM_PROVIDER_SOURCE` and `TERRAFORM_PROVIDER_VERSION` in
