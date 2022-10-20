@@ -35,7 +35,7 @@ example organization name to be used.
     export TERRAFORM_PROVIDER_SOURCE := integrations/github
     export TERRAFORM_PROVIDER_REPO := https://github.com/integrations/terraform-provider-github
     export TERRAFORM_PROVIDER_VERSION := 5.5.0
-    export TERRAFORM_PROVIDER_DOWNLOAD_NAME := terraform-provider-githubexport
+    export TERRAFORM_PROVIDER_DOWNLOAD_NAME := terraform-provider-github
     export TERRAFORM_NATIVE_PROVIDER_BINARY := terraform-provider-github_v5.5.0_x5
     export TERRAFORM_DOCS_PATH := website/docs/r
     ```
@@ -48,7 +48,7 @@ example organization name to be used.
    the Terraform provider.
 
 5. Implement `ProviderConfig` logic. In `upjet-provider-template`, there is already
-   a boilerplate code in file `internal/clients/${ProviderNameLower}.go` which
+   a boilerplate code in file `internal/clients/github.go` which
    takes care of properly fetching secret data referenced from `ProviderConfig`
    resource.
 
@@ -95,7 +95,7 @@ example organization name to be used.
      "github_repository": config.NameAsIdentifier,
      // The import ID consists of several parameters. We'll use branch name as
      // the external name.
-     "github_branch": config.TemplatedStringAsIdentifier("branch", "{{ parameters.repository }}:{{ .external_name }}:{{ parameters.branch }}"),
+     "github_branch": config.TemplatedStringAsIdentifier("branch", "{{ .parameters.repository }}:{{ .external_name }}:{{ .parameters.branch }}"),
    }
    ```
 
@@ -127,6 +127,7 @@ example organization name to be used.
    ```
 
    ```bash
+   # Note that you need to change `myorg/provider-github`.
    cat <<EOF > config/branch/config.go
    package branch
 
@@ -143,7 +144,7 @@ example organization name to be used.
            // object, we can build cross resource referencing. See
            // repositoryRef in the example in the Testing section below.
            r.References["repository"] = config.Reference{
-               Type: "github.com/crossplane-contrib/provider-jet-github/apis/repository/v1alpha1.Repository",
+               Type: "github.com/myorg/provider-github/apis/repository/v1alpha1.Repository",
            }
        })
    }
@@ -186,13 +187,9 @@ example organization name to be used.
    make generate
    ```
 
-### Adding New Resources
+### Adding More Resources
 
-To add more resources, please **follow the steps between 6-8 for each resource**.
-
-Alternatively, you can drop the `tjconfig.WithIncludeList` option in provider
-Configuration which would generate all resources, and you can add resource
-configurations as a next step.
+See the guide [here][new-resource-short] to add more resources.
 
 ## Test
 
@@ -207,7 +204,7 @@ Now let's test our generated resources.
    mkdir examples/branch
 
    # remove the sample directory which was an example in the template
-   rm -rf examples/sample
+   rm -rf examples/null
    ```
 
    Create a provider secret template:
@@ -234,7 +231,7 @@ Now let's test our generated resources.
 
    ```bash
    cat <<EOF > examples/repository/repository.yaml
-   apiVersion: repository.github.jet.crossplane.io/v1alpha1
+   apiVersion: repository.github.upbound.io/v1alpha1
    kind: Repository
    metadata:
      name: hello-crossplane
@@ -243,7 +240,7 @@ Now let's test our generated resources.
        description: "Managed with Crossplane Github Provider (generated with Upjet)"
        visibility: public
        template:
-         - owner: crossplane-contrib
+         - owner: upbound
            repository: upjet-provider-template
      providerConfigRef:
        name: default
@@ -255,19 +252,21 @@ Now let's test our generated resources.
 
    ```bash
    cat <<EOF > examples/branch/branch.yaml
-   apiVersion: branch.github.jet.crossplane.io/v1alpha1
+   apiVersion: branch.github.upbound.io/v1alpha1
    kind: Branch
    metadata:
      name: hello-upjet
    spec:
      forProvider:
-       branch: hello-upjet
        repositoryRef:
          name: hello-crossplane
      providerConfigRef:
        name: default
    EOF
    ```
+
+   In order to change the `apiVersion`, you can use `WithRootGroup` and `WithShortName`
+   options in `config/provider.go` as arguments to `ujconfig.NewProvider`.
 
 2. Generate a [Personal Access Token](https://github.com/settings/tokens) for
    your Github account with `repo/public_repo` and `delete_repo` scopes.
@@ -321,6 +320,8 @@ Now let's test our generated resources.
    Verify that repo `hello-crossplane` and branch `hello-upjet` created under
    your GitHub account.
 
+8. You can check the errors and events by calling `kubectl describe` for either
+   of the resources.
 
 9. Cleanup
 
@@ -341,3 +342,4 @@ Now let's test our generated resources.
 [github_branch]: https://registry.terraform.io/providers/integrations/github/latest/docs/resources/branch
 [this line in controller Dockerfile]: https://github.com/upbound/upjet-provider-template/blob/main/cluster/images/official-provider-template-controller/Dockerfile#L18-L26
 [terraform-plugin-sdk]: https://github.com/hashicorp/terraform-plugin-sdk
+[new-resource-short]: add-new-resource-short.md

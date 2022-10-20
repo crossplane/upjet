@@ -230,8 +230,8 @@ func (r *Resource) scrapePrelude(doc *html.Node, preludeXPath string) error {
 	}
 	r.Description = strings.TrimSpace(strings.Replace(r.Description, "|-", "", 1))
 
-	if r.SubCategory == "" || r.Title == "" {
-		return errors.Errorf("failed to parse prelude. Description: %s, Subcategory: %s, Title name: %s. Raw data:%s\n",
+	if r.Title == "" {
+		return errors.Errorf("failed to find title. Description: %s, Subcategory: %s, Title name: %s. Raw data:%s\n",
 			r.Description, r.SubCategory, r.Title, rawData)
 	}
 	return nil

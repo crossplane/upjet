@@ -192,8 +192,8 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadata []byt
 	p := &Provider{
 		ModulePath:              modulePath,
 		TerraformResourcePrefix: fmt.Sprintf("%s_", prefix),
-		RootGroup:               fmt.Sprintf("%s.jet.crossplane.io", prefix),
-		ShortName:               fmt.Sprintf("%sjet", prefix),
+		RootGroup:               fmt.Sprintf("%s.upbound.io", prefix),
+		ShortName:               fmt.Sprintf("%s", prefix),
 		BasePackages:            DefaultBasePackages,
 		IncludeList: []string{
 			// Include all Resources
