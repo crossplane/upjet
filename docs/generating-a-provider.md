@@ -4,7 +4,8 @@ In this guide, we will generate a Crossplane provider based on an existing
 Terraform provider using Upjet.
 
 We have chosen [Terraform GitHub provider] as an example, but the process will
-be quite similar for any other Terraform provider.
+be quite similar for any other Terraform provider. We will use `myorg` as the
+example organization name to be used.
 
 ## Generate
 
@@ -19,15 +20,9 @@ be quite similar for any other Terraform provider.
 
 3. Replace `template` with your provider name.
 
-    1. Export `ProviderName`:
-
-        ```bash
-        export ProviderNameLower=github
-        export ProviderNameUpper=GitHub
-        ```
-
-    2. Run the `./hack/prepare.sh` script from repo root to prepare the repo, e.g., to
-       replace all occurrences of `template` with your provider name:
+    1. Run the `./hack/prepare.sh` script from repo root to prepare the repo, e.g., to
+       replace all occurrences of `template` with your provider name and `upbound`
+       with your organization name:
 
         ```bash
        ./hack/prepare.sh
@@ -38,16 +33,19 @@ be quite similar for any other Terraform provider.
 
     ```makefile
     export TERRAFORM_PROVIDER_SOURCE := integrations/github
-    export TERRAFORM_PROVIDER_VERSION := 4.19.2
+    export TERRAFORM_PROVIDER_REPO := https://github.com/integrations/terraform-provider-github
+    export TERRAFORM_PROVIDER_VERSION := 5.5.0
     export TERRAFORM_PROVIDER_DOWNLOAD_NAME := terraform-provider-github
-    export TERRAFORM_PROVIDER_DOWNLOAD_URL_PREFIX := https://releases.hashicorp.com/terraform-provider-github/4.19.2
+    export TERRAFORM_PROVIDER_DOWNLOAD_URL_PREFIX := https://releases.hashicorp.com/terraform-provider-github/5.5.0
+    export TERRAFORM_DOCS_PATH ?= website/docs/r
     ```
 
    You can find `TERRAFORM_PROVIDER_SOURCE` and `TERRAFORM_PROVIDER_VERSION` in
    [Terraform GitHub provider] documentation by hitting the "**USE PROVIDER**"
    button. Check [this line in controller Dockerfile] to see how these
-   variables are used to build the provider plugin binary.
-
+   variables are used to build the provider plugin binary. `TERRAFORM_DOCS_PATH`
+   is the directory where resource documentation is stored in the repository of
+   the Terraform provider.
 
 5. Implement `ProviderConfig` logic. In `upjet-provider-template`, there is already
    a boilerplate code in file `internal/clients/${ProviderNameLower}.go` which
@@ -62,24 +60,20 @@ be quite similar for any other Terraform provider.
      keyBaseURL = "base_url"
      keyOwner = "owner"
      keyToken = "token"
-
-     // GitHub credentials environment variable names
-     envToken = "GITHUB_TOKEN"
    )
 
    func TerraformSetupBuilder(version, providerSource, providerVersion string) terraform.SetupFn {
      ...
      // set provider configuration
      ps.Configuration = map[string]any{}
-     if v, ok := githubCreds[keyBaseURL]; ok {
-         ps.Configuration[keyBaseURL] = v
+     if v, ok := creds[keyBaseURL]; ok {
+       ps.Configuration[keyBaseURL] = v
      }
-     if v, ok := githubCreds[keyOwner]; ok {
-         ps.Configuration[keyOwner] = v
+     if v, ok := creds[keyOwner]; ok {
+       ps.Configuration[keyOwner] = v
      }
-     // set environment variables for sensitive provider configuration
-     ps.Env = []string{
-         fmt.Sprintf(fmtEnvVar, envToken, githubCreds[keyToken]),
+     if v, ok := creds[keyToken]; ok {
+       ps.Configuration[keyToken] = v
      }
      return ps, nil
    }
@@ -89,15 +83,20 @@ be quite similar for any other Terraform provider.
    and only start with generating CRDs for [github_repository] and
    [github_branch] Terraform resources.
 
-   To limit the resources to be generated, we need to provide an include list
-   option with `tjconfig.WithIncludeList` in file `config/provider.go`:
+   Only the resources with external name configuration should be generated.
+   Let's add external name configurations for these two resources in 
+   `config/external_name.go` as an entry to the map called `ExternalNameConfigs`:
 
    ```go
-   pc := tjconfig.NewProviderWithSchema([]byte(providerSchema), resourcePrefix, modulePath,
-       tjconfig.WithIncludeList([]string{
-           "github_repository$",
-           "github_branch$",
-       }))
+   // ExternalNameConfigs contains all external name configurations for this
+   // provider.
+   var ExternalNameConfigs = map[string]config.ExternalName{
+     // Name is a parameter and it is also used to import the resource.
+     "github_repository": config.NameAsIdentifier,
+     // The import ID consists of several parameters. We'll use branch name as
+     // the external name.
+     "github_branch": config.TemplatedStringAsIdentifier("branch", "{{ parameters.repository }}:{{ .external_name }}:{{ parameters.branch }}"),
+   }
    ```
 
 7. Finally, we would need to add some custom configurations for these two
@@ -119,8 +118,7 @@ be quite similar for any other Terraform provider.
    // Configure configures individual resources by adding custom ResourceConfigurators.
    func Configure(p *config.Provider) {
        p.AddResourceConfigurator("github_repository", func(r *config.Resource) {
-
-           // we need to override the default group that upjet generated for
+           // We need to override the default group that upjet generated for
            // this resource, which would be "github"
            r.ShortGroup = "repository"
        })
@@ -136,14 +134,9 @@ be quite similar for any other Terraform provider.
 
    func Configure(p *config.Provider) {
        p.AddResourceConfigurator("github_branch", func(r *config.Resource) {
-
-           // we need to override the default group that upjet generated for
+           // We need to override the default group that upjet generated for
            // this resource, which would be "github"
            r.ShortGroup = "branch"
-
-           // Identifier for this resource is assigned by the provider. In other
-           // words it is not simply the name of the resource.
-           r.ExternalName = config.IdentifierFromProvider
 
            // This resource need the repository in which branch would be created
            // as an input. And by defining it as a reference to Repository
@@ -167,14 +160,15 @@ be quite similar for any other Terraform provider.
        "github.com/upbound/upjet/pkg/types/conversion/cli"
        "github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 
-   +   "github.com/crossplane-contrib/provider-jet-github/config/branch"
-   +   "github.com/crossplane-contrib/provider-jet-github/config/repository"
+   +   "github.com/myorg/provider-github/config/branch"
+   +   "github.com/myorg/provider-github/config/repository"
     )
 
     func GetProvider() *tjconfig.Provider {
        ...
        for _, configure := range []func(provider *tjconfig.Provider){
                // add custom config functions
+   -           null.Configure,
    +           repository.Configure,
    +           branch.Configure,
        } {
