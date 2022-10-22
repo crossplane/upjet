@@ -193,7 +193,7 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadata []byt
 		ModulePath:              modulePath,
 		TerraformResourcePrefix: fmt.Sprintf("%s_", prefix),
 		RootGroup:               fmt.Sprintf("%s.upbound.io", prefix),
-		ShortName:               fmt.Sprintf("%s", prefix),
+		ShortName:               prefix,
 		BasePackages:            DefaultBasePackages,
 		IncludeList: []string{
 			// Include all Resources

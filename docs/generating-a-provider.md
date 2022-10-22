@@ -95,7 +95,7 @@ example organization name to be used.
      "github_repository": config.NameAsIdentifier,
      // The import ID consists of several parameters. We'll use branch name as
      // the external name.
-     "github_branch": config.TemplatedStringAsIdentifier("branch", "{{ .parameters.repository }}:{{ .external_name }}:{{ .parameters.branch }}"),
+     "github_branch": config.TemplatedStringAsIdentifier("branch", "{{ .parameters.repository }}:{{ .external_name }}:{{ .parameters.source_branch }}"),
    }
    ```
 
