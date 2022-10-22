@@ -19,7 +19,7 @@ func main() {
 		outFile      = app.Flag("out", "Provider metadata output file path").Short('o').Default("provider-metadata.yaml").OpenFile(os.O_CREATE, 0644)
 		providerName = app.Flag("name", "Provider name").Short('n').Required().String()
 		codeXPath    = app.Flag("code-xpath", "Code XPath expression").Default(`//code[@class="language-terraform" or @class="language-hcl"]/text()`).String()
-		preludeXPath = app.Flag("prelude-xpath", "Prelude XPath expression").Default(`//text()[contains(., "description") and contains(., "subcategory")]`).String()
+		preludeXPath = app.Flag("prelude-xpath", "Prelude XPath expression").Default(`//text()[contains(., "description") and contains(., "page_title")]`).String()
 		fieldXPath   = app.Flag("field-xpath", "Field documentation XPath expression").Default(`//ul/li//code[1]/text()`).String()
 		importXPath  = app.Flag("import-xpath", "Import statements XPath expression").Default(`//code[@class="language-shell"]/text()`).String()
 		repoPath     = app.Flag("repo", "Terraform provider repo path").Short('r').Required().ExistingDir()
