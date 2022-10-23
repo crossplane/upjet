@@ -17,14 +17,14 @@ groups, such as `glue`, `grafana`, `guardduty` and `iam`.
   infer the external name configuration. In this case, there is a `name`
   argument seen under `Argument Reference` section and when we look at `Import`
   section, we see that this is what's used to import, i.e. Terraform ID is same
-  as `name` argument. This means that we can use `config.NameAsExternalName`
+  as `name` argument. This means that we can use `config.NameAsIdentifier`
   configuration from Upjet as our external name config. See section [External
   Name Cases](#external-name-cases) to see how you can infer in many different
   cases of Terraform ID.
 1. First of all, please see the [Moving Untested Resources to v1beta1] 
    documentation.
 
-    Go to `config/external_name.go` and add the following line to
+    Go to `config/externalname.go` and add the following line to
    `ExternalNameConfigs` table:
     ```golang
     // glue
@@ -157,7 +157,7 @@ And successful manual testing still meets the `v1beta1` criteria.
 There is a `name` argument under `Argument Reference` section and `Import`
 section suggests to use `name` to import the resource.
 
-Use `config.NameAsExternalName`.
+Use `config.NameAsIdentifier`.
 
 An example would be
 [`aws_eks_cluster`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/eks_cluster)
@@ -171,7 +171,7 @@ There is an argument under `Argument Reference` section that is used like name,
 i.e. `cluster_name` or `group_name`, and `Import` section suggests to use the
 value of that argument to import the resource.
 
-Use `config.ParameterAsExternalName(<name of the argument parameter>)`.
+Use `config.ParameterAsIdentifier(<name of the argument parameter>)`.
 
 An example would be
 [`aws_elasticache_cluster`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/elasticache_cluster)
