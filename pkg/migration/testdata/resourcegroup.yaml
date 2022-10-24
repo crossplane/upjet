@@ -1,0 +1,7 @@
+apiVersion: azure.crossplane.io/v1beta1
+kind: ResourceGroup
+metadata:
+  name: example-resources
+spec:
+  forProvider:
+    location: "West Europe"
