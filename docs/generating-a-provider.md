@@ -10,7 +10,7 @@ example organization name to be used.
 ## Generate
 
 1. Generate a GitHub repository for the Crossplane provider by hitting the
-   "**Use this template**" button in [upjet-provider-template] repository.
+   "**Use this template**" button in [upjet-provider-template] repository. The preferred repository name is `provider-<name>` (e.g. `provider-github`), which is assumed by the `./hack/prepare.sh` script in step 3.
 2. Clone the repository to your local and `cd` into the repository directory.
    Fetch the [upbound/build] submodule by running the following:
 
