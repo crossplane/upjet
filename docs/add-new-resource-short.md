@@ -6,7 +6,7 @@ we will go over the steps that will take us to `v1beta1` quality without going
 into much detail so that it can be followed repeatedly quickly.
 
 The steps are generally identical, so we'll just take a resource issue from AWS
-[#258][issue-258] and you can generalize steps pretty much to all other
+[#90][issue-90] and you can generalize steps pretty much to all other
 resources in all official providers. It has several resources from different API
 groups, such as `glue`, `grafana`, `guardduty` and `iam`.
 
@@ -17,14 +17,14 @@ groups, such as `glue`, `grafana`, `guardduty` and `iam`.
   infer the external name configuration. In this case, there is a `name`
   argument seen under `Argument Reference` section and when we look at `Import`
   section, we see that this is what's used to import, i.e. Terraform ID is same
-  as `name` argument. This means that we can use `config.NameAsExternalName`
+  as `name` argument. This means that we can use `config.NameAsIdentifier`
   configuration from Upjet as our external name config. See section [External
   Name Cases](#external-name-cases) to see how you can infer in many different
   cases of Terraform ID.
 1. First of all, please see the [Moving Untested Resources to v1beta1] 
    documentation.
 
-    Go to `config/external_name.go` and add the following line to
+    Go to `config/externalname.go` and add the following line to
    `ExternalNameConfigs` table:
     ```golang
     // glue
@@ -157,12 +157,12 @@ And successful manual testing still meets the `v1beta1` criteria.
 There is a `name` argument under `Argument Reference` section and `Import`
 section suggests to use `name` to import the resource.
 
-Use `config.NameAsExternalName`.
+Use `config.NameAsIdentifier`.
 
 An example would be
 [`aws_eks_cluster`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/eks_cluster)
 and
-[here](https://github.com/upbound/official-providers/blob/1f88c68/provider-aws/config/external_name.go#L139)
+[here](https://github.com/upbound/provider-aws/blob/8b3887c91c4b44dc14e1123b3a5ae1a70e0e45ed/config/externalname.go#L284)
 is its configuration.
 
 ### Case 2: Parameter As Identifier
@@ -171,12 +171,12 @@ There is an argument under `Argument Reference` section that is used like name,
 i.e. `cluster_name` or `group_name`, and `Import` section suggests to use the
 value of that argument to import the resource.
 
-Use `config.ParameterAsExternalName(<name of the argument parameter>)`.
+Use `config.ParameterAsIdentifier(<name of the argument parameter>)`.
 
 An example would be
 [`aws_elasticache_cluster`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/elasticache_cluster)
 and
-[here](https://github.com/upbound/official-providers/blob/1f88c68/provider-aws/config/external_name.go#L154)
+[here](https://github.com/upbound/provider-aws/blob/8b3887c91c4b44dc14e1123b3a5ae1a70e0e45ed/config/externalname.go#L299)
 is its configuration.
 
 ### Case 3: Random Identifier From Provider
@@ -189,7 +189,7 @@ Use `config.IdentifierFromProvider`.
 An example would be
 [`aws_vpc`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc)
 and
-[here](https://github.com/upbound/official-providers/blob/1f88c68/provider-aws/config/external_name.go#L74)
+[here](https://github.com/upbound/provider-aws/blob/8b3887c91c4b44dc14e1123b3a5ae1a70e0e45ed/config/externalname.go#L155)
 is its configuration.
 
 ### Case 4: Random Identifier Substring From Provider
@@ -359,7 +359,7 @@ other resource. In many cases, the identifier is also a valid argument, maybe
 even the only argument, to configure this resource.
 
 An example would be
-[`aws_ecrpublic_repository_policy`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ecrpublic_repository)
+[`aws_ecrpublic_repository_policy`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ecrpublic_repository_policy)
 from AWS where the identifier is `repository_name`.
 
 Use `config.IdentifierFromProvider` because in these cases `repository_name` is
@@ -395,8 +395,9 @@ detailed guide could also help you.
 [provider-guide]:
     https://github.com/upbound/upjet/blob/main/docs/generating-a-provider.md
 [config-guide]:
-    https://github.com/upbound/upjet/blob/main/docs/configuring-a-resource.md
-[issue-258]: https://github.com/upbound/official-providers/issues/258
+    https://github.com/upbound/upjet/blob/main/docs/add-new-resource-long.md
+[issue-90]:
+    https://github.com/upbound/provider-aws/issues/90
 [`aws_glue_workflow`]:
     https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/glue_workflow
 [`aws_ecrpublic_repository_policy`]:
@@ -404,7 +405,7 @@ detailed guide could also help you.
 [`aws_route`]:
     https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route
 [route-impl]:
-    https://github.com/upbound/official-providers/blob/74a254b/provider-aws/config/external_name.go#L342
+    https://github.com/upbound/provider-aws/blob/8b3887c91c4b44dc14e1123b3a5ae1a70e0e45ed/config/externalname.go#L172
 [external-name-in-guide]:
-    https://github.com/upbound/upjet/blob/main/docs/configuring-a-resource.md#external-name
-[Moving Untested Resources to v1beta1]: https://github.com/upbound/official-providers/blob/main/docs/moving-resources-to-v1beta1.md
+    https://github.com/upbound/upjet/blob/main/docs/add-new-resource-long.md#external-name
+[Moving Untested Resources to v1beta1]: https://github.com/upbound/upjet/blob/main/docs/moving-resources-to-v1beta1.md
