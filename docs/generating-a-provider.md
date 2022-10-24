@@ -19,8 +19,14 @@ example organization name to be used.
     ```
 
 3. Replace `template` with your provider name.
-
-    1. Run the `./hack/prepare.sh` script from repo root to prepare the repo, e.g., to
+    1. Export provider name and organization name: 
+    ```
+    export PROVIDER_NAME_LOWER=github
+    export PROVIDER_NAME_NORMAL=GitHub
+    export ORGANIZATION_NAME=upbound
+    
+    ```
+    2.  Run the `./hack/prepare.sh` script from repo root to prepare the repo, e.g., to
        replace all occurrences of `template` with your provider name and `upbound`
        with your organization name:
 
