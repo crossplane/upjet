@@ -6,7 +6,7 @@ we will go over the steps that will take us to `v1beta1` quality without going
 into much detail so that it can be followed repeatedly quickly.
 
 The steps are generally identical, so we'll just take a resource issue from AWS
-[#258][issue-258] and you can generalize steps pretty much to all other
+[#90][issue-90] and you can generalize steps pretty much to all other
 resources in all official providers. It has several resources from different API
 groups, such as `glue`, `grafana`, `guardduty` and `iam`.
 
@@ -396,7 +396,8 @@ detailed guide could also help you.
     https://github.com/upbound/upjet/blob/main/docs/generating-a-provider.md
 [config-guide]:
     https://github.com/upbound/upjet/blob/main/docs/add-new-resource-long.md
-[issue-258]: https://github.com/upbound/official-providers/issues/258
+[issue-90]:
+    https://github.com/upbound/provider-aws/issues/90
 [`aws_glue_workflow`]:
     https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/glue_workflow
 [`aws_ecrpublic_repository_policy`]:
