@@ -83,10 +83,19 @@ func tfJSONAttributeToV2Schema(attr *tfjson.SchemaAttribute) *schemav2.Schema {
 		Deprecated:  deprecatedMessage(attr.Deprecated),
 		Sensitive:   attr.Sensitive,
 	}
-	if err := schemaV2TypeFromCtyType(attr.AttributeType, v2sch); err != nil {
-		panic(err)
+	if attr.AttributeNestedType != nil {
+		if err := schemaV2TypeFromNestedType(attr.AttributeNestedType, v2sch); err != nil {
+			panic(err)
+		}
+		return v2sch
 	}
-	return v2sch
+	if !attr.AttributeType.Equals(cty.NilType) {
+		if err := schemaV2TypeFromCtyType(attr.AttributeType, v2sch); err != nil {
+			panic(err)
+		}
+		return v2sch
+	}
+	panic("attribute neither has \"type\" nor \"nested-type\" defined")
 }
 
 func tfJSONBlockTypeToV2Schema(nb *tfjson.SchemaBlockType) *schemav2.Schema { //nolint:gocyclo
@@ -145,6 +154,36 @@ func tfJSONBlockTypeToV2Schema(nb *tfjson.SchemaBlockType) *schemav2.Schema { //
 	}
 	v2sch.Elem = res
 	return v2sch
+}
+
+func schemaV2TypeFromNestedType(ntyp *tfjson.SchemaNestedAttributeType, schema *schemav2.Schema) error {
+	switch ntyp.NestingMode {
+	case tfjson.SchemaNestingModeSingle:
+		schema.Type = schemav2.TypeList
+		schema.MinItems = 0
+		schema.MaxItems = 1
+	case tfjson.SchemaNestingModeGroup:
+		schema.Type = schemav2.TypeList
+		schema.MinItems = 1
+		schema.MaxItems = 1
+	case tfjson.SchemaNestingModeList:
+		schema.Type = schemav2.TypeList
+	case tfjson.SchemaNestingModeSet:
+		schema.Type = schemav2.TypeSet
+	case tfjson.SchemaNestingModeMap:
+		schema.Type = schemav2.TypeMap
+	default:
+		return errors.Errorf("unknown nesting mode: %s", ntyp.NestingMode)
+	}
+
+	res := &schemav2.Resource{}
+	res.Schema = make(map[string]*schemav2.Schema, len(ntyp.Attributes))
+	for key, attr := range ntyp.Attributes {
+		res.Schema[key] = tfJSONAttributeToV2Schema(attr)
+	}
+	schema.Elem = res
+	schema.ConfigMode = schemav2.SchemaConfigModeAttr
+	return nil
 }
 
 func schemaV2TypeFromCtyType(typ cty.Type, schema *schemav2.Schema) error { //nolint:gocyclo
