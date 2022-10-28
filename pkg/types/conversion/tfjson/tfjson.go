@@ -95,7 +95,7 @@ func tfJSONAttributeToV2Schema(attr *tfjson.SchemaAttribute) *schemav2.Schema {
 		}
 		return v2sch
 	}
-	panic("attribute neither has \"type\" nor \"nested-type\" defined")
+	panic(`attribute neither has "type" nor "nested-type" defined`)
 }
 
 func tfJSONBlockTypeToV2Schema(nb *tfjson.SchemaBlockType) *schemav2.Schema { //nolint:gocyclo
@@ -157,6 +157,8 @@ func tfJSONBlockTypeToV2Schema(nb *tfjson.SchemaBlockType) *schemav2.Schema { //
 }
 
 func schemaV2TypeFromNestedType(ntyp *tfjson.SchemaNestedAttributeType, schema *schemav2.Schema) error {
+	// Note(turkenh): See the comments for SchemaNestingModes in tfjson code:
+	// https://github.com/hashicorp/terraform-json/blob/e6b203c3cb12469bcf829be00d16379c595008ed/schemas.go#L131
 	switch ntyp.NestingMode {
 	case tfjson.SchemaNestingModeSingle:
 		schema.Type = schemav2.TypeList
@@ -173,7 +175,7 @@ func schemaV2TypeFromNestedType(ntyp *tfjson.SchemaNestedAttributeType, schema *
 	case tfjson.SchemaNestingModeMap:
 		schema.Type = schemav2.TypeMap
 	default:
-		return errors.Errorf("unknown nesting mode: %s", ntyp.NestingMode)
+		return errors.Errorf("unknown nesting mode: %q", ntyp.NestingMode)
 	}
 
 	res := &schemav2.Resource{}
