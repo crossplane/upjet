@@ -58,10 +58,10 @@ func TestNewFileSystemSource(t *testing.T) {
 				dir: "testdata",
 				a: func() afero.Afero {
 					fss := afero.Afero{Fs: afero.NewMemMapFs()}
-					_ = fss.WriteFile("testdata/awsvpc.yaml",
+					_ = fss.WriteFile("testdata/source/awsvpc.yaml",
 						[]byte("apiVersion: ec2.aws.crossplane.io/v1beta1\nkind: VPC\nmetadata:\n  name: sample-vpc\nspec:\n  forProvider:\n    cidrBlock: 172.16.0.0/16\n    region: us-west-1\n"),
 						0600)
-					_ = fss.WriteFile("testdata/resourcegroup.yaml",
+					_ = fss.WriteFile("testdata/source/resourcegroup.yaml",
 						[]byte("apiVersion: azure.crossplane.io/v1beta1\nkind: ResourceGroup\nmetadata:\n  name: example-resources\nspec:\n  forProvider:\n    location: West Europe\n"),
 						0600)
 					return fss
@@ -76,7 +76,7 @@ func TestNewFileSystemSource(t *testing.T) {
 								Object: unstructuredAwsVpc,
 							},
 							Metadata: Metadata{
-								Path: "testdata/awsvpc.yaml",
+								Path: "testdata/source/awsvpc.yaml",
 							},
 						},
 						{
@@ -84,7 +84,7 @@ func TestNewFileSystemSource(t *testing.T) {
 								Object: unstructuredResourceGroup,
 							},
 							Metadata: Metadata{
-								Path: "testdata/resourcegroup.yaml",
+								Path: "testdata/source/resourcegroup.yaml",
 							},
 						},
 					},
@@ -95,7 +95,10 @@ func TestNewFileSystemSource(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			files := tc.args.a()
-			fs, err := NewFileSystemSource("testdata", FsWithFileSystem(files))
+			fs, err := NewFileSystemSource("testdata/source", FsWithFileSystem(files))
+			if err != nil {
+				t.Fatalf("Failed to initialize a new FileSystemSource: %v", err)
+			}
 			if diff := cmp.Diff(tc.want.err, err); diff != "" {
 				t.Errorf("\nNext(...): -want, +got:\n%s", diff)
 			}
@@ -139,7 +142,7 @@ func TestFileSystemTarget_Put(t *testing.T) {
 						},
 					},
 					Metadata: Metadata{
-						Path: "testdata/awsvpc.yaml",
+						Path: "testdata/source/awsvpc.yaml",
 					},
 				},
 				a: func() afero.Afero {
@@ -169,13 +172,13 @@ func TestFileSystemTarget_Put(t *testing.T) {
 						},
 					},
 					Metadata: Metadata{
-						Path:    "testdata/awsvpc.yaml",
+						Path:    "testdata/source/awsvpc.yaml",
 						Parents: "parent metadata",
 					},
 				},
 				a: func() afero.Afero {
 					fss := afero.Afero{Fs: afero.NewMemMapFs()}
-					_ = fss.WriteFile("testdata/awsvpc.yaml",
+					_ = fss.WriteFile("testdata/source/awsvpc.yaml",
 						[]byte("apiVersion: ec2.aws.upbound.io/v1beta1\nkind: VPC\nmetadata:\n  name: sample-vpc\nspec:\n  forProvider:\n    cidrBlock: 172.16.0.0/16\n    region: us-west-1\n"),
 						0600)
 					return fss
@@ -194,7 +197,7 @@ func TestFileSystemTarget_Put(t *testing.T) {
 			if err := ft.Put(tc.args.o); err != nil {
 				t.Error(err)
 			}
-			b, err := ft.afero.ReadFile("testdata/awsvpc.yaml")
+			b, err := ft.afero.ReadFile("testdata/source/awsvpc.yaml")
 			if diff := cmp.Diff(tc.want.err, err); diff != "" {
 				t.Errorf("\nNext(...): -want, +got:\n%s", diff)
 			}
@@ -221,19 +224,19 @@ func TestFileSystemTarget_Delete(t *testing.T) {
 			args: args{
 				o: UnstructuredWithMetadata{
 					Metadata: Metadata{
-						Path: "testdata/awsvpc.yaml",
+						Path: "testdata/source/awsvpc.yaml",
 					},
 				},
 				a: func() afero.Afero {
 					fss := afero.Afero{Fs: afero.NewMemMapFs()}
-					_ = fss.WriteFile("testdata/awsvpc.yaml",
+					_ = fss.WriteFile("testdata/source/awsvpc.yaml",
 						[]byte("apiVersion: ec2.aws.upbound.io/v1beta1\nkind: VPC\nmetadata:\n  name: sample-vpc\nspec:\n  forProvider:\n    cidrBlock: 172.16.0.0/16\n    region: us-west-1\n"),
 						0600)
 					return fss
 				},
 			},
 			want: want{
-				err: errors.New(fmt.Sprintf("%s: %s", "open testdata/awsvpc.yaml", afero.ErrFileNotFound)),
+				err: errors.New(fmt.Sprintf("%s: %s", "open testdata/source/awsvpc.yaml", afero.ErrFileNotFound)),
 			},
 		},
 	}
@@ -244,7 +247,7 @@ func TestFileSystemTarget_Delete(t *testing.T) {
 			if err := ft.Delete(tc.args.o); err != nil {
 				t.Error(err)
 			}
-			_, err := ft.afero.ReadFile("testdata/awsvpc.yaml")
+			_, err := ft.afero.ReadFile("testdata/source/awsvpc.yaml")
 			if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {
 				t.Errorf("\nNext(...): -want, +got:\n%s", diff)
 			}

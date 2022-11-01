@@ -145,12 +145,6 @@ func (ft *FileSystemTarget) Put(o UnstructuredWithMetadata) error {
 	return nil
 }
 
-// Patch patches an existing file in filesystem
-func (ft *FileSystemTarget) Patch(o UnstructuredWithMetadata) error {
-	// no-op
-	return nil
-}
-
 // Delete deletes a file from filesystem
 func (ft *FileSystemTarget) Delete(o UnstructuredWithMetadata) error {
 	return ft.afero.Remove(o.Metadata.Path)
