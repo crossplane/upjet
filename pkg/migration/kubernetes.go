@@ -20,6 +20,13 @@ type KubernetesSource struct {
 }
 
 // NewKubernetesSource returns a KubernetesSource
+// DynamicClient is used here to query resources.
+// Elements of gvks (slice of GroupVersionKind) are passed to the Dynamic Client
+// in a loop to get list of resources.
+// An example element of gvks slice:
+// Group:   "ec2.aws.upbound.io",
+// Version: "v1beta1",
+// Kind:    "VPC",
 func NewKubernetesSource(dynamicClient dynamic.Interface, gvks []schema.GroupVersionKind) (*KubernetesSource, error) {
 	ks := &KubernetesSource{
 		dynamicClient: dynamicClient,
@@ -34,7 +41,7 @@ func NewKubernetesSource(dynamicClient dynamic.Interface, gvks []schema.GroupVer
 			})
 		unstructuredList, err := ri.List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "cannot list resources")
 		}
 		for _, u := range unstructuredList.Items {
 			ks.items = append(ks.items, UnstructuredWithMetadata{
@@ -50,10 +57,7 @@ func NewKubernetesSource(dynamicClient dynamic.Interface, gvks []schema.GroupVer
 
 // HasNext checks the next item
 func (ks *KubernetesSource) HasNext() (bool, error) {
-	if ks.index < len(ks.items) {
-		return true, nil
-	}
-	return false, nil
+	return ks.index < len(ks.items), nil
 }
 
 // Next returns the next item of slice
@@ -63,18 +67,18 @@ func (ks *KubernetesSource) Next() (UnstructuredWithMetadata, error) {
 		ks.index++
 		return item, nil
 	}
-	return UnstructuredWithMetadata{}, errors.New("failed to get next element")
+	return UnstructuredWithMetadata{}, errors.New("no more elements")
 }
 
 // InitializeDynamicClient returns a dynamic client
 func InitializeDynamicClient(kubeconfigPath string) (dynamic.Interface, error) {
 	config, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "cannot create rest config object")
 	}
 	dynamicClient, err := dynamic.NewForConfig(config)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "cannot initialize dynamic client")
 	}
 	return dynamicClient, nil
 }

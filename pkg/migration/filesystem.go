@@ -3,7 +3,6 @@ package migration
 import (
 	"bytes"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 
@@ -40,34 +39,36 @@ func NewFileSystemSource(dir string, opts ...FileSystemSourceOption) (*FileSyste
 		f(fs)
 	}
 
-	files, err := fs.afero.ReadDir(dir)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	for _, file := range files {
-		if file.IsDir() {
-			continue
-		}
-		data, err := fs.afero.ReadFile(filepath.Join(dir, file.Name()))
+	if err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			return nil, err
+			return errors.Wrap(err, fmt.Sprintf("cannot read %s", path))
+		}
+
+		if info.IsDir() {
+			return nil
+		}
+
+		data, err := fs.afero.ReadFile(path)
+		if err != nil {
+			return errors.Wrap(err, "cannot read source file")
 		}
 
 		decoder := yaml.NewYAMLOrJSONDecoder(bytes.NewBufferString(string(data)), 1024)
 		u := &unstructured.Unstructured{}
 		if err := decoder.Decode(&u); err != nil {
-			if err != nil {
-				return nil, err
-			}
+			return errors.Wrap(err, "cannot decode read data")
 		}
 
 		fs.items = append(fs.items, UnstructuredWithMetadata{
 			Object: *u,
 			Metadata: Metadata{
-				Path: filepath.Join(dir, file.Name()),
+				Path: path,
 			},
 		})
+
+		return nil
+	}); err != nil {
+		return nil, errors.Wrap(err, "cannot read source directory")
 	}
 
 	return fs, nil
@@ -75,10 +76,7 @@ func NewFileSystemSource(dir string, opts ...FileSystemSourceOption) (*FileSyste
 
 // HasNext checks the next item
 func (fs *FileSystemSource) HasNext() (bool, error) {
-	if fs.index < len(fs.items) {
-		return true, nil
-	}
-	return false, nil
+	return fs.index < len(fs.items), nil
 }
 
 // Next returns the next item of slice
@@ -88,7 +86,7 @@ func (fs *FileSystemSource) Next() (UnstructuredWithMetadata, error) {
 		fs.index++
 		return item, nil
 	}
-	return UnstructuredWithMetadata{}, errors.New("failed to get next element")
+	return UnstructuredWithMetadata{}, errors.New("no more elements")
 }
 
 // FileSystemTarget is a target implementation to write/patch/delete resources to file system
@@ -121,26 +119,26 @@ func NewFileSystemTarget(opts ...FileSystemTargetOption) *FileSystemTarget {
 func (ft *FileSystemTarget) Put(o UnstructuredWithMetadata) error {
 	b, err := sigsyaml.Marshal(o.Object.Object)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "cannot marshal object")
 	}
 	if o.Metadata.Parents != "" {
 		f, err := ft.afero.OpenFile(o.Metadata.Path, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "cannot open file")
 		}
 
 		defer f.Close() //nolint:errcheck
 
 		if _, err = f.WriteString(fmt.Sprintf("\n---\n\n%s", string(b))); err != nil {
-			return err
+			return errors.Wrap(err, "cannot write file")
 		}
 	} else {
 		f, err := ft.afero.Create(o.Metadata.Path)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "cannot create file")
 		}
 		if _, err := f.Write(b); err != nil {
-			return err
+			return errors.Wrap(err, "cannot write file")
 		}
 	}
 
