@@ -118,6 +118,67 @@ CI pipelines especially if you've updated your provider module's Go version.
 8. Now, you may want to build your provider package and test the fresh package
    with your provider's managed resources.
 
+Having successfully migrated from the `github.com/crossplane/terrajet`
+Go module to the `github.com/upbound/upjet` module, you may now consider
+enabling some new and advanced features only available in Upjet:
+
+9. You may consider enabling metadata extraction from the [Terraform registry].
+In order to enable metadata extraction for the provider, you will need to run
+Upjet's metadata scraper. This can be achieved by including a Go generate
+comment in your provider's `apis/generate.go` with something similar to:
+```go
+//go:generate go run github.com/upbound/upjet/cmd/scraper -n ${TERRAFORM_PROVIDER_SOURCE} -r ../.work/${TERRAFORM_PROVIDER_SOURCE}/${TERRAFORM_DOCS_PATH} -o ../config/provider-metadata.yaml
+```
+This generate directive depends on some Makefile changes like adding the
+`pull-docs` target and declaring certain Makefile variables. For details,
+please refer to Upjet's provider template [Makefile](https://github.com/upbound/upjet-provider-template/blob/main/Makefile)
+and [apis/generate.go](https://github.com/upbound/upjet-provider-template/blob/main/apis/generate.go).
+
+Now, when you run a `make generate`, you should find the extracted metadata at
+`config/provider-metadata.yaml`.
+
+10. Now that your provider extracts Terraform registry metadata, you can use it
+to generate CRD documentation and to generate example CR manifests. In order to
+do this, you will need to configure your provider with the scraped metadata
+as follows:
+- In `config/provider.go`: You need to load the provider's metadata from the
+`config/provider-metadata.yaml` file.
+You can easily do so with the `go:embed` directive:
+```go
+//go:embed provider-metadata.yaml
+var providerMetadata []byte
+```
+- In `config/provider.go`: You need to make the provider metadata available
+to the provider configuration. This is done by passing the metadata bytes
+(stored in the variable `providerMetadata` above) to the
+`config.NewProvider` call. For an example, please refer to the template
+repo's [config/provider.go](https://github.com/upbound/upjet-provider-template/blob/d34119409586f6205ec8ed4b9b2c2481c74bf07e/config/provider.go#L29).
+
+Now, when you run `make generate`, the generated CRDs for your provider should
+have documentation scraped from the Terraform registry. And you should
+have some example manifests generated for your managed resources under
+the path `examples-generated` in the repo root.
+
+Please also take a look at the template repo's [apis/generate.go](https://github.com/upbound/upjet-provider-template/blob/main/apis/generate.go)
+for some other `go:generate` directives for cleaning up these newly
+generated artifacts.
+
+11. You may also want to update your provider's `build` submodule to the latest version by running a:
+```shell
+git submodule update --remote --merge
+```
+
+12. If you would like to enable a shared gRPC server for your provider
+(which implies that the Terraform CLI will not fork multiple native provider
+processes to make requests and instead, share a common instance across
+all requests to improve the performance of the Crossplane provider), or
+if you would like to integrate the single image building process,
+please adapt your provider package's Dockerfile
+(`cluster/images/<provider name>/Dockerfile`) and
+Makefile (`cluster/images/<provider name>/Makefile`)
+to the template repo's [associated files](https://github.com/upbound/upjet-provider-template/tree/main/cluster/images/upjet-provider-template).
+You will also need to adapt your provider's Makefile to match
+the template repo's [Makefile](https://github.com/upbound/upjet-provider-template/blob/main/Makefile).
 
 
 [Upjet]: https://github.com/upbound/upjet
@@ -127,3 +188,4 @@ CI pipelines especially if you've updated your provider module's Go version.
     https://github.com/upbound/upjet/blob/7e84c638a8bc5c93c6da3cf9420f961f165dd05d/pkg/config/resource.go#L258
 [reference configurations]: https://github.com/upbound/upjet/blob/c82119f5ef342f752406a0ed38264940b02e795f/pkg/config/resource.go#L293
 [Makefile]: https://github.com/upbound/upjet-provider-template/blob/d34119409586f6205ec8ed4b9b2c2481c74bf07e/Makefile#L41
+[Terraform registry]: https://registry.terraform.io/
