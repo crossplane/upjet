@@ -150,31 +150,34 @@ func NewSensitiveField(g *Builder, cfg *config.Resource, r *resource, sch *schem
 		// Data will be stored in connection details secret
 		return nil, true, nil
 	}
-	sfx := "SecretRef"
-	cfg.Sensitive.AddFieldPath(fieldPathWithWildcard(f.TerraformPaths), "spec.forProvider."+fieldPathWithWildcard(f.CRDPaths)+sfx)
-	// todo(turkenh): do we need to support other field types as sensitive?
-	if f.FieldType.String() != "string" && f.FieldType.String() != "*string" && f.FieldType.String() != "[]string" &&
-		f.FieldType.String() != "[]*string" && f.FieldType.String() != "map[string]string" && f.FieldType.String() != "map[string]*string" {
+
+	f.TFTag = "-"
+	var sfx string
+	switch f.FieldType.String() {
+	case "string", "*string":
+		f.FieldType = typeSecretKeySelector
+		if f.Schema.Optional {
+			f.FieldType = types.NewPointer(f.FieldType)
+		}
+		sfx = "SecretRef"
+	case "[]string", "[]*string":
+		f.FieldType = types.NewSlice(typeSecretKeySelector)
+		sfx = "SecretRefs"
+	case "map[string]string", "map[string]*string":
+		f.FieldType = types.NewMap(types.Universe.Lookup("string").Type(), typeSecretKeySelector)
+		sfx = "SecretRefMap"
+	default:
+		// todo(turkenh): do we need to support other field types as sensitive?
 		return nil, false, fmt.Errorf(`got type %q for field %q, only types "string", "*string", []string, []*string, "map[string]string" and "map[string]*string" supported as sensitive`, f.FieldType.String(), f.FieldNameCamel)
 	}
+	cfg.Sensitive.AddFieldPath(fieldPathWithWildcard(f.TerraformPaths), "spec.forProvider."+fieldPathWithWildcard(f.CRDPaths)+sfx)
 	// Replace a parameter field with secretKeyRef if it is sensitive.
 	// If it is an observation field, it will be dropped.
 	// Data will be loaded from the referenced secret key.
 	f.FieldNameCamel += sfx
-
-	f.TFTag = "-"
-	switch f.FieldType.String() {
-	case "string", "*string":
-		f.FieldType = typeSecretKeySelector
-	case "[]string", "[]*string":
-		f.FieldType = types.NewSlice(typeSecretKeySelector)
-	case "map[string]string", "map[string]*string":
-		f.FieldType = types.NewMap(types.Universe.Lookup("string").Type(), typeSecretKeySelector)
-	}
 	f.TransformedName = name.NewFromCamel(f.FieldNameCamel).LowerCamelComputed
 	f.JSONTag = f.TransformedName
 	if f.Schema.Optional {
-		f.FieldType = types.NewPointer(f.FieldType)
 		f.JSONTag += ",omitempty"
 	}
 	return f, false, nil
