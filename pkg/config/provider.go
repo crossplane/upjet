@@ -85,6 +85,12 @@ type Provider struct {
 	// can add "aws_waf.*" to the list.
 	SkipList []string
 
+	// skippedResourceNames is a list of Terraform resource names
+	// available in the Terraform provider schema, but
+	// not in the include list or in the skip list, meaning that
+	// the corresponding managed resources are not generated.
+	skippedResourceNames []string
+
 	// IncludeList is a list of regex for the Terraform resources to be
 	// included. For example, to include "aws_shield_protection_group" into
 	// the generated resources, one can add "aws_shield_protection_group$".
@@ -207,7 +213,9 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadata []byt
 		o(p)
 	}
 
+	p.skippedResourceNames = make([]string, 0, len(resourceMap))
 	for name, terraformResource := range resourceMap {
+		p.skippedResourceNames = append(p.skippedResourceNames, name)
 		if len(terraformResource.Schema) == 0 {
 			// There are resources with no schema, that we will address later.
 			fmt.Printf("Skipping resource %s because it has no schema\n", name)
@@ -219,7 +227,8 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadata []byt
 		if !matches(name, p.IncludeList) {
 			continue
 		}
-
+		// resource is to be generated, so remove it from the skipped list
+		p.skippedResourceNames = p.skippedResourceNames[:len(p.skippedResourceNames)-1]
 		p.Resources[name] = DefaultResource(name, terraformResource, providerMetadata.Resources[name], p.DefaultResourceOptions...)
 	}
 	for i, refInjector := range p.refInjectors {
@@ -253,6 +262,14 @@ func (p *Provider) ConfigureResources() {
 			c.Configure(r)
 		}
 	}
+}
+
+// GetSkippedResourceNames returns a list of Terraform resource names
+// available in the Terraform provider schema, but
+// not in the include list or in the skip list, meaning that
+// the corresponding managed resources are not generated.
+func (p *Provider) GetSkippedResourceNames() []string {
+	return p.skippedResourceNames
 }
 
 func matches(name string, regexList []string) bool {
