@@ -215,20 +215,14 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadata []byt
 
 	p.skippedResourceNames = make([]string, 0, len(resourceMap))
 	for name, terraformResource := range resourceMap {
-		p.skippedResourceNames = append(p.skippedResourceNames, name)
 		if len(terraformResource.Schema) == 0 {
 			// There are resources with no schema, that we will address later.
 			fmt.Printf("Skipping resource %s because it has no schema\n", name)
+		}
+		if len(terraformResource.Schema) == 0 || matches(name, p.SkipList) || !matches(name, p.IncludeList) {
+			p.skippedResourceNames = append(p.skippedResourceNames, name)
 			continue
 		}
-		if matches(name, p.SkipList) {
-			continue
-		}
-		if !matches(name, p.IncludeList) {
-			continue
-		}
-		// resource is to be generated, so remove it from the skipped list
-		p.skippedResourceNames = p.skippedResourceNames[:len(p.skippedResourceNames)-1]
 		p.Resources[name] = DefaultResource(name, terraformResource, providerMetadata.Resources[name], p.DefaultResourceOptions...)
 	}
 	for i, refInjector := range p.refInjectors {
