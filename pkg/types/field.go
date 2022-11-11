@@ -169,7 +169,7 @@ func NewSensitiveField(g *Builder, cfg *config.Resource, r *resource, sch *schem
 	case "[]string", "[]*string":
 		f.FieldType = types.NewSlice(typeSecretKeySelector)
 	case "map[string]string", "map[string]*string":
-		f.FieldType = types.NewMap(types.Universe.Lookup("string").Type(), typeSecretKeySelector)
+		f.FieldType = typeSecretReference
 	}
 	f.TransformedName = name.NewFromCamel(f.FieldNameCamel).LowerCamelComputed
 	f.JSONTag = f.TransformedName

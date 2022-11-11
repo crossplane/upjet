@@ -37,6 +37,11 @@ var (
 		types.NewStruct(nil, nil),
 		nil,
 	)
+	typeSecretReference types.Type = types.NewNamed(
+		types.NewTypeName(token.NoPos, types.NewPackage(PackagePathXPCommonAPIs, "v1"), "SecretReference", nil),
+		types.NewStruct(nil, nil),
+		nil,
+	)
 	commentOptional = &comments.Comment{
 		Options: markers.Options{
 			KubebuilderOptions: markers.KubebuilderOptions{
