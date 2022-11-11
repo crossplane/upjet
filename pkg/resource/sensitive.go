@@ -217,7 +217,10 @@ func GetSensitiveParameters(ctx context.Context, client SecretClient, from runti
 						return errors.Wrapf(err, errFmtCannotGetSecretKeySelectorAsMap, expandedJSONPath)
 					}
 					data, err := client.GetSecretData(ctx, ref)
-					if err != nil {
+					// We don't want to fail if the secret is not found. Otherwise, we won't be able to delete the
+					// resource if secret is deleted before. This is quite expected when both secret and resource
+					// got deleted in parallel.
+					if resource.IgnoreNotFound(err) != nil {
 						return errors.Wrapf(err, errFmtCannotGetSecretValue, ref)
 					}
 					for key, value := range data {
