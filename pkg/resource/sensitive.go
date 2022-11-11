@@ -206,40 +206,38 @@ func GetSensitiveParameters(ctx context.Context, client SecretClient, from runti
 
 			switch k := v.(type) {
 			case map[string]any:
-				if hasMapValue(k) {
-					sel := &map[string]v1.SecretKeySelector{}
-					if err = pavedJSON.GetValueInto(expandedJSONPath, sel); err != nil {
+				_, ok := k["key"]
+				if !ok {
+					// This is a special case where we have a "SecretReference" without a selected "key". This happens
+					// when there is an input field of type map[string]string (or map[string]*string).
+					// In this case, we need to get the entire secret data and fill it in the terraform state as a map.
+					// This is the only case where we have one-to-many mapping between json and tf paths.
+					ref := &v1.SecretReference{}
+					if err = pavedJSON.GetValueInto(expandedJSONPath, ref); err != nil {
 						return errors.Wrapf(err, errFmtCannotGetSecretKeySelectorAsMap, expandedJSONPath)
 					}
-					sensitives := make(map[string]any)
-					for key, value := range *sel {
-						sensitive, err = client.GetSecretValue(ctx, value)
-						if resource.IgnoreNotFound(err) != nil {
-							return errors.Wrapf(err, errFmtCannotGetSecretValue, sel)
+					data, err := client.GetSecretData(ctx, ref)
+					if err != nil {
+						return errors.Wrapf(err, errFmtCannotGetSecretValue, ref)
+					}
+					for key, value := range data {
+						if err = pavedTF.SetValue(fmt.Sprintf("%s.%s", tfPath, key), string(value)); err != nil {
+							return errors.Wrapf(err, "cannot set string as terraform attribute for fieldpath %q", fmt.Sprintf("%s.%s", tfPath, key))
 						}
+					}
+					continue
+				}
 
-						// If referenced k8s secret is deleted before the MR, we pass empty string for the sensitive
-						// field to be able to destroy the resource.
-						if kerrors.IsNotFound(err) {
-							sensitive = []byte("")
-						}
-						sensitives[key] = string(sensitive)
-					}
-					if err := setSensitiveParametersWithPaved(pavedTF, expandedJSONPath, tfPath, mapping, sensitives); err != nil {
-						return err
-					}
-				} else {
-					sel := &v1.SecretKeySelector{}
-					if err = pavedJSON.GetValueInto(expandedJSONPath, sel); err != nil {
-						return errors.Wrapf(err, errFmtCannotGetSecretKeySelector, expandedJSONPath)
-					}
-					sensitive, err = client.GetSecretValue(ctx, *sel)
-					if resource.IgnoreNotFound(err) != nil {
-						return errors.Wrapf(err, errFmtCannotGetSecretValue, sel)
-					}
-					if err := setSensitiveParametersWithPaved(pavedTF, expandedJSONPath, tfPath, mapping, string(sensitive)); err != nil {
-						return err
-					}
+				sel := &v1.SecretKeySelector{}
+				if err = pavedJSON.GetValueInto(expandedJSONPath, sel); err != nil {
+					return errors.Wrapf(err, errFmtCannotGetSecretKeySelector, expandedJSONPath)
+				}
+				sensitive, err = client.GetSecretValue(ctx, *sel)
+				if resource.IgnoreNotFound(err) != nil {
+					return errors.Wrapf(err, errFmtCannotGetSecretValue, sel)
+				}
+				if err := setSensitiveParametersWithPaved(pavedTF, expandedJSONPath, tfPath, mapping, string(sensitive)); err != nil {
+					return err
 				}
 			case []any:
 				sel := &[]v1.SecretKeySelector{}
@@ -417,18 +415,4 @@ func setSensitiveAttributesToValuesMap(e, i any, k, fp string, vals map[string][
 	}
 	vals[fmt.Sprintf("%s%s.%v", prefixAttribute, k, i)] = []byte(value)
 	return nil
-}
-
-// This for loop accesses the first value of selectorMap to determine the map's value type.
-func hasMapValue(selectorMap map[string]any) bool {
-	for _, v := range selectorMap {
-		switch v.(type) {
-		case map[string]any:
-			return true
-		case string:
-			return false
-		}
-	}
-
-	return false
 }

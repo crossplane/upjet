@@ -610,39 +610,21 @@ func TestGetSensitiveParameters(t *testing.T) {
 				},
 			},
 		},
-		"SingleNoWildcardWithMap": {
+		"SingleNoWildcardWithSecretReference": {
 			args: args{
 				clientFn: func(client *mocks.MockSecretClient) {
-					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
-						SecretReference: xpv1.SecretReference{
-							Name:      "db-passwords",
-							Namespace: "crossplane-system",
-						},
-						Key: "admin",
-					})).Return([]byte("admin_pwd"), nil)
-					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
-						SecretReference: xpv1.SecretReference{
-							Name:      "db-passwords",
-							Namespace: "crossplane-system",
-						},
-						Key: "system",
-					})).Return([]byte("system_pwd"), nil)
+					client.EXPECT().GetSecretData(gomock.Any(), gomock.Eq(&xpv1.SecretReference{
+						Name:      "db-passwords",
+						Namespace: "crossplane-system",
+					})).Return(map[string][]byte{"admin": []byte("admin_pwd"), "system": []byte("system_pwd")}, nil)
 				},
 				from: &unstructured.Unstructured{
 					Object: map[string]any{
 						"spec": map[string]any{
 							"forProvider": map[string]any{
-								"passwordsSecretRef": map[string]any{
-									"pwd1": map[string]any{
-										"key":       "admin",
-										"name":      "db-passwords",
-										"namespace": "crossplane-system",
-									},
-									"pwd2": map[string]any{
-										"key":       "system",
-										"name":      "db-passwords",
-										"namespace": "crossplane-system",
-									},
+								"dbPasswordsSecretRef": map[string]any{
+									"name":      "db-passwords",
+									"namespace": "crossplane-system",
 								},
 							},
 						},
@@ -652,15 +634,15 @@ func TestGetSensitiveParameters(t *testing.T) {
 					"some_other_key": "some_other_value",
 				},
 				mapping: map[string]string{
-					"db_passwords": "spec.forProvider.passwordsSecretRef",
+					"db_passwords": "spec.forProvider.dbPasswordsSecretRef",
 				},
 			},
 			want: want{
 				out: map[string]any{
 					"some_other_key": "some_other_value",
 					"db_passwords": map[string]any{
-						"pwd1": "admin_pwd",
-						"pwd2": "system_pwd",
+						"admin":  "admin_pwd",
+						"system": "system_pwd",
 					},
 				},
 			},

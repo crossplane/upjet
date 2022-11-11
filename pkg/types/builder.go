@@ -142,8 +142,13 @@ func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, r 
 		return types.NewPointer(types.Universe.Lookup("string").Type()), nil
 	case schema.TypeMap, schema.TypeList, schema.TypeSet:
 		names = append(names, f.Name.Camel)
-		f.TerraformPaths = append(f.TerraformPaths, wildcard)
-		f.CRDPaths = append(f.CRDPaths, wildcard)
+		if f.Schema.Type != schema.TypeMap {
+			// We don't want to have a many-to-many relationship in case of a Map, since we use SecretReference as
+			// the type of XP field. In this case, we want to have a one-to-many relationship which is handled at
+			// runtime in the controller.
+			f.TerraformPaths = append(f.TerraformPaths, wildcard)
+			f.CRDPaths = append(f.CRDPaths, wildcard)
+		}
 		var elemType types.Type
 		switch et := f.Schema.Elem.(type) {
 		case schema.ValueType:
