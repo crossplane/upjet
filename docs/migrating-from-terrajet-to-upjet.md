@@ -4,7 +4,18 @@ As [Terrajet] is being [deprecated][terrrajet-deprecation] in favor of [Upjet],
 new Crossplane providers are expected to be generated using Upjet's [provider
 template repository](https://github.com/upbound/upjet-provider-template), and
 this guide outlines the steps needed to convert an existing Terrajet-based
-Crossplane provider to an Upjet-based one.
+Crossplane provider to an Upjet-based one. While this guide describes the
+steps needed to update the `github.com/crossplane/terrajet` Go module
+dependency with the `github.com/upbound/upjet` module, especially if you
+have not customized your provider's CI pipelines and architecture, and
+you want to utilize all the new features offered by Upjet 
+(such as documentation/example manifest generation), 
+you may also prefer to [bootstrap a new provider] from the
+[Upjet template repository] and copy your existing resource configurations
+under the `config` folder of your existing provider to the new provider.
+The steps involved are similar in both approaches but this guide provides
+more flexibility as we have indicated certain steps as optional to the
+migration process itself.
 
 ### Overview of Terrajet-Upjet Migration Steps
 
@@ -187,5 +198,7 @@ the template repo's [Makefile](https://github.com/upbound/upjet-provider-templat
 [resource configuration API]:
     https://github.com/upbound/upjet/blob/7e84c638a8bc5c93c6da3cf9420f961f165dd05d/pkg/config/resource.go#L258
 [reference configurations]: https://github.com/upbound/upjet/blob/c82119f5ef342f752406a0ed38264940b02e795f/pkg/config/resource.go#L293
+[Upjet template repository]: https://github.com/upbound/upjet-provider-template
 [Makefile]: https://github.com/upbound/upjet-provider-template/blob/d34119409586f6205ec8ed4b9b2c2481c74bf07e/Makefile#L41
 [Terraform registry]: https://registry.terraform.io/
+[bootstrap a new provider]: https://github.com/upbound/upjet/blob/main/docs/generating-a-provider.md
