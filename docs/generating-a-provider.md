@@ -340,6 +340,6 @@ Now let's test our generated resources.
 [Terraform documentation for provider configuration]: https://registry.terraform.io/providers/integrations/github/latest/docs#argument-reference
 [github_repository]: https://registry.terraform.io/providers/integrations/github/latest/docs/resources/repository
 [github_branch]: https://registry.terraform.io/providers/integrations/github/latest/docs/resources/branch
-[this line in controller Dockerfile]: https://github.com/upbound/upjet-provider-template/blob/main/cluster/images/official-provider-template-controller/Dockerfile#L18-L26
+[this line in controller Dockerfile]: https://github.com/upbound/upjet-provider-template/blob/main/cluster/images/upjet-provider-template/Dockerfile#L13-L21
 [terraform-plugin-sdk]: https://github.com/hashicorp/terraform-plugin-sdk
 [new-resource-short]: add-new-resource-short.md
