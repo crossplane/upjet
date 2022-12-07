@@ -33,11 +33,12 @@ func TestScrapeRepo(t *testing.T) {
 			reason: "Should successfully scrape AWS resource metadata",
 			args: args{
 				config: &ScrapeConfiguration{
-					RepoPath:      "testdata/aws/r",
-					CodeXPath:     `//code[@class="language-terraform" or @class="language-hcl"]/text()`,
-					PreludeXPath:  `//text()[contains(., "description") and contains(., "subcategory")]`,
-					FieldDocXPath: `//ul/li//code[1]/text()`,
-					ImportXPath:   `//code[@class="language-shell"]/text()`,
+					RepoPath:       "testdata/aws/r",
+					CodeXPath:      `//code[@class="language-terraform" or @class="language-hcl"]/text()`,
+					PreludeXPath:   `//text()[contains(., "description") and contains(., "subcategory")]`,
+					FieldDocXPath:  `//ul/li//code[1]/text()`,
+					ImportXPath:    `//code[@class="language-shell"]/text()`,
+					FileExtensions: []string{".markdown"},
 				},
 			},
 			want: want{
@@ -48,11 +49,12 @@ func TestScrapeRepo(t *testing.T) {
 			reason: "Should successfully scrape Azure resource metadata",
 			args: args{
 				config: &ScrapeConfiguration{
-					RepoPath:      "testdata/azure/r",
-					CodeXPath:     `//code[@class="language-terraform" or @class="language-hcl"]/text()`,
-					PreludeXPath:  `//text()[contains(., "description") and contains(., "subcategory")]`,
-					FieldDocXPath: `//ul/li//code[1]/text()`,
-					ImportXPath:   `//code[@class="language-shell"]/text()`,
+					RepoPath:       "testdata/azure/r",
+					CodeXPath:      `//code[@class="language-terraform" or @class="language-hcl"]/text()`,
+					PreludeXPath:   `//text()[contains(., "description") and contains(., "subcategory")]`,
+					FieldDocXPath:  `//ul/li//code[1]/text()`,
+					ImportXPath:    `//code[@class="language-shell"]/text()`,
+					FileExtensions: []string{".markdown"},
 				},
 			},
 			want: want{
@@ -63,11 +65,12 @@ func TestScrapeRepo(t *testing.T) {
 			reason: "Should successfully scrape GCP resource metadata",
 			args: args{
 				config: &ScrapeConfiguration{
-					RepoPath:      "testdata/gcp/r",
-					CodeXPath:     `//code[@class="language-terraform" or @class="language-hcl"]/text()`,
-					PreludeXPath:  `//text()[contains(., "description") and contains(., "subcategory")]`,
-					FieldDocXPath: `//ul/li//code[1]/text()`,
-					ImportXPath:   `//code[@class="language-shell"]/text()`,
+					RepoPath:       "testdata/gcp/r",
+					CodeXPath:      `//code[@class="language-terraform" or @class="language-hcl"]/text()`,
+					PreludeXPath:   `//text()[contains(., "description") and contains(., "subcategory")]`,
+					FieldDocXPath:  `//ul/li//code[1]/text()`,
+					ImportXPath:    `//code[@class="language-shell"]/text()`,
+					FileExtensions: []string{".markdown"},
 				},
 			},
 			want: want{
