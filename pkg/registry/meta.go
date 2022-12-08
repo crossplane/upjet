@@ -27,7 +27,6 @@ import (
 )
 
 const (
-	extMarkdown    = ".markdown"
 	blockResource  = "resource"
 	keySubCategory = "subcategory"
 	keyDescription = "description"
@@ -200,11 +199,10 @@ func (r *Resource) scrapePrelude(doc *html.Node, preludeXPath string) error {
 	// parse prelude
 	nodes := htmlquery.Find(doc, preludeXPath)
 	if len(nodes) == 0 {
-		return errors.Errorf("failed to extract subcategory and title name of the resource")
+		return errors.Errorf("failed to find the prelude of the document using the xpath expressions: %s", preludeXPath)
 	}
 
 	n := nodes[0]
-	rawData := n.Data
 	lines := strings.Split(n.Data, "\n")
 	descIndex := -1
 	for i, l := range lines {
@@ -230,10 +228,6 @@ func (r *Resource) scrapePrelude(doc *html.Node, preludeXPath string) error {
 	}
 	r.Description = strings.TrimSpace(strings.Replace(r.Description, "|-", "", 1))
 
-	if r.Title == "" {
-		return errors.Errorf("failed to find title. Description: %s, Subcategory: %s, Title name: %s. Raw data:%s\n",
-			r.Description, r.SubCategory, r.Title, rawData)
-	}
 	return nil
 }
 
@@ -464,6 +458,17 @@ type ScrapeConfiguration struct {
 	FieldDocXPath string
 	// ImportXPath Import statements XPath expression
 	ImportXPath string
+	// FileExtensions extensions of the files to be scraped
+	FileExtensions []string
+}
+
+func (sc *ScrapeConfiguration) hasExpectedExtension(fileName string) bool {
+	for _, e := range sc.FileExtensions {
+		if e == filepath.Ext(fileName) {
+			return true
+		}
+	}
+	return false
 }
 
 // ScrapeRepo scrape metadata from the configured Terraform native provider repo
@@ -472,7 +477,7 @@ func (pm *ProviderMetadata) ScrapeRepo(config *ScrapeConfiguration) error {
 		if err != nil {
 			return errors.Wrap(err, "failed to traverse Terraform registry")
 		}
-		if d.IsDir() || filepath.Ext(d.Name()) != extMarkdown {
+		if d.IsDir() || !config.hasExpectedExtension(d.Name()) {
 			return nil
 		}
 		r := &Resource{}
