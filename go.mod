@@ -2,6 +2,8 @@ module github.com/upbound/upjet
 
 go 1.19
 
+replace github.com/crossplane/crossplane-runtime => ../../crossplane/crossplane-runtime
+
 require (
 	github.com/antchfx/htmlquery v1.2.4
 	github.com/crossplane/crossplane v1.10.0
