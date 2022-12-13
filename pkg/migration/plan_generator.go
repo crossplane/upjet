@@ -207,7 +207,7 @@ func (pg *PlanGenerator) convertResource(o UnstructuredWithMetadata) ([]Unstruct
 	converted := make([]UnstructuredWithMetadata, 0, len(resources))
 	for _, mg := range resources {
 		converted = append(converted, UnstructuredWithMetadata{
-			Object:   ToUnstructured(mg),
+			Object:   ToSanitizedUnstructured(mg),
 			Metadata: o.Metadata,
 		})
 	}
@@ -273,7 +273,7 @@ func (pg *PlanGenerator) convertComposition(o UnstructuredWithMetadata) (*Unstru
 		c.Spec.Resources = append(c.Spec.Resources, *cmp)
 	}
 	return &UnstructuredWithMetadata{
-		Object:   ToUnstructured(&c),
+		Object:   ToSanitizedUnstructured(&c),
 		Metadata: o.Metadata,
 	}, isConverted, nil
 }
@@ -356,10 +356,7 @@ func (pg *PlanGenerator) stepStartManagedResource(u *UnstructuredWithMetadata) e
 
 	u.Metadata.Path = fmt.Sprintf("%s/%s.yaml", pg.Plan.Spec.Steps[stepStartManaged].Name, getQualifiedName(u.Object))
 	pg.Plan.Spec.Steps[stepStartManaged].Apply.Files = append(pg.Plan.Spec.Steps[stepStartManaged].Apply.Files, u.Metadata.Path)
-	if err := pg.target.Put(*u); err != nil {
-		return errors.Wrap(err, errResourceOutput)
-	}
-	return nil
+	return errors.Wrap(pg.target.Put(*u), errResourceOutput)
 }
 
 func (pg *PlanGenerator) stepPauseManagedResource(u *UnstructuredWithMetadata, qName string) error {
@@ -392,17 +389,8 @@ func (pg *PlanGenerator) stepDeleteOldManagedResource(u *UnstructuredWithMetadat
 		})
 }
 
-func addPauseAnnotation(u *unstructured.Unstructured) {
-	annot := u.GetAnnotations()
-	if annot == nil {
-		annot = make(map[string]string)
-	}
-	annot[meta.AnnotationKeyReconciliationPaused] = "true"
-	u.SetAnnotations(annot)
-}
-
 func (pg *PlanGenerator) pause(fp string, u *unstructured.Unstructured) error {
-	addPauseAnnotation(u)
+	meta.AddAnnotations(u, map[string]string{meta.AnnotationKeyReconciliationPaused: "true"})
 	return errors.Wrap(pg.target.Put(UnstructuredWithMetadata{
 		Object: *u,
 		Metadata: Metadata{
@@ -417,7 +405,7 @@ func getQualifiedName(u unstructured.Unstructured) string {
 }
 
 func (pg *PlanGenerator) stepNewManagedResource(u *UnstructuredWithMetadata) error {
-	addPauseAnnotation(&u.Object)
+	meta.AddAnnotations(&u.Object, map[string]string{meta.AnnotationKeyReconciliationPaused: "true"})
 	u.Metadata.Path = fmt.Sprintf("%s/%s.yaml", pg.Plan.Spec.Steps[stepCreateNewManaged].Name, getQualifiedName(u.Object))
 	pg.Plan.Spec.Steps[stepCreateNewManaged].Apply.Files = append(pg.Plan.Spec.Steps[stepCreateNewManaged].Apply.Files, u.Metadata.Path)
 	if err := pg.target.Put(*u); err != nil {

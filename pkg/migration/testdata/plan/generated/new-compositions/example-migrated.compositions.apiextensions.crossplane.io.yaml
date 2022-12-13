@@ -1,0 +1,33 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  labels:
+    purpose: example
+  name: example-migrated
+spec:
+  compositeTypeRef:
+    apiVersion: test.com/v1alpha1
+    kind: XMyResource
+  resources:
+  - base:
+      apiVersion: faketargetapi/v1alpha1
+      kind: VPC
+      mockManaged:
+        ctrl: null
+        recorder: null
+      spec:
+        forProvider:
+          cidrBlock: 192.168.0.0/16
+          region: us-west-1
+          tags:
+            key1: val1
+            key2: val2
+            key3: val3
+    name: vpc
+    patches:
+    - fromFieldPath: spec.parameters.tagValue
+      toFieldPath: spec.forProvider.tags["key1"]
+    - fromFieldPath: spec.parameters.tagValue
+      toFieldPath: spec.forProvider.tags["key2"]
+    - fromFieldPath: spec.parameters.tagValue
+      toFieldPath: spec.forProvider.tags["key3"]

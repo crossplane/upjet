@@ -42,7 +42,7 @@ const (
 // included in the `skipFieldPaths` and it must manually be handled in the
 // conversion function.
 func CopyInto(source any, target any, targetGVK schema.GroupVersionKind, skipFieldPaths ...string) (any, error) {
-	u := ToUnstructured(source)
+	u := ToSanitizedUnstructured(source)
 	paved := fieldpath.Pave(u.Object)
 	skipFieldPaths = append(skipFieldPaths, "apiVersion", "kind")
 	for _, p := range skipFieldPaths {
@@ -75,11 +75,11 @@ func sanitizeResource(m map[string]any) map[string]any {
 	return m
 }
 
-// ToUnstructured converts the specified managed resource to an
+// ToSanitizedUnstructured converts the specified managed resource to an
 // unstructured.Unstructured. Before the converted object is
 // returned, it's sanitized by removing certain fields
 // (like status, metadata.creationTimestamp).
-func ToUnstructured(mg any) unstructured.Unstructured {
+func ToSanitizedUnstructured(mg any) unstructured.Unstructured {
 	m, err := runtime.DefaultUnstructuredConverter.ToUnstructured(mg)
 	if err != nil {
 		panic(errors.Wrap(err, errToUnstructured))
