@@ -25,7 +25,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/kubernetes/scheme"
 
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
@@ -78,7 +77,7 @@ const (
 type PlanGenerator struct {
 	source   Source
 	target   Target
-	registry Registry
+	registry *Registry
 	// Plan is the migration.Plan whose steps are expected
 	// to complete a migration when they're executed in order.
 	Plan Plan
@@ -86,7 +85,7 @@ type PlanGenerator struct {
 
 // NewPlanGenerator constructs a new PlanGenerator using the specified
 // Source and Target and the default converter Registry.
-func NewPlanGenerator(source Source, target Target) PlanGenerator {
+func NewPlanGenerator(registry *Registry, source Source, target Target) PlanGenerator {
 	return PlanGenerator{
 		source:   source,
 		target:   target,
@@ -167,7 +166,7 @@ func (pg *PlanGenerator) convert() error { //nolint: gocyclo
 						return errors.Wrap(err, errResourceMigrate)
 					}
 				}
-			} else if _, ok, _ := toManagedResource(o.Object); ok {
+			} else if _, ok, _ := toManagedResource(pg.registry.scheme, o.Object); ok {
 				if err := pg.stepStartManagedResource(&o); err != nil {
 					return errors.Wrap(err, errResourceMigrate)
 				}
@@ -191,12 +190,12 @@ func (pg *PlanGenerator) convert() error { //nolint: gocyclo
 
 func (pg *PlanGenerator) convertResource(o UnstructuredWithMetadata) ([]UnstructuredWithMetadata, bool, error) {
 	gvk := o.Object.GroupVersionKind()
-	conv := pg.registry[gvk]
+	conv := pg.registry.converters[gvk]
 	if conv == nil {
 		return []UnstructuredWithMetadata{o}, false, nil
 	}
 	// we have already ensured that the GVK belongs to a managed resource type
-	mg, _, err := toManagedResource(o.Object)
+	mg, _, err := toManagedResource(pg.registry.scheme, o.Object)
 	if err != nil {
 		return nil, false, errors.Wrap(err, errResourceMigrate)
 	}
@@ -214,9 +213,9 @@ func (pg *PlanGenerator) convertResource(o UnstructuredWithMetadata) ([]Unstruct
 	return converted, true, nil
 }
 
-func toManagedResource(u unstructured.Unstructured) (resource.Managed, bool, error) {
+func toManagedResource(c runtime.ObjectCreater, u unstructured.Unstructured) (resource.Managed, bool, error) {
 	gvk := u.GroupVersionKind()
-	obj, err := scheme.Scheme.New(gvk)
+	obj, err := c.New(gvk)
 	if err != nil {
 		return nil, false, errors.Wrapf(err, errFmtNewObject, gvk)
 	}
@@ -260,7 +259,7 @@ func (pg *PlanGenerator) convertComposition(o UnstructuredWithMetadata) (*Unstru
 			}
 			cmps = append(cmps, c)
 		}
-		conv := pg.registry[gvk]
+		conv := pg.registry.converters[gvk]
 		if conv != nil {
 			if err := conv.ComposedTemplates(cmp, cmps...); err != nil {
 				return nil, false, errors.Wrap(err, errComposedTemplateMigrate)
@@ -331,7 +330,7 @@ func (pg *PlanGenerator) buildPlan() {
 }
 
 func (pg *PlanGenerator) addStepsForManagedResource(u *UnstructuredWithMetadata) error {
-	if _, ok, err := toManagedResource(u.Object); err != nil || !ok {
+	if _, ok, err := toManagedResource(pg.registry.scheme, u.Object); err != nil || !ok {
 		// not a managed resource or unable to determine
 		// whether it's a managed resource
 		return nil // nolint:nilerr

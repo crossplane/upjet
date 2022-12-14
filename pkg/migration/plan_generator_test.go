@@ -28,9 +28,9 @@ import (
 	v1 "github.com/crossplane/crossplane/apis/apiextensions/v1"
 	"github.com/google/go-cmp/cmp"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/yaml"
-	"k8s.io/client-go/kubernetes/scheme"
 	k8syaml "sigs.k8s.io/yaml"
 
 	"github.com/upbound/upjet/pkg/migration/fake"
@@ -40,7 +40,7 @@ func TestGeneratePlan(t *testing.T) {
 	type fields struct {
 		source   Source
 		target   *testTarget
-		registry Registry
+		registry *Registry
 	}
 	type want struct {
 		err               error
@@ -83,7 +83,7 @@ func TestGeneratePlan(t *testing.T) {
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			pg := NewPlanGenerator(tt.fields.source, tt.fields.target)
+			pg := NewPlanGenerator(tt.fields.registry, tt.fields.source, tt.fields.target)
 			err := pg.GeneratePlan()
 			// compare error state
 			if diff := cmp.Diff(tt.want.err, err, test.EquateErrors()); diff != "" {
@@ -244,12 +244,14 @@ func (f *testConverter) ComposedTemplates(cmp v1.ComposedTemplate, convertedBase
 	return nil
 }
 
-func getRegistryWithConverters(converters map[schema.GroupVersionKind]Converter) Registry {
-	scheme.Scheme.AddKnownTypeWithName(fake.MigrationSourceGVK, &fake.MigrationSourceObject{})
+func getRegistryWithConverters(converters map[schema.GroupVersionKind]Converter) *Registry {
+	scheme := runtime.NewScheme()
+	scheme.AddKnownTypeWithName(fake.MigrationSourceGVK, &fake.MigrationSourceObject{})
+	r := NewRegistry(scheme)
 	for gvk, c := range converters {
-		RegisterConverter(gvk, c)
+		r.RegisterConverter(gvk, c)
 	}
-	return registry
+	return r
 }
 
 func loadPlan(planPath string) (*Plan, error) {
