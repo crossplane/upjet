@@ -1,0 +1,10 @@
+apiVersion: test.com/v1alpha1
+kind: MyResource
+metadata:
+  name: my-resource
+  namespace: upbound-system
+spec:
+  compositionRef:
+    name: example
+  parameters:
+    tagValue: demo-test

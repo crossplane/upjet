@@ -1,0 +1,33 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  labels:
+    purpose: example
+  name: example
+spec:
+  compositeTypeRef:
+    apiVersion: test.com/v1alpha1
+    kind: XMyResource
+  resources:
+    - base:
+        apiVersion: fakesourceapi/v1alpha1
+        kind: VPC
+        spec:
+          forProvider:
+            cidrBlock: "192.168.0.0/16"
+            region: "us-west-1"
+            tags:
+              - key: key1
+                value: val1
+              - key: key2
+                value: val2
+              - key: key3
+                value: val3
+      name: vpc
+      patches:
+        - fromFieldPath: "spec.parameters.tagValue"
+          toFieldPath: spec.forProvider.tags[0].value
+        - fromFieldPath: "spec.parameters.tagValue"
+          toFieldPath: spec.forProvider.tags[1].value
+        - fromFieldPath: "spec.parameters.tagValue"
+          toFieldPath: spec.forProvider.tags[2].value
