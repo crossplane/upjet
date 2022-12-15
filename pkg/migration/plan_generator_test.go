@@ -56,17 +56,17 @@ func TestGeneratePlan(t *testing.T) {
 			fields: fields{
 				source: newTestSource(map[string]Metadata{
 					"testdata/plan/sourcevpc.yaml":   {},
-					"testdata/plan/claim.yaml":       {IsClaim: true},
+					"testdata/plan/claim.yaml":       {Category: CategoryClaim},
 					"testdata/plan/composition.yaml": {},
 					"testdata/plan/xrd.yaml":         {},
-					"testdata/plan/xr.yaml":          {IsComposite: true}}),
+					"testdata/plan/xr.yaml":          {Category: CategoryComposite}}),
 				target: newTestTarget(),
 				registry: getRegistryWithConverters(map[schema.GroupVersionKind]Converter{
 					fake.MigrationSourceGVK: &testConverter{},
 				}),
 			},
 			want: want{
-				migrationPlanPath: "testdata/plan/migration_plan.yaml",
+				migrationPlanPath: "testdata/plan/generated/migration_plan.yaml",
 				migratedResourceNames: []string{
 					"pause-managed/sample-vpc.vpcs.fakesourceapi.yaml",
 					"edit-claims/my-resource.myresources.test.com.yaml",

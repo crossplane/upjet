@@ -16,7 +16,7 @@ package migration
 
 import (
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
-	v1 "github.com/crossplane/crossplane/apis/apiextensions/v1"
+	xpv1 "github.com/crossplane/crossplane/apis/apiextensions/v1"
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -35,18 +35,20 @@ type ResourceConversionFn func(mg resource.Managed) ([]resource.Managed, error)
 // ComposedTemplateConversionFn is a function that converts from the specified
 // v1.ComposedTemplate's migration source resources to one or more migration
 // target resources.
-type ComposedTemplateConversionFn func(cmp v1.ComposedTemplate, convertedBase ...*v1.ComposedTemplate) error
+type ComposedTemplateConversionFn func(cmp xpv1.ComposedTemplate, convertedBase ...*xpv1.ComposedTemplate) error
 
 // Registry is a registry of `migration.Converter`s keyed with
 // the associated `schema.GroupVersionKind`s and an associated
 // runtime.Scheme with which the corresponding types are registered.
 type Registry struct {
-	converters map[schema.GroupVersionKind]Converter
-	scheme     *runtime.Scheme
+	converters     map[schema.GroupVersionKind]Converter
+	scheme         *runtime.Scheme
+	claimTypes     []schema.GroupVersionKind
+	compositeTypes []schema.GroupVersionKind
 }
 
 // NewRegistry returns a new Registry initialized with
-// the specified runtime.Scheme
+// the specified runtime.Scheme.
 func NewRegistry(scheme *runtime.Scheme) *Registry {
 	return &Registry{
 		converters: make(map[schema.GroupVersionKind]Converter),
@@ -87,7 +89,7 @@ func (d delegatingConverter) Resources(mg resource.Managed) ([]resource.Managed,
 // ComposedTemplates converts from the specified migration source
 // v1.ComposedTemplate to the migration target schema by calling the configured
 // ComposedTemplateConversionFn.
-func (d delegatingConverter) ComposedTemplates(cmp v1.ComposedTemplate, convertedBase ...*v1.ComposedTemplate) error {
+func (d delegatingConverter) ComposedTemplates(cmp xpv1.ComposedTemplate, convertedBase ...*xpv1.ComposedTemplate) error {
 	if d.cmpFn == nil {
 		return nil
 	}
@@ -111,13 +113,49 @@ func (r *Registry) AddToScheme(sb func(scheme *runtime.Scheme) error) error {
 	return errors.Wrap(sb(r.scheme), errAddToScheme)
 }
 
-// GetRegisteredGVKs returns a list of registered GVKs
-// including v1.CompositionGroupVersionKind
-func (r *Registry) GetRegisteredGVKs() []schema.GroupVersionKind {
-	gvks := make([]schema.GroupVersionKind, 0, len(r.converters)+1)
+// AddCompositionTypes registers the Composition types with
+// the registry's scheme. Only the v1 API of Compositions
+// is currently supported.
+func (r *Registry) AddCompositionTypes() error {
+	return r.AddToScheme(xpv1.AddToScheme)
+}
+
+// AddClaimType registers a new composite resource claim type
+// with the given GVK
+func (r *Registry) AddClaimType(gvk schema.GroupVersionKind) {
+	r.claimTypes = append(r.claimTypes, gvk)
+}
+
+// AddCompositeType registers a new composite resource type with the given GVK
+func (r *Registry) AddCompositeType(gvk schema.GroupVersionKind) {
+	r.compositeTypes = append(r.compositeTypes, gvk)
+}
+
+// GetManagedResourceGVKs returns a list of all registered managed resource
+// GVKs
+func (r *Registry) GetManagedResourceGVKs() []schema.GroupVersionKind {
+	gvks := make([]schema.GroupVersionKind, 0, len(r.converters))
 	for gvk := range r.converters {
 		gvks = append(gvks, gvk)
 	}
-	gvks = append(gvks, v1.CompositionGroupVersionKind)
+	return gvks
+}
+
+func (r *Registry) GetCompositionGVKs() []schema.GroupVersionKind {
+	// Composition types are registered with this registry's scheme
+	if _, ok := r.scheme.AllKnownTypes()[xpv1.CompositionGroupVersionKind]; ok {
+		return []schema.GroupVersionKind{xpv1.CompositionGroupVersionKind}
+	}
+	return nil
+}
+
+// GetAllRegisteredGVKs returns a list of registered GVKs
+// including v1.CompositionGroupVersionKind
+func (r *Registry) GetAllRegisteredGVKs() []schema.GroupVersionKind {
+	gvks := make([]schema.GroupVersionKind, 0, len(r.claimTypes)+len(r.compositeTypes)+len(r.converters)+1)
+	gvks = append(gvks, r.claimTypes...)
+	gvks = append(gvks, r.compositeTypes...)
+	gvks = append(gvks, r.GetManagedResourceGVKs()...)
+	gvks = append(gvks, xpv1.CompositionGroupVersionKind)
 	return gvks
 }

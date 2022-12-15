@@ -27,12 +27,28 @@ type KubernetesSource struct {
 // Group:   "ec2.aws.upbound.io",
 // Version: "v1beta1",
 // Kind:    "VPC",
-func NewKubernetesSource(dynamicClient dynamic.Interface, gvks []schema.GroupVersionKind) (*KubernetesSource, error) {
+func NewKubernetesSource(r *Registry, dynamicClient dynamic.Interface) (*KubernetesSource, error) {
 	ks := &KubernetesSource{
 		dynamicClient: dynamicClient,
 	}
+	if err := ks.getResources(r.claimTypes, CategoryClaim); err != nil {
+		return nil, errors.Wrap(err, "cannot get claims")
+	}
+	if err := ks.getResources(r.compositeTypes, CategoryComposite); err != nil {
+		return nil, errors.Wrap(err, "cannot get composites")
+	}
+	if err := ks.getResources(r.GetCompositionGVKs(), CategoryComposition); err != nil {
+		return nil, errors.Wrap(err, "cannot get compositions")
+	}
+	if err := ks.getResources(r.GetManagedResourceGVKs(), CategoryManaged); err != nil {
+		return nil, errors.Wrap(err, "cannot get managed resources")
+	}
+	return ks, nil
+}
+
+func (ks *KubernetesSource) getResources(gvks []schema.GroupVersionKind, category Category) error {
 	for _, gvk := range gvks {
-		ri := dynamicClient.Resource(
+		ri := ks.dynamicClient.Resource(
 			schema.GroupVersionResource{
 				Group:   gvk.Group,
 				Version: gvk.Version,
@@ -41,18 +57,19 @@ func NewKubernetesSource(dynamicClient dynamic.Interface, gvks []schema.GroupVer
 			})
 		unstructuredList, err := ri.List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
-			return nil, errors.Wrap(err, "cannot list resources")
+			return errors.Wrap(err, "cannot list resources")
 		}
 		for _, u := range unstructuredList.Items {
 			ks.items = append(ks.items, UnstructuredWithMetadata{
 				Object: u,
 				Metadata: Metadata{
-					Path: string(u.GetUID()),
+					Path:     string(u.GetUID()),
+					Category: category,
 				},
 			})
 		}
 	}
-	return ks, nil
+	return nil
 }
 
 // HasNext checks the next item

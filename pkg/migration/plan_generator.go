@@ -70,6 +70,10 @@ const (
 	stepStartComposites
 )
 
+const (
+	versionV010 = "0.1.0"
+)
+
 // PlanGenerator generates a migration.Plan reading the manifests available
 // from `source`, converting managed resources and compositions using the
 // available `migration.Converter`s registered in the `registry` and
@@ -134,7 +138,7 @@ func (pg *PlanGenerator) convert() error { //nolint: gocyclo
 				}
 			}
 		default:
-			if o.Metadata.IsComposite {
+			if o.Metadata.Category == CategoryComposite {
 				if err := pg.stepPauseComposite(&o); err != nil {
 					return errors.Wrap(err, errCompositePause)
 				}
@@ -142,7 +146,7 @@ func (pg *PlanGenerator) convert() error { //nolint: gocyclo
 				continue
 			}
 
-			if o.Metadata.IsClaim {
+			if o.Metadata.Category == CategoryClaim {
 				claims = append(claims, o)
 				continue
 			}
@@ -327,6 +331,7 @@ func (pg *PlanGenerator) buildPlan() {
 	pg.Plan.Spec.Steps[stepStartComposites].Name = "start-composites"
 	pg.Plan.Spec.Steps[stepStartComposites].Type = StepTypeApply
 	pg.Plan.Spec.Steps[stepStartComposites].Apply = &ApplyStep{}
+	pg.Plan.Version = versionV010
 }
 
 func (pg *PlanGenerator) addStepsForManagedResource(u *UnstructuredWithMetadata) error {

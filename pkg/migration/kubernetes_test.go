@@ -40,6 +40,9 @@ func TestNewKubernetesSource(t *testing.T) {
 							Object: unstructured.Unstructured{
 								Object: unstructuredAwsVpc,
 							},
+							Metadata: Metadata{
+								Category: CategoryManaged,
+							},
 						},
 					},
 				},
@@ -48,10 +51,14 @@ func TestNewKubernetesSource(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			dynamicClient := fake.NewSimpleDynamicClient(runtime.NewScheme(),
+			s := runtime.NewScheme()
+			r := NewRegistry(s)
+			// register a dummy converter so that MRs will be observed
+			r.converters = map[schema.GroupVersionKind]Converter{tc.args.gvks[0]: nil}
+			dynamicClient := fake.NewSimpleDynamicClient(s,
 				&unstructured.Unstructured{Object: unstructuredAwsVpc},
 				&unstructured.Unstructured{Object: unstructuredResourceGroup})
-			ks, err := NewKubernetesSource(dynamicClient, tc.args.gvks)
+			ks, err := NewKubernetesSource(r, dynamicClient)
 			if diff := cmp.Diff(tc.want.err, err); diff != "" {
 				t.Errorf("\nNext(...): -want, +got:\n%s", diff)
 			}
