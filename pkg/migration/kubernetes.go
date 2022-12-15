@@ -2,9 +2,9 @@ package migration
 
 import (
 	"context"
-	"strings"
 
 	"github.com/pkg/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
@@ -48,13 +48,10 @@ func NewKubernetesSource(r *Registry, dynamicClient dynamic.Interface) (*Kuberne
 
 func (ks *KubernetesSource) getResources(gvks []schema.GroupVersionKind, category Category) error {
 	for _, gvk := range gvks {
-		ri := ks.dynamicClient.Resource(
-			schema.GroupVersionResource{
-				Group:   gvk.Group,
-				Version: gvk.Version,
-				// we need to add plural appendix to end of kind name
-				Resource: strings.ToLower(gvk.Kind) + "s",
-			})
+		// TODO: we are not using discovery as of now (to be reconsidered).
+		// This will not in all cases.
+		pluralGVR, _ := meta.UnsafeGuessKindToResource(gvk)
+		ri := ks.dynamicClient.Resource(pluralGVR)
 		unstructuredList, err := ri.List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
 			return errors.Wrap(err, "cannot list resources")
