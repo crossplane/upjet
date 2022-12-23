@@ -16,11 +16,13 @@ package migration
 
 import (
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
+	xpv1 "github.com/crossplane/crossplane/apis/apiextensions/v1"
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/json"
+	k8sjson "sigs.k8s.io/json"
 )
 
 const (
@@ -109,4 +111,15 @@ func FromGroupVersionKind(gvk schema.GroupVersionKind) GroupVersionKind {
 		Version: gvk.Version,
 		Kind:    gvk.Kind,
 	}
+}
+
+// workaround for:
+// https://github.com/kubernetes-sigs/structured-merge-diff/issues/230
+func convertToComposition(u map[string]interface{}) (*xpv1.Composition, error) {
+	buff, err := json.Marshal(u)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshal map to JSON")
+	}
+	c := &xpv1.Composition{}
+	return c, errors.Wrap(k8sjson.UnmarshalCaseSensitivePreserveInts(buff, c), "failed to unmarshal into a v1.Composition")
 }

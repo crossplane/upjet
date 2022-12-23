@@ -18,18 +18,18 @@ import (
 	"fmt"
 	"strings"
 
-	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
-	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
-	"github.com/crossplane/crossplane-runtime/pkg/resource/unstructured/claim"
-	"github.com/crossplane/crossplane-runtime/pkg/resource/unstructured/composite"
+	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 
+	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
+	"github.com/crossplane/crossplane-runtime/pkg/resource/unstructured/claim"
+	"github.com/crossplane/crossplane-runtime/pkg/resource/unstructured/composite"
 	xpv1 "github.com/crossplane/crossplane/apis/apiextensions/v1"
-	"github.com/pkg/errors"
 )
 
 const (
@@ -219,6 +219,9 @@ func (pg *PlanGenerator) convertResource(o UnstructuredWithMetadata) ([]Unstruct
 
 func toManagedResource(c runtime.ObjectCreater, u unstructured.Unstructured) (resource.Managed, bool, error) {
 	gvk := u.GroupVersionKind()
+	if gvk == xpv1.CompositionGroupVersionKind {
+		return nil, false, nil
+	}
 	obj, err := c.New(gvk)
 	if err != nil {
 		return nil, false, errors.Wrapf(err, errFmtNewObject, gvk)
@@ -231,8 +234,8 @@ func toManagedResource(c runtime.ObjectCreater, u unstructured.Unstructured) (re
 }
 
 func (pg *PlanGenerator) convertComposition(o UnstructuredWithMetadata) (*UnstructuredWithMetadata, bool, error) { // nolint:gocyclo
-	c := xpv1.Composition{}
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(o.Object.Object, &c); err != nil {
+	c, err := convertToComposition(o.Object.Object)
+	if err != nil {
 		return nil, false, errors.Wrap(err, errUnstructuredConvert)
 	}
 	var targetResources []*xpv1.ComposedTemplate
