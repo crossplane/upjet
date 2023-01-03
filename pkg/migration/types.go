@@ -28,6 +28,18 @@ const (
 	FinalizerPolicyRemove FinalizerPolicy = "Remove" // Default
 )
 
+// Resource categories
+const (
+	// CategoryClaim category for composite claim resources
+	CategoryClaim Category = "Claim"
+	// CategoryComposite category for composite resources
+	CategoryComposite Category = "Composite"
+	// CategoryComposition category for compositions
+	CategoryComposition Category = "Composition"
+	// CategoryManaged category for managed resources
+	CategoryManaged Category = "Managed"
+)
+
 // Plan represents a migration plan for migrating managed resources,
 // and associated composites and claims from a migration source provider
 // to a migration target provider.
@@ -114,6 +126,9 @@ type Resource struct {
 	Name string `json:"name"`
 }
 
+// Category specifies if a resource is a Claim, Composite or a Managed resource
+type Category string
+
 // Metadata holds metadata for an object read from a Source
 type Metadata struct {
 	// Path uniquely identifies the path for this object on its Source
@@ -121,10 +136,9 @@ type Metadata struct {
 	// colon separated list of parent `Path`s for fan-ins and fan-outs
 	// Example: resources/a.yaml:resources/b.yaml
 	Parents string
-	// IsComposite set if the object belongs to a Composite type
-	IsComposite bool
-	// IsClaim set if the object belongs to a Claim type
-	IsClaim bool
+	// Category specifies if the associated resource is a Claim, Composite or a
+	// Managed resource
+	Category Category
 }
 
 // UnstructuredWithMetadata represents an unstructured.Unstructured

@@ -55,3 +55,4 @@ spec:
       - start-composites/my-resource-dwjgh.xmyresources.test.com.yaml
     name: start-composites
     type: Apply
+version: 0.1.0

@@ -121,6 +121,9 @@ func (ft *FileSystemTarget) Put(o UnstructuredWithMetadata) error {
 	if err != nil {
 		return errors.Wrap(err, "cannot marshal object")
 	}
+	if err := os.MkdirAll(filepath.Dir(o.Metadata.Path), 0o750); err != nil {
+		return errors.Wrapf(err, "cannot mkdirall: %s", filepath.Dir(o.Metadata.Path))
+	}
 	if o.Metadata.Parents != "" {
 		f, err := ft.afero.OpenFile(o.Metadata.Path, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 		if err != nil {

@@ -18,19 +18,18 @@ import (
 	"fmt"
 	"strings"
 
-	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
-	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
-	"github.com/crossplane/crossplane-runtime/pkg/resource/unstructured/claim"
-	"github.com/crossplane/crossplane-runtime/pkg/resource/unstructured/composite"
+	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/kubernetes/scheme"
 
+	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
+	"github.com/crossplane/crossplane-runtime/pkg/resource/unstructured/claim"
+	"github.com/crossplane/crossplane-runtime/pkg/resource/unstructured/composite"
 	xpv1 "github.com/crossplane/crossplane/apis/apiextensions/v1"
-	"github.com/pkg/errors"
 )
 
 const (
@@ -71,6 +70,10 @@ const (
 	stepStartComposites
 )
 
+const (
+	versionV010 = "0.1.0"
+)
+
 // PlanGenerator generates a migration.Plan reading the manifests available
 // from `source`, converting managed resources and compositions using the
 // available `migration.Converter`s registered in the `registry` and
@@ -78,7 +81,7 @@ const (
 type PlanGenerator struct {
 	source   Source
 	target   Target
-	registry Registry
+	registry *Registry
 	// Plan is the migration.Plan whose steps are expected
 	// to complete a migration when they're executed in order.
 	Plan Plan
@@ -86,7 +89,7 @@ type PlanGenerator struct {
 
 // NewPlanGenerator constructs a new PlanGenerator using the specified
 // Source and Target and the default converter Registry.
-func NewPlanGenerator(source Source, target Target) PlanGenerator {
+func NewPlanGenerator(registry *Registry, source Source, target Target) PlanGenerator {
 	return PlanGenerator{
 		source:   source,
 		target:   target,
@@ -135,7 +138,7 @@ func (pg *PlanGenerator) convert() error { //nolint: gocyclo
 				}
 			}
 		default:
-			if o.Metadata.IsComposite {
+			if o.Metadata.Category == CategoryComposite {
 				if err := pg.stepPauseComposite(&o); err != nil {
 					return errors.Wrap(err, errCompositePause)
 				}
@@ -143,7 +146,7 @@ func (pg *PlanGenerator) convert() error { //nolint: gocyclo
 				continue
 			}
 
-			if o.Metadata.IsClaim {
+			if o.Metadata.Category == CategoryClaim {
 				claims = append(claims, o)
 				continue
 			}
@@ -167,7 +170,7 @@ func (pg *PlanGenerator) convert() error { //nolint: gocyclo
 						return errors.Wrap(err, errResourceMigrate)
 					}
 				}
-			} else if _, ok, _ := toManagedResource(o.Object); ok {
+			} else if _, ok, _ := toManagedResource(pg.registry.scheme, o.Object); ok {
 				if err := pg.stepStartManagedResource(&o); err != nil {
 					return errors.Wrap(err, errResourceMigrate)
 				}
@@ -191,12 +194,12 @@ func (pg *PlanGenerator) convert() error { //nolint: gocyclo
 
 func (pg *PlanGenerator) convertResource(o UnstructuredWithMetadata) ([]UnstructuredWithMetadata, bool, error) {
 	gvk := o.Object.GroupVersionKind()
-	conv := pg.registry[gvk]
+	conv := pg.registry.converters[gvk]
 	if conv == nil {
 		return []UnstructuredWithMetadata{o}, false, nil
 	}
 	// we have already ensured that the GVK belongs to a managed resource type
-	mg, _, err := toManagedResource(o.Object)
+	mg, _, err := toManagedResource(pg.registry.scheme, o.Object)
 	if err != nil {
 		return nil, false, errors.Wrap(err, errResourceMigrate)
 	}
@@ -214,9 +217,12 @@ func (pg *PlanGenerator) convertResource(o UnstructuredWithMetadata) ([]Unstruct
 	return converted, true, nil
 }
 
-func toManagedResource(u unstructured.Unstructured) (resource.Managed, bool, error) {
+func toManagedResource(c runtime.ObjectCreater, u unstructured.Unstructured) (resource.Managed, bool, error) {
 	gvk := u.GroupVersionKind()
-	obj, err := scheme.Scheme.New(gvk)
+	if gvk == xpv1.CompositionGroupVersionKind {
+		return nil, false, nil
+	}
+	obj, err := c.New(gvk)
 	if err != nil {
 		return nil, false, errors.Wrapf(err, errFmtNewObject, gvk)
 	}
@@ -228,8 +234,8 @@ func toManagedResource(u unstructured.Unstructured) (resource.Managed, bool, err
 }
 
 func (pg *PlanGenerator) convertComposition(o UnstructuredWithMetadata) (*UnstructuredWithMetadata, bool, error) { // nolint:gocyclo
-	c := xpv1.Composition{}
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(o.Object.Object, &c); err != nil {
+	c, err := convertToComposition(o.Object.Object)
+	if err != nil {
 		return nil, false, errors.Wrap(err, errUnstructuredConvert)
 	}
 	var targetResources []*xpv1.ComposedTemplate
@@ -260,7 +266,7 @@ func (pg *PlanGenerator) convertComposition(o UnstructuredWithMetadata) (*Unstru
 			}
 			cmps = append(cmps, c)
 		}
-		conv := pg.registry[gvk]
+		conv := pg.registry.converters[gvk]
 		if conv != nil {
 			if err := conv.ComposedTemplates(cmp, cmps...); err != nil {
 				return nil, false, errors.Wrap(err, errComposedTemplateMigrate)
@@ -328,10 +334,11 @@ func (pg *PlanGenerator) buildPlan() {
 	pg.Plan.Spec.Steps[stepStartComposites].Name = "start-composites"
 	pg.Plan.Spec.Steps[stepStartComposites].Type = StepTypeApply
 	pg.Plan.Spec.Steps[stepStartComposites].Apply = &ApplyStep{}
+	pg.Plan.Version = versionV010
 }
 
 func (pg *PlanGenerator) addStepsForManagedResource(u *UnstructuredWithMetadata) error {
-	if _, ok, err := toManagedResource(u.Object); err != nil || !ok {
+	if _, ok, err := toManagedResource(pg.registry.scheme, u.Object); err != nil || !ok {
 		// not a managed resource or unable to determine
 		// whether it's a managed resource
 		return nil // nolint:nilerr
