@@ -23,9 +23,9 @@ import (
 // from the migration source provider's schema to the migration target
 // provider's schema.
 type Converter interface {
-	// Resources takes a managed resource and returns zero or more managed
+	// Resource takes a managed resource and returns zero or more managed
 	// resources to be created.
-	Resources(mg resource.Managed) ([]resource.Managed, error)
+	Resource(mg resource.Managed) ([]resource.Managed, error)
 
 	// Composition receives a migration source v1.ComposedTemplate
 	// that has been converted, by a resource converter, to the

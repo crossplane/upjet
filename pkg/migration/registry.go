@@ -77,9 +77,9 @@ type delegatingConverter struct {
 	compFn CompositionConversionFn
 }
 
-// Resources converts from the specified migration source resource to
+// Resource converts from the specified migration source resource to
 // the migration target resources by calling the configured ResourceConversionFn.
-func (d delegatingConverter) Resources(mg resource.Managed) ([]resource.Managed, error) {
+func (d delegatingConverter) Resource(mg resource.Managed) ([]resource.Managed, error) {
 	if d.rFn == nil {
 		return []resource.Managed{mg}, nil
 	}

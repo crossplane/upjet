@@ -203,7 +203,7 @@ func (pg *PlanGenerator) convertResource(o UnstructuredWithMetadata) ([]Unstruct
 	if err != nil {
 		return nil, false, errors.Wrap(err, errResourceMigrate)
 	}
-	resources, err := conv.Resources(mg)
+	resources, err := conv.Resource(mg)
 	if err != nil {
 		return nil, false, errors.Wrap(err, errResourceMigrate)
 	}

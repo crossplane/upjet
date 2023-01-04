@@ -206,7 +206,7 @@ func (f *testTarget) Delete(o UnstructuredWithMetadata) error {
 
 type testConverter struct{}
 
-func (f *testConverter) Resources(mg xpresource.Managed) ([]xpresource.Managed, error) {
+func (f *testConverter) Resource(mg xpresource.Managed) ([]xpresource.Managed, error) {
 	s := mg.(*fake.MigrationSourceObject)
 	t := &fake.MigrationTargetObject{}
 	if _, err := CopyInto(s, t, fake.MigrationTargetGVK, "spec.forProvider.tags", "mockManaged"); err != nil {
