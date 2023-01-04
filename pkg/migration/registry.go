@@ -32,10 +32,10 @@ const (
 // source managed resource to one or more migration target managed resources.
 type ResourceConversionFn func(mg resource.Managed) ([]resource.Managed, error)
 
-// ComposedTemplateConversionFn is a function that converts from the specified
+// CompositionConversionFn is a function that converts from the specified
 // v1.ComposedTemplate's migration source resources to one or more migration
 // target resources.
-type ComposedTemplateConversionFn func(cmp xpv1.ComposedTemplate, convertedBase ...*xpv1.ComposedTemplate) error
+type CompositionConversionFn func(sourcePatchSets []xpv1.PatchSet, sourceTemplate xpv1.ComposedTemplate, convertedTemplates ...*xpv1.ComposedTemplate) ([]xpv1.PatchSet, error)
 
 // Registry is a registry of `migration.Converter`s keyed with
 // the associated `schema.GroupVersionKind`s and an associated
@@ -73,8 +73,8 @@ func (r *Registry) RegisterConverter(gvk schema.GroupVersionKind, conv Converter
 }
 
 type delegatingConverter struct {
-	rFn   ResourceConversionFn
-	cmpFn ComposedTemplateConversionFn
+	rFn    ResourceConversionFn
+	compFn CompositionConversionFn
 }
 
 // Resources converts from the specified migration source resource to
@@ -86,14 +86,14 @@ func (d delegatingConverter) Resources(mg resource.Managed) ([]resource.Managed,
 	return d.rFn(mg)
 }
 
-// ComposedTemplates converts from the specified migration source
+// Composition converts from the specified migration source
 // v1.ComposedTemplate to the migration target schema by calling the configured
 // ComposedTemplateConversionFn.
-func (d delegatingConverter) ComposedTemplates(cmp xpv1.ComposedTemplate, convertedBase ...*xpv1.ComposedTemplate) error {
-	if d.cmpFn == nil {
-		return nil
+func (d delegatingConverter) Composition(sourcePatchSets []xpv1.PatchSet, sourceTemplate xpv1.ComposedTemplate, convertedTemplates ...*xpv1.ComposedTemplate) ([]xpv1.PatchSet, error) {
+	if d.compFn == nil {
+		return sourcePatchSets, nil
 	}
-	return d.cmpFn(cmp, convertedBase...)
+	return d.compFn(sourcePatchSets, sourceTemplate, convertedTemplates...)
 }
 
 // RegisterConversionFunctions registers the supplied ResourceConversionFn and
@@ -101,10 +101,10 @@ func (d delegatingConverter) ComposedTemplates(cmp xpv1.ComposedTemplate, conver
 // The specified GVK must belong to a Crossplane managed resource type and
 // the type must already have been registered with the client-go's
 // default scheme.
-func (r *Registry) RegisterConversionFunctions(gvk schema.GroupVersionKind, rFn ResourceConversionFn, cmpFn ComposedTemplateConversionFn) {
+func (r *Registry) RegisterConversionFunctions(gvk schema.GroupVersionKind, rFn ResourceConversionFn, compFn CompositionConversionFn) {
 	r.RegisterConverter(gvk, delegatingConverter{
-		rFn:   rFn,
-		cmpFn: cmpFn,
+		rFn:    rFn,
+		compFn: compFn,
 	})
 }
 

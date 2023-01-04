@@ -238,6 +238,10 @@ func (pg *PlanGenerator) convertComposition(o UnstructuredWithMetadata) (*Unstru
 	if err != nil {
 		return nil, false, errors.Wrap(err, errUnstructuredConvert)
 	}
+	targetPatchSets := make([]xpv1.PatchSet, 0, len(c.Spec.PatchSets))
+	for _, ps := range c.Spec.PatchSets {
+		targetPatchSets = append(targetPatchSets, *ps.DeepCopy())
+	}
 	var targetResources []*xpv1.ComposedTemplate
 	isConverted := false
 	for _, cmp := range c.Spec.Resources {
@@ -268,12 +272,15 @@ func (pg *PlanGenerator) convertComposition(o UnstructuredWithMetadata) (*Unstru
 		}
 		conv := pg.registry.converters[gvk]
 		if conv != nil {
-			if err := conv.ComposedTemplates(cmp, cmps...); err != nil {
+			ps, err := conv.Composition(targetPatchSets, cmp, cmps...)
+			if err != nil {
 				return nil, false, errors.Wrap(err, errComposedTemplateMigrate)
 			}
+			targetPatchSets = ps
 		}
 		targetResources = append(targetResources, cmps...)
 	}
+	c.Spec.PatchSets = targetPatchSets
 	c.Spec.Resources = make([]xpv1.ComposedTemplate, 0, len(targetResources))
 	for _, cmp := range targetResources {
 		c.Spec.Resources = append(c.Spec.Resources, *cmp)

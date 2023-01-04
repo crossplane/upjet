@@ -8,6 +8,11 @@ spec:
   compositeTypeRef:
     apiVersion: test.com/v1alpha1
     kind: XMyResource
+  patchSets:
+    - name: ps1
+      patches:
+        - fromFieldPath: "spec.parameters.tagValue"
+          toFieldPath: spec.forProvider.tags[2].value
   resources:
     - base:
         apiVersion: fakesourceapi/v1alpha1
@@ -29,5 +34,5 @@ spec:
           toFieldPath: spec.forProvider.tags[0].value
         - fromFieldPath: "spec.parameters.tagValue"
           toFieldPath: spec.forProvider.tags[1].value
-        - fromFieldPath: "spec.parameters.tagValue"
-          toFieldPath: spec.forProvider.tags[2].value
+        - type: PatchSet
+          patchSetName: ps1

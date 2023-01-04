@@ -27,12 +27,16 @@ type Converter interface {
 	// resources to be created.
 	Resources(mg resource.Managed) ([]resource.Managed, error)
 
-	// ComposedTemplates takes a ComposedTemplate entry and returns zero or more
-	// ComposedTemplate with the new shape, including the necessary changes in
-	// its patches. Conversion of the v1.ComposedTemplate.Bases is handled
-	// via Converter.Resources and Converter.ComposedTemplates must only
-	// convert the other fields (`Patches`, `ConnectionDetails`, etc.)
-	ComposedTemplates(cmp v1.ComposedTemplate, convertedBase ...*v1.ComposedTemplate) error
+	// Composition receives a migration source v1.ComposedTemplate
+	// that has been converted, by a resource converter, to the
+	// v1.ComposedTemplates with new shapes specified in the
+	// `convertedTemplates` argument.
+	// Conversion of the v1.ComposedTemplate.Bases is handled
+	// via Converter.Resources and Converter.Composition must only
+	// convert the other fields (`Patches`, `ConnectionDetails`,
+	// `PatchSet`s, etc.)
+	// Returns the converted v1.PatchSet array or any errors encountered.
+	Composition(sourcePatchSets []v1.PatchSet, sourceTemplate v1.ComposedTemplate, convertedTemplates ...*v1.ComposedTemplate) ([]v1.PatchSet, error)
 }
 
 // Source is a source for reading resource manifests

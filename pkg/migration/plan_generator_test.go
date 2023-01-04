@@ -222,26 +222,39 @@ func (f *testConverter) Resources(mg xpresource.Managed) ([]xpresource.Managed, 
 	}, nil
 }
 
-func (f *testConverter) ComposedTemplates(cmp v1.ComposedTemplate, convertedBase ...*v1.ComposedTemplate) error {
-	for i, cb := range convertedBase {
+func (f *testConverter) Composition(sourcePatchSets []v1.PatchSet, sourceTemplate v1.ComposedTemplate, convertedTemplates ...*v1.ComposedTemplate) ([]v1.PatchSet, error) {
+	// convert patches in the migration target composed templates
+	for i, cb := range convertedTemplates {
 		for j, p := range cb.Patches {
 			if p.ToFieldPath == nil || !strings.HasPrefix(*p.ToFieldPath, "spec.forProvider.tags") {
 				continue
 			}
-			u, err := FromRawExtension(cmp.Base)
+			u, err := FromRawExtension(sourceTemplate.Base)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			paved := fieldpath.Pave(u.Object)
 			key, err := paved.GetString(strings.ReplaceAll(*p.ToFieldPath, ".value", ".key"))
 			if err != nil {
-				return err
+				return nil, err
 			}
 			s := fmt.Sprintf(`spec.forProvider.tags["%s"]`, key)
-			convertedBase[i].Patches[j].ToFieldPath = &s
+			convertedTemplates[i].Patches[j].ToFieldPath = &s
 		}
 	}
-	return nil
+	// convert patch sets in the source
+	targetPatchSets := make([]v1.PatchSet, 0, len(sourcePatchSets))
+	for _, ps := range sourcePatchSets {
+		tPs := ps.DeepCopy()
+		for i, p := range tPs.Patches {
+			if p.ToFieldPath == nil || *p.ToFieldPath != "spec.forProvider.tags[2].value" {
+				continue
+			}
+			*tPs.Patches[i].ToFieldPath = `spec.forProvider.tags["key3"]`
+		}
+		targetPatchSets = append(targetPatchSets, *tPs)
+	}
+	return targetPatchSets, nil
 }
 
 func getRegistryWithConverters(converters map[schema.GroupVersionKind]Converter) *Registry {
