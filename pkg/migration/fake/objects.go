@@ -106,3 +106,15 @@ type TargetSpecParameters struct {
 	CIDRBlock string            `json:"cidrBlock"`
 	Tags      map[string]string `json:"tags,omitempty"`
 }
+
+type targetObjectKind struct{}
+
+func (t *targetObjectKind) SetGroupVersionKind(_ schema.GroupVersionKind) {}
+
+func (t *targetObjectKind) GroupVersionKind() schema.GroupVersionKind {
+	return MigrationTargetGVK
+}
+
+func (m *MigrationTargetObject) GetObjectKind() schema.ObjectKind {
+	return &targetObjectKind{}
+}

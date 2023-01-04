@@ -16,12 +16,8 @@ package migration
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
-
-	"github.com/pkg/errors"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 
 	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
@@ -30,6 +26,10 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/resource/unstructured/claim"
 	"github.com/crossplane/crossplane-runtime/pkg/resource/unstructured/composite"
 	xpv1 "github.com/crossplane/crossplane/apis/apiextensions/v1"
+	"github.com/pkg/errors"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 const (
@@ -53,6 +53,7 @@ const (
 	errClaimsEdit              = "failed to edit claims"
 	errPlanGeneration          = "failed to generate the migration plan"
 	errPause                   = "failed to store a paused manifest"
+	errMissingGVK              = "managed resource is missing its GVK. Resource converters must set GVKs on any managed resources they newly generate."
 )
 
 type step int
@@ -207,6 +208,9 @@ func (pg *PlanGenerator) convertResource(o UnstructuredWithMetadata) ([]Unstruct
 	if err != nil {
 		return nil, false, errors.Wrap(err, errResourceMigrate)
 	}
+	if err := assertGVK(resources); err != nil {
+		return nil, true, errors.Wrap(err, errResourceMigrate)
+	}
 	converted := make([]UnstructuredWithMetadata, 0, len(resources))
 	for _, mg := range resources {
 		converted = append(converted, UnstructuredWithMetadata{
@@ -215,6 +219,15 @@ func (pg *PlanGenerator) convertResource(o UnstructuredWithMetadata) ([]Unstruct
 		})
 	}
 	return converted, true, nil
+}
+
+func assertGVK(resources []resource.Managed) error {
+	for _, r := range resources {
+		if reflect.ValueOf(r.GetObjectKind().GroupVersionKind()).IsZero() {
+			return errors.New(errMissingGVK)
+		}
+	}
+	return nil
 }
 
 func toManagedResource(c runtime.ObjectCreater, u unstructured.Unstructured) (resource.Managed, bool, error) {
