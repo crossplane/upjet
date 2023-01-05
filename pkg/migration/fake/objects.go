@@ -81,6 +81,10 @@ type Status struct {
 
 type Observation struct{}
 
+func (m *MigrationSourceObject) GetName() string {
+	return m.ObjectMeta.Name
+}
+
 type MigrationTargetObject struct {
 	mocks.MockManaged
 	// cannot inline v1.TypeMeta here as mocks.MockManaged is also inlined
@@ -93,7 +97,8 @@ type MigrationTargetObject struct {
 }
 
 type ObjectMeta struct {
-	Name string `json:"name,omitempty"`
+	Name         string `json:"name,omitempty"`
+	GenerateName string `json:"generateName,omitempty"`
 }
 
 type TargetSpec struct {
@@ -117,4 +122,12 @@ func (t *targetObjectKind) GroupVersionKind() schema.GroupVersionKind {
 
 func (m *MigrationTargetObject) GetObjectKind() schema.ObjectKind {
 	return &targetObjectKind{}
+}
+
+func (m *MigrationTargetObject) GetName() string {
+	return m.ObjectMeta.Name
+}
+
+func (m *MigrationTargetObject) GetGenerateName() string {
+	return m.ObjectMeta.GenerateName
 }

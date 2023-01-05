@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
 	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
@@ -30,6 +31,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/rand"
 )
 
 const (
@@ -152,7 +154,7 @@ func (pg *PlanGenerator) convert() error { //nolint: gocyclo
 				continue
 			}
 
-			targets, converted, err := pg.convertResource(o)
+			targets, converted, err := pg.convertResource(o, false)
 			if err != nil {
 				return errors.Wrap(err, errResourceMigrate)
 			}
@@ -193,7 +195,7 @@ func (pg *PlanGenerator) convert() error { //nolint: gocyclo
 	return nil
 }
 
-func (pg *PlanGenerator) convertResource(o UnstructuredWithMetadata) ([]UnstructuredWithMetadata, bool, error) {
+func (pg *PlanGenerator) convertResource(o UnstructuredWithMetadata, compositionContext bool) ([]UnstructuredWithMetadata, bool, error) {
 	gvk := o.Object.GroupVersionKind()
 	conv := pg.registry.converters[gvk]
 	if conv == nil {
@@ -210,6 +212,9 @@ func (pg *PlanGenerator) convertResource(o UnstructuredWithMetadata) ([]Unstruct
 	}
 	if err := assertGVK(resources); err != nil {
 		return nil, true, errors.Wrap(err, errResourceMigrate)
+	}
+	if !compositionContext {
+		assertMetadataName(mg.GetName(), resources)
 	}
 	converted := make([]UnstructuredWithMetadata, 0, len(resources))
 	for _, mg := range resources {
@@ -228,6 +233,15 @@ func assertGVK(resources []resource.Managed) error {
 		}
 	}
 	return nil
+}
+
+func assertMetadataName(parentName string, resources []resource.Managed) {
+	for i, r := range resources {
+		if len(r.GetName()) != 0 || len(r.GetGenerateName()) != 0 {
+			continue
+		}
+		resources[i].SetGenerateName(fmt.Sprintf("%s-", parentName))
+	}
 }
 
 func toManagedResource(c runtime.ObjectCreater, u unstructured.Unstructured) (resource.Managed, bool, error) {
@@ -266,7 +280,7 @@ func (pg *PlanGenerator) convertComposition(o UnstructuredWithMetadata) (*Unstru
 		converted, ok, err := pg.convertResource(UnstructuredWithMetadata{
 			Object:   u,
 			Metadata: o.Metadata,
-		})
+		}, true)
 		if err != nil {
 			return nil, false, errors.Wrap(err, errComposedTemplateBase)
 		}
@@ -427,8 +441,12 @@ func (pg *PlanGenerator) pause(fp string, u *unstructured.Unstructured) error {
 }
 
 func getQualifiedName(u unstructured.Unstructured) string {
+	namePrefix := u.GetName()
+	if len(namePrefix) == 0 {
+		namePrefix = fmt.Sprintf("%s%s", u.GetGenerateName(), rand.String(5))
+	}
 	gvk := u.GroupVersionKind()
-	return fmt.Sprintf("%s.%ss.%s", u.GetName(), strings.ToLower(gvk.Kind), gvk.Group)
+	return fmt.Sprintf("%s.%ss.%s", namePrefix, strings.ToLower(gvk.Kind), gvk.Group)
 }
 
 func (pg *PlanGenerator) stepNewManagedResource(u *UnstructuredWithMetadata) error {
@@ -513,4 +531,8 @@ func (pg *PlanGenerator) stepEditClaims(claims []UnstructuredWithMetadata, conve
 		}
 	}
 	return nil
+}
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
 }
