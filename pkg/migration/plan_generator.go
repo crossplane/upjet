@@ -31,6 +31,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/rand"
 )
 
@@ -286,6 +287,7 @@ func (pg *PlanGenerator) convertComposition(o UnstructuredWithMetadata) (*Unstru
 		}
 		isConverted = isConverted || ok
 		cmps := make([]*xpv1.ComposedTemplate, 0, len(converted))
+		sourceNameUsed := false
 		for _, u := range converted {
 			buff, err := u.Object.MarshalJSON()
 			if err != nil {
@@ -295,7 +297,7 @@ func (pg *PlanGenerator) convertComposition(o UnstructuredWithMetadata) (*Unstru
 			c.Base = runtime.RawExtension{
 				Raw: buff,
 			}
-			cmps = append(cmps, c)
+			cmps = append(cmps, setDefaultsOnTargetTemplate(cmp.Name, &sourceNameUsed, gvk, u.Object.GroupVersionKind(), c))
 		}
 		conv := pg.registry.converters[gvk]
 		if conv != nil {
@@ -316,6 +318,22 @@ func (pg *PlanGenerator) convertComposition(o UnstructuredWithMetadata) (*Unstru
 		Object:   ToSanitizedUnstructured(&c),
 		Metadata: o.Metadata,
 	}, isConverted, nil
+}
+
+func setDefaultsOnTargetTemplate(sourceName *string, sourceNameUsed *bool, gvkSource, gvkTarget schema.GroupVersionKind, target *xpv1.ComposedTemplate) *xpv1.ComposedTemplate {
+	// preserve patch statements if kinds match between the source and target resources
+	if gvkSource.Kind != gvkTarget.Kind {
+		target.Patches = nil
+	}
+	if *sourceNameUsed || gvkSource.Kind != gvkTarget.Kind {
+		if sourceName != nil && len(*sourceName) > 0 {
+			targetName := fmt.Sprintf("%s-%s", *sourceName, rand.String(5))
+			target.Name = &targetName
+		}
+	} else {
+		*sourceNameUsed = true
+	}
+	return target
 }
 
 // NOTE: to cover different migration scenarios, we may use
