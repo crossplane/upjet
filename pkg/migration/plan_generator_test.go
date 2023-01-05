@@ -116,6 +116,7 @@ func TestGeneratePlan(t *testing.T) {
 					t.Errorf("GeneratePlan(): Expected generated migration resource file not found: %s", name)
 					continue
 				}
+				removeNilValuedKeys(u.Object)
 				if diff := cmp.Diff(u, gU.Object); diff != "" {
 					t.Errorf("GeneratePlan(): -wantMigratedResource, +gotMigratedResource with name %q: %s", name, diff)
 				}
