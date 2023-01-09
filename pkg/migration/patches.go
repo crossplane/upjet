@@ -38,11 +38,6 @@ const (
 	jsonTagInlined = ",inline"
 )
 
-// removeInvalidPatches removes the (inherited) patches from
-// a (split) migration target composed template. The migration target composed
-// templates inherit patches from migration source templates by default, and
-// this function is responsible for removing patches (including references to
-// patch sets) that do not conform to the target composed template's schema.
 func removeInvalidPatches(c runtime.ObjectCreater, gvkSource, gvkTarget schema.GroupVersionKind, patchSets []xpv1.PatchSet, targetTemplate *xpv1.ComposedTemplate) error {
 	source, err := c.New(gvkSource)
 	if err != nil {
@@ -89,10 +84,6 @@ func removeInvalidPatches(c runtime.ObjectCreater, gvkSource, gvkTarget schema.G
 	return nil
 }
 
-// assertPatchSchemaConformance asserts that the specified patch actually
-// conforms the specified target schema. We also assert the patch conforms
-// to the migration source schema, which prevents an invalid patch from being
-// preserved after the conversion.
 func assertPatchSchemaConformance(p xpv1.Patch, source, target any) (bool, error) {
 	var targetPath *string
 	// because this is defaulting logic and what we default can be overridden
@@ -111,8 +102,6 @@ func assertPatchSchemaConformance(p xpv1.Patch, source, target any) (bool, error
 	return ok, errors.Wrapf(err, "failed to assert patch schema for path: %s", *targetPath)
 }
 
-// splitPathComponents splits a fieldpath expression into its path components,
-// e.g., `m[a.b.c].a.b.c` is split into `m[a.b.c]`, `a`, `b`, `c`.
 func splitPathComponents(path string) []string {
 	components := strings.Split(path, ".")
 	result := make([]string, 0, len(components))
@@ -134,9 +123,6 @@ func splitPathComponents(path string) []string {
 	return result
 }
 
-// assertNameAndTypeAtPath asserts that the migration source and target
-// templates both have the same kind for the type at the specified path.
-// Also validates the specific path is valid for the source.
 func assertNameAndTypeAtPath(source, target reflect.Type, pathComponents []string) (bool, error) { // nolint:gocyclo
 	if len(pathComponents) < 1 {
 		return compareKinds(source, target), nil
@@ -184,8 +170,6 @@ func assertNameAndTypeAtPath(source, target reflect.Type, pathComponents []strin
 	return assertNameAndTypeAtPath(nextSource, nextTarget, pathComponents[1:])
 }
 
-// compareKinds compares the kinds of the specified types
-// dereferencing (following) pointer types.
 func compareKinds(s, t reflect.Type) bool {
 	if s.Kind() == reflect.Pointer {
 		s = s.Elem()
@@ -196,10 +180,6 @@ func compareKinds(s, t reflect.Type) bool {
 	return s.Kind() == t.Kind()
 }
 
-// getFieldWithSerializedName returns the field of a struct (if it exists)
-// with the specified serialized (JSON) name. Returns a nil (and a nil error)
-// if a field with the specified serialized name is not found
-// in the specified type.
 func getFieldWithSerializedName(t reflect.Type, name string) (*reflect.StructField, error) { // nolint:gocyclo
 	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
@@ -241,9 +221,6 @@ func getFieldWithSerializedName(t reflect.Type, name string) (*reflect.StructFie
 	return nil, nil // not found
 }
 
-// getNamedPatchSet returns the patch set with the specified name
-// from the specified patch set slice. Returns nil if a patch set
-// with the given name is not found.
 func getNamedPatchSet(name *string, patchSets []xpv1.PatchSet) *xpv1.PatchSet {
 	if name == nil {
 		// if name is not specified, do not attempt to find a named patchset
