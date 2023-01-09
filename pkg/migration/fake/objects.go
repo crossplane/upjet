@@ -63,10 +63,15 @@ type SourceSpec struct {
 	ForProvider       SourceSpecParameters `json:"forProvider"`
 }
 
+type EmbeddedParameter struct {
+	Param *string `json:"param,omitempty"`
+}
+
 type SourceSpecParameters struct {
-	Region    *string `json:"region,omitempty"`
-	CIDRBlock string  `json:"cidrBlock"`
-	Tags      []Tag   `json:"tags,omitempty"`
+	Region    *string            `json:"region,omitempty"`
+	CIDRBlock string             `json:"cidrBlock"`
+	Tags      []Tag              `json:"tags,omitempty"`
+	TestParam *EmbeddedParameter `json:",inline"`
 }
 
 type Tag struct {
@@ -97,8 +102,9 @@ type MigrationTargetObject struct {
 }
 
 type ObjectMeta struct {
-	Name         string `json:"name,omitempty"`
-	GenerateName string `json:"generateName,omitempty"`
+	Name         string            `json:"name,omitempty"`
+	GenerateName string            `json:"generateName,omitempty"`
+	Labels       map[string]string `json:"labels,omitempty"`
 }
 
 type TargetSpec struct {
@@ -110,6 +116,7 @@ type TargetSpecParameters struct {
 	Region    *string           `json:"region,omitempty"`
 	CIDRBlock string            `json:"cidrBlock"`
 	Tags      map[string]string `json:"tags,omitempty"`
+	TestParam EmbeddedParameter `json:",inline"`
 }
 
 type targetObjectKind struct{}

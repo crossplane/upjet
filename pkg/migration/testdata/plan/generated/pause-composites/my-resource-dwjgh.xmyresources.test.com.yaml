@@ -24,6 +24,7 @@ spec:
     name: example-migrated
   compositionUpdatePolicy: Automatic
   parameters:
+    region: us-west-1
     tagValue: demo-test
   resourceRefs:
   - apiVersion: fakesourceapi/v1alpha1

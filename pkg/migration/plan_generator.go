@@ -297,7 +297,10 @@ func (pg *PlanGenerator) convertComposition(o UnstructuredWithMetadata) (*Unstru
 			c.Base = runtime.RawExtension{
 				Raw: buff,
 			}
-			cmps = append(cmps, setDefaultsOnTargetTemplate(cmp.Name, &sourceNameUsed, gvk, u.Object.GroupVersionKind(), c))
+			if err := pg.setDefaultsOnTargetTemplate(cmp.Name, &sourceNameUsed, gvk, u.Object.GroupVersionKind(), c, targetPatchSets); err != nil {
+				return nil, false, errors.Wrap(err, errComposedTemplateMigrate)
+			}
+			cmps = append(cmps, c)
 		}
 		conv := pg.registry.converters[gvk]
 		if conv != nil {
@@ -320,10 +323,10 @@ func (pg *PlanGenerator) convertComposition(o UnstructuredWithMetadata) (*Unstru
 	}, isConverted, nil
 }
 
-func setDefaultsOnTargetTemplate(sourceName *string, sourceNameUsed *bool, gvkSource, gvkTarget schema.GroupVersionKind, target *xpv1.ComposedTemplate) *xpv1.ComposedTemplate {
-	// preserve patch statements if kinds match between the source and target resources
-	if gvkSource.Kind != gvkTarget.Kind {
-		target.Patches = nil
+func (pg *PlanGenerator) setDefaultsOnTargetTemplate(sourceName *string, sourceNameUsed *bool, gvkSource, gvkTarget schema.GroupVersionKind, target *xpv1.ComposedTemplate, patchSets []xpv1.PatchSet) error {
+	// remove invalid patches that do not conform to the migration target's schema
+	if err := removeInvalidPatches(pg.registry.scheme, gvkSource, gvkTarget, patchSets, target); err != nil {
+		return errors.Wrap(err, "failed to set the defaults on the migration target composed template")
 	}
 	if *sourceNameUsed || gvkSource.Kind != gvkTarget.Kind {
 		if sourceName != nil && len(*sourceName) > 0 {
@@ -333,7 +336,7 @@ func setDefaultsOnTargetTemplate(sourceName *string, sourceNameUsed *bool, gvkSo
 	} else {
 		*sourceNameUsed = true
 	}
-	return target
+	return nil
 }
 
 // NOTE: to cover different migration scenarios, we may use

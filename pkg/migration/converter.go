@@ -78,6 +78,9 @@ func sanitizeResource(m map[string]any) map[string]any {
 	return m
 }
 
+// removeNilValuedKeys removes nil values from the specified map so that
+// the serialized manifest do not contain corresponding superfluous YAML
+// nulls.
 func removeNilValuedKeys(m map[string]interface{}) {
 	for k, v := range m {
 		if v == nil {

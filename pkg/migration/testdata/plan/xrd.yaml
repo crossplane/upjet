@@ -22,8 +22,11 @@ spec:
                 properties:
                   tagValue:
                     type: string
+                  region:
+                    type: string
                 required:
                 - tagValue
+                - region
                 type: object
             required:
             - parameters

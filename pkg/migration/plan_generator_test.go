@@ -16,13 +16,10 @@ package migration
 
 import (
 	"bytes"
-	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
-	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	v1 "github.com/crossplane/crossplane/apis/apiextensions/v1"
@@ -223,34 +220,33 @@ func (f *testConverter) Resource(mg xpresource.Managed) ([]xpresource.Managed, e
 	}, nil
 }
 
+func ptrFromString(s string) *string {
+	return &s
+}
+
 func (f *testConverter) Composition(sourcePatchSets []v1.PatchSet, sourceTemplate v1.ComposedTemplate, convertedTemplates ...*v1.ComposedTemplate) ([]v1.PatchSet, error) {
 	// convert patches in the migration target composed templates
-	for i, cb := range convertedTemplates {
-		for j, p := range cb.Patches {
-			if p.ToFieldPath == nil || !strings.HasPrefix(*p.ToFieldPath, "spec.forProvider.tags") {
-				continue
-			}
-			u, err := FromRawExtension(sourceTemplate.Base)
-			if err != nil {
-				return nil, err
-			}
-			paved := fieldpath.Pave(u.Object)
-			key, err := paved.GetString(strings.ReplaceAll(*p.ToFieldPath, ".value", ".key"))
-			if err != nil {
-				return nil, err
-			}
-			s := fmt.Sprintf(`spec.forProvider.tags["%s"]`, key)
-			convertedTemplates[i].Patches[j].ToFieldPath = &s
-		}
+	for i := range convertedTemplates {
+		convertedTemplates[i].Patches = append(convertedTemplates[i].Patches, v1.Patch{
+			FromFieldPath: ptrFromString("spec.parameters.tagValue"),
+			ToFieldPath:   ptrFromString(`spec.forProvider.tags["key1"]`),
+		}, v1.Patch{
+			FromFieldPath: ptrFromString("spec.parameters.tagValue"),
+			ToFieldPath:   ptrFromString(`spec.forProvider.tags["key2"]`),
+		}, v1.Patch{
+			Type:         v1.PatchTypePatchSet,
+			PatchSetName: ptrFromString("ps1"),
+		})
 	}
 	// convert patch sets in the source
 	targetPatchSets := make([]v1.PatchSet, 0, len(sourcePatchSets))
 	for _, ps := range sourcePatchSets {
+		if ps.Name != "ps1" {
+			targetPatchSets = append(targetPatchSets, ps)
+			continue
+		}
 		tPs := ps.DeepCopy()
-		for i, p := range tPs.Patches {
-			if p.ToFieldPath == nil || *p.ToFieldPath != "spec.forProvider.tags[2].value" {
-				continue
-			}
+		for i := range tPs.Patches {
 			*tPs.Patches[i].ToFieldPath = `spec.forProvider.tags["key3"]`
 		}
 		targetPatchSets = append(targetPatchSets, *tPs)
@@ -261,6 +257,7 @@ func (f *testConverter) Composition(sourcePatchSets []v1.PatchSet, sourceTemplat
 func getRegistryWithConverters(converters map[schema.GroupVersionKind]Converter) *Registry {
 	scheme := runtime.NewScheme()
 	scheme.AddKnownTypeWithName(fake.MigrationSourceGVK, &fake.MigrationSourceObject{})
+	scheme.AddKnownTypeWithName(fake.MigrationTargetGVK, &fake.MigrationTargetObject{})
 	r := NewRegistry(scheme)
 	for gvk, c := range converters {
 		r.RegisterConverter(gvk, c)

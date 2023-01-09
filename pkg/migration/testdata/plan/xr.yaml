@@ -24,6 +24,7 @@ spec:
   compositionUpdatePolicy: Automatic
   parameters:
     tagValue: demo-test
+    region: us-west-1
   resourceRefs:
     - apiVersion: fakesourceapi/v1alpha1
       kind: VPC

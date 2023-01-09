@@ -7,4 +7,5 @@ spec:
   compositionRef:
     name: example-migrated
   parameters:
+    region: us-west-1
     tagValue: demo-test
