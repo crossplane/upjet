@@ -79,6 +79,16 @@ func TestGetExternalNameFromTemplated(t *testing.T) {
 				name: "myname",
 			},
 		},
+		"NoExternalNameInTemplate": {
+			reason: "Should return the ID intact if there's no {{ .external_name }} variable in the template",
+			args: args{
+				tmpl: "olala:{{ .another }}:omama:{{ .someOther }}",
+				val:  "olala:val1:omama:val2",
+			},
+			want: want{
+				name: "olala:val1:omama:val2",
+			},
+		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
