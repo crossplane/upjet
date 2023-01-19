@@ -32,6 +32,7 @@ const (
 	errUnmarshalAttr     = "cannot unmarshal state attributes"
 	errUnmarshalTFState  = "cannot unmarshal tfstate file"
 	errFmtNonString      = "cannot work with a non-string id: %s"
+	errReadMainTF        = "cannot read main.tf.json file"
 )
 
 // FileProducerOption allows you to configure FileProducer
@@ -233,4 +234,21 @@ func (fp *FileProducer) isStateEmpty() (bool, error) {
 		return false, errors.Errorf(errFmtNonString, fmt.Sprint(id))
 	}
 	return sid == "", nil
+}
+
+func (fp *FileProducer) isNeedProviderUpgrade() (bool, error) {
+	data, err := fp.fs.ReadFile(filepath.Join(fp.Dir, "main.tf.json"))
+	if errors.Is(err, iofs.ErrNotExist) {
+		return false, nil
+	}
+	m := map[string]any{}
+	if err := json.JSParser.Unmarshal(data, &m); err != nil {
+		return false, errors.Wrap(err, errReadMainTF)
+	}
+	providerSource := strings.Split(fp.Setup.Requirement.Source, "/")
+	v := m["terraform"].(map[string]any)["required_providers"].(map[string]any)[providerSource[len(providerSource)-1]].(map[string]any)["version"]
+	if v != fp.Setup.Requirement.Version {
+		return true, nil
+	}
+	return false, nil
 }
