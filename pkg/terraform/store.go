@@ -158,9 +158,9 @@ func (ws *WorkspaceStore) Workspace(ctx context.Context, c resource.SecretClient
 	if err := fp.EnsureTFState(ctx); err != nil {
 		return nil, errors.Wrap(err, "cannot ensure tfstate file")
 	}
-	isNeedProviderUpgrade, err := fp.isNeedProviderUpgrade()
+	isNeedProviderUpgrade, err := fp.needProviderUpgrade()
 	if err != nil {
-		return nil, errors.Wrap(err, "cannot upgrade provider")
+		return nil, errors.Wrap(err, "cannot check if a Terraform dependency update is required")
 	}
 	if err := fp.WriteMainTF(); err != nil {
 		return nil, errors.Wrap(err, "cannot write main tf file")
@@ -169,9 +169,9 @@ func (ws *WorkspaceStore) Workspace(ctx context.Context, c resource.SecretClient
 		cmd := w.executor.CommandContext(ctx, "terraform", "init", "-upgrade", "-input=false")
 		cmd.SetDir(w.dir)
 		out, err := cmd.CombinedOutput()
-		w.logger.Debug("init ended", "out", string(out))
+		w.logger.Debug("init -upgrade ended", "out", string(out))
 		if err != nil {
-			return w, errors.Wrapf(err, "cannot init workspace: %s", string(out))
+			return w, errors.Wrapf(err, "cannot upgrade workspace: %s", string(out))
 		}
 	}
 	attachmentConfig, err := ws.providerRunner.Start()

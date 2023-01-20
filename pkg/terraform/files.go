@@ -236,19 +236,34 @@ func (fp *FileProducer) isStateEmpty() (bool, error) {
 	return sid == "", nil
 }
 
-func (fp *FileProducer) isNeedProviderUpgrade() (bool, error) {
+type MainConfiguration struct {
+	Terraform Terraform `json:"terraform,omitempty"`
+}
+
+type Terraform struct {
+	RequiredProviders map[string]any `json:"required_providers,omitempty"`
+}
+
+func (fp *FileProducer) needProviderUpgrade() (bool, error) {
 	data, err := fp.fs.ReadFile(filepath.Join(fp.Dir, "main.tf.json"))
 	if errors.Is(err, iofs.ErrNotExist) {
 		return false, nil
 	}
-	m := map[string]any{}
-	if err := json.JSParser.Unmarshal(data, &m); err != nil {
+	if err != nil {
+		return false, errors.Wrap(err, errReadMainTF)
+	}
+	mainConfiguration := MainConfiguration{}
+	if err := json.JSParser.Unmarshal(data, &mainConfiguration); err != nil {
 		return false, errors.Wrap(err, errReadMainTF)
 	}
 	providerSource := strings.Split(fp.Setup.Requirement.Source, "/")
-	v := m["terraform"].(map[string]any)["required_providers"].(map[string]any)[providerSource[len(providerSource)-1]].(map[string]any)["version"]
-	if v != fp.Setup.Requirement.Version {
-		return true, nil
+	providerConfiguration, ok := mainConfiguration.Terraform.RequiredProviders[providerSource[len(providerSource)-1]]
+	if !ok {
+		return false, errors.New("cannot get provider configuration")
 	}
-	return false, nil
+	v, ok := providerConfiguration.(map[string]any)["version"]
+	if !ok {
+		return false, errors.New("cannot get version")
+	}
+	return v != fp.Setup.Requirement.Version, nil
 }
