@@ -32,6 +32,7 @@ const (
 	errUnmarshalAttr     = "cannot unmarshal state attributes"
 	errUnmarshalTFState  = "cannot unmarshal tfstate file"
 	errFmtNonString      = "cannot work with a non-string id: %s"
+	errReadMainTF        = "cannot read main.tf.json file"
 )
 
 // FileProducerOption allows you to configure FileProducer
@@ -233,4 +234,36 @@ func (fp *FileProducer) isStateEmpty() (bool, error) {
 		return false, errors.Errorf(errFmtNonString, fmt.Sprint(id))
 	}
 	return sid == "", nil
+}
+
+type MainConfiguration struct {
+	Terraform Terraform `json:"terraform,omitempty"`
+}
+
+type Terraform struct {
+	RequiredProviders map[string]any `json:"required_providers,omitempty"`
+}
+
+func (fp *FileProducer) needProviderUpgrade() (bool, error) {
+	data, err := fp.fs.ReadFile(filepath.Join(fp.Dir, "main.tf.json"))
+	if errors.Is(err, iofs.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, errors.Wrap(err, errReadMainTF)
+	}
+	mainConfiguration := MainConfiguration{}
+	if err := json.JSParser.Unmarshal(data, &mainConfiguration); err != nil {
+		return false, errors.Wrap(err, errReadMainTF)
+	}
+	providerSource := strings.Split(fp.Setup.Requirement.Source, "/")
+	providerConfiguration, ok := mainConfiguration.Terraform.RequiredProviders[providerSource[len(providerSource)-1]]
+	if !ok {
+		return false, errors.New("cannot get provider configuration")
+	}
+	v, ok := providerConfiguration.(map[string]any)["version"]
+	if !ok {
+		return false, errors.New("cannot get version")
+	}
+	return v != fp.Setup.Requirement.Version, nil
 }
