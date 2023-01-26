@@ -61,6 +61,9 @@ type StepType string
 const (
 	// StepTypeApply denotes an apply step
 	StepTypeApply StepType = "Apply"
+	// StepTypePatch denotes a patch step, where a resource is patched
+	// using the given JSON patch document.
+	StepTypePatch StepType = "Patch"
 	// StepTypeDelete denotes a delete step
 	StepTypeDelete StepType = "Delete"
 )
@@ -75,6 +78,8 @@ type Step struct {
 	// Apply contains the information needed to run an StepTypeApply step.
 	// Must be set when the Step.Type is StepTypeApply.
 	Apply *ApplyStep `json:"apply,omitempty"`
+	// Patch contains the information needed to run a StepTypePatch step.
+	Patch *PatchStep `json:"patch,omitempty"`
 	// Delete contains the information needed to run an StepTypeDelete step.
 	// Must be set when the Step.Type is StepTypeDelete.
 	Delete *DeleteStep `json:"delete,omitempty"`
@@ -86,6 +91,29 @@ type ApplyStep struct {
 	// Files denotes the paths of the manifest files to be applied.
 	// The paths can either be relative or absolute.
 	Files []string `json:"files,omitempty"`
+}
+
+// PatchType represents the patch type used in a patch operation
+type PatchType string
+
+const (
+	// PatchTypeStrategic represents the strategic merge patch
+	PatchTypeStrategic PatchType = "strategic"
+	// PatchTypeMerge represents the RFC 7386 JSON merge patch
+	PatchTypeMerge PatchType = "merge"
+	// PatchTypeJSON represents the RFC 6902 JSON patch
+	PatchTypeJSON PatchType = "json"
+)
+
+// PatchStep represents a patch step in which an array of manifests
+// is used to patch resources.
+type PatchStep struct {
+	// Files denotes the paths of the manifest files
+	// to be used as patch documents.
+	// The paths can either be relative or absolute.
+	Files []string `json:"files,omitempty"`
+	// Type is the PatchType to be used in this step
+	Type PatchType `json:"type,omitempty"`
 }
 
 // DeleteStep represents a deletion step with options

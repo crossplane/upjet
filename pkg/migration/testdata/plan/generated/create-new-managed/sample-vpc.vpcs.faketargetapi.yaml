@@ -1,7 +1,8 @@
 apiVersion: faketargetapi/v1alpha1
 kind: VPC
 metadata:
-  annotations: {}
+  annotations:
+    crossplane.io/paused: "true"
   name: sample-vpc
 mockManaged:
   ctrl: null

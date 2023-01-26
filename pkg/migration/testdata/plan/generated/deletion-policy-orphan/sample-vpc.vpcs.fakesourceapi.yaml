@@ -1,14 +1,6 @@
 apiVersion: fakesourceapi/v1alpha1
 kind: VPC
 metadata:
-  annotations:
-    crossplane.io/paused: "true"
   name: sample-vpc
 spec:
   deletionPolicy: Orphan
-  forProvider:
-    cidrBlock: 172.16.0.0/16
-    region: us-west-1
-    tags:
-    - key: tag1
-      value: value1

@@ -1,40 +1,52 @@
 spec:
   steps:
-  - apply:
+  - patch:
+      type: merge
       files:
       - pause-managed/sample-vpc.vpcs.fakesourceapi.yaml
     name: pause-managed
-    type: Apply
-  - apply:
+    type: Patch
+
+  - patch:
+      type: merge
       files:
       - pause-composites/my-resource-dwjgh.xmyresources.test.com.yaml
     name: pause-composites
-    type: Apply
+    type: Patch
+
   - apply:
       files:
       - create-new-managed/sample-vpc.vpcs.faketargetapi.yaml
     name: create-new-managed
     type: Apply
+
   - apply:
       files:
       - new-compositions/example-migrated.compositions.apiextensions.crossplane.io.yaml
     name: new-compositions
     type: Apply
-  - apply:
+
+  - patch:
+      type: merge
       files:
       - edit-composites/my-resource-dwjgh.xmyresources.test.com.yaml
     name: edit-composites
-    type: Apply
-  - apply:
+    type: Patch
+
+  - patch:
+      type: merge
       files:
       - edit-claims/my-resource.myresources.test.com.yaml
     name: edit-claims
-    type: Apply
-  - apply:
+    type: Patch
+
+  - patch:
+      type: merge
       files:
       - deletion-policy-orphan/sample-vpc.vpcs.fakesourceapi.yaml
     name: deletion-policy-orphan
-    type: Apply
+    type: Patch
+
   - delete:
       options:
         finalizerPolicy: Remove
@@ -45,14 +57,19 @@ spec:
         version: v1alpha1
     name: delete-old-managed
     type: Delete
-  - apply:
+
+  - patch:
+      type: merge
       files:
       - start-managed/sample-vpc.vpcs.faketargetapi.yaml
     name: start-managed
-    type: Apply
-  - apply:
+    type: Patch
+
+  - patch:
+      type: merge
       files:
       - start-composites/my-resource-dwjgh.xmyresources.test.com.yaml
     name: start-composites
-    type: Apply
+    type: Patch
+
 version: 0.1.0

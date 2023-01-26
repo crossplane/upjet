@@ -28,6 +28,7 @@ spec:
   resourceRefs:
     - apiVersion: fakesourceapi/v1alpha1
       kind: VPC
+      name: sample-vpc
 status:
   conditions:
     - lastTransitionTime: "2022-12-13T18:38:31Z"
