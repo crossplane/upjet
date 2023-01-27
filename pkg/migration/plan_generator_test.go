@@ -60,6 +60,11 @@ func TestGeneratePlan(t *testing.T) {
 				target: newTestTarget(),
 				registry: getRegistryWithConverters(map[schema.GroupVersionKind]Converter{
 					fake.MigrationSourceGVK: &testConverter{},
+				}, []PatchSetConverter{
+					{
+						Re:        AllCompositions,
+						Converter: convertPatchSet6,
+					},
 				}),
 			},
 			want: want{
@@ -202,6 +207,15 @@ func (f *testTarget) Delete(o UnstructuredWithMetadata) error {
 	return nil
 }*/
 
+func convertPatchSet6(psMap map[string]*v1.PatchSet) error {
+	ps := psMap["ps6"]
+	if ps == nil {
+		return nil
+	}
+	ps.Patches[0].ToFieldPath = ptrFromString(`spec.forProvider.tags["key4"]`)
+	return nil
+}
+
 type testConverter struct{}
 
 func (f *testConverter) Resource(mg xpresource.Managed) ([]xpresource.Managed, error) {
@@ -224,7 +238,7 @@ func ptrFromString(s string) *string {
 	return &s
 }
 
-func (f *testConverter) Composition(sourcePatchSets []v1.PatchSet, sourceTemplate v1.ComposedTemplate, convertedTemplates ...*v1.ComposedTemplate) ([]v1.PatchSet, error) {
+func (f *testConverter) Composition(sourcePatchSets []v1.PatchSet, _ v1.ComposedTemplate, convertedTemplates ...*v1.ComposedTemplate) ([]v1.PatchSet, error) {
 	// convert patches in the migration target composed templates
 	for i := range convertedTemplates {
 		convertedTemplates[i].Patches = append(convertedTemplates[i].Patches, v1.Patch{
@@ -254,11 +268,14 @@ func (f *testConverter) Composition(sourcePatchSets []v1.PatchSet, sourceTemplat
 	return targetPatchSets, nil
 }
 
-func getRegistryWithConverters(converters map[schema.GroupVersionKind]Converter) *Registry {
+func getRegistryWithConverters(converters map[schema.GroupVersionKind]Converter, psConverters []PatchSetConverter) *Registry {
 	scheme := runtime.NewScheme()
 	scheme.AddKnownTypeWithName(fake.MigrationSourceGVK, &fake.MigrationSourceObject{})
 	scheme.AddKnownTypeWithName(fake.MigrationTargetGVK, &fake.MigrationTargetObject{})
 	r := NewRegistry(scheme)
+	for _, c := range psConverters {
+		r.RegisterPatchSetConverter(c)
+	}
 	for gvk, c := range converters {
 		r.RegisterConverter(gvk, c)
 	}

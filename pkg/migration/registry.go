@@ -15,11 +15,18 @@
 package migration
 
 import (
+	"regexp"
+
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	xpv1 "github.com/crossplane/crossplane/apis/apiextensions/v1"
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+)
+
+var (
+	// AllCompositions matches all v1.Composition names.
+	AllCompositions = regexp.MustCompile(`.*`)
 )
 
 const (
@@ -41,10 +48,11 @@ type CompositionConversionFn func(sourcePatchSets []xpv1.PatchSet, sourceTemplat
 // the associated `schema.GroupVersionKind`s and an associated
 // runtime.Scheme with which the corresponding types are registered.
 type Registry struct {
-	converters     map[schema.GroupVersionKind]Converter
-	scheme         *runtime.Scheme
-	claimTypes     []schema.GroupVersionKind
-	compositeTypes []schema.GroupVersionKind
+	converters         map[schema.GroupVersionKind]Converter
+	patchSetConverters []PatchSetConverter
+	scheme             *runtime.Scheme
+	claimTypes         []schema.GroupVersionKind
+	compositeTypes     []schema.GroupVersionKind
 }
 
 // NewRegistry returns a new Registry initialized with
@@ -106,6 +114,12 @@ func (r *Registry) RegisterConversionFunctions(gvk schema.GroupVersionKind, rFn 
 		rFn:    rFn,
 		compFn: compFn,
 	})
+}
+
+// RegisterPatchSetConverter registers the given PatchSetConversionFn for
+// the compositions whose name match the given regular expression.
+func (r *Registry) RegisterPatchSetConverter(psConv PatchSetConverter) {
+	r.patchSetConverters = append(r.patchSetConverters, psConv)
 }
 
 // AddToScheme registers types with this Registry's runtime.Scheme

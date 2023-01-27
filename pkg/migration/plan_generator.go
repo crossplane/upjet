@@ -22,6 +22,7 @@ import (
 	"time"
 
 	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/crossplane/crossplane-runtime/pkg/resource/unstructured/claim"
@@ -111,6 +112,37 @@ func NewPlanGenerator(registry *Registry, source Source, target Target) PlanGene
 func (pg *PlanGenerator) GeneratePlan() error {
 	pg.buildPlan()
 	return errors.Wrap(pg.convert(), errPlanGeneration)
+}
+
+func (pg *PlanGenerator) convertPatchSets(o UnstructuredWithMetadata) ([]string, error) {
+	var converted []string
+	for _, psConv := range pg.registry.patchSetConverters {
+		if psConv.Re == nil || psConv.Converter == nil {
+			continue
+		}
+		if !psConv.Re.MatchString(o.Object.GetName()) {
+			continue
+		}
+		c, err := convertToComposition(o.Object.Object)
+		if err != nil {
+			return nil, errors.Wrap(err, errUnstructuredConvert)
+		}
+		oldPatchSets := make([]xpv1.PatchSet, len(c.Spec.PatchSets))
+		for i, ps := range c.Spec.PatchSets {
+			oldPatchSets[i] = *ps.DeepCopy()
+		}
+		psMap := convertToMap(c.Spec.PatchSets)
+		if err := psConv.Converter(psMap); err != nil {
+			return nil, errors.Wrapf(err, "failed to call PatchSet converter on Composition: %s", c.GetName())
+		}
+		newPatchSets := convertFromMap(psMap, oldPatchSets)
+		converted = append(converted, getConvertedPatchSetNames(newPatchSets, oldPatchSets)...)
+		pv := fieldpath.Pave(o.Object.Object)
+		if err := pv.SetValue("spec.patchSets", newPatchSets); err != nil {
+			return nil, errors.Wrapf(err, "failed to set converted patch sets on Composition: %s", c.GetName())
+		}
+	}
+	return converted, nil
 }
 
 func (pg *PlanGenerator) convert() error { //nolint: gocyclo
@@ -264,6 +296,10 @@ func toManagedResource(c runtime.ObjectCreater, u unstructured.Unstructured) (re
 }
 
 func (pg *PlanGenerator) convertComposition(o UnstructuredWithMetadata) (*UnstructuredWithMetadata, bool, error) { // nolint:gocyclo
+	convertedPS, err := pg.convertPatchSets(o)
+	if err != nil {
+		return nil, false, errors.Wrap(err, "failed to convert patch sets")
+	}
 	c, err := convertToComposition(o.Object.Object)
 	if err != nil {
 		return nil, false, errors.Wrap(err, errUnstructuredConvert)
@@ -299,7 +335,7 @@ func (pg *PlanGenerator) convertComposition(o UnstructuredWithMetadata) (*Unstru
 			c.Base = runtime.RawExtension{
 				Raw: buff,
 			}
-			if err := pg.setDefaultsOnTargetTemplate(cmp.Name, &sourceNameUsed, gvk, u.Object.GroupVersionKind(), c, targetPatchSets); err != nil {
+			if err := pg.setDefaultsOnTargetTemplate(cmp.Name, &sourceNameUsed, gvk, u.Object.GroupVersionKind(), c, targetPatchSets, convertedPS); err != nil {
 				return nil, false, errors.Wrap(err, errComposedTemplateMigrate)
 			}
 			cmps = append(cmps, c)
@@ -325,9 +361,9 @@ func (pg *PlanGenerator) convertComposition(o UnstructuredWithMetadata) (*Unstru
 	}, isConverted, nil
 }
 
-func (pg *PlanGenerator) setDefaultsOnTargetTemplate(sourceName *string, sourceNameUsed *bool, gvkSource, gvkTarget schema.GroupVersionKind, target *xpv1.ComposedTemplate, patchSets []xpv1.PatchSet) error {
+func (pg *PlanGenerator) setDefaultsOnTargetTemplate(sourceName *string, sourceNameUsed *bool, gvkSource, gvkTarget schema.GroupVersionKind, target *xpv1.ComposedTemplate, patchSets []xpv1.PatchSet, convertedPS []string) error {
 	// remove invalid patches that do not conform to the migration target's schema
-	if err := removeInvalidPatches(pg.registry.scheme, gvkSource, gvkTarget, patchSets, target); err != nil {
+	if err := removeInvalidPatches(pg.registry.scheme, gvkSource, gvkTarget, patchSets, target, convertedPS); err != nil {
 		return errors.Wrap(err, "failed to set the defaults on the migration target composed template")
 	}
 	if *sourceNameUsed || gvkSource.Kind != gvkTarget.Kind {

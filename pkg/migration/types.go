@@ -15,6 +15,9 @@
 package migration
 
 import (
+	"regexp"
+
+	xpv1 "github.com/crossplane/crossplane/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
@@ -174,4 +177,27 @@ type Metadata struct {
 type UnstructuredWithMetadata struct {
 	Object   unstructured.Unstructured
 	Metadata Metadata
+}
+
+// PatchSetConversionFn is a function that converts the given migration source
+// v1.PatchSet's to migration target v1.PatchSet's. `psMap` is indexed by
+// the names of the patch sets.
+type PatchSetConversionFn func(psMap map[string]*xpv1.PatchSet) error
+
+// PatchSetConverter converts patch sets of Compositions whose name match
+// the specified regular expression. Any registered PatchSetConverters
+// will be called before any resource or Composition conversion is done.
+// The rationale is to convert the Composition-wide patch sets before
+// any resource-specific conversions so that migration targets can
+// automatically inherit converted patch sets if their schemas match them.
+// Registered PatchSetConverters will be called in the order
+// they are registered.
+type PatchSetConverter struct {
+	// Re is the regular expression against which a Composition's name
+	// will be matched to determine whether the conversion function
+	// will be invoked.
+	Re *regexp.Regexp
+	// Converter is the conversion function to be run on the Composition's
+	// patch sets.
+	Converter PatchSetConversionFn
 }

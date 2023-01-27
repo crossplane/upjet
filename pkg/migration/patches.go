@@ -27,10 +27,7 @@ import (
 )
 
 var (
-	regexSlice = regexp.MustCompile(`(.+)\[\d+]`)
-	// this regex captures some malformed expressions
-	// (like mismatches in quotes, etc.)
-	regexMap     = regexp.MustCompile(`(.+)\[["|']?\D+["|']?]`)
+	regexIndex   = regexp.MustCompile(`(.+)\[(.+)]`)
 	regexJSONTag = regexp.MustCompile(`([^,]+)?(,.+)?`)
 )
 
@@ -38,7 +35,16 @@ const (
 	jsonTagInlined = ",inline"
 )
 
-func removeInvalidPatches(c runtime.ObjectCreater, gvkSource, gvkTarget schema.GroupVersionKind, patchSets []xpv1.PatchSet, targetTemplate *xpv1.ComposedTemplate) error {
+func isConverted(convertedPS []string, psName string) bool {
+	for _, n := range convertedPS {
+		if psName == n {
+			return true
+		}
+	}
+	return false
+}
+
+func removeInvalidPatches(c runtime.ObjectCreater, gvkSource, gvkTarget schema.GroupVersionKind, patchSets []xpv1.PatchSet, targetTemplate *xpv1.ComposedTemplate, convertedPS []string) error { //nolint:gocyclo // complexity (11) just above the threshold (10)
 	source, err := c.New(gvkSource)
 	if err != nil {
 		return errors.Wrapf(err, "failed to instantiate a new source object with GVK: %s", gvkSource.String())
@@ -51,6 +57,7 @@ func removeInvalidPatches(c runtime.ObjectCreater, gvkSource, gvkTarget schema.G
 	newPatches := make([]xpv1.Patch, 0, len(targetTemplate.Patches))
 	var patches []xpv1.Patch
 	for _, p := range targetTemplate.Patches {
+		s := source
 		switch p.Type { // nolint:exhaustive
 		case xpv1.PatchTypePatchSet:
 			ps := getNamedPatchSet(p.PatchSetName, patchSets)
@@ -58,6 +65,11 @@ func removeInvalidPatches(c runtime.ObjectCreater, gvkSource, gvkTarget schema.G
 				// something is wrong with the patchset ref,
 				// we will just remove the ref
 				continue
+			}
+			if isConverted(convertedPS, ps.Name) {
+				// then do not use the source schema as the patch set
+				// is already converted
+				s = target
 			}
 			// assert each of the patches in the set
 			// conform the target schema
@@ -67,7 +79,7 @@ func removeInvalidPatches(c runtime.ObjectCreater, gvkSource, gvkTarget schema.G
 		}
 		keep := true
 		for _, p := range patches {
-			ok, err := assertPatchSchemaConformance(p, source, target)
+			ok, err := assertPatchSchemaConformance(p, s, target)
 			if err != nil {
 				return errors.Wrap(err, "failed to check whether the patch conforms to the target schema")
 			}
@@ -132,11 +144,7 @@ func assertNameAndTypeAtPath(source, target reflect.Type, pathComponents []strin
 	if len(pathComponent) == 0 {
 		return false, errors.Errorf("failed to compare source and target structs. Invalid path: %s", strings.Join(pathComponents, "."))
 	}
-	m := regexMap.FindStringSubmatch(pathComponents[0])
-	if m == nil {
-		// if not a map index expression, check for slice indexing expression
-		m = regexSlice.FindStringSubmatch(pathComponents[0])
-	}
+	m := regexIndex.FindStringSubmatch(pathComponent)
 	if m != nil {
 		// then a map component or a slicing component
 		pathComponent = m[1]
@@ -232,4 +240,55 @@ func getNamedPatchSet(name *string, patchSets []xpv1.PatchSet) *xpv1.PatchSet {
 		}
 	}
 	return nil
+}
+
+func getConvertedPatchSetNames(newPatchSets, oldPatchSets []xpv1.PatchSet) []string {
+	converted := make([]string, 0, len(newPatchSets))
+	for _, n := range newPatchSets {
+		found := false
+		for _, o := range oldPatchSets {
+			if o.Name != n.Name {
+				continue
+			}
+			found = true
+			if !reflect.DeepEqual(o, n) {
+				converted = append(converted, n.Name)
+			}
+			break
+		}
+		if !found {
+			converted = append(converted, n.Name)
+		}
+	}
+	return converted
+}
+
+func convertToMap(ps []xpv1.PatchSet) map[string]*xpv1.PatchSet {
+	m := make(map[string]*xpv1.PatchSet, len(ps))
+	for _, p := range ps {
+		// Crossplane dereferences the last patch set with the same name,
+		// so override with the last patch set with the same name.
+		m[p.Name] = p.DeepCopy()
+	}
+	return m
+}
+
+func convertFromMap(psMap map[string]*xpv1.PatchSet, oldPS []xpv1.PatchSet) []xpv1.PatchSet {
+	result := make([]xpv1.PatchSet, 0, len(psMap))
+	for _, ps := range oldPS {
+		if psMap[ps.Name] == nil {
+			// then patch set has been deleted
+			continue
+		}
+		result = append(result, *psMap[ps.Name])
+		delete(psMap, ps.Name)
+	}
+	// add the new patch sets
+	for _, ps := range psMap {
+		if ps == nil {
+			continue
+		}
+		result = append(result, *ps)
+	}
+	return result
 }
