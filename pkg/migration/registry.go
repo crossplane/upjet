@@ -42,7 +42,7 @@ type ResourceConversionFn func(mg resource.Managed) ([]resource.Managed, error)
 // CompositionConversionFn is a function that converts from the specified
 // v1.ComposedTemplate's migration source resources to one or more migration
 // target resources.
-type CompositionConversionFn func(sourcePatchSets []xpv1.PatchSet, sourceTemplate xpv1.ComposedTemplate, convertedTemplates ...*xpv1.ComposedTemplate) ([]xpv1.PatchSet, error)
+type CompositionConversionFn func(sourceTemplate xpv1.ComposedTemplate, convertedTemplates ...*xpv1.ComposedTemplate) error
 
 // Registry is a registry of `migration.Converter`s keyed with
 // the associated `schema.GroupVersionKind`s and an associated
@@ -94,14 +94,14 @@ func (d delegatingConverter) Resource(mg resource.Managed) ([]resource.Managed, 
 	return d.rFn(mg)
 }
 
-// Composition converts from the specified migration source
+// ComposedTemplate converts from the specified migration source
 // v1.ComposedTemplate to the migration target schema by calling the configured
 // ComposedTemplateConversionFn.
-func (d delegatingConverter) Composition(sourcePatchSets []xpv1.PatchSet, sourceTemplate xpv1.ComposedTemplate, convertedTemplates ...*xpv1.ComposedTemplate) ([]xpv1.PatchSet, error) {
+func (d delegatingConverter) ComposedTemplate(sourceTemplate xpv1.ComposedTemplate, convertedTemplates ...*xpv1.ComposedTemplate) error {
 	if d.compFn == nil {
-		return sourcePatchSets, nil
+		return nil
 	}
-	return d.compFn(sourcePatchSets, sourceTemplate, convertedTemplates...)
+	return d.compFn(sourceTemplate, convertedTemplates...)
 }
 
 // RegisterConversionFunctions registers the supplied ResourceConversionFn and

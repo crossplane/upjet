@@ -35,6 +35,8 @@ const (
 	jsonTagInlined = ",inline"
 )
 
+// isConverted looks up the specified name in the list of already converted
+// patch sets.
 func isConverted(convertedPS []string, psName string) bool {
 	for _, n := range convertedPS {
 		if psName == n {
@@ -44,6 +46,11 @@ func isConverted(convertedPS []string, psName string) bool {
 	return false
 }
 
+// removeInvalidPatches removes the (inherited) patches from
+// a (split) migration target composed template. The migration target composed
+// templates inherit patches from migration source templates by default, and
+// this function is responsible for removing patches (including references to
+// patch sets) that do not conform to the target composed template's schema.
 func removeInvalidPatches(c runtime.ObjectCreater, gvkSource, gvkTarget schema.GroupVersionKind, patchSets []xpv1.PatchSet, targetTemplate *xpv1.ComposedTemplate, convertedPS []string) error { //nolint:gocyclo // complexity (11) just above the threshold (10)
 	source, err := c.New(gvkSource)
 	if err != nil {
@@ -96,6 +103,10 @@ func removeInvalidPatches(c runtime.ObjectCreater, gvkSource, gvkTarget schema.G
 	return nil
 }
 
+// assertPatchSchemaConformance asserts that the specified patch actually
+// conforms the specified target schema. We also assert the patch conforms
+// to the migration source schema, which prevents an invalid patch from being
+// preserved after the conversion.
 func assertPatchSchemaConformance(p xpv1.Patch, source, target any) (bool, error) {
 	var targetPath *string
 	// because this is defaulting logic and what we default can be overridden
@@ -114,6 +125,8 @@ func assertPatchSchemaConformance(p xpv1.Patch, source, target any) (bool, error
 	return ok, errors.Wrapf(err, "failed to assert patch schema for path: %s", *targetPath)
 }
 
+// splitPathComponents splits a fieldpath expression into its path components,
+// e.g., `m[a.b.c].a.b.c` is split into `m[a.b.c]`, `a`, `b`, `c`.
 func splitPathComponents(path string) []string {
 	components := strings.Split(path, ".")
 	result := make([]string, 0, len(components))
@@ -135,6 +148,9 @@ func splitPathComponents(path string) []string {
 	return result
 }
 
+// assertNameAndTypeAtPath asserts that the migration source and target
+// templates both have the same kind for the type at the specified path.
+// Also validates the specific path is valid for the source.
 func assertNameAndTypeAtPath(source, target reflect.Type, pathComponents []string) (bool, error) { // nolint:gocyclo
 	if len(pathComponents) < 1 {
 		return compareKinds(source, target), nil
@@ -178,6 +194,8 @@ func assertNameAndTypeAtPath(source, target reflect.Type, pathComponents []strin
 	return assertNameAndTypeAtPath(nextSource, nextTarget, pathComponents[1:])
 }
 
+// compareKinds compares the kinds of the specified types
+// dereferencing (following) pointer types.
 func compareKinds(s, t reflect.Type) bool {
 	if s.Kind() == reflect.Pointer {
 		s = s.Elem()
@@ -188,6 +206,10 @@ func compareKinds(s, t reflect.Type) bool {
 	return s.Kind() == t.Kind()
 }
 
+// getFieldWithSerializedName returns the field of a struct (if it exists)
+// with the specified serialized (JSON) name. Returns a nil (and a nil error)
+// if a field with the specified serialized name is not found
+// in the specified type.
 func getFieldWithSerializedName(t reflect.Type, name string) (*reflect.StructField, error) { // nolint:gocyclo
 	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
@@ -229,6 +251,9 @@ func getFieldWithSerializedName(t reflect.Type, name string) (*reflect.StructFie
 	return nil, nil // not found
 }
 
+// getNamedPatchSet returns the patch set with the specified name
+// from the specified patch set slice. Returns nil if a patch set
+// with the given name is not found.
 func getNamedPatchSet(name *string, patchSets []xpv1.PatchSet) *xpv1.PatchSet {
 	if name == nil {
 		// if name is not specified, do not attempt to find a named patchset
@@ -242,6 +267,8 @@ func getNamedPatchSet(name *string, patchSets []xpv1.PatchSet) *xpv1.PatchSet {
 	return nil
 }
 
+// getConvertedPatchSetNames returns the names of patch sets that have been
+// converted by a PatchSetConverter.
 func getConvertedPatchSetNames(newPatchSets, oldPatchSets []xpv1.PatchSet) []string {
 	converted := make([]string, 0, len(newPatchSets))
 	for _, n := range newPatchSets {
@@ -263,6 +290,8 @@ func getConvertedPatchSetNames(newPatchSets, oldPatchSets []xpv1.PatchSet) []str
 	return converted
 }
 
+// convertToMap converts the given slice of patch sets to a map of
+// patch sets keyed by their names.
 func convertToMap(ps []xpv1.PatchSet) map[string]*xpv1.PatchSet {
 	m := make(map[string]*xpv1.PatchSet, len(ps))
 	for _, p := range ps {
@@ -273,11 +302,23 @@ func convertToMap(ps []xpv1.PatchSet) map[string]*xpv1.PatchSet {
 	return m
 }
 
-func convertFromMap(psMap map[string]*xpv1.PatchSet, oldPS []xpv1.PatchSet) []xpv1.PatchSet {
+// convertFromMap converts the specified map of patch sets back to a slice.
+// If filterDeleted is set, previously existing patch sets in the Composition
+// which have been removed from the map are also removed from the resulting
+// slice, and eventually from the Composition. PatchSetConverters are
+// allowed to remove patch sets, whereas Composition converters are
+// not, as Composition converters have a local view of the patch sets and
+// don't know about the other composed templates that may be sharing
+// patch sets with them.
+func convertFromMap(psMap map[string]*xpv1.PatchSet, oldPS []xpv1.PatchSet, filterDeleted bool) []xpv1.PatchSet {
 	result := make([]xpv1.PatchSet, 0, len(psMap))
 	for _, ps := range oldPS {
-		if psMap[ps.Name] == nil {
+		if filterDeleted && psMap[ps.Name] == nil {
 			// then patch set has been deleted
+			continue
+		}
+		if psMap[ps.Name] == nil {
+			result = append(result, ps)
 			continue
 		}
 		result = append(result, *psMap[ps.Name])

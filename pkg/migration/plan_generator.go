@@ -135,7 +135,7 @@ func (pg *PlanGenerator) convertPatchSets(o UnstructuredWithMetadata) ([]string,
 		if err := psConv.Converter(psMap); err != nil {
 			return nil, errors.Wrapf(err, "failed to call PatchSet converter on Composition: %s", c.GetName())
 		}
-		newPatchSets := convertFromMap(psMap, oldPatchSets)
+		newPatchSets := convertFromMap(psMap, oldPatchSets, true)
 		converted = append(converted, getConvertedPatchSetNames(newPatchSets, oldPatchSets)...)
 		pv := fieldpath.Pave(o.Object.Object)
 		if err := pv.SetValue("spec.patchSets", newPatchSets); err != nil {
@@ -300,17 +300,13 @@ func (pg *PlanGenerator) convertComposition(o UnstructuredWithMetadata) (*Unstru
 	if err != nil {
 		return nil, false, errors.Wrap(err, "failed to convert patch sets")
 	}
-	c, err := convertToComposition(o.Object.Object)
+	comp, err := convertToComposition(o.Object.Object)
 	if err != nil {
 		return nil, false, errors.Wrap(err, errUnstructuredConvert)
 	}
-	targetPatchSets := make([]xpv1.PatchSet, 0, len(c.Spec.PatchSets))
-	for _, ps := range c.Spec.PatchSets {
-		targetPatchSets = append(targetPatchSets, *ps.DeepCopy())
-	}
 	var targetResources []*xpv1.ComposedTemplate
 	isConverted := false
-	for _, cmp := range c.Spec.Resources {
+	for _, cmp := range comp.Spec.Resources {
 		u, err := FromRawExtension(cmp.Base)
 		if err != nil {
 			return nil, false, errors.Wrap(err, errCompositionMigrate)
@@ -335,28 +331,25 @@ func (pg *PlanGenerator) convertComposition(o UnstructuredWithMetadata) (*Unstru
 			c.Base = runtime.RawExtension{
 				Raw: buff,
 			}
-			if err := pg.setDefaultsOnTargetTemplate(cmp.Name, &sourceNameUsed, gvk, u.Object.GroupVersionKind(), c, targetPatchSets, convertedPS); err != nil {
+			if err := pg.setDefaultsOnTargetTemplate(cmp.Name, &sourceNameUsed, gvk, u.Object.GroupVersionKind(), c, comp.Spec.PatchSets, convertedPS); err != nil {
 				return nil, false, errors.Wrap(err, errComposedTemplateMigrate)
 			}
 			cmps = append(cmps, c)
 		}
 		conv := pg.registry.converters[gvk]
 		if conv != nil {
-			ps, err := conv.Composition(targetPatchSets, cmp, cmps...)
-			if err != nil {
+			if err := conv.ComposedTemplate(cmp, cmps...); err != nil {
 				return nil, false, errors.Wrap(err, errComposedTemplateMigrate)
 			}
-			targetPatchSets = ps
 		}
 		targetResources = append(targetResources, cmps...)
 	}
-	c.Spec.PatchSets = targetPatchSets
-	c.Spec.Resources = make([]xpv1.ComposedTemplate, 0, len(targetResources))
+	comp.Spec.Resources = make([]xpv1.ComposedTemplate, 0, len(targetResources))
 	for _, cmp := range targetResources {
-		c.Spec.Resources = append(c.Spec.Resources, *cmp)
+		comp.Spec.Resources = append(comp.Spec.Resources, *cmp)
 	}
 	return &UnstructuredWithMetadata{
-		Object:   ToSanitizedUnstructured(&c),
+		Object:   ToSanitizedUnstructured(&comp),
 		Metadata: o.Metadata,
 	}, isConverted, nil
 }

@@ -9,6 +9,10 @@ spec:
     apiVersion: test.com/v1alpha1
     kind: XMyResource
   patchSets:
+    - name: not-referenced
+      patches:
+        - fromFieldPath: "spec.parameters.tagValue"
+          toFieldPath: spec.forProvider.myTag
     - name: ps1
       patches:
         - fromFieldPath: "spec.parameters.tagValue"

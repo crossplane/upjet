@@ -63,7 +63,7 @@ func TestGeneratePlan(t *testing.T) {
 				}, []PatchSetConverter{
 					{
 						Re:        AllCompositions,
-						Converter: convertPatchSet6,
+						Converter: convertPatchSets,
 					},
 				}),
 			},
@@ -207,12 +207,9 @@ func (f *testTarget) Delete(o UnstructuredWithMetadata) error {
 	return nil
 }*/
 
-func convertPatchSet6(psMap map[string]*v1.PatchSet) error {
-	ps := psMap["ps6"]
-	if ps == nil {
-		return nil
-	}
-	ps.Patches[0].ToFieldPath = ptrFromString(`spec.forProvider.tags["key4"]`)
+func convertPatchSets(psMap map[string]*v1.PatchSet) error {
+	psMap["ps1"].Patches[0].ToFieldPath = ptrFromString(`spec.forProvider.tags["key3"]`)
+	psMap["ps6"].Patches[0].ToFieldPath = ptrFromString(`spec.forProvider.tags["key4"]`)
 	return nil
 }
 
@@ -238,34 +235,19 @@ func ptrFromString(s string) *string {
 	return &s
 }
 
-func (f *testConverter) Composition(sourcePatchSets []v1.PatchSet, _ v1.ComposedTemplate, convertedTemplates ...*v1.ComposedTemplate) ([]v1.PatchSet, error) {
+func (f *testConverter) ComposedTemplate(_ v1.ComposedTemplate, convertedTemplates ...*v1.ComposedTemplate) error {
 	// convert patches in the migration target composed templates
 	for i := range convertedTemplates {
-		convertedTemplates[i].Patches = append(convertedTemplates[i].Patches, v1.Patch{
-			FromFieldPath: ptrFromString("spec.parameters.tagValue"),
-			ToFieldPath:   ptrFromString(`spec.forProvider.tags["key1"]`),
-		}, v1.Patch{
-			FromFieldPath: ptrFromString("spec.parameters.tagValue"),
-			ToFieldPath:   ptrFromString(`spec.forProvider.tags["key2"]`),
-		}, v1.Patch{
-			Type:         v1.PatchTypePatchSet,
-			PatchSetName: ptrFromString("ps1"),
-		})
+		convertedTemplates[i].Patches = append([]v1.Patch{
+			{FromFieldPath: ptrFromString("spec.parameters.tagValue"),
+				ToFieldPath: ptrFromString(`spec.forProvider.tags["key1"]`),
+			}, {
+				FromFieldPath: ptrFromString("spec.parameters.tagValue"),
+				ToFieldPath:   ptrFromString(`spec.forProvider.tags["key2"]`),
+			},
+		}, convertedTemplates[i].Patches...)
 	}
-	// convert patch sets in the source
-	targetPatchSets := make([]v1.PatchSet, 0, len(sourcePatchSets))
-	for _, ps := range sourcePatchSets {
-		if ps.Name != "ps1" {
-			targetPatchSets = append(targetPatchSets, ps)
-			continue
-		}
-		tPs := ps.DeepCopy()
-		for i := range tPs.Patches {
-			*tPs.Patches[i].ToFieldPath = `spec.forProvider.tags["key3"]`
-		}
-		targetPatchSets = append(targetPatchSets, *tPs)
-	}
-	return targetPatchSets, nil
+	return nil
 }
 
 func getRegistryWithConverters(converters map[schema.GroupVersionKind]Converter, psConverters []PatchSetConverter) *Registry {
