@@ -74,7 +74,30 @@ func sanitizeResource(m map[string]any) map[string]any {
 	if len(metadata) == 0 {
 		delete(m, "metadata")
 	}
+	removeNilValuedKeys(m)
 	return m
+}
+
+// removeNilValuedKeys removes nil values from the specified map so that
+// the serialized manifest do not contain corresponding superfluous YAML
+// nulls.
+func removeNilValuedKeys(m map[string]interface{}) {
+	for k, v := range m {
+		if v == nil {
+			delete(m, k)
+			continue
+		}
+		switch c := v.(type) {
+		case map[string]any:
+			removeNilValuedKeys(c)
+		case []any:
+			for _, e := range c {
+				if cm, ok := e.(map[string]interface{}); ok {
+					removeNilValuedKeys(cm)
+				}
+			}
+		}
+	}
 }
 
 // ToSanitizedUnstructured converts the specified managed resource to an

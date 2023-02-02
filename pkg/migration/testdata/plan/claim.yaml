@@ -8,3 +8,4 @@ spec:
     name: example
   parameters:
     tagValue: demo-test
+    region: us-west-1

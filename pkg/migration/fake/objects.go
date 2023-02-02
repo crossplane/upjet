@@ -63,10 +63,15 @@ type SourceSpec struct {
 	ForProvider       SourceSpecParameters `json:"forProvider"`
 }
 
+type EmbeddedParameter struct {
+	Param *string `json:"param,omitempty"`
+}
+
 type SourceSpecParameters struct {
-	Region    *string `json:"region,omitempty"`
-	CIDRBlock string  `json:"cidrBlock"`
-	Tags      []Tag   `json:"tags,omitempty"`
+	Region    *string            `json:"region,omitempty"`
+	CIDRBlock string             `json:"cidrBlock"`
+	Tags      []Tag              `json:"tags,omitempty"`
+	TestParam *EmbeddedParameter `json:",inline"`
 }
 
 type Tag struct {
@@ -81,6 +86,10 @@ type Status struct {
 
 type Observation struct{}
 
+func (m *MigrationSourceObject) GetName() string {
+	return m.ObjectMeta.Name
+}
+
 type MigrationTargetObject struct {
 	mocks.MockManaged
 	// cannot inline v1.TypeMeta here as mocks.MockManaged is also inlined
@@ -93,7 +102,9 @@ type MigrationTargetObject struct {
 }
 
 type ObjectMeta struct {
-	Name string `json:"name,omitempty"`
+	Name         string            `json:"name,omitempty"`
+	GenerateName string            `json:"generateName,omitempty"`
+	Labels       map[string]string `json:"labels,omitempty"`
 }
 
 type TargetSpec struct {
@@ -105,4 +116,25 @@ type TargetSpecParameters struct {
 	Region    *string           `json:"region,omitempty"`
 	CIDRBlock string            `json:"cidrBlock"`
 	Tags      map[string]string `json:"tags,omitempty"`
+	TestParam EmbeddedParameter `json:",inline"`
+}
+
+type targetObjectKind struct{}
+
+func (t *targetObjectKind) SetGroupVersionKind(_ schema.GroupVersionKind) {}
+
+func (t *targetObjectKind) GroupVersionKind() schema.GroupVersionKind {
+	return MigrationTargetGVK
+}
+
+func (m *MigrationTargetObject) GetObjectKind() schema.ObjectKind {
+	return &targetObjectKind{}
+}
+
+func (m *MigrationTargetObject) GetName() string {
+	return m.ObjectMeta.Name
+}
+
+func (m *MigrationTargetObject) GetGenerateName() string {
+	return m.ObjectMeta.GenerateName
 }

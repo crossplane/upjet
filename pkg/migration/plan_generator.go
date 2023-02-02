@@ -16,12 +16,9 @@ package migration
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
-
-	"github.com/pkg/errors"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
+	"time"
 
 	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
@@ -30,6 +27,12 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/resource/unstructured/claim"
 	"github.com/crossplane/crossplane-runtime/pkg/resource/unstructured/composite"
 	xpv1 "github.com/crossplane/crossplane/apis/apiextensions/v1"
+	"github.com/pkg/errors"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/rand"
 )
 
 const (
@@ -53,6 +56,7 @@ const (
 	errClaimsEdit              = "failed to edit claims"
 	errPlanGeneration          = "failed to generate the migration plan"
 	errPause                   = "failed to store a paused manifest"
+	errMissingGVK              = "managed resource is missing its GVK. Resource converters must set GVKs on any managed resources they newly generate."
 )
 
 type step int
@@ -151,7 +155,7 @@ func (pg *PlanGenerator) convert() error { //nolint: gocyclo
 				continue
 			}
 
-			targets, converted, err := pg.convertResource(o)
+			targets, converted, err := pg.convertResource(o, false)
 			if err != nil {
 				return errors.Wrap(err, errResourceMigrate)
 			}
@@ -192,7 +196,7 @@ func (pg *PlanGenerator) convert() error { //nolint: gocyclo
 	return nil
 }
 
-func (pg *PlanGenerator) convertResource(o UnstructuredWithMetadata) ([]UnstructuredWithMetadata, bool, error) {
+func (pg *PlanGenerator) convertResource(o UnstructuredWithMetadata, compositionContext bool) ([]UnstructuredWithMetadata, bool, error) {
 	gvk := o.Object.GroupVersionKind()
 	conv := pg.registry.converters[gvk]
 	if conv == nil {
@@ -203,9 +207,15 @@ func (pg *PlanGenerator) convertResource(o UnstructuredWithMetadata) ([]Unstruct
 	if err != nil {
 		return nil, false, errors.Wrap(err, errResourceMigrate)
 	}
-	resources, err := conv.Resources(mg)
+	resources, err := conv.Resource(mg)
 	if err != nil {
 		return nil, false, errors.Wrap(err, errResourceMigrate)
+	}
+	if err := assertGVK(resources); err != nil {
+		return nil, true, errors.Wrap(err, errResourceMigrate)
+	}
+	if !compositionContext {
+		assertMetadataName(mg.GetName(), resources)
 	}
 	converted := make([]UnstructuredWithMetadata, 0, len(resources))
 	for _, mg := range resources {
@@ -215,6 +225,24 @@ func (pg *PlanGenerator) convertResource(o UnstructuredWithMetadata) ([]Unstruct
 		})
 	}
 	return converted, true, nil
+}
+
+func assertGVK(resources []resource.Managed) error {
+	for _, r := range resources {
+		if reflect.ValueOf(r.GetObjectKind().GroupVersionKind()).IsZero() {
+			return errors.New(errMissingGVK)
+		}
+	}
+	return nil
+}
+
+func assertMetadataName(parentName string, resources []resource.Managed) {
+	for i, r := range resources {
+		if len(r.GetName()) != 0 || len(r.GetGenerateName()) != 0 {
+			continue
+		}
+		resources[i].SetGenerateName(fmt.Sprintf("%s-", parentName))
+	}
 }
 
 func toManagedResource(c runtime.ObjectCreater, u unstructured.Unstructured) (resource.Managed, bool, error) {
@@ -238,6 +266,10 @@ func (pg *PlanGenerator) convertComposition(o UnstructuredWithMetadata) (*Unstru
 	if err != nil {
 		return nil, false, errors.Wrap(err, errUnstructuredConvert)
 	}
+	targetPatchSets := make([]xpv1.PatchSet, 0, len(c.Spec.PatchSets))
+	for _, ps := range c.Spec.PatchSets {
+		targetPatchSets = append(targetPatchSets, *ps.DeepCopy())
+	}
 	var targetResources []*xpv1.ComposedTemplate
 	isConverted := false
 	for _, cmp := range c.Spec.Resources {
@@ -249,12 +281,13 @@ func (pg *PlanGenerator) convertComposition(o UnstructuredWithMetadata) (*Unstru
 		converted, ok, err := pg.convertResource(UnstructuredWithMetadata{
 			Object:   u,
 			Metadata: o.Metadata,
-		})
+		}, true)
 		if err != nil {
 			return nil, false, errors.Wrap(err, errComposedTemplateBase)
 		}
 		isConverted = isConverted || ok
 		cmps := make([]*xpv1.ComposedTemplate, 0, len(converted))
+		sourceNameUsed := false
 		for _, u := range converted {
 			buff, err := u.Object.MarshalJSON()
 			if err != nil {
@@ -264,16 +297,22 @@ func (pg *PlanGenerator) convertComposition(o UnstructuredWithMetadata) (*Unstru
 			c.Base = runtime.RawExtension{
 				Raw: buff,
 			}
+			if err := pg.setDefaultsOnTargetTemplate(cmp.Name, &sourceNameUsed, gvk, u.Object.GroupVersionKind(), c, targetPatchSets); err != nil {
+				return nil, false, errors.Wrap(err, errComposedTemplateMigrate)
+			}
 			cmps = append(cmps, c)
 		}
 		conv := pg.registry.converters[gvk]
 		if conv != nil {
-			if err := conv.ComposedTemplates(cmp, cmps...); err != nil {
+			ps, err := conv.Composition(targetPatchSets, cmp, cmps...)
+			if err != nil {
 				return nil, false, errors.Wrap(err, errComposedTemplateMigrate)
 			}
+			targetPatchSets = ps
 		}
 		targetResources = append(targetResources, cmps...)
 	}
+	c.Spec.PatchSets = targetPatchSets
 	c.Spec.Resources = make([]xpv1.ComposedTemplate, 0, len(targetResources))
 	for _, cmp := range targetResources {
 		c.Spec.Resources = append(c.Spec.Resources, *cmp)
@@ -282,6 +321,22 @@ func (pg *PlanGenerator) convertComposition(o UnstructuredWithMetadata) (*Unstru
 		Object:   ToSanitizedUnstructured(&c),
 		Metadata: o.Metadata,
 	}, isConverted, nil
+}
+
+func (pg *PlanGenerator) setDefaultsOnTargetTemplate(sourceName *string, sourceNameUsed *bool, gvkSource, gvkTarget schema.GroupVersionKind, target *xpv1.ComposedTemplate, patchSets []xpv1.PatchSet) error {
+	// remove invalid patches that do not conform to the migration target's schema
+	if err := removeInvalidPatches(pg.registry.scheme, gvkSource, gvkTarget, patchSets, target); err != nil {
+		return errors.Wrap(err, "failed to set the defaults on the migration target composed template")
+	}
+	if *sourceNameUsed || gvkSource.Kind != gvkTarget.Kind {
+		if sourceName != nil && len(*sourceName) > 0 {
+			targetName := fmt.Sprintf("%s-%s", *sourceName, rand.String(5))
+			target.Name = &targetName
+		}
+	} else {
+		*sourceNameUsed = true
+	}
+	return nil
 }
 
 // NOTE: to cover different migration scenarios, we may use
@@ -407,8 +462,12 @@ func (pg *PlanGenerator) pause(fp string, u *unstructured.Unstructured) error {
 }
 
 func getQualifiedName(u unstructured.Unstructured) string {
+	namePrefix := u.GetName()
+	if len(namePrefix) == 0 {
+		namePrefix = fmt.Sprintf("%s%s", u.GetGenerateName(), rand.String(5))
+	}
 	gvk := u.GroupVersionKind()
-	return fmt.Sprintf("%s.%ss.%s", u.GetName(), strings.ToLower(gvk.Kind), gvk.Group)
+	return fmt.Sprintf("%s.%ss.%s", namePrefix, strings.ToLower(gvk.Kind), gvk.Group)
 }
 
 func (pg *PlanGenerator) stepNewManagedResource(u *UnstructuredWithMetadata) error {
@@ -493,4 +552,8 @@ func (pg *PlanGenerator) stepEditClaims(claims []UnstructuredWithMetadata, conve
 		}
 	}
 	return nil
+}
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
 }

@@ -8,6 +8,27 @@ spec:
   compositeTypeRef:
     apiVersion: test.com/v1alpha1
     kind: XMyResource
+  patchSets:
+    - name: ps1
+      patches:
+        - fromFieldPath: "spec.parameters.tagValue"
+          toFieldPath: spec.forProvider.tags[2].value
+    - name: ps2
+      patches:
+        - fromFieldPath: "spec.parameters.region"
+          toFieldPath: spec.forProvider.region
+    - name: ps3
+      patches:
+        - fromFieldPath: "spec.parameters.tagValue"
+          toFieldPath: metadata.labels[a.b.c.d/tag-value]
+    - name: ps4
+      patches:
+        - fromFieldPath: "spec.parameters.tagValue"
+          toFieldPath: metadata.labels['a.b.c.d.e/tag-value']
+    - name: ps5
+      patches:
+        - fromFieldPath: "spec.parameters.tagValue"
+          toFieldPath: metadata.labels["a.b.c.d.e.f/tag-value"]
   resources:
     - base:
         apiVersion: fakesourceapi/v1alpha1
@@ -29,5 +50,15 @@ spec:
           toFieldPath: spec.forProvider.tags[0].value
         - fromFieldPath: "spec.parameters.tagValue"
           toFieldPath: spec.forProvider.tags[1].value
+        - type: PatchSet
+          patchSetName: ps1
+        - type: PatchSet
+          patchSetName: ps2
+        - type: PatchSet
+          patchSetName: ps3
+        - type: PatchSet
+          patchSetName: ps4
+        - type: PatchSet
+          patchSetName: ps5
         - fromFieldPath: "spec.parameters.tagValue"
-          toFieldPath: spec.forProvider.tags[2].value
+          toFieldPath: spec.forProvider.param

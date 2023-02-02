@@ -8,6 +8,27 @@ spec:
   compositeTypeRef:
     apiVersion: test.com/v1alpha1
     kind: XMyResource
+  patchSets:
+    - name: ps1
+      patches:
+        - fromFieldPath: "spec.parameters.tagValue"
+          toFieldPath: spec.forProvider.tags["key3"]
+    - name: ps2
+      patches:
+        - fromFieldPath: "spec.parameters.region"
+          toFieldPath: spec.forProvider.region
+    - name: ps3
+      patches:
+        - fromFieldPath: "spec.parameters.tagValue"
+          toFieldPath: metadata.labels[a.b.c.d/tag-value]
+    - name: ps4
+      patches:
+        - fromFieldPath: "spec.parameters.tagValue"
+          toFieldPath: metadata.labels['a.b.c.d.e/tag-value']
+    - name: ps5
+      patches:
+        - fromFieldPath: "spec.parameters.tagValue"
+          toFieldPath: metadata.labels["a.b.c.d.e.f/tag-value"]
   resources:
   - base:
       apiVersion: faketargetapi/v1alpha1
@@ -25,9 +46,19 @@ spec:
             key3: val3
     name: vpc
     patches:
+    - type: PatchSet
+      patchSetName: ps2
+    - type: PatchSet
+      patchSetName: ps3
+    - type: PatchSet
+      patchSetName: ps4
+    - type: PatchSet
+      patchSetName: ps5
+    - fromFieldPath: "spec.parameters.tagValue"
+      toFieldPath: spec.forProvider.param
     - fromFieldPath: spec.parameters.tagValue
       toFieldPath: spec.forProvider.tags["key1"]
     - fromFieldPath: spec.parameters.tagValue
       toFieldPath: spec.forProvider.tags["key2"]
-    - fromFieldPath: spec.parameters.tagValue
-      toFieldPath: spec.forProvider.tags["key3"]
+    - type: PatchSet
+      patchSetName: ps1
