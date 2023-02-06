@@ -1,6 +1,16 @@
-/*
-Copyright 2021 Upbound Inc.
-*/
+// Copyright 2021 Upbound Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 package terraform
 
@@ -169,9 +179,9 @@ func (ws *WorkspaceStore) Workspace(ctx context.Context, c resource.SecretClient
 		cmd := w.executor.CommandContext(ctx, "terraform", "init", "-upgrade", "-input=false")
 		cmd.SetDir(w.dir)
 		out, err := cmd.CombinedOutput()
-		w.logger.Debug("init -upgrade ended", "out", string(out))
+		w.logger.Debug("init -upgrade ended", "out", ts.filterSensitiveInformation(string(out)))
 		if err != nil {
-			return w, errors.Wrapf(err, "cannot upgrade workspace: %s", string(out))
+			return w, errors.Wrapf(err, "cannot upgrade workspace: %s", ts.filterSensitiveInformation(string(out)))
 		}
 	}
 	attachmentConfig, err := ws.providerRunner.Start()
@@ -191,8 +201,8 @@ func (ws *WorkspaceStore) Workspace(ctx context.Context, c resource.SecretClient
 	cmd := w.executor.CommandContext(ctx, "terraform", "init", "-input=false")
 	cmd.SetDir(w.dir)
 	out, err := cmd.CombinedOutput()
-	w.logger.Debug("init ended", "out", string(out))
-	return w, errors.Wrapf(err, "cannot init workspace: %s", string(out))
+	w.logger.Debug("init ended", "out", ts.filterSensitiveInformation(string(out)))
+	return w, errors.Wrapf(err, "cannot init workspace: %s", ts.filterSensitiveInformation(string(out)))
 }
 
 // Remove deletes the workspace directory from the filesystem and erases its
