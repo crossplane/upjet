@@ -6,6 +6,8 @@ package terraform
 
 import (
 	"context"
+	"fmt"
+	"github.com/upbound/upjet/pkg/resource"
 	"os"
 	"path/filepath"
 	"strings"
@@ -86,6 +88,8 @@ type CallbackFn func(error, context.Context) error
 type Workspace struct {
 	// LastOperation contains information about the last operation performed.
 	LastOperation *Operation
+
+	trID string
 
 	dir string
 	env []string
@@ -233,6 +237,56 @@ func (w *Workspace) Refresh(ctx context.Context) (RefreshResult, error) {
 	w.logger.Debug("refresh ended", "out", w.filterFn(string(out)))
 	if err != nil {
 		return RefreshResult{}, tferrors.NewRefreshFailed(out)
+	}
+	raw, err := w.fs.ReadFile(filepath.Join(w.dir, "terraform.tfstate"))
+	if err != nil {
+		return RefreshResult{}, errors.Wrap(err, "cannot read terraform state file")
+	}
+	s := &json.StateV4{}
+	if err := json.JSParser.Unmarshal(raw, s); err != nil {
+		return RefreshResult{}, errors.Wrap(err, "cannot unmarshal tfstate file")
+	}
+	return RefreshResult{
+		Exists: s.GetAttributes() != nil,
+		State:  s,
+	}, nil
+}
+
+// Import makes a blocking terraform import call where only the state file
+// is changed with the current state of the resource.
+func (w *Workspace) Import(ctx context.Context, tr resource.Terraformed) (RefreshResult, error) {
+	switch {
+	case w.LastOperation.IsRunning():
+		return RefreshResult{
+			IsApplying:   w.LastOperation.Type == "apply",
+			IsDestroying: w.LastOperation.Type == "destroy",
+		}, nil
+	case w.LastOperation.IsEnded():
+		defer w.LastOperation.Flush()
+	}
+	// Note(turkenh): This resource does not have an ID, we cannot import it. This happens with identifier from
+	// provider case and we simply return does not exist in this case.
+	if len(w.trID) == 0 {
+		return RefreshResult{
+			Exists: false,
+		}, nil
+	}
+	// Note(turkenh): We remove the state file before import wouldn't work if tfstate contains the resource already.
+	if err := w.fs.Remove(filepath.Join(w.dir, "terraform.tfstate")); err != nil {
+		return RefreshResult{}, errors.Wrap(err, "cannot remove terraform.tfstate file")
+	}
+	cmd := w.executor.CommandContext(ctx, "terraform", "import", "-input=false", "-lock=false", fmt.Sprintf("%s.%s", tr.GetTerraformResourceType(), tr.GetName()), w.trID)
+	cmd.SetEnv(append(os.Environ(), w.env...))
+	cmd.SetDir(w.dir)
+	out, err := cmd.CombinedOutput()
+	w.logger.Debug("import ended", "out", w.filterFn(string(out)))
+	if err != nil {
+		if strings.Contains(string(out), "Cannot import non-existent remote object") {
+			return RefreshResult{
+				Exists: false,
+			}, nil
+		}
+		return RefreshResult{}, errors.WithMessage(errors.New("import failed"), string(out))
 	}
 	raw, err := w.fs.ReadFile(filepath.Join(w.dir, "terraform.tfstate"))
 	if err != nil {

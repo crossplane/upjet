@@ -23,6 +23,7 @@ type Workspace interface {
 	DestroyAsync(terraform.CallbackFn) error
 	Destroy(context.Context) error
 	Refresh(context.Context) (terraform.RefreshResult, error)
+	Import(context.Context, resource.Terraformed) (terraform.RefreshResult, error)
 	Plan(context.Context) (terraform.PlanResult, error)
 }
 

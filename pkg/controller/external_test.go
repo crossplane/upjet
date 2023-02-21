@@ -47,6 +47,7 @@ type WorkspaceFns struct {
 	DestroyAsyncFn func(callback terraform.CallbackFn) error
 	DestroyFn      func(ctx context.Context) error
 	RefreshFn      func(ctx context.Context) (terraform.RefreshResult, error)
+	ImportFn       func(ctx context.Context, tr resource.Terraformed) (terraform.RefreshResult, error)
 	PlanFn         func(ctx context.Context) (terraform.PlanResult, error)
 }
 
@@ -68,6 +69,10 @@ func (c WorkspaceFns) Destroy(ctx context.Context) error {
 
 func (c WorkspaceFns) Refresh(ctx context.Context) (terraform.RefreshResult, error) {
 	return c.RefreshFn(ctx)
+}
+
+func (c WorkspaceFns) Import(ctx context.Context, tr resource.Terraformed) (terraform.RefreshResult, error) {
+	return c.ImportFn(ctx, tr)
 }
 
 func (c WorkspaceFns) Plan(ctx context.Context) (terraform.PlanResult, error) {

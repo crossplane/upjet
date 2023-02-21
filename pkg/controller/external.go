@@ -24,6 +24,7 @@ const (
 	errGetTerraformSetup = "cannot get terraform setup"
 	errGetWorkspace      = "cannot get a terraform workspace for resource"
 	errRefresh           = "cannot run refresh"
+	errImport            = "cannot run import"
 	errPlan              = "cannot run plan"
 	errStartAsyncApply   = "cannot start async apply"
 	errStartAsyncDestroy = "cannot start async destroy"
@@ -108,10 +109,21 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 	if !ok {
 		return managed.ExternalObservation{}, errors.New(errUnexpectedObject)
 	}
-	res, err := e.workspace.Refresh(ctx)
-	if err != nil {
-		return managed.ExternalObservation{}, errors.Wrap(err, errRefresh)
+
+	var err error
+	var res terraform.RefreshResult
+	if tr.GetManagementPolicy() == xpv1.ManagementObserveOnly {
+		res, err = e.workspace.Import(ctx, tr)
+		if err != nil {
+			return managed.ExternalObservation{}, errors.Wrap(err, errImport)
+		}
+	} else {
+		res, err = e.workspace.Refresh(ctx)
+		if err != nil {
+			return managed.ExternalObservation{}, errors.Wrap(err, errRefresh)
+		}
 	}
+
 	switch {
 	case res.IsApplying, res.IsDestroying:
 		mg.SetConditions(resource.AsyncOperationOngoingCondition())
@@ -141,7 +153,7 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot set observation")
 	}
 
-	annotationsUpdated, err := resource.SetCriticalAnnotations(tr, e.config, tfstate, string(res.State.GetPrivateRaw()))
+	annotationsUpdated, err := resource.SetCriticalAnnotations(tr, e.config, tfstate, "")
 	if err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot set critical annotations")
 	}
