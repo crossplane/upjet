@@ -15,7 +15,7 @@ func (o KubebuilderOptions) String() string {
 
 	if o.Required != nil {
 		if *o.Required {
-			m += "+kubebuilder:validation:Required\n"
+			m += "+kubebuilder:validation:Optional\n"
 		} else {
 			m += "+kubebuilder:validation:Optional\n"
 		}
