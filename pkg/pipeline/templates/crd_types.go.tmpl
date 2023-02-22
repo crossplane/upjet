@@ -13,11 +13,6 @@ import (
 
 {{ .Types }}
 
-type {{ .CRD.Kind }}FullState struct {
-    {{ .CRD.ForProviderType }} `json:",inline"`
-    {{ .CRD.AtProviderType }} `json:",inline"`
-}
-
 // {{ .CRD.Kind }}Spec defines the desired state of {{ .CRD.Kind }}
 type {{ .CRD.Kind }}Spec struct {
 	{{ .XPCommonAPIsPackageAlias }}ResourceSpec `json:",inline"`
@@ -27,7 +22,7 @@ type {{ .CRD.Kind }}Spec struct {
 // {{ .CRD.Kind }}Status defines the observed state of {{ .CRD.Kind }}.
 type {{ .CRD.Kind }}Status struct {
 	{{ .XPCommonAPIsPackageAlias }}ResourceStatus `json:",inline"`
-	AtProvider         {{ .CRD.Kind }}FullState `json:"atProvider,omitempty"`
+	AtProvider         {{ .CRD.AtProviderType }} `json:"atProvider,omitempty"`
 }
 
 // +kubebuilder:object:root=true

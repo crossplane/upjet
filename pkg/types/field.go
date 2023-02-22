@@ -204,10 +204,18 @@ func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames) {
 	}
 
 	field := types.NewField(token.NoPos, g.Package, f.FieldNameCamel, f.FieldType, false)
-	switch {
-	case IsObservation(f.Schema):
-		r.addObservationField(f, field)
-	default:
+	/*	switch {
+		case IsObservation(f.Schema):
+			r.addObservationField(f, field)
+		default:
+			if f.AsBlocksMode {
+				f.TFTag = strings.TrimSuffix(f.TFTag, ",omitempty")
+			}
+			r.addParameterField(f, field)
+		}*/
+
+	r.addObservationField(f, field)
+	if !IsObservation(f.Schema) {
 		if f.AsBlocksMode {
 			f.TFTag = strings.TrimSuffix(f.TFTag, ",omitempty")
 		}
