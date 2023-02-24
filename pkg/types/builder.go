@@ -277,6 +277,12 @@ func (r *resource) addParameterField(f *Field, field *types.Var) {
 }
 
 func (r *resource) addObservationField(f *Field, field *types.Var) {
+	for _, obsF := range r.obsFields {
+		if obsF.Name() == field.Name() {
+			// If the field is already added, we don't add it again.
+			return
+		}
+	}
 	r.obsFields = append(r.obsFields, field)
 	r.obsTags = append(r.obsTags, fmt.Sprintf(`json:"%s" tf:"%s"`, f.JSONTag, f.TFTag))
 }

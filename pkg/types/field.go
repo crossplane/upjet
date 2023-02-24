@@ -204,10 +204,12 @@ func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames) {
 	}
 
 	field := types.NewField(token.NoPos, g.Package, f.FieldNameCamel, f.FieldType, false)
-	switch {
-	case IsObservation(f.Schema):
-		r.addObservationField(f, field)
-	default:
+
+	// Note(turkenh): We want atProvider to be a superset of forProvider, so
+	// we always add the field as an observation field and then add it as a
+	// parameter field if it's not an observation (only) field, i.e. parameter.
+	r.addObservationField(f, field)
+	if !IsObservation(f.Schema) {
 		if f.AsBlocksMode {
 			f.TFTag = strings.TrimSuffix(f.TFTag, ",omitempty")
 		}
@@ -219,6 +221,14 @@ func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames) {
 	}
 
 	g.comments.AddFieldComment(typeNames.ParameterTypeName, f.FieldNameCamel, f.Comment.Build())
+	// Note(turkenh): We don't want reference resolver to be generated for
+	// fields under status.atProvider. So, we don't want reference comments to
+	// be added, hence we are unsetting reference on the field comment just
+	// before adding it as an observation field.
+	f.Comment.Reference = config.Reference{}
+	// Note(turkenh): We don't need required/optional markers for observation
+	// fields.
+	f.Comment.Required = nil
 	g.comments.AddFieldComment(typeNames.ObservationTypeName, f.FieldNameCamel, f.Comment.Build())
 }
 
