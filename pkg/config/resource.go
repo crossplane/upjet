@@ -104,6 +104,12 @@ type ExternalName struct {
 	// assigned by the provider, like AWS VPC where it gets vpc-21kn123 identifier
 	// and not let you name it.
 	DisableNameInitializer bool
+
+	// IdentifierFields are the fields that are used to construct external
+	// resource identifier. We need to know these fields no matter what the
+	// management policy is including the Observe Only, different from other
+	// (required) fields.
+	IdentifierFields []string
 }
 
 // References represents reference resolver configurations for the fields of a

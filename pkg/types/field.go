@@ -32,6 +32,7 @@ type Field struct {
 	Reference                                *config.Reference
 	TransformedName                          string
 	SelectorName                             string
+	Identifier                               bool
 }
 
 // getDocString tries to extract the documentation string for the specified
@@ -92,6 +93,13 @@ func NewField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema,
 		Name:           name.NewFromSnake(snakeFieldName),
 		FieldNameCamel: name.NewFromSnake(snakeFieldName).Camel,
 		AsBlocksMode:   asBlocksMode,
+	}
+
+	for _, ident := range cfg.ExternalName.IdentifierFields {
+		if ident == snakeFieldName {
+			f.Identifier = true
+			break
+		}
 	}
 
 	var commentText string

@@ -33,14 +33,17 @@ type Generated struct {
 
 	ForProviderType *types.Named
 	AtProviderType  *types.Named
+
+	ValidationRules string
 }
 
 // Builder is used to generate Go type equivalence of given Terraform schema.
 type Builder struct {
 	Package *types.Package
 
-	genTypes []*types.Named
-	comments twtypes.Comments
+	genTypes        []*types.Named
+	comments        twtypes.Comments
+	validationRules string
 }
 
 // NewBuilder returns a new Builder.
@@ -59,6 +62,7 @@ func (g *Builder) Build(cfg *config.Resource) (Generated, error) {
 		Comments:        g.comments,
 		ForProviderType: fp,
 		AtProviderType:  ap,
+		ValidationRules: g.validationRules,
 	}, errors.Wrapf(err, "cannot build the Types")
 }
 
@@ -126,6 +130,11 @@ func (g *Builder) AddToBuilder(typeNames *TypeNames, r *resource) (*types.Named,
 
 	obsType := types.NewNamed(typeNames.ObservationTypeName, types.NewStruct(r.obsFields, r.obsTags), nil)
 	g.genTypes = append(g.genTypes, obsType)
+
+	for _, p := range r.topLevelRequiredParams {
+		g.validationRules += "\n"
+		g.validationRules += fmt.Sprintf(`// +kubebuilder:validation:XValidation:rule="self.managementPolicy == 'ObserveOnly' || has(self.forProvider.%s)",message="%s is a required parameter"`, p, p)
+	}
 
 	return paramType, obsType
 }
@@ -260,10 +269,26 @@ func NewTypeNames(fieldPaths []string, pkg *types.Package) (*TypeNames, error) {
 type resource struct {
 	paramFields, obsFields []*types.Var
 	paramTags, obsTags     []string
+	topLevelRequiredParams []string
 }
 
 func (r *resource) addParameterField(f *Field, field *types.Var) {
-	if f.Schema.Optional {
+	req := !f.Schema.Optional
+	// Note(turkenh): We are collecting the top level required parameters that
+	// are not identifier fields. This is to generate CEL validation rules for
+	// those parameters not to require them if management policy is set Observe
+	// Only. In other words, if we are not creating or managing the resource, we
+	// don't need to provide those parameters which are:
+	// - req => required
+	// - !f.Identifier => not identifiers - i.e. region, zone, etc.
+	// - len(f.CanonicalPaths) == 1 => top level, i.e. not a nested field
+	if req && !f.Identifier && len(f.CanonicalPaths) == 1 {
+		req = false
+		r.topLevelRequiredParams = append(r.topLevelRequiredParams, f.TransformedName)
+	}
+
+	f.Comment.Required = &req
+	if !req {
 		r.paramTags = append(r.paramTags, fmt.Sprintf(`json:"%s" tf:"%s"`, f.JSONTag, f.TFTag))
 	} else {
 		// Required fields should not have omitempty tag in json tag.
@@ -271,8 +296,6 @@ func (r *resource) addParameterField(f *Field, field *types.Var) {
 		// JSON tag.
 		r.paramTags = append(r.paramTags, fmt.Sprintf(`json:"%s" tf:"%s"`, strings.TrimSuffix(f.JSONTag, ",omitempty"), f.TFTag))
 	}
-	req := !f.Schema.Optional
-	f.Comment.Required = &req
 	r.paramFields = append(r.paramFields, field)
 }
 

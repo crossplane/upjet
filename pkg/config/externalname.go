@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strings"
 	"text/template"
+	"text/template/parse"
 
 	"github.com/crossplane/crossplane-runtime/pkg/errors"
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
@@ -47,6 +48,8 @@ var (
 		GetIDFn:                 ExternalNameAsID,
 		DisableNameInitializer:  true,
 	}
+
+	parameterPattern = regexp.MustCompile(`{{\s*\.parameters\.([^\s}]+)\s*}}`)
 )
 
 // ParameterAsIdentifier uses the given field name in the arguments as the
@@ -90,6 +93,18 @@ func TemplatedStringAsIdentifier(nameFieldPath, tmpl string) ExternalName {
 	if err != nil {
 		panic(errors.Wrap(err, "cannot parse template"))
 	}
+
+	// Note(turkenh): If a parameter is used in the external name template,
+	// it is an identifier field.
+	var identifierFields []string
+	for _, node := range t.Root.Nodes {
+		if node.Type() == parse.NodeAction {
+			match := parameterPattern.FindStringSubmatch(node.String())
+			if len(match) == 2 {
+				identifierFields = append(identifierFields, match[1])
+			}
+		}
+	}
 	return ExternalName{
 		SetIdentifierArgumentFn: func(base map[string]any, externalName string) {
 			if nameFieldPath == "" {
@@ -126,6 +141,7 @@ func TemplatedStringAsIdentifier(nameFieldPath, tmpl string) ExternalName {
 			}
 			return GetExternalNameFromTemplated(tmpl, id.(string))
 		},
+		IdentifierFields: identifierFields,
 	}
 }
 
