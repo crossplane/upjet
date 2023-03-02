@@ -378,7 +378,7 @@ func (w *Workspace) Import(ctx context.Context, tr resource.Terraformed) (Import
 		return ImportResult{}, errors.Wrap(err, "cannot remove terraform.tfstate file")
 	}
 
-	out, err := w.runTF(ctx, metrics.ModeSync, "import", "-input=false", "-lock=false", fmt.Sprintf("%s.%s", tr.GetTerraformResourceType(), tr.GetName()), w.terraformID)
+	out, err := w.runTF(ctx, ModeSync, "import", "-input=false", "-lock=false", fmt.Sprintf("%s.%s", tr.GetTerraformResourceType(), tr.GetName()), w.terraformID)
 	w.logger.Debug("import ended", "out", w.filterFn(string(out)))
 	if err != nil {
 		// Note(turkenh): This is not a great way to check if the resource does not exist, but it is the only

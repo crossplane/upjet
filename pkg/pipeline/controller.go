@@ -35,7 +35,7 @@ type ControllerGenerator struct {
 }
 
 // Generate writes controller setup functions.
-func (cg *ControllerGenerator) Generate(cfg *config.Resource, typesPkgPath string) (pkgPath string, err error) {
+func (cg *ControllerGenerator) Generate(cfg *config.Resource, typesPkgPath string, featuresPkgPath string) (pkgPath string, err error) {
 	controllerPkgPath := filepath.Join(cg.ModulePath, "internal", "controller", strings.ToLower(strings.Split(cg.Group, ".")[0]), strings.ToLower(cfg.Kind))
 	ctrlFile := wrapper.NewFile(controllerPkgPath, strings.ToLower(cfg.Kind), templates.ControllerTemplate,
 		wrapper.WithGenStatement(GenStatement),
@@ -52,6 +52,7 @@ func (cg *ControllerGenerator) Generate(cfg *config.Resource, typesPkgPath strin
 		"UseAsync":               cfg.UseAsync,
 		"ResourceType":           cfg.Name,
 		"Initializers":           cfg.InitializerFns,
+		"FeaturesPackageAlias":   ctrlFile.Imports.UsePackage(featuresPkgPath),
 	}
 
 	filePath := filepath.Join(cg.ControllerGroupDir, strings.ToLower(cfg.Kind), "zz_controller.go")
