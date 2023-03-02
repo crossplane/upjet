@@ -55,7 +55,7 @@ func TestAPICallbacks_Apply(t *testing.T) {
 				mgr: &xpfake.Manager{
 					Client: &test.MockClient{
 						MockGet: test.NewMockGetFn(nil),
-						MockStatusUpdate: func(_ context.Context, obj client.Object, _ ...client.UpdateOption) error {
+						MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 							got := obj.(resource.Terraformed).GetCondition(resource.TypeLastAsyncOperation)
 							if diff := cmp.Diff(resource.LastAsyncOperationCondition(tjerrors.NewApplyFailed(nil)), got); diff != "" {
 								t.Errorf("\nApply(...): -want error, +got error:\n%s", diff)
@@ -75,7 +75,7 @@ func TestAPICallbacks_Apply(t *testing.T) {
 				mgr: &xpfake.Manager{
 					Client: &test.MockClient{
 						MockGet: test.NewMockGetFn(nil),
-						MockStatusUpdate: func(_ context.Context, obj client.Object, _ ...client.UpdateOption) error {
+						MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 							got := obj.(resource.Terraformed).GetCondition(resource.TypeLastAsyncOperation)
 							if diff := cmp.Diff(resource.LastAsyncOperationCondition(nil), got); diff != "" {
 								t.Errorf("\nApply(...): -want error, +got error:\n%s", diff)
@@ -137,7 +137,7 @@ func TestAPICallbacks_Destroy(t *testing.T) {
 				mgr: &xpfake.Manager{
 					Client: &test.MockClient{
 						MockGet: test.NewMockGetFn(nil),
-						MockStatusUpdate: func(_ context.Context, obj client.Object, _ ...client.UpdateOption) error {
+						MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 							got := obj.(resource.Terraformed).GetCondition(resource.TypeLastAsyncOperation)
 							if diff := cmp.Diff(resource.LastAsyncOperationCondition(tjerrors.NewDestroyFailed(nil)), got); diff != "" {
 								t.Errorf("\nApply(...): -want error, +got error:\n%s", diff)
@@ -157,7 +157,7 @@ func TestAPICallbacks_Destroy(t *testing.T) {
 				mgr: &xpfake.Manager{
 					Client: &test.MockClient{
 						MockGet: test.NewMockGetFn(nil),
-						MockStatusUpdate: func(_ context.Context, obj client.Object, _ ...client.UpdateOption) error {
+						MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 							got := obj.(resource.Terraformed).GetCondition(resource.TypeLastAsyncOperation)
 							if diff := cmp.Diff(resource.LastAsyncOperationCondition(nil), got); diff != "" {
 								t.Errorf("\nApply(...): -want error, +got error:\n%s", diff)

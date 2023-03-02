@@ -27,6 +27,7 @@ const (
 	errGetTerraformSetup = "cannot get terraform setup"
 	errGetWorkspace      = "cannot get a terraform workspace for resource"
 	errRefresh           = "cannot run refresh"
+	errImport            = "cannot run import"
 	errPlan              = "cannot run plan"
 	errStartAsyncApply   = "cannot start async apply"
 	errStartAsyncDestroy = "cannot start async destroy"
@@ -153,10 +154,67 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 	if !ok {
 		return managed.ExternalObservation{}, errors.New(errUnexpectedObject)
 	}
+
+	// Note(turkenh): We don't need to check if the management policies are
+	// enabled or not because the crossplane-runtime's managed reconciler already
+	// does that for us. In other words, if the management policy is set to
+	// "ObserveOnly" without management policies being enabled, the managed
+	// reconciler will error out before reaching this point.
+	// https://github.com/crossplane/crossplane-runtime/pull/384/files#diff-97300a2543f95f5a2ada3560bf47dd7334e237e27976574d15d1cddef2e66c01R696
+	if tr.GetManagementPolicy() == xpv1.ManagementObserveOnly {
+		res, err := e.workspace.Import(ctx, tr)
+		if err != nil {
+			return managed.ExternalObservation{}, errors.Wrap(err, errImport)
+		}
+		// We normally don't expect apply/destroy to be in progress when the
+		// management policy is set to "ObserveOnly". However, this could happen
+		// if the policy is changed to "ObserveOnly" while an async operation is
+		// in progress. In that case, we want to wait for the operation to finish
+		// before we start observing.
+		if res.ASyncInProgress {
+			mg.SetConditions(resource.AsyncOperationOngoingCondition())
+			return managed.ExternalObservation{
+				ResourceExists:   true,
+				ResourceUpToDate: true,
+			}, nil
+		}
+		// If the resource doesn't exist, we don't need to do anything else.
+		// We report it to the managed reconciler as a non-existent resource and
+		// it will take care of reporting it to the user as an error case for
+		// observe-only policy.
+		if !res.Exists {
+			return managed.ExternalObservation{
+				ResourceExists: false,
+			}, nil
+		}
+
+		// No operation was in progress, our observation completed successfully, and
+		// we have an observation to consume.
+		tfstate := map[string]any{}
+		if err := json.JSParser.Unmarshal(res.State.GetAttributes(), &tfstate); err != nil {
+			return managed.ExternalObservation{}, errors.Wrap(err, "cannot unmarshal state attributes")
+		}
+		if err := tr.SetObservation(tfstate); err != nil {
+			return managed.ExternalObservation{}, errors.Wrap(err, "cannot set observation")
+		}
+		conn, err := resource.GetConnectionDetails(tfstate, tr, e.config)
+		if err != nil {
+			return managed.ExternalObservation{}, errors.Wrap(err, "cannot get connection details")
+		}
+
+		tr.SetConditions(xpv1.Available())
+		return managed.ExternalObservation{
+			ResourceExists:    true,
+			ResourceUpToDate:  true,
+			ConnectionDetails: conn,
+		}, nil
+	}
+
 	res, err := e.workspace.Refresh(ctx)
 	if err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, errRefresh)
 	}
+
 	switch {
 	case res.ASyncInProgress:
 		mg.SetConditions(resource.AsyncOperationOngoingCondition())

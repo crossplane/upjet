@@ -145,7 +145,7 @@ func TestEnsureTFState(t *testing.T) {
 			if err != nil {
 				t.Errorf("cannot initialize a file producer: %s", err.Error())
 			}
-			err = fp.EnsureTFState(ctx)
+			err = fp.EnsureTFState(ctx, "some-id")
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nWriteTFState(...): -want error, +got error:\n%s", tc.reason, diff)
 			}
