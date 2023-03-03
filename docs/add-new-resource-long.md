@@ -257,7 +257,10 @@ You can always check resource configurations of existing jet Providers as
 further examples under `config/<group>/config.go` in their repositories.
 
 _Please see [this figure] to understand why we really need 3 different
-functions to configure external names and, it visualizes which is used how._
+functions to configure external names and, it visualizes which is used how:_
+![Alt text](./images/upjet-externalname.png)
+_Note that, initially, GetIDFn will use the external-name annotation to set the terraform.tfstate id and, after that, it uses the terraform.tfstate id to update the external-name annotation. For cases where both values are different, both GetIDFn and GetExternalNameFn must be set in order to have the correct configuration._
+
 
 ### Cross Resource Referencing
 
