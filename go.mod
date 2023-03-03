@@ -14,8 +14,10 @@ require (
 	github.com/hashicorp/terraform-plugin-sdk/v2 v2.24.0
 	github.com/iancoleman/strcase v0.2.0
 	github.com/json-iterator/go v1.1.12
+	github.com/mitchellh/go-ps v1.0.0
 	github.com/muvaf/typewriter v0.0.0-20210910160850-80e49fe1eb32
 	github.com/pkg/errors v0.9.1
+	github.com/prometheus/client_golang v1.12.2
 	github.com/spf13/afero v1.9.2
 	github.com/tmccombs/hcl2json v0.3.3
 	github.com/yuin/goldmark v1.4.13
@@ -79,7 +81,6 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/prometheus/client_golang v1.12.2 // indirect
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.32.1 // indirect
 	github.com/prometheus/procfs v0.7.3 // indirect

@@ -225,7 +225,7 @@ func TestObserve(t *testing.T) {
 				w: WorkspaceFns{
 					RefreshFn: func(_ context.Context) (terraform.RefreshResult, error) {
 						return terraform.RefreshResult{
-							IsApplying: true,
+							ASyncInProgress: true,
 						}, nil
 					},
 				},
