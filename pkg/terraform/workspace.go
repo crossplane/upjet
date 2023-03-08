@@ -27,6 +27,7 @@ import (
 
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 
+	"github.com/upbound/upjet/pkg/metrics"
 	"github.com/upbound/upjet/pkg/resource/json"
 	tferrors "github.com/upbound/upjet/pkg/terraform/errors"
 )
@@ -110,17 +111,13 @@ type Workspace struct {
 // ApplyAsync makes a terraform apply call without blocking and calls the given
 // function once that apply call finishes.
 func (w *Workspace) ApplyAsync(callback CallbackFn) error {
-	if w.LastOperation.IsRunning() {
+	if !w.LastOperation.MarkStart("apply") {
 		return errors.Errorf("%s operation that started at %s is still running", w.LastOperation.Type, w.LastOperation.StartTime().String())
 	}
-	w.LastOperation.MarkStart("apply")
 	ctx, cancel := context.WithDeadline(context.TODO(), w.LastOperation.StartTime().Add(defaultAsyncTimeout))
 	go func() {
 		defer cancel()
-		cmd := w.executor.CommandContext(ctx, "terraform", "apply", "-auto-approve", "-input=false", "-lock=false", "-json")
-		cmd.SetEnv(append(os.Environ(), w.env...))
-		cmd.SetDir(w.dir)
-		out, err := cmd.CombinedOutput()
+		out, err := w.runTF(ctx, metrics.ModeASync, "apply", "-auto-approve", "-input=false", "-lock=false", "-json")
 		if err != nil {
 			err = tferrors.NewApplyFailed(out)
 		}
@@ -145,10 +142,7 @@ func (w *Workspace) Apply(ctx context.Context) (ApplyResult, error) {
 	if w.LastOperation.IsRunning() {
 		return ApplyResult{}, errors.Errorf("%s operation that started at %s is still running", w.LastOperation.Type, w.LastOperation.StartTime().String())
 	}
-	cmd := w.executor.CommandContext(ctx, "terraform", "apply", "-auto-approve", "-input=false", "-lock=false", "-json")
-	cmd.SetEnv(append(os.Environ(), w.env...))
-	cmd.SetDir(w.dir)
-	out, err := cmd.CombinedOutput()
+	out, err := w.runTF(ctx, metrics.ModeSync, "apply", "-auto-approve", "-input=false", "-lock=false", "-json")
 	w.logger.Debug("apply ended", "out", w.filterFn(string(out)))
 	if err != nil {
 		return ApplyResult{}, tferrors.NewApplyFailed(out)
@@ -175,17 +169,13 @@ func (w *Workspace) DestroyAsync(callback CallbackFn) error {
 		return nil
 	// We cannot run destroy until current non-destroy operation is completed.
 	// TODO(muvaf): Gracefully terminate the ongoing apply operation?
-	case w.LastOperation.IsRunning():
+	case !w.LastOperation.MarkStart("destroy"):
 		return errors.Errorf("%s operation that started at %s is still running", w.LastOperation.Type, w.LastOperation.StartTime().String())
 	}
-	w.LastOperation.MarkStart("destroy")
 	ctx, cancel := context.WithDeadline(context.TODO(), w.LastOperation.StartTime().Add(defaultAsyncTimeout))
 	go func() {
 		defer cancel()
-		cmd := w.executor.CommandContext(ctx, "terraform", "destroy", "-auto-approve", "-input=false", "-lock=false", "-json")
-		cmd.SetEnv(append(os.Environ(), w.env...))
-		cmd.SetDir(w.dir)
-		out, err := cmd.CombinedOutput()
+		out, err := w.runTF(ctx, metrics.ModeASync, "destroy", "-auto-approve", "-input=false", "-lock=false", "-json")
 		if err != nil {
 			err = tferrors.NewDestroyFailed(out)
 		}
@@ -205,10 +195,7 @@ func (w *Workspace) Destroy(ctx context.Context) error {
 	if w.LastOperation.IsRunning() {
 		return errors.Errorf("%s operation that started at %s is still running", w.LastOperation.Type, w.LastOperation.StartTime().String())
 	}
-	cmd := w.executor.CommandContext(ctx, "terraform", "destroy", "-auto-approve", "-input=false", "-lock=false", "-json")
-	cmd.SetEnv(append(os.Environ(), w.env...))
-	cmd.SetDir(w.dir)
-	out, err := cmd.CombinedOutput()
+	out, err := w.runTF(ctx, metrics.ModeSync, "destroy", "-auto-approve", "-input=false", "-lock=false", "-json")
 	w.logger.Debug("destroy ended", "out", w.filterFn(string(out)))
 	if err != nil {
 		return tferrors.NewDestroyFailed(out)
@@ -218,10 +205,9 @@ func (w *Workspace) Destroy(ctx context.Context) error {
 
 // RefreshResult contains information about the current state of the resource.
 type RefreshResult struct {
-	Exists       bool
-	IsApplying   bool
-	IsDestroying bool
-	State        *json.StateV4
+	Exists          bool
+	ASyncInProgress bool
+	State           *json.StateV4
 }
 
 // Refresh makes a blocking terraform apply -refresh-only call where only the state file
@@ -230,16 +216,12 @@ func (w *Workspace) Refresh(ctx context.Context) (RefreshResult, error) {
 	switch {
 	case w.LastOperation.IsRunning():
 		return RefreshResult{
-			IsApplying:   w.LastOperation.Type == "apply",
-			IsDestroying: w.LastOperation.Type == "destroy",
+			ASyncInProgress: w.LastOperation.Type == "apply" || w.LastOperation.Type == "destroy",
 		}, nil
 	case w.LastOperation.IsEnded():
 		defer w.LastOperation.Flush()
 	}
-	cmd := w.executor.CommandContext(ctx, "terraform", "apply", "-refresh-only", "-auto-approve", "-input=false", "-lock=false", "-json")
-	cmd.SetEnv(append(os.Environ(), w.env...))
-	cmd.SetDir(w.dir)
-	out, err := cmd.CombinedOutput()
+	out, err := w.runTF(ctx, metrics.ModeSync, "apply", "-refresh-only", "-auto-approve", "-input=false", "-lock=false", "-json")
 	w.logger.Debug("refresh ended", "out", w.filterFn(string(out)))
 	if err != nil {
 		return RefreshResult{}, tferrors.NewRefreshFailed(out)
@@ -271,10 +253,7 @@ func (w *Workspace) Plan(ctx context.Context) (PlanResult, error) {
 	if w.LastOperation.IsRunning() {
 		return PlanResult{}, errors.Errorf("%s operation that started at %s is still running", w.LastOperation.Type, w.LastOperation.StartTime().String())
 	}
-	cmd := w.executor.CommandContext(ctx, "terraform", "plan", "-refresh=false", "-input=false", "-lock=false", "-json")
-	cmd.SetEnv(append(os.Environ(), w.env...))
-	cmd.SetDir(w.dir)
-	out, err := cmd.CombinedOutput()
+	out, err := w.runTF(ctx, metrics.ModeSync, "plan", "-refresh=false", "-input=false", "-lock=false", "-json")
 	w.logger.Debug("plan ended", "out", w.filterFn(string(out)))
 	if err != nil {
 		return PlanResult{}, tferrors.NewPlanFailed(out)
@@ -303,4 +282,20 @@ func (w *Workspace) Plan(ctx context.Context) (PlanResult, error) {
 		Exists:   p.Changes.Add == 0,
 		UpToDate: p.Changes.Change == 0,
 	}, nil
+}
+
+func (w *Workspace) runTF(ctx context.Context, execMode metrics.ExecMode, args ...string) ([]byte, error) {
+	if len(args) < 1 {
+		return nil, errors.New("args cannot be empty")
+	}
+	cmd := w.executor.CommandContext(ctx, "terraform", args...)
+	cmd.SetEnv(append(os.Environ(), w.env...))
+	cmd.SetDir(w.dir)
+	metrics.CLIExecutions.WithLabelValues(args[0], execMode.String()).Inc()
+	start := time.Now()
+	defer func() {
+		metrics.CLITime.WithLabelValues(args[0], execMode.String()).Observe(time.Since(start).Seconds())
+		metrics.CLIExecutions.WithLabelValues(args[0], execMode.String()).Dec()
+	}()
+	return cmd.CombinedOutput()
 }

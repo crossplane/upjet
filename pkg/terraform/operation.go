@@ -18,14 +18,20 @@ type Operation struct {
 	mu        sync.RWMutex
 }
 
-// MarkStart marks the operation as started.
-func (o *Operation) MarkStart(t string) {
+// MarkStart marks the operation as started atomically after checking
+// no previous operation is already running.
+// Returns `false` if a previous operation is still in progress.
+func (o *Operation) MarkStart(t string) bool {
 	o.mu.Lock()
 	defer o.mu.Unlock()
+	if o.startTime != nil && o.endTime == nil {
+		return false
+	}
 	now := time.Now()
 	o.Type = t
 	o.startTime = &now
 	o.endTime = nil
+	return true
 }
 
 // MarkEnd marks the operation as ended.
@@ -60,15 +66,15 @@ func (o *Operation) IsRunning() bool {
 }
 
 // StartTime returns the start time of the current operation.
-func (o *Operation) StartTime() *time.Time {
+func (o *Operation) StartTime() time.Time {
 	o.mu.RLock()
 	defer o.mu.RUnlock()
-	return o.startTime
+	return *o.startTime
 }
 
 // EndTime returns the end time of the current operation.
-func (o *Operation) EndTime() *time.Time {
+func (o *Operation) EndTime() time.Time {
 	o.mu.RLock()
 	defer o.mu.RUnlock()
-	return o.endTime
+	return *o.endTime
 }

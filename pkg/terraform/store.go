@@ -21,9 +21,11 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
+	"github.com/mitchellh/go-ps"
 	"github.com/pkg/errors"
 	"github.com/spf13/afero"
 	"k8s.io/apimachinery/pkg/types"
@@ -31,6 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/upbound/upjet/pkg/config"
+	"github.com/upbound/upjet/pkg/metrics"
 	"github.com/upbound/upjet/pkg/resource"
 )
 
@@ -109,6 +112,15 @@ func WithProviderRunner(pr ProviderRunner) WorkspaceStoreOption {
 	}
 }
 
+// WithProcessReportInterval enables the upjet.terraform.running_processes
+// metric, which periodically reports the total number of Terraform CLI and
+// Terraform provider processes in the system.
+func WithProcessReportInterval(d time.Duration) WorkspaceStoreOption {
+	return func(ws *WorkspaceStore) {
+		ws.processReportInterval = d
+	}
+}
+
 // NewWorkspaceStore returns a new WorkspaceStore.
 func NewWorkspaceStore(l logging.Logger, opts ...WorkspaceStoreOption) *WorkspaceStore {
 	ws := &WorkspaceStore{
@@ -122,6 +134,10 @@ func NewWorkspaceStore(l logging.Logger, opts ...WorkspaceStoreOption) *Workspac
 	for _, f := range opts {
 		f(ws)
 	}
+	ws.initMetrics()
+	if ws.processReportInterval != 0 {
+		go ws.reportTFProcesses(ws.processReportInterval)
+	}
 	return ws
 }
 
@@ -131,13 +147,13 @@ type WorkspaceStore struct {
 	// Since there can be multiple calls that add/remove values from the map at
 	// the same time, it has to be safe for concurrency since those operations
 	// cause rehashing in some cases.
-	store          map[types.UID]*Workspace
-	logger         logging.Logger
-	providerRunner ProviderRunner
-	mu             sync.Mutex
-
-	fs       afero.Afero
-	executor exec.Interface
+	store                 map[types.UID]*Workspace
+	logger                logging.Logger
+	providerRunner        ProviderRunner
+	mu                    sync.Mutex
+	processReportInterval time.Duration
+	fs                    afero.Afero
+	executor              exec.Interface
 }
 
 // Workspace makes sure the Terraform workspace for the given resource is ready
@@ -176,9 +192,7 @@ func (ws *WorkspaceStore) Workspace(ctx context.Context, c resource.SecretClient
 		return nil, errors.Wrap(err, "cannot write main tf file")
 	}
 	if isNeedProviderUpgrade {
-		cmd := w.executor.CommandContext(ctx, "terraform", "init", "-upgrade", "-input=false")
-		cmd.SetDir(w.dir)
-		out, err := cmd.CombinedOutput()
+		out, err := w.runTF(ctx, metrics.ModeSync, "init", "-upgrade", "-input=false")
 		w.logger.Debug("init -upgrade ended", "out", ts.filterSensitiveInformation(string(out)))
 		if err != nil {
 			return w, errors.Wrapf(err, "cannot upgrade workspace: %s", ts.filterSensitiveInformation(string(out)))
@@ -198,9 +212,7 @@ func (ws *WorkspaceStore) Workspace(ctx context.Context, c resource.SecretClient
 	if !os.IsNotExist(err) {
 		return w, nil
 	}
-	cmd := w.executor.CommandContext(ctx, "terraform", "init", "-input=false")
-	cmd.SetDir(w.dir)
-	out, err := cmd.CombinedOutput()
+	out, err := w.runTF(ctx, metrics.ModeSync, "init", "-input=false")
 	w.logger.Debug("init ended", "out", ts.filterSensitiveInformation(string(out)))
 	return w, errors.Wrapf(err, "cannot init workspace: %s", ts.filterSensitiveInformation(string(out)))
 }
@@ -221,6 +233,14 @@ func (ws *WorkspaceStore) Remove(obj xpresource.Object) error {
 	return nil
 }
 
+func (ws *WorkspaceStore) initMetrics() {
+	for _, mode := range []metrics.ExecMode{metrics.ModeSync, metrics.ModeASync} {
+		for _, subcommand := range []string{"init", "apply", "destroy", "plan"} {
+			metrics.CLIExecutions.WithLabelValues(subcommand, mode.String()).Set(0)
+		}
+	}
+}
+
 func (ts Setup) filterSensitiveInformation(s string) string {
 	for _, v := range ts.Configuration {
 		if str, ok := v.(string); ok && str != "" {
@@ -228,4 +248,30 @@ func (ts Setup) filterSensitiveInformation(s string) string {
 		}
 	}
 	return s
+}
+
+func (ws *WorkspaceStore) reportTFProcesses(interval time.Duration) {
+	for _, t := range []string{"cli", "provider"} {
+		metrics.TFProcesses.WithLabelValues(t).Set(0)
+	}
+	t := time.NewTicker(interval)
+	for range t.C {
+		processes, err := ps.Processes()
+		if err != nil {
+			ws.logger.Debug("Failed to list processes", "err", err)
+			continue
+		}
+		cliCount, providerCount := 0.0, 0.0
+		for _, p := range processes {
+			e := p.Executable()
+			switch {
+			case e == "terraform":
+				cliCount++
+			case strings.HasPrefix(e, "terraform-"):
+				providerCount++
+			}
+		}
+		metrics.TFProcesses.WithLabelValues("cli").Set(cliCount)
+		metrics.TFProcesses.WithLabelValues("provider").Set(providerCount)
+	}
 }

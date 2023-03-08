@@ -219,7 +219,7 @@ func TestWorkspaceRefresh(t *testing.T) {
 			},
 			want: want{
 				r: RefreshResult{
-					IsApplying: true,
+					ASyncInProgress: true,
 				},
 			},
 		},

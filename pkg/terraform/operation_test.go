@@ -60,7 +60,7 @@ func TestOperation(t *testing.T) {
 			},
 			want: want{
 				checks: func(o *Operation) bool {
-					return o.Type == "" && o.StartTime() == nil && o.EndTime() == nil
+					return o.Type == "" && o.startTime == nil && o.endTime == nil
 				},
 				result: true,
 			},

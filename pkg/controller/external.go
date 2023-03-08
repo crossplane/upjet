@@ -6,6 +6,7 @@ package controller
 
 import (
 	"context"
+	"time"
 
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
@@ -14,6 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/upbound/upjet/pkg/config"
+	"github.com/upbound/upjet/pkg/metrics"
 	"github.com/upbound/upjet/pkg/resource"
 	"github.com/upbound/upjet/pkg/resource/json"
 	"github.com/upbound/upjet/pkg/terraform"
@@ -113,7 +115,7 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 		return managed.ExternalObservation{}, errors.Wrap(err, errRefresh)
 	}
 	switch {
-	case res.IsApplying, res.IsDestroying:
+	case res.ASyncInProgress:
 		mg.SetConditions(resource.AsyncOperationOngoingCondition())
 		return managed.ExternalObservation{
 			ResourceExists:   true,
@@ -179,6 +181,7 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 		}, nil
 	// we prioritize status updates over late-init'ed spec updates
 	case !markedAvailable:
+		addTTR(tr)
 		tr.SetConditions(xpv1.Available())
 		return managed.ExternalObservation{
 			ResourceExists:    true,
@@ -209,6 +212,11 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 			ConnectionDetails: conn,
 		}, nil
 	}
+}
+
+func addTTR(mg xpresource.Managed) {
+	gvk := mg.GetObjectKind().GroupVersionKind()
+	metrics.TTRMeasurements.WithLabelValues(gvk.Group, gvk.Version, gvk.Kind).Observe(time.Since(mg.GetCreationTimestamp().Time).Seconds())
 }
 
 func (e *external) Create(ctx context.Context, mg xpresource.Managed) (managed.ExternalCreation, error) {
