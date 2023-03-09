@@ -59,7 +59,19 @@ func (r *Resource) addExampleManifest(file *hcl.File, body *hclsyntax.Block) err
 	return nil
 }
 
-func (r *Resource) scrapeExamples(doc *html.Node, codeElXPath string, debug bool) error { // nolint: gocyclo
+func getResourceNameFromPath(path, resourcePrefix string) string {
+	tokens := strings.Split(filepath.Base(path), ".")
+	if len(tokens) < 2 {
+		return ""
+	}
+	prefix := ""
+	if len(resourcePrefix) != 0 {
+		prefix = resourcePrefix + "_"
+	}
+	return fmt.Sprintf("%s%s", prefix, tokens[0])
+}
+
+func (r *Resource) scrapeExamples(doc *html.Node, codeElXPath string, path string, resourcePrefix string, debug bool) error { // nolint: gocyclo
 	resourceName := r.Title
 	nodes := htmlquery.Find(doc, codeElXPath)
 	for _, n := range nodes {
@@ -83,6 +95,9 @@ func (r *Resource) scrapeExamples(doc *html.Node, codeElXPath string, debug bool
 		}
 		body.Blocks = trimmed
 		// first try an exact match to find the example
+		if len(resourceName) == 0 {
+			resourceName = getResourceNameFromPath(path, resourcePrefix)
+		}
 		if err := r.findExampleBlock(f, body.Blocks, &resourceName, true); err != nil {
 			return err
 		}
@@ -441,7 +456,7 @@ func (r *Resource) scrape(path string, config *ScrapeConfiguration) error {
 	r.scrapeFieldDocs(doc, config.FieldDocXPath)
 	r.scrapeImportStatements(doc, config.ImportXPath)
 
-	return r.scrapeExamples(doc, config.CodeXPath, config.Debug)
+	return r.scrapeExamples(doc, config.CodeXPath, path, config.ResourcePrefix, config.Debug)
 }
 
 // ScrapeConfiguration is a configurator for the scraper
@@ -460,6 +475,8 @@ type ScrapeConfiguration struct {
 	ImportXPath string
 	// FileExtensions extensions of the files to be scraped
 	FileExtensions []string
+	// ResourcePrefix Terraform resource name prefix for the Terraform provider
+	ResourcePrefix string
 }
 
 func (sc *ScrapeConfiguration) hasExpectedExtension(fileName string) bool {

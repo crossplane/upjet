@@ -18,6 +18,7 @@ func main() {
 		app            = kingpin.New(filepath.Base(os.Args[0]), "Terraform Registry provider metadata scraper.").DefaultEnvars()
 		outFile        = app.Flag("out", "Provider metadata output file path").Short('o').Default("provider-metadata.yaml").OpenFile(os.O_CREATE, 0644)
 		providerName   = app.Flag("name", "Provider name").Short('n').Required().String()
+		resourcePrefix = app.Flag("resource-prefix", `Terraform resource name prefix for the Terraform provider. For example, this is "google" for the google Terraform provider.`).String()
 		codeXPath      = app.Flag("code-xpath", "Code XPath expression").Default(`//code[@class="language-terraform" or @class="language-hcl"]/text()`).String()
 		preludeXPath   = app.Flag("prelude-xpath", "Prelude XPath expression").Default(`//text()[contains(., "description") and contains(., "page_title")]`).String()
 		fieldXPath     = app.Flag("field-xpath", "Field documentation XPath expression").Default(`//ul/li//code[1]/text()`).String()
@@ -37,6 +38,7 @@ func main() {
 		FieldDocXPath:  *fieldXPath,
 		ImportXPath:    *importXPath,
 		FileExtensions: *fileExtensions,
+		ResourcePrefix: *resourcePrefix,
 	}), "Failed to scrape Terraform provider metadata")
 	kingpin.FatalIfError(pm.Store((*outFile).Name()), "Failed to store Terraform provider metadata to file: %s", (*outFile).Name())
 }
