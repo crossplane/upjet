@@ -58,12 +58,12 @@ func TestGeneratePlan(t *testing.T) {
 					"testdata/plan/xrd.yaml":         {},
 					"testdata/plan/xr.yaml":          {Category: CategoryComposite}}),
 				target: newTestTarget(),
-				registry: getRegistryWithConverters(map[schema.GroupVersionKind]Converter{
+				registry: getRegistryWithConverters(map[schema.GroupVersionKind]CompositionConverter{
 					fake.MigrationSourceGVK: &testConverter{},
-				}, []PatchSetConverter{
+				}, []patchSetConverter{
 					{
-						Re:        AllCompositions,
-						Converter: convertPatchSets,
+						re:        AllCompositions,
+						converter: &testConverter{},
 					},
 				}),
 			},
@@ -207,13 +207,13 @@ func (f *testTarget) Delete(o UnstructuredWithMetadata) error {
 	return nil
 }*/
 
-func convertPatchSets(psMap map[string]*v1.PatchSet) error {
+type testConverter struct{}
+
+func (f *testConverter) PatchSets(psMap map[string]*v1.PatchSet) error {
 	psMap["ps1"].Patches[0].ToFieldPath = ptrFromString(`spec.forProvider.tags["key3"]`)
 	psMap["ps6"].Patches[0].ToFieldPath = ptrFromString(`spec.forProvider.tags["key4"]`)
 	return nil
 }
-
-type testConverter struct{}
 
 func (f *testConverter) Resource(mg xpresource.Managed) ([]xpresource.Managed, error) {
 	s := mg.(*fake.MigrationSourceObject)
@@ -250,16 +250,16 @@ func (f *testConverter) ComposedTemplate(_ v1.ComposedTemplate, convertedTemplat
 	return nil
 }
 
-func getRegistryWithConverters(converters map[schema.GroupVersionKind]Converter, psConverters []PatchSetConverter) *Registry {
+func getRegistryWithConverters(converters map[schema.GroupVersionKind]CompositionConverter, psConverters []patchSetConverter) *Registry {
 	scheme := runtime.NewScheme()
 	scheme.AddKnownTypeWithName(fake.MigrationSourceGVK, &fake.MigrationSourceObject{})
 	scheme.AddKnownTypeWithName(fake.MigrationTargetGVK, &fake.MigrationTargetObject{})
 	r := NewRegistry(scheme)
 	for _, c := range psConverters {
-		r.RegisterPatchSetConverter(c)
+		r.RegisterPatchSetConverter(c.re, c.converter)
 	}
 	for gvk, c := range converters {
-		r.RegisterConverter(gvk, c)
+		r.RegisterCompositionConverter(gvk, c)
 	}
 	return r
 }

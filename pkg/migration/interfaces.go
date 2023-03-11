@@ -16,27 +16,57 @@ package migration
 
 import (
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
-	v1 "github.com/crossplane/crossplane/apis/apiextensions/v1"
+	xpv1 "github.com/crossplane/crossplane/apis/apiextensions/v1"
 )
 
-// Converter converts a managed resource or a Composition's ComposedTemplate
-// from the migration source provider's schema to the migration target
+// ResourceConverter converts a managed resource from
+// the migration source provider's schema to the migration target
 // provider's schema.
-type Converter interface {
+type ResourceConverter interface {
 	// Resource takes a managed resource and returns zero or more managed
 	// resources to be created.
 	Resource(mg resource.Managed) ([]resource.Managed, error)
+}
 
+// ComposedTemplateConverter converts a Composition's ComposedTemplate
+// from the migration source provider's schema to the migration target
+// provider's schema. Conversion of the `Base` must be handled by
+// a ResourceConverter.
+type ComposedTemplateConverter interface {
 	// ComposedTemplate receives a migration source v1.ComposedTemplate
 	// that has been converted, by a resource converter, to the
-	// v1.ComposedTemplates with new shapes specified in the
+	// v1.ComposedTemplates with the new shapes specified in the
 	// `convertedTemplates` argument.
 	// Conversion of the v1.ComposedTemplate.Bases is handled
-	// via Converter.Resources and Converter.Composition must only
+	// via ResourceConverter.Resource and ComposedTemplate must only
 	// convert the other fields (`Patches`, `ConnectionDetails`,
 	// `PatchSet`s, etc.)
 	// Returns any errors encountered.
-	ComposedTemplate(sourceTemplate v1.ComposedTemplate, convertedTemplates ...*v1.ComposedTemplate) error
+	ComposedTemplate(sourceTemplate xpv1.ComposedTemplate, convertedTemplates ...*xpv1.ComposedTemplate) error
+}
+
+// CompositionConverter converts a managed resource and a Composition's
+// ComposedTemplate that composes a managed resource of the same kind
+// from the migration source provider's schema to the migration target
+// provider's schema.
+type CompositionConverter interface {
+	ResourceConverter
+	ComposedTemplateConverter
+}
+
+// PatchSetConverter converts patch sets of Compositions.
+// Any registered PatchSetConverters
+// will be called before any resource or ComposedTemplate conversion is done.
+// The rationale is to convert the Composition-wide patch sets before
+// any resource-specific conversions so that migration targets can
+// automatically inherit converted patch sets if their schemas match them.
+// Registered PatchSetConverters will be called in the order
+// they are registered.
+type PatchSetConverter interface {
+	// PatchSets converts the `spec.patchSets` of a Composition
+	// from the migration source provider's schema to the migration target
+	// provider's schema.
+	PatchSets(psMap map[string]*xpv1.PatchSet) error
 }
 
 // Source is a source for reading resource manifests

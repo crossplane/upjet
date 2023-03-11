@@ -117,10 +117,10 @@ func (pg *PlanGenerator) GeneratePlan() error {
 func (pg *PlanGenerator) convertPatchSets(o UnstructuredWithMetadata) ([]string, error) {
 	var converted []string
 	for _, psConv := range pg.registry.patchSetConverters {
-		if psConv.Re == nil || psConv.Converter == nil {
+		if psConv.re == nil || psConv.converter == nil {
 			continue
 		}
-		if !psConv.Re.MatchString(o.Object.GetName()) {
+		if !psConv.re.MatchString(o.Object.GetName()) {
 			continue
 		}
 		c, err := convertToComposition(o.Object.Object)
@@ -132,7 +132,7 @@ func (pg *PlanGenerator) convertPatchSets(o UnstructuredWithMetadata) ([]string,
 			oldPatchSets[i] = *ps.DeepCopy()
 		}
 		psMap := convertToMap(c.Spec.PatchSets)
-		if err := psConv.Converter(psMap); err != nil {
+		if err := psConv.converter.PatchSets(psMap); err != nil {
 			return nil, errors.Wrapf(err, "failed to call PatchSet converter on Composition: %s", c.GetName())
 		}
 		newPatchSets := convertFromMap(psMap, oldPatchSets, true)
@@ -232,7 +232,7 @@ func (pg *PlanGenerator) convert() error { //nolint: gocyclo
 
 func (pg *PlanGenerator) convertResource(o UnstructuredWithMetadata, compositionContext bool) ([]UnstructuredWithMetadata, bool, error) {
 	gvk := o.Object.GroupVersionKind()
-	conv := pg.registry.converters[gvk]
+	conv := pg.registry.resourceConverters[gvk]
 	if conv == nil {
 		return []UnstructuredWithMetadata{o}, false, nil
 	}
@@ -336,7 +336,7 @@ func (pg *PlanGenerator) convertComposition(o UnstructuredWithMetadata) (*Unstru
 			}
 			cmps = append(cmps, c)
 		}
-		conv := pg.registry.converters[gvk]
+		conv := pg.registry.templateConverters[gvk]
 		if conv != nil {
 			if err := conv.ComposedTemplate(cmp, cmps...); err != nil {
 				return nil, false, errors.Wrap(err, errComposedTemplateMigrate)
