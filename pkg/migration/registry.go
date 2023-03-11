@@ -165,3 +165,65 @@ func (r *Registry) GetAllRegisteredGVKs() []schema.GroupVersionKind {
 	gvks = append(gvks, xpv1.CompositionGroupVersionKind)
 	return gvks
 }
+
+// ResourceConversionFn is a function that converts the specified migration
+// source managed resource to one or more migration target managed resources.
+type ResourceConversionFn func(mg resource.Managed) ([]resource.Managed, error)
+
+// ComposedTemplateConversionFn is a function that converts from the specified
+// migration source v1.ComposedTemplate to one or more migration
+// target v1.ComposedTemplates.
+type ComposedTemplateConversionFn func(sourceTemplate xpv1.ComposedTemplate, convertedTemplates ...*xpv1.ComposedTemplate) error
+
+// PatchSetsConversionFn is a function that converts
+// the `spec.patchSets` of a Composition from the migration source provider's
+// schema to the migration target provider's schema.
+type PatchSetsConversionFn func(psMap map[string]*xpv1.PatchSet) error
+
+type delegatingConverter struct {
+	rFn   ResourceConversionFn
+	cmpFn ComposedTemplateConversionFn
+	psFn  PatchSetsConversionFn
+}
+
+func (d *delegatingConverter) PatchSets(psMap map[string]*xpv1.PatchSet) error {
+	if d.psFn == nil {
+		return nil
+	}
+	return d.psFn(psMap)
+}
+
+// Resource takes a managed resource and returns zero or more managed
+// resources to be created by calling the configured ResourceConversionFn.
+func (d *delegatingConverter) Resource(mg resource.Managed) ([]resource.Managed, error) {
+	if d.rFn == nil {
+		return []resource.Managed{mg}, nil
+	}
+	return d.rFn(mg)
+}
+
+// ComposedTemplate converts from the specified migration source
+// v1.ComposedTemplate to the migration target schema by calling the configured
+// ComposedTemplateConversionFn.
+func (d *delegatingConverter) ComposedTemplate(sourceTemplate xpv1.ComposedTemplate, convertedTemplates ...*xpv1.ComposedTemplate) error {
+	if d.cmpFn == nil {
+		return nil
+	}
+	return d.cmpFn(sourceTemplate, convertedTemplates...)
+}
+
+// RegisterConversionFunctions registers the supplied ResourceConversionFn and
+// ComposedTemplateConversionFn for the specified GVK, and the supplied
+// PatchSetsConversionFn for all the discovered Compositions.
+// The specified GVK must belong to a Crossplane managed resource type and
+// the type must already have been registered with this registry's scheme
+// by calling Registry.AddToScheme.
+func (r *Registry) RegisterConversionFunctions(gvk schema.GroupVersionKind, rFn ResourceConversionFn, cmpFn ComposedTemplateConversionFn, psFn PatchSetsConversionFn) {
+	d := &delegatingConverter{
+		rFn:   rFn,
+		cmpFn: cmpFn,
+		psFn:  psFn,
+	}
+	r.RegisterPatchSetConverter(AllCompositions, d)
+	r.RegisterCompositionConverter(gvk, d)
+}

@@ -58,8 +58,38 @@ func TestGeneratePlan(t *testing.T) {
 					"testdata/plan/xrd.yaml":         {},
 					"testdata/plan/xr.yaml":          {Category: CategoryComposite}}),
 				target: newTestTarget(),
-				registry: getRegistryWithConverters(map[schema.GroupVersionKind]CompositionConverter{
-					fake.MigrationSourceGVK: &testConverter{},
+				registry: getRegistryWithConverters(map[schema.GroupVersionKind]delegatingConverter{
+					fake.MigrationSourceGVK: {
+						rFn: func(mg xpresource.Managed) ([]xpresource.Managed, error) {
+							s := mg.(*fake.MigrationSourceObject)
+							t := &fake.MigrationTargetObject{}
+							if _, err := CopyInto(s, t, fake.MigrationTargetGVK, "spec.forProvider.tags", "mockManaged"); err != nil {
+								return nil, err
+							}
+							t.Spec.ForProvider.Tags = make(map[string]string, len(s.Spec.ForProvider.Tags))
+							for _, tag := range s.Spec.ForProvider.Tags {
+								v := tag.Value
+								t.Spec.ForProvider.Tags[tag.Key] = v
+							}
+							return []xpresource.Managed{
+								t,
+							}, nil
+						},
+						cmpFn: func(_ v1.ComposedTemplate, convertedTemplates ...*v1.ComposedTemplate) error {
+							// convert patches in the migration target composed templates
+							for i := range convertedTemplates {
+								convertedTemplates[i].Patches = append([]v1.Patch{
+									{FromFieldPath: ptrFromString("spec.parameters.tagValue"),
+										ToFieldPath: ptrFromString(`spec.forProvider.tags["key1"]`),
+									}, {
+										FromFieldPath: ptrFromString("spec.parameters.tagValue"),
+										ToFieldPath:   ptrFromString(`spec.forProvider.tags["key2"]`),
+									},
+								}, convertedTemplates[i].Patches...)
+							}
+							return nil
+						},
+					},
 				}, []patchSetConverter{
 					{
 						re:        AllCompositions,
@@ -215,42 +245,11 @@ func (f *testConverter) PatchSets(psMap map[string]*v1.PatchSet) error {
 	return nil
 }
 
-func (f *testConverter) Resource(mg xpresource.Managed) ([]xpresource.Managed, error) {
-	s := mg.(*fake.MigrationSourceObject)
-	t := &fake.MigrationTargetObject{}
-	if _, err := CopyInto(s, t, fake.MigrationTargetGVK, "spec.forProvider.tags", "mockManaged"); err != nil {
-		return nil, err
-	}
-	t.Spec.ForProvider.Tags = make(map[string]string, len(s.Spec.ForProvider.Tags))
-	for _, tag := range s.Spec.ForProvider.Tags {
-		v := tag.Value
-		t.Spec.ForProvider.Tags[tag.Key] = v
-	}
-	return []xpresource.Managed{
-		t,
-	}, nil
-}
-
 func ptrFromString(s string) *string {
 	return &s
 }
 
-func (f *testConverter) ComposedTemplate(_ v1.ComposedTemplate, convertedTemplates ...*v1.ComposedTemplate) error {
-	// convert patches in the migration target composed templates
-	for i := range convertedTemplates {
-		convertedTemplates[i].Patches = append([]v1.Patch{
-			{FromFieldPath: ptrFromString("spec.parameters.tagValue"),
-				ToFieldPath: ptrFromString(`spec.forProvider.tags["key1"]`),
-			}, {
-				FromFieldPath: ptrFromString("spec.parameters.tagValue"),
-				ToFieldPath:   ptrFromString(`spec.forProvider.tags["key2"]`),
-			},
-		}, convertedTemplates[i].Patches...)
-	}
-	return nil
-}
-
-func getRegistryWithConverters(converters map[schema.GroupVersionKind]CompositionConverter, psConverters []patchSetConverter) *Registry {
+func getRegistryWithConverters(converters map[schema.GroupVersionKind]delegatingConverter, psConverters []patchSetConverter) *Registry {
 	scheme := runtime.NewScheme()
 	scheme.AddKnownTypeWithName(fake.MigrationSourceGVK, &fake.MigrationSourceObject{})
 	scheme.AddKnownTypeWithName(fake.MigrationTargetGVK, &fake.MigrationTargetObject{})
@@ -258,8 +257,8 @@ func getRegistryWithConverters(converters map[schema.GroupVersionKind]Compositio
 	for _, c := range psConverters {
 		r.RegisterPatchSetConverter(c.re, c.converter)
 	}
-	for gvk, c := range converters {
-		r.RegisterCompositionConverter(gvk, c)
+	for gvk, d := range converters {
+		r.RegisterConversionFunctions(gvk, d.rFn, d.cmpFn, nil)
 	}
 	return r
 }
