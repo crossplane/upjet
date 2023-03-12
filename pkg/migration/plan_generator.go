@@ -94,6 +94,14 @@ func WithErrorOnInvalidPatchSchema(e bool) PlanGeneratorOption {
 	}
 }
 
+// WithSkipGVKs configures the set of GVKs to skip for conversion
+// during a migration.
+func WithSkipGVKs(gvk ...schema.GroupVersionKind) PlanGeneratorOption {
+	return func(pg *PlanGenerator) {
+		pg.SkipGVKs = gvk
+	}
+}
+
 // PlanGenerator generates a migration.Plan reading the manifests available
 // from `source`, converting managed resources and compositions using the
 // available `migration.Converter`s registered in the `registry` and
@@ -109,6 +117,12 @@ type PlanGenerator struct {
 	// an error is encountered while checking the conformance of a patch
 	// statement against the migration source or the migration target.
 	ErrorOnInvalidPatchSchema bool
+	// GVKs of managed resources that
+	// should be skipped for conversion during the migration, if no
+	// converters are registered for them. If any of the GVK components
+	// is left empty, it will be a wildcard component.
+	// Exact matching with an empty group name is not possible.
+	SkipGVKs []schema.GroupVersionKind
 }
 
 // NewPlanGenerator constructs a new PlanGenerator using the specified
@@ -375,7 +389,21 @@ func (pg *PlanGenerator) convertComposition(o UnstructuredWithMetadata) (*Unstru
 	}, isConverted, nil
 }
 
+func (pg *PlanGenerator) isGVKSkipped(sourceGVK schema.GroupVersionKind) bool {
+	for _, gvk := range pg.SkipGVKs {
+		if (len(gvk.Group) == 0 || gvk.Group == sourceGVK.Group) &&
+			(len(gvk.Version) == 0 || gvk.Version == sourceGVK.Version) &&
+			(len(gvk.Kind) == 0 || gvk.Kind == sourceGVK.Kind) {
+			return true
+		}
+	}
+	return false
+}
+
 func (pg *PlanGenerator) setDefaultsOnTargetTemplate(sourceName *string, sourceNameUsed *bool, gvkSource, gvkTarget schema.GroupVersionKind, target *xpv1.ComposedTemplate, patchSets []xpv1.PatchSet, convertedPS []string) error {
+	if pg.isGVKSkipped(gvkSource) {
+		return nil
+	}
 	// remove invalid patches that do not conform to the migration target's schema
 	if err := pg.removeInvalidPatches(gvkSource, gvkTarget, patchSets, target, convertedPS); err != nil {
 		return errors.Wrap(err, "failed to set the defaults on the migration target composed template")
