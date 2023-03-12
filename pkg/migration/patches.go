@@ -16,6 +16,7 @@ package migration
 
 import (
 	"fmt"
+	"log"
 	"reflect"
 	"regexp"
 	"strings"
@@ -51,7 +52,8 @@ func isConverted(convertedPS []string, psName string) bool {
 // templates inherit patches from migration source templates by default, and
 // this function is responsible for removing patches (including references to
 // patch sets) that do not conform to the target composed template's schema.
-func removeInvalidPatches(c runtime.ObjectCreater, gvkSource, gvkTarget schema.GroupVersionKind, patchSets []xpv1.PatchSet, targetTemplate *xpv1.ComposedTemplate, convertedPS []string) error { //nolint:gocyclo // complexity (11) just above the threshold (10)
+func (pg *PlanGenerator) removeInvalidPatches(gvkSource, gvkTarget schema.GroupVersionKind, patchSets []xpv1.PatchSet, targetTemplate *xpv1.ComposedTemplate, convertedPS []string) error { //nolint:gocyclo // complexity (11) just above the threshold (10)
+	c := pg.registry.scheme
 	source, err := c.New(gvkSource)
 	if err != nil {
 		return errors.Wrapf(err, "failed to instantiate a new source object with GVK: %s", gvkSource.String())
@@ -88,7 +90,15 @@ func removeInvalidPatches(c runtime.ObjectCreater, gvkSource, gvkTarget schema.G
 		for _, p := range patches {
 			ok, err := assertPatchSchemaConformance(p, s, target)
 			if err != nil {
-				return errors.Wrap(err, "failed to check whether the patch conforms to the target schema")
+				err := errors.Wrap(err, "failed to check whether the patch conforms to the target schema")
+				if pg.ErrorOnInvalidPatchSchema {
+					return err
+				}
+				log.Printf("Excluding the patch from the migration target because conformance checking has failed with: %v\n", err)
+				// if we could not check the patch's schema conformance
+				// and the plan generator is configured not to error,
+				// assume the patch does not conform to the schema
+				ok = false
 			}
 			if !ok {
 				keep = false
@@ -148,12 +158,23 @@ func splitPathComponents(path string) []string {
 	return result
 }
 
+func isRawExtension(source, target reflect.Type) bool {
+	reType := reflect.TypeOf(runtime.RawExtension{})
+	rePtrType := reflect.TypeOf(&runtime.RawExtension{})
+	return (source == reType && target == reType) || (source == rePtrType && target == rePtrType)
+}
+
 // assertNameAndTypeAtPath asserts that the migration source and target
 // templates both have the same kind for the type at the specified path.
 // Also validates the specific path is valid for the source.
 func assertNameAndTypeAtPath(source, target reflect.Type, pathComponents []string) (bool, error) { // nolint:gocyclo
 	if len(pathComponents) < 1 {
 		return compareKinds(source, target), nil
+	}
+	// if both source and target are runtime.RawExtensions,
+	// then stop traversing the type hierarchy.
+	if isRawExtension(source, target) {
+		return true, nil
 	}
 
 	pathComponent := pathComponents[0]
