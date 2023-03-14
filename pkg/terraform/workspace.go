@@ -101,9 +101,10 @@ type Workspace struct {
 	dir string
 	env []string
 
-	logger   logging.Logger
-	executor k8sExec.Interface
-	fs       afero.Afero
+	logger        logging.Logger
+	executor      k8sExec.Interface
+	providerInUse InUse
+	fs            afero.Afero
 
 	filterFn func(string) string
 }
@@ -288,6 +289,10 @@ func (w *Workspace) runTF(ctx context.Context, execMode metrics.ExecMode, args .
 	if len(args) < 1 {
 		return nil, errors.New("args cannot be empty")
 	}
+	if err := w.providerInUse.Increment(); err != nil {
+		return nil, errors.Wrap(err, "cannot increment in-use counter for the shared provider")
+	}
+	defer w.providerInUse.Decrement()
 	cmd := w.executor.CommandContext(ctx, "terraform", args...)
 	cmd.SetEnv(append(os.Environ(), w.env...))
 	cmd.SetDir(w.dir)

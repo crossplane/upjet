@@ -94,7 +94,7 @@ type FileProducer struct {
 
 // WriteMainTF writes the content main configuration file that has the desired
 // state configuration for Terraform.
-func (fp *FileProducer) WriteMainTF() error {
+func (fp *FileProducer) WriteMainTF() (ProviderHandle, error) {
 	// If the resource is in a deletion process, we need to remove the deletion
 	// protection.
 	fp.parameters["lifecycle"] = map[string]bool{
@@ -129,9 +129,13 @@ func (fp *FileProducer) WriteMainTF() error {
 	}
 	rawMainTF, err := json.JSParser.Marshal(m)
 	if err != nil {
-		return errors.Wrap(err, "cannot marshal main hcl object")
+		return InvalidProviderHandle, errors.Wrap(err, "cannot marshal main hcl object")
 	}
-	return errors.Wrap(fp.fs.WriteFile(filepath.Join(fp.Dir, "main.tf.json"), rawMainTF, 0600), errWriteMainTFFile)
+	h, err := fp.Setup.Configuration.ToProviderHandle()
+	if err != nil {
+		return InvalidProviderHandle, errors.Wrap(err, "cannot get scheduler handle")
+	}
+	return h, errors.Wrap(fp.fs.WriteFile(filepath.Join(fp.Dir, "main.tf.json"), rawMainTF, 0600), errWriteMainTFFile)
 }
 
 // EnsureTFState writes the Terraform state that should exist in the filesystem

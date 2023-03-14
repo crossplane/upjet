@@ -1,6 +1,16 @@
-/*
-Copyright 2022 Upbound Inc.
-*/
+// Copyright 2022 Upbound Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 package terraform
 
@@ -44,6 +54,7 @@ var (
 // gRPC server mode
 type ProviderRunner interface {
 	Start() (string, error)
+	Stop() error
 }
 
 // NoOpProviderRunner is a no-op ProviderRunner
@@ -59,6 +70,11 @@ func (NoOpProviderRunner) Start() (string, error) {
 	return "", nil
 }
 
+// Stop takes no action
+func (NoOpProviderRunner) Stop() error {
+	return nil
+}
+
 // SharedProvider runs the configured native provider plugin
 // using the supplied command-line args
 type SharedProvider struct {
@@ -71,6 +87,7 @@ type SharedProvider struct {
 	executor           exec.Interface
 	clock              clock.Clock
 	mu                 *sync.Mutex
+	stopCh             chan bool
 }
 
 // SharedGRPCRunnerOption lets you configure the shared gRPC runner.
@@ -98,17 +115,30 @@ func WithProtocolVersion(protocolVersion int) SharedGRPCRunnerOption {
 	}
 }
 
-// NewSharedProvider instantiates a SharedProvider with an
-// OS executor using the supplied logger
-func NewSharedProvider(l logging.Logger, nativeProviderPath, nativeProviderName string, opts ...SharedGRPCRunnerOption) *SharedProvider {
+// WithNativeProviderPath configures the Terraform provider executable path
+// for the runner.
+func WithNativeProviderPath(p string) SharedGRPCRunnerOption {
+	return func(sr *SharedProvider) {
+		sr.nativeProviderPath = p
+	}
+}
+
+// WithNativeProviderName configures the Terraform provider name
+// for the runner.
+func WithNativeProviderName(n string) SharedGRPCRunnerOption {
+	return func(sr *SharedProvider) {
+		sr.nativeProviderName = n
+	}
+}
+
+// NewSharedProvider instantiates a SharedProvider runner with an
+// OS executor using the supplied options.
+func NewSharedProvider(opts ...SharedGRPCRunnerOption) *SharedProvider {
 	sr := &SharedProvider{
-		logger:             l,
-		nativeProviderPath: nativeProviderPath,
-		nativeProviderName: nativeProviderName,
-		protocolVersion:    defaultProtocolVersion,
-		executor:           exec.New(),
-		clock:              clock.RealClock{},
-		mu:                 &sync.Mutex{},
+		protocolVersion: defaultProtocolVersion,
+		executor:        exec.New(),
+		clock:           clock.RealClock{},
+		mu:              &sync.Mutex{},
 	}
 	for _, o := range opts {
 		o(sr)
@@ -131,6 +161,7 @@ func (sr *SharedProvider) Start() (string, error) { //nolint:gocyclo
 	}
 	errCh := make(chan error, 1)
 	reattachCh := make(chan string, 1)
+	sr.stopCh = make(chan bool, 1)
 
 	go func() {
 		defer close(errCh)
@@ -162,9 +193,24 @@ func (sr *SharedProvider) Start() (string, error) { //nolint:gocyclo
 			reattachCh <- fmt.Sprintf(fmtReattachEnv, sr.nativeProviderName, sr.protocolVersion, os.Getpid(), matches[1])
 			break
 		}
-		if err := cmd.Wait(); err != nil {
+
+		waitErrCh := make(chan error, 1)
+		go func() {
+			defer close(waitErrCh)
+			waitErrCh <- cmd.Wait()
+		}()
+		select {
+		case err := <-waitErrCh:
 			log.Info("Native Terraform provider process error", "error", err)
 			errCh <- err
+		case <-sr.stopCh:
+			defer func() {
+				// we have observed a panic in k8s.io/utils/exec.Cmd.Stop()
+				if r := recover(); r != nil {
+					sr.logger.Info("Recovered from a panic in SharedProvider.Stop: %v", r)
+				}
+			}()
+			cmd.Stop()
 		}
 	}()
 
@@ -177,4 +223,17 @@ func (sr *SharedProvider) Start() (string, error) { //nolint:gocyclo
 	case <-sr.clock.After(reattachTimeout):
 		return "", errors.Errorf(errFmtTimeout, reattachTimeout)
 	}
+}
+
+// Stop attempts to stop a shared gRPC server if it's already running.
+func (sr *SharedProvider) Stop() error {
+	sr.mu.Lock()
+	defer sr.mu.Unlock()
+	if sr.stopCh == nil {
+		return errors.New("shared provider process not started yet")
+	}
+	sr.stopCh <- true
+	close(sr.stopCh)
+	sr.stopCh = nil
+	return nil
 }
