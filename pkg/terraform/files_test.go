@@ -414,7 +414,7 @@ func TestWriteMainTF(t *testing.T) {
 			if err != nil {
 				t.Errorf("cannot initialize a file producer: %s", err.Error())
 			}
-			err = fp.WriteMainTF()
+			_, err = fp.WriteMainTF()
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nWriteMainTF(...): -want error, +got error:\n%s", tc.reason, diff)
 			}

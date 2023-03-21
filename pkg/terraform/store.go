@@ -16,7 +16,7 @@ package terraform
 
 import (
 	"context"
-	"crypto/md5"
+	"crypto/sha256"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -39,10 +39,6 @@ import (
 	"github.com/upbound/upjet/pkg/resource"
 )
 
-const (
-	fmtEnv = "%s=%s"
-)
-
 // SetupFn is a function that returns Terraform setup which contains
 // provider requirement, configuration and Terraform version.
 type SetupFn func(ctx context.Context, client client.Client, mg xpresource.Managed) (Setup, error)
@@ -63,7 +59,7 @@ type ProviderConfiguration map[string]any
 // for the provider scheduler.
 func (pc ProviderConfiguration) ToProviderHandle() (ProviderHandle, error) {
 	h := strings.Join(getSortedKeyValuePairs("", pc), ",")
-	hash := md5.New()
+	hash := sha256.New()
 	if _, err := hash.Write([]byte(h)); err != nil {
 		return InvalidProviderHandle, errors.Wrap(err, "cannot convert provider configuration to scheduler handle")
 	}
@@ -118,6 +114,12 @@ type Setup struct {
 	// not part of the Terraform AWS Provider configuration, so it could be
 	// made available only by this map.
 	ClientMetadata map[string]string
+
+	// Scheduler specifies the provider scheduler to be used for the Terraform
+	// workspace being setup. If not set, no scheduler is configured and
+	// the lifecycle of Terraform provider processes will be managed by
+	// the Terraform CLI.
+	Scheduler ProviderScheduler
 }
 
 // Map returns the Setup object in map form. The initial reason was so that
@@ -145,14 +147,6 @@ func WithFs(fs afero.Fs) WorkspaceStoreOption {
 	}
 }
 
-// WithProviderScheduler sets the ProviderScheduler to be used with
-// a WorkspaceStore.
-func WithProviderScheduler(ps ProviderScheduler) WorkspaceStoreOption {
-	return func(ws *WorkspaceStore) {
-		ws.providerScheduler = ps
-	}
-}
-
 // WithProcessReportInterval enables the upjet.terraform.running_processes
 // metric, which periodically reports the total number of Terraform CLI and
 // Terraform provider processes in the system.
@@ -174,12 +168,11 @@ func WithDisableInit(disable bool) WorkspaceStoreOption {
 // NewWorkspaceStore returns a new WorkspaceStore.
 func NewWorkspaceStore(l logging.Logger, opts ...WorkspaceStoreOption) *WorkspaceStore {
 	ws := &WorkspaceStore{
-		store:             map[types.UID]*Workspace{},
-		logger:            l,
-		mu:                sync.Mutex{},
-		fs:                afero.Afero{Fs: afero.NewOsFs()},
-		executor:          exec.New(),
-		providerScheduler: NewNoOpProviderScheduler(),
+		store:    map[types.UID]*Workspace{},
+		logger:   l,
+		mu:       sync.Mutex{},
+		fs:       afero.Afero{Fs: afero.NewOsFs()},
+		executor: exec.New(),
 	}
 	for _, f := range opts {
 		f(ws)
@@ -199,7 +192,6 @@ type WorkspaceStore struct {
 	// cause rehashing in some cases.
 	store                 map[types.UID]*Workspace
 	logger                logging.Logger
-	providerScheduler     ProviderScheduler
 	mu                    sync.Mutex
 	processReportInterval time.Duration
 	fs                    afero.Afero
@@ -244,8 +236,7 @@ func (ws *WorkspaceStore) Workspace(ctx context.Context, c resource.SecretClient
 		}
 	}
 
-	ph, err := fp.WriteMainTF()
-	if err != nil {
+	if w.ProviderHandle, err = fp.WriteMainTF(); err != nil {
 		return nil, errors.Wrap(err, "cannot write main tf file")
 	}
 	if isNeedProviderUpgrade {
@@ -255,13 +246,6 @@ func (ws *WorkspaceStore) Workspace(ctx context.Context, c resource.SecretClient
 			return w, errors.Wrapf(err, "cannot upgrade workspace: %s", ts.filterSensitiveInformation(string(out)))
 		}
 	}
-	inuse, attachmentConfig, err := ws.providerScheduler.Start(ph)
-	if err != nil {
-		return nil, errors.Wrap(err, "cannot schedule a shared provider for the workspace")
-	}
-	w.env = append(w.env, fmt.Sprintf(fmtEnv, envReattachConfig, attachmentConfig))
-	w.providerInUse = inuse
-
 	if ws.disableInit {
 		return w, nil
 	}

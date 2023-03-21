@@ -33,10 +33,9 @@ const (
 	errFmtTimeout = "timed out after %v while waiting for the reattach configuration string"
 
 	// an example value would be: '{"registry.terraform.io/hashicorp/aws": {"Protocol": "grpc", "ProtocolVersion":5, "Pid":... "Addr":{"Network": "unix","String": "..."}}}'
-	fmtReattachEnv    = `{"%s":{"Protocol":"grpc","ProtocolVersion":%d,"Pid":%d,"Test": true,"Addr":{"Network": "unix","String": "%s"}}}`
-	fmtSetEnv         = "%s=%s"
-	envReattachConfig = "TF_REATTACH_PROVIDERS"
-	envMagicCookie    = "TF_PLUGIN_MAGIC_COOKIE"
+	fmtReattachEnv = `{"%s":{"Protocol":"grpc","ProtocolVersion":%d,"Pid":%d,"Test": true,"Addr":{"Network": "unix","String": "%s"}}}`
+	fmtSetEnv      = "%s=%s"
+	envMagicCookie = "TF_PLUGIN_MAGIC_COOKIE"
 	// Terraform provider plugin expects this magic cookie in its environment
 	// (as the value of key TF_PLUGIN_MAGIC_COOKIE):
 	// https://github.com/hashicorp/terraform/blob/d35bc0531255b496beb5d932f185cbcdb2d61a99/internal/plugin/serve.go#L33
@@ -90,18 +89,18 @@ type SharedProvider struct {
 	stopCh             chan bool
 }
 
-// SharedGRPCRunnerOption lets you configure the shared gRPC runner.
-type SharedGRPCRunnerOption func(runner *SharedProvider)
+// SharedProviderOption lets you configure the shared gRPC runner.
+type SharedProviderOption func(runner *SharedProvider)
 
 // WithNativeProviderArgs are the arguments to be passed to the native provider
-func WithNativeProviderArgs(args ...string) SharedGRPCRunnerOption {
+func WithNativeProviderArgs(args ...string) SharedProviderOption {
 	return func(sr *SharedProvider) {
 		sr.nativeProviderArgs = args
 	}
 }
 
 // WithNativeProviderExecutor sets the process executor to be used
-func WithNativeProviderExecutor(e exec.Interface) SharedGRPCRunnerOption {
+func WithNativeProviderExecutor(e exec.Interface) SharedProviderOption {
 	return func(sr *SharedProvider) {
 		sr.executor = e
 	}
@@ -109,7 +108,7 @@ func WithNativeProviderExecutor(e exec.Interface) SharedGRPCRunnerOption {
 
 // WithProtocolVersion sets the gRPC protocol version in use between
 // the Terraform CLI and the native provider.
-func WithProtocolVersion(protocolVersion int) SharedGRPCRunnerOption {
+func WithProtocolVersion(protocolVersion int) SharedProviderOption {
 	return func(sr *SharedProvider) {
 		sr.protocolVersion = protocolVersion
 	}
@@ -117,7 +116,7 @@ func WithProtocolVersion(protocolVersion int) SharedGRPCRunnerOption {
 
 // WithNativeProviderPath configures the Terraform provider executable path
 // for the runner.
-func WithNativeProviderPath(p string) SharedGRPCRunnerOption {
+func WithNativeProviderPath(p string) SharedProviderOption {
 	return func(sr *SharedProvider) {
 		sr.nativeProviderPath = p
 	}
@@ -125,15 +124,22 @@ func WithNativeProviderPath(p string) SharedGRPCRunnerOption {
 
 // WithNativeProviderName configures the Terraform provider name
 // for the runner.
-func WithNativeProviderName(n string) SharedGRPCRunnerOption {
+func WithNativeProviderName(n string) SharedProviderOption {
 	return func(sr *SharedProvider) {
 		sr.nativeProviderName = n
 	}
 }
 
+// WithNativeProviderLogger configures the logger for the runner.
+func WithNativeProviderLogger(logger logging.Logger) SharedProviderOption {
+	return func(sr *SharedProvider) {
+		sr.logger = logger
+	}
+}
+
 // NewSharedProvider instantiates a SharedProvider runner with an
 // OS executor using the supplied options.
-func NewSharedProvider(opts ...SharedGRPCRunnerOption) *SharedProvider {
+func NewSharedProvider(opts ...SharedProviderOption) *SharedProvider {
 	sr := &SharedProvider{
 		protocolVersion: defaultProtocolVersion,
 		executor:        exec.New(),
@@ -204,12 +210,6 @@ func (sr *SharedProvider) Start() (string, error) { //nolint:gocyclo
 			log.Info("Native Terraform provider process error", "error", err)
 			errCh <- err
 		case <-sr.stopCh:
-			defer func() {
-				// we have observed a panic in k8s.io/utils/exec.Cmd.Stop()
-				if r := recover(); r != nil {
-					sr.logger.Info("Recovered from a panic in SharedProvider.Stop: %v", r)
-				}
-			}()
 			cmd.Stop()
 		}
 	}()

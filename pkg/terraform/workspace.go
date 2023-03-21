@@ -16,9 +16,11 @@ package terraform
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pkg/errors"
@@ -34,6 +36,8 @@ import (
 
 const (
 	defaultAsyncTimeout = 1 * time.Hour
+	envReattachConfig   = "TF_REATTACH_PROVIDERS"
+	fmtEnv              = "%s=%s"
 )
 
 // WorkspaceOption allows you to configure Workspace objects.
@@ -67,9 +71,18 @@ func WithAferoFs(fs afero.Fs) WorkspaceOption {
 	}
 }
 
+// WithFilterFn configures the debug log sensitive information filtering func.
 func WithFilterFn(filterFn func(string) string) WorkspaceOption {
 	return func(w *Workspace) {
 		w.filterFn = filterFn
+	}
+}
+
+// WithProviderInUse configures an InUse for keeping track of
+// the shared provider InUse by this Terraform workspace.
+func WithProviderInUse(providerInUse InUse) WorkspaceOption {
+	return func(w *Workspace) {
+		w.providerInUse = providerInUse
 	}
 }
 
@@ -81,6 +94,8 @@ func NewWorkspace(dir string, opts ...WorkspaceOption) *Workspace {
 		dir:           dir,
 		logger:        logging.NewNopLogger(),
 		fs:            afero.Afero{Fs: afero.NewOsFs()},
+		providerInUse: noopInUse{},
+		mu:            &sync.Mutex{},
 	}
 	for _, f := range opts {
 		f(w)
@@ -97,6 +112,10 @@ type CallbackFn func(error, context.Context) error
 type Workspace struct {
 	// LastOperation contains information about the last operation performed.
 	LastOperation *Operation
+	// ProviderHandle is the handle of the associated native Terraform provider
+	// computed from the generated provider resource configuration block
+	// of the Terraform workspace.
+	ProviderHandle ProviderHandle
 
 	dir string
 	env []string
@@ -105,8 +124,25 @@ type Workspace struct {
 	executor      k8sExec.Interface
 	providerInUse InUse
 	fs            afero.Afero
+	mu            *sync.Mutex
 
 	filterFn func(string) string
+}
+
+func (w *Workspace) UseSharedProvider(inuse InUse, attachmentConfig string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	// remove existing reattach configs
+	env := make([]string, 0, len(w.env))
+	prefix := fmt.Sprintf(fmtEnv, envReattachConfig, "")
+	for _, e := range w.env {
+		if !strings.HasPrefix(e, prefix) {
+			env = append(env, e)
+		}
+	}
+	env = append(env, prefix+attachmentConfig)
+	w.env = env
+	w.providerInUse = inuse
 }
 
 // ApplyAsync makes a terraform apply call without blocking and calls the given
@@ -289,9 +325,10 @@ func (w *Workspace) runTF(ctx context.Context, execMode metrics.ExecMode, args .
 	if len(args) < 1 {
 		return nil, errors.New("args cannot be empty")
 	}
-	if err := w.providerInUse.Increment(); err != nil {
-		return nil, errors.Wrap(err, "cannot increment in-use counter for the shared provider")
-	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.logger.Debug("Running terraform", "args", args)
+	w.providerInUse.Increment()
 	defer w.providerInUse.Decrement()
 	cmd := w.executor.CommandContext(ctx, "terraform", args...)
 	cmd.SetEnv(append(os.Environ(), w.env...))

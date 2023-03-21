@@ -48,8 +48,8 @@ func TestStartSharedServer(t *testing.T) {
 		},
 		"SuccessfullyStarted": {
 			args: args{
-				runner: NewSharedProvider(logging.NewNopLogger(), testPath, testName, WithNativeProviderArgs(testArgs...),
-					WithNativeProviderExecutor(newExecutorWithStoutPipe(testReattachConfig1, nil))),
+				runner: NewSharedProvider(WithNativeProviderLogger(logging.NewNopLogger()), WithNativeProviderPath(testPath),
+					WithNativeProviderName(testName), WithNativeProviderArgs(testArgs...), WithNativeProviderExecutor(newExecutorWithStoutPipe(testReattachConfig1, nil))),
 			},
 			want: want{
 				reattachConfig: fmt.Sprintf(`{"provider-test":{"Protocol":"grpc","ProtocolVersion":5,"Pid":%d,"Test": true,"Addr":{"Network": "unix","String": "test1"}}}`, os.Getpid()),
@@ -71,8 +71,8 @@ func TestStartSharedServer(t *testing.T) {
 		},
 		"NativeProviderError": {
 			args: args{
-				runner: NewSharedProvider(logging.NewNopLogger(), testPath, testName,
-					WithNativeProviderExecutor(newExecutorWithStoutPipe(testReattachConfig1, testErr))),
+				runner: NewSharedProvider(WithNativeProviderLogger(logging.NewNopLogger()), WithNativeProviderPath(testPath),
+					WithNativeProviderName(testName), WithNativeProviderArgs(testArgs...), WithNativeProviderExecutor(newExecutorWithStoutPipe(testReattachConfig1, testErr))),
 			},
 			want: want{
 				err: testErr,
@@ -102,7 +102,7 @@ func TestStartSharedServer(t *testing.T) {
 			if err != nil {
 				return
 			}
-			if diff := cmp.Diff(reattachConfig, tt.want.reattachConfig); diff != "" {
+			if diff := cmp.Diff(tt.want.reattachConfig, reattachConfig); diff != "" {
 				t.Errorf("\n%s\nStartSharedServer(): -want reattachConfig, +got reattachConfig:\n%s", name, diff)
 			}
 		})

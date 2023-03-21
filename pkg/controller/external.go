@@ -32,6 +32,7 @@ const (
 	errApply             = "cannot apply"
 	errDestroy           = "cannot destroy"
 	errStatusUpdate      = "cannot update status of custom resource"
+	errScheduleProvider  = "cannot schedule native Terraform provider process"
 )
 
 // Option allows you to configure Connector.
@@ -46,6 +47,14 @@ func WithCallbackProvider(ac CallbackProvider) Option {
 	}
 }
 
+// WithProviderScheduler sets the native Terraform provider scheduler to be used
+// by a Connector.
+func WithProviderScheduler(s terraform.ProviderScheduler) Option {
+	return func(c *Connector) {
+		c.providerScheduler = s
+	}
+}
+
 // NewConnector returns a new Connector object.
 func NewConnector(kube client.Client, ws Store, sf terraform.SetupFn, cfg *config.Resource, opts ...Option) *Connector {
 	c := &Connector{
@@ -53,6 +62,7 @@ func NewConnector(kube client.Client, ws Store, sf terraform.SetupFn, cfg *confi
 		getTerraformSetup: sf,
 		store:             ws,
 		config:            cfg,
+		providerScheduler: terraform.NewNoOpProviderScheduler(),
 	}
 	for _, f := range opts {
 		f(c)
@@ -68,6 +78,8 @@ type Connector struct {
 	getTerraformSetup terraform.SetupFn
 	config            *config.Resource
 	callback          CallbackProvider
+	providerScheduler terraform.ProviderScheduler
+	providerHandle    terraform.ProviderHandle
 }
 
 // Connect makes sure the underlying client is ready to issue requests to the
@@ -82,17 +94,43 @@ func (c *Connector) Connect(ctx context.Context, mg xpresource.Managed) (managed
 	if err != nil {
 		return nil, errors.Wrap(err, errGetTerraformSetup)
 	}
+	if ts.Scheduler != nil {
+		c.providerScheduler = ts.Scheduler
+	}
 
-	tf, err := c.store.Workspace(ctx, &APISecretClient{kube: c.kube}, tr, ts, c.config)
+	ws, err := c.store.Workspace(ctx, &APISecretClient{kube: c.kube}, tr, ts, c.config)
 	if err != nil {
 		return nil, errors.Wrap(err, errGetWorkspace)
 	}
-
+	if err := c.scheduleProvider(ws); err != nil {
+		return nil, errors.Wrap(err, errScheduleProvider)
+	}
 	return &external{
-		workspace: tf,
+		workspace: ws,
 		config:    c.config,
 		callback:  c.callback,
 	}, nil
+}
+
+func (c *Connector) scheduleProvider(ws *terraform.Workspace) error {
+	if c.providerScheduler == nil || ws == nil {
+		return nil
+	}
+	inuse, attachmentConfig, err := c.providerScheduler.Start(ws.ProviderHandle)
+	if err != nil {
+		return errors.Wrap(err, "cannot schedule a shared provider for the workspace")
+	}
+	ws.UseSharedProvider(inuse, attachmentConfig)
+	c.providerHandle = ws.ProviderHandle
+	return nil
+}
+
+// Disconnect releases any resources held by the Connector.
+func (c *Connector) Disconnect(_ context.Context) error {
+	if c.providerScheduler == nil {
+		return nil
+	}
+	return errors.Wrap(c.providerScheduler.Stop(c.providerHandle), "cannot stop the shared provider for the workspace")
 }
 
 type external struct {

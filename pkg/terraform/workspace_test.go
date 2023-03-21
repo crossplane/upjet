@@ -98,7 +98,7 @@ func TestWorkspaceApply(t *testing.T) {
 		"Success": {
 			args: args{
 				w: NewWorkspace(directory, WithExecutor(&testingexec.FakeExec{DisableScripts: true}), WithAferoFs(fs),
-					WithFilterFn(filterFn)),
+					WithFilterFn(filterFn), WithProviderInUse(noopInUse{})),
 			},
 			want: want{
 				r: ApplyResult{
@@ -109,7 +109,7 @@ func TestWorkspaceApply(t *testing.T) {
 		"Failure": {
 			args: args{
 				w: NewWorkspace(directory, WithExecutor(newFakeExec(errBoom.Error(), errBoom)), WithAferoFs(fs),
-					WithFilterFn(filterFn)),
+					WithFilterFn(filterFn), WithProviderInUse(noopInUse{})),
 			},
 			want: want{
 				err: tferrors.NewApplyFailed([]byte(errBoom.Error())),
