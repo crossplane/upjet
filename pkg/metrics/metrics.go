@@ -25,28 +25,6 @@ const (
 	promSysResource = "resource"
 )
 
-// ExecMode is the Terraform CLI execution mode label
-type ExecMode int
-
-const (
-	// ModeSync represents the synchronous execution mode
-	ModeSync ExecMode = iota
-	// ModeASync represents the asynchronous execution mode
-	ModeASync
-)
-
-// String converts an execMode to string
-func (em ExecMode) String() string {
-	switch em {
-	case ModeSync:
-		return "sync"
-	case ModeASync:
-		return "async"
-	default:
-		return "unknown"
-	}
-}
-
 var (
 	// CLITime is the Terraform CLI execution times histogram.
 	CLITime = prometheus.NewHistogramVec(prometheus.HistogramOpts{

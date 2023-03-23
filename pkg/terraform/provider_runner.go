@@ -165,6 +165,7 @@ func (sr *SharedProvider) Start() (string, error) { //nolint:gocyclo
 		log.Debug("Shared gRPC server is running...", "reattachConfig", sr.reattachConfig)
 		return sr.reattachConfig, nil
 	}
+	log.Debug("Provider runner not yet started. Will fork a new native provider.")
 	errCh := make(chan error, 1)
 	reattachCh := make(chan string, 1)
 	sr.stopCh = make(chan bool, 1)
@@ -189,6 +190,7 @@ func (sr *SharedProvider) Start() (string, error) { //nolint:gocyclo
 			errCh <- err
 			return
 		}
+		log.Debug("Forked new native provider.")
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
 			t := scanner.Text()
@@ -211,6 +213,7 @@ func (sr *SharedProvider) Start() (string, error) { //nolint:gocyclo
 			errCh <- err
 		case <-sr.stopCh:
 			cmd.Stop()
+			log.Debug("Stopped the provider runner.")
 		}
 	}()
 
@@ -229,6 +232,7 @@ func (sr *SharedProvider) Start() (string, error) { //nolint:gocyclo
 func (sr *SharedProvider) Stop() error {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
+	sr.logger.Debug("Attempting to stop the provider runner.")
 	if sr.stopCh == nil {
 		return errors.New("shared provider process not started yet")
 	}

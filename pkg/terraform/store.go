@@ -86,6 +86,10 @@ func getSortedKeyValuePairs(parent string, m map[string]any) []string {
 				cArr = append(cArr, getSortedKeyValuePairs(fmt.Sprintf("%s%s[%d].", parent, k, i), e)...)
 			}
 			result = append(result, fmt.Sprintf("%q:%q", parent+k, strings.Join(cArr, ",")))
+		case *string:
+			if t != nil {
+				result = append(result, fmt.Sprintf("%q:%q", parent+k, *t))
+			}
 		default:
 			result = append(result, fmt.Sprintf("%q:%q", parent+k, t))
 		}
@@ -240,7 +244,7 @@ func (ws *WorkspaceStore) Workspace(ctx context.Context, c resource.SecretClient
 		return nil, errors.Wrap(err, "cannot write main tf file")
 	}
 	if isNeedProviderUpgrade {
-		out, err := w.runTF(ctx, metrics.ModeSync, "init", "-upgrade", "-input=false")
+		out, err := w.runTF(ctx, ModeSync, "init", "-upgrade", "-input=false")
 		w.logger.Debug("init -upgrade ended", "out", ts.filterSensitiveInformation(string(out)))
 		if err != nil {
 			return w, errors.Wrapf(err, "cannot upgrade workspace: %s", ts.filterSensitiveInformation(string(out)))
@@ -257,7 +261,7 @@ func (ws *WorkspaceStore) Workspace(ctx context.Context, c resource.SecretClient
 	if !os.IsNotExist(err) {
 		return w, nil
 	}
-	out, err := w.runTF(ctx, metrics.ModeSync, "init", "-input=false")
+	out, err := w.runTF(ctx, ModeSync, "init", "-input=false")
 	w.logger.Debug("init ended", "out", ts.filterSensitiveInformation(string(out)))
 	return w, errors.Wrapf(err, "cannot init workspace: %s", ts.filterSensitiveInformation(string(out)))
 }
@@ -279,7 +283,7 @@ func (ws *WorkspaceStore) Remove(obj xpresource.Object) error {
 }
 
 func (ws *WorkspaceStore) initMetrics() {
-	for _, mode := range []metrics.ExecMode{metrics.ModeSync, metrics.ModeASync} {
+	for _, mode := range []ExecMode{ModeSync, ModeASync} {
 		for _, subcommand := range []string{"init", "apply", "destroy", "plan"} {
 			metrics.CLIExecutions.WithLabelValues(subcommand, mode.String()).Set(0)
 		}

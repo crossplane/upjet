@@ -215,7 +215,7 @@ func NewWorkspaceProviderScheduler(l logging.Logger, opts ...SharedProviderOptio
 }
 
 func (s *WorkspaceProviderScheduler) Start(h ProviderHandle) (InUse, string, error) {
-	s.logger.Debug("Starting workspace scoped shared provider runner.", "handle", h)
+	s.logger.Debug("Starting workspace scoped provider runner.", "handle", h)
 	reattachConfig, err := s.runner.Start()
 	return s.inUse, reattachConfig, errors.Wrap(err, "cannot start a workspace provider runner")
 }
