@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"sync"
 
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
@@ -25,16 +26,22 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	ctrl "sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/upbound/upjet/pkg/resource"
 	"github.com/upbound/upjet/pkg/terraform"
 )
 
 const (
-	errGet = "cannot get resource"
+	errGetFmt          = "cannot get resource %s/%s after an async %s"
+	errUpdateStatusFmt = "cannot update status of resource %s/%s after an async %s"
 )
+
+var _ CallbackProvider = &APICallbacks{}
 
 // APISecretClient is a client for getting k8s secrets
 type APISecretClient struct {
@@ -67,39 +74,96 @@ func NewAPICallbacks(m ctrl.Manager, of xpresource.ManagedKind) *APICallbacks {
 	return &APICallbacks{
 		kube:           m.GetClient(),
 		newTerraformed: nt,
+		EventHandler: &eventHandler{
+			mu:          &sync.Mutex{},
+			rateLimiter: workqueue.DefaultControllerRateLimiter(),
+		},
 	}
 }
 
 // APICallbacks providers callbacks that work on API resources.
 type APICallbacks struct {
+	EventHandler *eventHandler
+
 	kube           client.Client
 	newTerraformed func() resource.Terraformed
 }
 
-// Apply makes sure the error is saved in async operation condition.
-func (ac *APICallbacks) Apply(name string) terraform.CallbackFn {
+func (ac *APICallbacks) callbackFn(name, op string) terraform.CallbackFn {
 	return func(err error, ctx context.Context) error {
 		nn := types.NamespacedName{Name: name}
 		tr := ac.newTerraformed()
 		if kErr := ac.kube.Get(ctx, nn, tr); kErr != nil {
-			return errors.Wrap(kErr, errGet)
+			return errors.Wrapf(kErr, errGetFmt, tr.GetObjectKind().GroupVersionKind().String(), name, op)
 		}
 		tr.SetConditions(resource.LastAsyncOperationCondition(err))
 		tr.SetConditions(resource.AsyncOperationFinishedCondition())
-		return errors.Wrap(ac.kube.Status().Update(ctx, tr), errStatusUpdate)
+		return errors.Wrapf(ac.kube.Status().Update(ctx, tr), errUpdateStatusFmt, tr.GetObjectKind().GroupVersionKind().String(), name, op)
+	}
+}
+
+// Create makes sure the error is saved in async operation condition.
+func (ac *APICallbacks) Create(name string) terraform.CallbackFn {
+	return ac.callbackFn(name, "create")
+}
+
+// Update makes sure the error is saved in async operation condition.
+func (ac *APICallbacks) Update(name string) terraform.CallbackFn {
+	return func(err error, ctx context.Context) error {
+		cErr := ac.callbackFn(name, "update")(err, ctx)
+		switch {
+		case err != nil:
+			ac.EventHandler.requestReconcile(name)
+		default:
+			ac.EventHandler.rateLimiter.Forget(reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name: name,
+				},
+			})
+		}
+		return cErr
 	}
 }
 
 // Destroy makes sure the error is saved in async operation condition.
 func (ac *APICallbacks) Destroy(name string) terraform.CallbackFn {
-	return func(err error, ctx context.Context) error {
-		nn := types.NamespacedName{Name: name}
-		tr := ac.newTerraformed()
-		if kErr := ac.kube.Get(ctx, nn, tr); kErr != nil {
-			return errors.Wrap(kErr, errGet)
-		}
-		tr.SetConditions(resource.LastAsyncOperationCondition(err))
-		tr.SetConditions(resource.AsyncOperationFinishedCondition())
-		return errors.Wrap(ac.kube.Status().Update(ctx, tr), errStatusUpdate)
+	return ac.callbackFn(name, "destroy")
+}
+
+type eventHandler struct {
+	queue       workqueue.RateLimitingInterface
+	rateLimiter workqueue.RateLimiter
+	mu          *sync.Mutex
+}
+
+func (e *eventHandler) requestReconcile(name string) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.queue == nil {
+		return false
 	}
+	item := reconcile.Request{
+		NamespacedName: types.NamespacedName{
+			Name: name,
+		},
+	}
+	e.queue.AddAfter(item, e.rateLimiter.When(item))
+	return true
+}
+
+func (e *eventHandler) Create(_ context.Context, _ event.CreateEvent, limitingInterface workqueue.RateLimitingInterface) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.queue == nil {
+		e.queue = limitingInterface
+	}
+}
+
+func (e *eventHandler) Update(_ context.Context, _ event.UpdateEvent, _ workqueue.RateLimitingInterface) {
+}
+
+func (e *eventHandler) Delete(_ context.Context, _ event.DeleteEvent, _ workqueue.RateLimitingInterface) {
+}
+
+func (e *eventHandler) Generic(_ context.Context, _ event.GenericEvent, _ workqueue.RateLimitingInterface) {
 }

@@ -34,7 +34,7 @@ import (
 	tjerrors "github.com/upbound/upjet/pkg/terraform/errors"
 )
 
-func TestAPICallbacks_Apply(t *testing.T) {
+func TestAPICallbacksCreate(t *testing.T) {
 	type args struct {
 		mgr ctrl.Manager
 		mg  xpresource.ManagedKind
@@ -48,7 +48,7 @@ func TestAPICallbacks_Apply(t *testing.T) {
 		args
 		want
 	}{
-		"ApplyOperationFailed": {
+		"CreateOperationFailed": {
 			reason: "It should update the condition with error if async apply failed",
 			args: args{
 				mg: xpresource.ManagedKind(xpfake.GVK(&fake.Terraformed{})),
@@ -58,7 +58,7 @@ func TestAPICallbacks_Apply(t *testing.T) {
 						MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 							got := obj.(resource.Terraformed).GetCondition(resource.TypeLastAsyncOperation)
 							if diff := cmp.Diff(resource.LastAsyncOperationCondition(tjerrors.NewApplyFailed(nil)), got); diff != "" {
-								t.Errorf("\nApply(...): -want error, +got error:\n%s", diff)
+								t.Errorf("\nCreate(...): -want error, +got error:\n%s", diff)
 							}
 							return nil
 						},
@@ -68,7 +68,7 @@ func TestAPICallbacks_Apply(t *testing.T) {
 				err: tjerrors.NewApplyFailed(nil),
 			},
 		},
-		"ApplyOperationSucceeded": {
+		"CreateOperationSucceeded": {
 			reason: "It should update the condition with success if the apply operation does not report error",
 			args: args{
 				mg: xpresource.ManagedKind(xpfake.GVK(&fake.Terraformed{})),
@@ -78,7 +78,7 @@ func TestAPICallbacks_Apply(t *testing.T) {
 						MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 							got := obj.(resource.Terraformed).GetCondition(resource.TypeLastAsyncOperation)
 							if diff := cmp.Diff(resource.LastAsyncOperationCondition(nil), got); diff != "" {
-								t.Errorf("\nApply(...): -want error, +got error:\n%s", diff)
+								t.Errorf("\nCreate(...): -want error, +got error:\n%s", diff)
 							}
 							return nil
 						},
@@ -101,16 +101,98 @@ func TestAPICallbacks_Apply(t *testing.T) {
 				},
 			},
 			want: want{
-				err: errors.Wrap(errBoom, errGet),
+				err: errors.Wrapf(errBoom, errGetFmt, "", ", Kind=/name", "create"),
 			},
 		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			e := NewAPICallbacks(tc.args.mgr, tc.args.mg)
-			err := e.Apply("name")(tc.args.err, context.TODO())
+			err := e.Create("name")(tc.args.err, context.TODO())
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
-				t.Errorf("\n%s\nApply(...): -want error, +got error:\n%s", tc.reason, diff)
+				t.Errorf("\n%s\nCreate(...): -want error, +got error:\n%s", tc.reason, diff)
+			}
+		})
+	}
+}
+
+func TestAPICallbacksUpdate(t *testing.T) {
+	type args struct {
+		mgr ctrl.Manager
+		mg  xpresource.ManagedKind
+		err error
+	}
+	type want struct {
+		err error
+	}
+	cases := map[string]struct {
+		reason string
+		args
+		want
+	}{
+		"UpdateOperationFailed": {
+			reason: "It should update the condition with error if async apply failed",
+			args: args{
+				mg: xpresource.ManagedKind(xpfake.GVK(&fake.Terraformed{})),
+				mgr: &xpfake.Manager{
+					Client: &test.MockClient{
+						MockGet: test.NewMockGetFn(nil),
+						MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
+							got := obj.(resource.Terraformed).GetCondition(resource.TypeLastAsyncOperation)
+							if diff := cmp.Diff(resource.LastAsyncOperationCondition(tjerrors.NewApplyFailed(nil)), got); diff != "" {
+								t.Errorf("\nUpdate(...): -want error, +got error:\n%s", diff)
+							}
+							return nil
+						},
+					},
+					Scheme: xpfake.SchemeWith(&fake.Terraformed{}),
+				},
+				err: tjerrors.NewApplyFailed(nil),
+			},
+		},
+		"ApplyOperationSucceeded": {
+			reason: "It should update the condition with success if the apply operation does not report error",
+			args: args{
+				mg: xpresource.ManagedKind(xpfake.GVK(&fake.Terraformed{})),
+				mgr: &xpfake.Manager{
+					Client: &test.MockClient{
+						MockGet: test.NewMockGetFn(nil),
+						MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
+							got := obj.(resource.Terraformed).GetCondition(resource.TypeLastAsyncOperation)
+							if diff := cmp.Diff(resource.LastAsyncOperationCondition(nil), got); diff != "" {
+								t.Errorf("\nUpdate(...): -want error, +got error:\n%s", diff)
+							}
+							return nil
+						},
+					},
+					Scheme: xpfake.SchemeWith(&fake.Terraformed{}),
+				},
+			},
+		},
+		"CannotGet": {
+			reason: "It should return error if it cannot get the resource to update",
+			args: args{
+				mg: xpresource.ManagedKind(xpfake.GVK(&fake.Terraformed{})),
+				mgr: &xpfake.Manager{
+					Client: &test.MockClient{
+						MockGet: func(_ context.Context, _ client.ObjectKey, _ client.Object) error {
+							return errBoom
+						},
+					},
+					Scheme: xpfake.SchemeWith(&fake.Terraformed{}),
+				},
+			},
+			want: want{
+				err: errors.Wrapf(errBoom, errGetFmt, "", ", Kind=/name", "update"),
+			},
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			e := NewAPICallbacks(tc.args.mgr, tc.args.mg)
+			err := e.Update("name")(tc.args.err, context.TODO())
+			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
+				t.Errorf("\n%s\nUpdate(...): -want error, +got error:\n%s", tc.reason, diff)
 			}
 		})
 	}
@@ -183,7 +265,7 @@ func TestAPICallbacks_Destroy(t *testing.T) {
 				},
 			},
 			want: want{
-				err: errors.Wrap(errBoom, errGet),
+				err: errors.Wrapf(errBoom, errGetFmt, "", ", Kind=/name", "destroy"),
 			},
 		},
 	}
