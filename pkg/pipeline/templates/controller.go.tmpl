@@ -54,6 +54,7 @@ func Setup(mgr ctrl.Manager, o tjcontroller.Options) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		Named(name).
 		WithOptions(o.ForControllerRuntime()).
+		WithEventFilter(xpresource.DesiredStateChanged()).
 		For(&{{ .TypePackageAlias }}{{ .CRD.Kind }}{}).
 		Complete(ratelimiter.NewReconciler(name, r, o.GlobalRateLimiter))
 }
