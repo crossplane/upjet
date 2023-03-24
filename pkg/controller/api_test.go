@@ -55,6 +55,15 @@ func TestAPICallbacks_Apply(t *testing.T) {
 				mgr: &xpfake.Manager{
 					Client: &test.MockClient{
 						MockGet: test.NewMockGetFn(nil),
+						MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+							got1 := obj.(resource.Terraformed).GetAnnotations()[annotationKeyAsyncOperationFinished]
+							got2 := obj.(resource.Terraformed).GetAnnotations()[annotationKeyLastAsyncOperation]
+
+							if got1 == "" || got2 == "" {
+								t.Errorf("Apply(...): want annotations, got none")
+							}
+							return nil
+						},
 						MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 							got := obj.(resource.Terraformed).GetCondition(resource.TypeLastAsyncOperation)
 							if diff := cmp.Diff(resource.LastAsyncOperationCondition(tjerrors.NewApplyFailed(nil)), got); diff != "" {
@@ -75,6 +84,15 @@ func TestAPICallbacks_Apply(t *testing.T) {
 				mgr: &xpfake.Manager{
 					Client: &test.MockClient{
 						MockGet: test.NewMockGetFn(nil),
+						MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+							got1 := obj.(resource.Terraformed).GetAnnotations()[annotationKeyAsyncOperationFinished]
+							got2 := obj.(resource.Terraformed).GetAnnotations()[annotationKeyLastAsyncOperation]
+
+							if got1 == "" || got2 == "" {
+								t.Errorf("Apply(...): want annotations, got none")
+							}
+							return nil
+						},
 						MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 							got := obj.(resource.Terraformed).GetCondition(resource.TypeLastAsyncOperation)
 							if diff := cmp.Diff(resource.LastAsyncOperationCondition(nil), got); diff != "" {
@@ -137,6 +155,15 @@ func TestAPICallbacks_Destroy(t *testing.T) {
 				mgr: &xpfake.Manager{
 					Client: &test.MockClient{
 						MockGet: test.NewMockGetFn(nil),
+						MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+							got1 := obj.(resource.Terraformed).GetAnnotations()[annotationKeyAsyncOperationFinished]
+							got2 := obj.(resource.Terraformed).GetAnnotations()[annotationKeyLastAsyncOperation]
+
+							if got1 == "" || got2 == "" {
+								t.Errorf("Apply(...): want annotations, got none")
+							}
+							return nil
+						},
 						MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 							got := obj.(resource.Terraformed).GetCondition(resource.TypeLastAsyncOperation)
 							if diff := cmp.Diff(resource.LastAsyncOperationCondition(tjerrors.NewDestroyFailed(nil)), got); diff != "" {
@@ -157,6 +184,15 @@ func TestAPICallbacks_Destroy(t *testing.T) {
 				mgr: &xpfake.Manager{
 					Client: &test.MockClient{
 						MockGet: test.NewMockGetFn(nil),
+						MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+							got1 := obj.(resource.Terraformed).GetAnnotations()[annotationKeyAsyncOperationFinished]
+							got2 := obj.(resource.Terraformed).GetAnnotations()[annotationKeyLastAsyncOperation]
+
+							if got1 == "" || got2 == "" {
+								t.Errorf("Apply(...): want annotations, got none")
+							}
+							return nil
+						},
 						MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 							got := obj.(resource.Terraformed).GetCondition(resource.TypeLastAsyncOperation)
 							if diff := cmp.Diff(resource.LastAsyncOperationCondition(nil), got); diff != "" {

@@ -20,6 +20,7 @@ import (
 	"context"
 
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
@@ -34,6 +35,11 @@ import (
 
 const (
 	errGet = "cannot get resource"
+)
+
+const (
+	annotationKeyLastAsyncOperation     = "upjet.upbound.io/last-async-operation"
+	annotationKeyAsyncOperationFinished = "upjet.upbound.io/async-operation-finished"
 )
 
 // APISecretClient is a client for getting k8s secrets
@@ -86,7 +92,23 @@ func (ac *APICallbacks) Apply(name string) terraform.CallbackFn {
 		}
 		tr.SetConditions(resource.LastAsyncOperationCondition(err))
 		tr.SetConditions(resource.AsyncOperationFinishedCondition())
-		return errors.Wrap(ac.kube.Status().Update(ctx, tr), errStatusUpdate)
+
+		if err = ac.kube.Status().Update(ctx, tr); err != nil {
+			return errors.Wrap(err, errStatusUpdate)
+		}
+
+		// Note(turkenh): After consuming DesiredStateChanged predicate from
+		// crossplane-runtime, updates to the status will no longer trigger a
+		// reconciliation which was assumed above. To continue triggering a
+		// reconciliation after an async operation completes, we need to modify
+		// the desired state and annotations is the best fit here. So, we are
+		// setting the last transition timestamps and put to annotations so that
+		// a change in the annotations will trigger a reconciliation.
+		// We intentionally get the timestamp from the resource
+		// conditions back since it is only changed after a transition.
+		meta.AddAnnotations(tr, map[string]string{annotationKeyLastAsyncOperation: tr.GetCondition(resource.TypeLastAsyncOperation).LastTransitionTime.String()})
+		meta.AddAnnotations(tr, map[string]string{annotationKeyAsyncOperationFinished: tr.GetCondition(resource.TypeAsyncOperation).LastTransitionTime.String()})
+		return errors.Wrap(ac.kube.Update(ctx, tr), errUpdate)
 	}
 }
 
@@ -100,6 +122,22 @@ func (ac *APICallbacks) Destroy(name string) terraform.CallbackFn {
 		}
 		tr.SetConditions(resource.LastAsyncOperationCondition(err))
 		tr.SetConditions(resource.AsyncOperationFinishedCondition())
-		return errors.Wrap(ac.kube.Status().Update(ctx, tr), errStatusUpdate)
+
+		if err = ac.kube.Status().Update(ctx, tr); err != nil {
+			return errors.Wrap(err, errStatusUpdate)
+		}
+
+		// Note(turkenh): After consuming DesiredStateChanged predicate from
+		// crossplane-runtime, updates to the status will no longer trigger a
+		// reconciliation which was assumed above. To continue triggering a
+		// reconciliation after an async operation completes, we need to modify
+		// the desired state and annotations is the best fit here. So, we are
+		// setting the last transition timestamps and put to annotations so that
+		// a change in the annotations will trigger a reconciliation.
+		// We intentionally get the timestamp from the resource
+		// conditions back since it is only changed after a transition.
+		meta.AddAnnotations(tr, map[string]string{annotationKeyLastAsyncOperation: tr.GetCondition(resource.TypeLastAsyncOperation).LastTransitionTime.String()})
+		meta.AddAnnotations(tr, map[string]string{annotationKeyAsyncOperationFinished: tr.GetCondition(resource.TypeAsyncOperation).LastTransitionTime.String()})
+		return errors.Wrap(ac.kube.Update(ctx, tr), errUpdate)
 	}
 }

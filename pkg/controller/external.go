@@ -32,6 +32,7 @@ const (
 	errApply             = "cannot apply"
 	errDestroy           = "cannot destroy"
 	errStatusUpdate      = "cannot update status of custom resource"
+	errUpdate            = "cannot update custom resource"
 )
 
 // Option allows you to configure Connector.
