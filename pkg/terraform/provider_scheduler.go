@@ -30,7 +30,7 @@ const (
 	// InvalidProviderHandle is an invalid ProviderHandle.
 	InvalidProviderHandle ProviderHandle = ""
 
-	ttlBudget = 0.1
+	ttlMargin = 0.1
 )
 
 // ProviderScheduler represents a shared native plugin process scheduler.
@@ -135,14 +135,14 @@ func NewSharedProviderScheduler(l logging.Logger, ttl int, opts ...SharedProvide
 }
 
 func (s *SharedProviderScheduler) Start(h ProviderHandle) (InUse, string, error) {
-	logger := s.logger.WithValues("handle", h, "ttl", s.ttl, "ttlBudget", ttlBudget)
+	logger := s.logger.WithValues("handle", h, "ttl", s.ttl, "ttlMargin", ttlMargin)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	r := s.runners[h]
 	switch {
 	case r != nil && (r.invocationCount < s.ttl || r.inUse > 0):
-		if r.invocationCount > int(float64(s.ttl)*(1+ttlBudget)) {
+		if r.invocationCount > int(float64(s.ttl)*(1+ttlMargin)) {
 			logger.Debug("Reuse budget has been exceeded. Caller will need to retry.")
 			return nil, "", errors.Errorf("native provider reuse budget has been exceeded: invocationCount: %d, ttl: %d", r.invocationCount, s.ttl)
 		}
