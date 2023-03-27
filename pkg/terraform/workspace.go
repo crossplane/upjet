@@ -16,9 +16,11 @@ package terraform
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pkg/errors"
@@ -34,7 +36,31 @@ import (
 
 const (
 	defaultAsyncTimeout = 1 * time.Hour
+	envReattachConfig   = "TF_REATTACH_PROVIDERS"
+	fmtEnv              = "%s=%s"
 )
+
+// ExecMode is the Terraform CLI execution mode label
+type ExecMode int
+
+const (
+	// ModeSync represents the synchronous execution mode
+	ModeSync ExecMode = iota
+	// ModeASync represents the asynchronous execution mode
+	ModeASync
+)
+
+// String converts an execMode to string
+func (em ExecMode) String() string {
+	switch em {
+	case ModeSync:
+		return "sync"
+	case ModeASync:
+		return "async"
+	default:
+		return "unknown"
+	}
+}
 
 // WorkspaceOption allows you to configure Workspace objects.
 type WorkspaceOption func(*Workspace)
@@ -67,9 +93,18 @@ func WithAferoFs(fs afero.Fs) WorkspaceOption {
 	}
 }
 
+// WithFilterFn configures the debug log sensitive information filtering func.
 func WithFilterFn(filterFn func(string) string) WorkspaceOption {
 	return func(w *Workspace) {
 		w.filterFn = filterFn
+	}
+}
+
+// WithProviderInUse configures an InUse for keeping track of
+// the shared provider InUse by this Terraform workspace.
+func WithProviderInUse(providerInUse InUse) WorkspaceOption {
+	return func(w *Workspace) {
+		w.providerInUse = providerInUse
 	}
 }
 
@@ -81,6 +116,8 @@ func NewWorkspace(dir string, opts ...WorkspaceOption) *Workspace {
 		dir:           dir,
 		logger:        logging.NewNopLogger(),
 		fs:            afero.Afero{Fs: afero.NewOsFs()},
+		providerInUse: noopInUse{},
+		mu:            &sync.Mutex{},
 	}
 	for _, f := range opts {
 		f(w)
@@ -97,15 +134,38 @@ type CallbackFn func(error, context.Context) error
 type Workspace struct {
 	// LastOperation contains information about the last operation performed.
 	LastOperation *Operation
+	// ProviderHandle is the handle of the associated native Terraform provider
+	// computed from the generated provider resource configuration block
+	// of the Terraform workspace.
+	ProviderHandle ProviderHandle
 
 	dir string
 	env []string
 
-	logger   logging.Logger
-	executor k8sExec.Interface
-	fs       afero.Afero
+	logger        logging.Logger
+	executor      k8sExec.Interface
+	providerInUse InUse
+	fs            afero.Afero
+	mu            *sync.Mutex
 
 	filterFn func(string) string
+}
+
+// UseProvider shares a native provider with the receiver Workspace.
+func (w *Workspace) UseProvider(inuse InUse, attachmentConfig string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	// remove existing reattach configs
+	env := make([]string, 0, len(w.env))
+	prefix := fmt.Sprintf(fmtEnv, envReattachConfig, "")
+	for _, e := range w.env {
+		if !strings.HasPrefix(e, prefix) {
+			env = append(env, e)
+		}
+	}
+	env = append(env, prefix+attachmentConfig)
+	w.env = env
+	w.providerInUse = inuse
 }
 
 // ApplyAsync makes a terraform apply call without blocking and calls the given
@@ -115,9 +175,10 @@ func (w *Workspace) ApplyAsync(callback CallbackFn) error {
 		return errors.Errorf("%s operation that started at %s is still running", w.LastOperation.Type, w.LastOperation.StartTime().String())
 	}
 	ctx, cancel := context.WithDeadline(context.TODO(), w.LastOperation.StartTime().Add(defaultAsyncTimeout))
+	w.providerInUse.Increment()
 	go func() {
 		defer cancel()
-		out, err := w.runTF(ctx, metrics.ModeASync, "apply", "-auto-approve", "-input=false", "-lock=false", "-json")
+		out, err := w.runTF(ctx, ModeASync, "apply", "-auto-approve", "-input=false", "-lock=false", "-json")
 		if err != nil {
 			err = tferrors.NewApplyFailed(out)
 		}
@@ -142,7 +203,7 @@ func (w *Workspace) Apply(ctx context.Context) (ApplyResult, error) {
 	if w.LastOperation.IsRunning() {
 		return ApplyResult{}, errors.Errorf("%s operation that started at %s is still running", w.LastOperation.Type, w.LastOperation.StartTime().String())
 	}
-	out, err := w.runTF(ctx, metrics.ModeSync, "apply", "-auto-approve", "-input=false", "-lock=false", "-json")
+	out, err := w.runTF(ctx, ModeSync, "apply", "-auto-approve", "-input=false", "-lock=false", "-json")
 	w.logger.Debug("apply ended", "out", w.filterFn(string(out)))
 	if err != nil {
 		return ApplyResult{}, tferrors.NewApplyFailed(out)
@@ -173,9 +234,10 @@ func (w *Workspace) DestroyAsync(callback CallbackFn) error {
 		return errors.Errorf("%s operation that started at %s is still running", w.LastOperation.Type, w.LastOperation.StartTime().String())
 	}
 	ctx, cancel := context.WithDeadline(context.TODO(), w.LastOperation.StartTime().Add(defaultAsyncTimeout))
+	w.providerInUse.Increment()
 	go func() {
 		defer cancel()
-		out, err := w.runTF(ctx, metrics.ModeASync, "destroy", "-auto-approve", "-input=false", "-lock=false", "-json")
+		out, err := w.runTF(ctx, ModeASync, "destroy", "-auto-approve", "-input=false", "-lock=false", "-json")
 		if err != nil {
 			err = tferrors.NewDestroyFailed(out)
 		}
@@ -195,7 +257,7 @@ func (w *Workspace) Destroy(ctx context.Context) error {
 	if w.LastOperation.IsRunning() {
 		return errors.Errorf("%s operation that started at %s is still running", w.LastOperation.Type, w.LastOperation.StartTime().String())
 	}
-	out, err := w.runTF(ctx, metrics.ModeSync, "destroy", "-auto-approve", "-input=false", "-lock=false", "-json")
+	out, err := w.runTF(ctx, ModeSync, "destroy", "-auto-approve", "-input=false", "-lock=false", "-json")
 	w.logger.Debug("destroy ended", "out", w.filterFn(string(out)))
 	if err != nil {
 		return tferrors.NewDestroyFailed(out)
@@ -221,7 +283,7 @@ func (w *Workspace) Refresh(ctx context.Context) (RefreshResult, error) {
 	case w.LastOperation.IsEnded():
 		defer w.LastOperation.Flush()
 	}
-	out, err := w.runTF(ctx, metrics.ModeSync, "apply", "-refresh-only", "-auto-approve", "-input=false", "-lock=false", "-json")
+	out, err := w.runTF(ctx, ModeSync, "apply", "-refresh-only", "-auto-approve", "-input=false", "-lock=false", "-json")
 	w.logger.Debug("refresh ended", "out", w.filterFn(string(out)))
 	if err != nil {
 		return RefreshResult{}, tferrors.NewRefreshFailed(out)
@@ -253,7 +315,7 @@ func (w *Workspace) Plan(ctx context.Context) (PlanResult, error) {
 	if w.LastOperation.IsRunning() {
 		return PlanResult{}, errors.Errorf("%s operation that started at %s is still running", w.LastOperation.Type, w.LastOperation.StartTime().String())
 	}
-	out, err := w.runTF(ctx, metrics.ModeSync, "plan", "-refresh=false", "-input=false", "-lock=false", "-json")
+	out, err := w.runTF(ctx, ModeSync, "plan", "-refresh=false", "-input=false", "-lock=false", "-json")
 	w.logger.Debug("plan ended", "out", w.filterFn(string(out)))
 	if err != nil {
 		return PlanResult{}, tferrors.NewPlanFailed(out)
@@ -284,10 +346,17 @@ func (w *Workspace) Plan(ctx context.Context) (PlanResult, error) {
 	}, nil
 }
 
-func (w *Workspace) runTF(ctx context.Context, execMode metrics.ExecMode, args ...string) ([]byte, error) {
+func (w *Workspace) runTF(ctx context.Context, execMode ExecMode, args ...string) ([]byte, error) {
 	if len(args) < 1 {
 		return nil, errors.New("args cannot be empty")
 	}
+	w.logger.Debug("Running terraform", "args", args)
+	if execMode == ModeSync {
+		w.providerInUse.Increment()
+	}
+	defer w.providerInUse.Decrement()
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	cmd := w.executor.CommandContext(ctx, "terraform", args...)
 	cmd.SetEnv(append(os.Environ(), w.env...))
 	cmd.SetDir(w.dir)

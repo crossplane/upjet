@@ -1,6 +1,16 @@
-/*
-Copyright 2022 Upbound Inc.
-*/
+// Copyright 2022 Upbound Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 package terraform
 
@@ -23,10 +33,9 @@ const (
 	errFmtTimeout = "timed out after %v while waiting for the reattach configuration string"
 
 	// an example value would be: '{"registry.terraform.io/hashicorp/aws": {"Protocol": "grpc", "ProtocolVersion":5, "Pid":... "Addr":{"Network": "unix","String": "..."}}}'
-	fmtReattachEnv    = `{"%s":{"Protocol":"grpc","ProtocolVersion":%d,"Pid":%d,"Test": true,"Addr":{"Network": "unix","String": "%s"}}}`
-	fmtSetEnv         = "%s=%s"
-	envReattachConfig = "TF_REATTACH_PROVIDERS"
-	envMagicCookie    = "TF_PLUGIN_MAGIC_COOKIE"
+	fmtReattachEnv = `{"%s":{"Protocol":"grpc","ProtocolVersion":%d,"Pid":%d,"Test": true,"Addr":{"Network": "unix","String": "%s"}}}`
+	fmtSetEnv      = "%s=%s"
+	envMagicCookie = "TF_PLUGIN_MAGIC_COOKIE"
 	// Terraform provider plugin expects this magic cookie in its environment
 	// (as the value of key TF_PLUGIN_MAGIC_COOKIE):
 	// https://github.com/hashicorp/terraform/blob/d35bc0531255b496beb5d932f185cbcdb2d61a99/internal/plugin/serve.go#L33
@@ -44,6 +53,7 @@ var (
 // gRPC server mode
 type ProviderRunner interface {
 	Start() (string, error)
+	Stop() error
 }
 
 // NoOpProviderRunner is a no-op ProviderRunner
@@ -59,6 +69,11 @@ func (NoOpProviderRunner) Start() (string, error) {
 	return "", nil
 }
 
+// Stop takes no action
+func (NoOpProviderRunner) Stop() error {
+	return nil
+}
+
 // SharedProvider runs the configured native provider plugin
 // using the supplied command-line args
 type SharedProvider struct {
@@ -71,20 +86,21 @@ type SharedProvider struct {
 	executor           exec.Interface
 	clock              clock.Clock
 	mu                 *sync.Mutex
+	stopCh             chan bool
 }
 
-// SharedGRPCRunnerOption lets you configure the shared gRPC runner.
-type SharedGRPCRunnerOption func(runner *SharedProvider)
+// SharedProviderOption lets you configure the shared gRPC runner.
+type SharedProviderOption func(runner *SharedProvider)
 
 // WithNativeProviderArgs are the arguments to be passed to the native provider
-func WithNativeProviderArgs(args ...string) SharedGRPCRunnerOption {
+func WithNativeProviderArgs(args ...string) SharedProviderOption {
 	return func(sr *SharedProvider) {
 		sr.nativeProviderArgs = args
 	}
 }
 
 // WithNativeProviderExecutor sets the process executor to be used
-func WithNativeProviderExecutor(e exec.Interface) SharedGRPCRunnerOption {
+func WithNativeProviderExecutor(e exec.Interface) SharedProviderOption {
 	return func(sr *SharedProvider) {
 		sr.executor = e
 	}
@@ -92,23 +108,43 @@ func WithNativeProviderExecutor(e exec.Interface) SharedGRPCRunnerOption {
 
 // WithProtocolVersion sets the gRPC protocol version in use between
 // the Terraform CLI and the native provider.
-func WithProtocolVersion(protocolVersion int) SharedGRPCRunnerOption {
+func WithProtocolVersion(protocolVersion int) SharedProviderOption {
 	return func(sr *SharedProvider) {
 		sr.protocolVersion = protocolVersion
 	}
 }
 
-// NewSharedProvider instantiates a SharedProvider with an
-// OS executor using the supplied logger
-func NewSharedProvider(l logging.Logger, nativeProviderPath, nativeProviderName string, opts ...SharedGRPCRunnerOption) *SharedProvider {
+// WithNativeProviderPath configures the Terraform provider executable path
+// for the runner.
+func WithNativeProviderPath(p string) SharedProviderOption {
+	return func(sr *SharedProvider) {
+		sr.nativeProviderPath = p
+	}
+}
+
+// WithNativeProviderName configures the Terraform provider name
+// for the runner.
+func WithNativeProviderName(n string) SharedProviderOption {
+	return func(sr *SharedProvider) {
+		sr.nativeProviderName = n
+	}
+}
+
+// WithNativeProviderLogger configures the logger for the runner.
+func WithNativeProviderLogger(logger logging.Logger) SharedProviderOption {
+	return func(sr *SharedProvider) {
+		sr.logger = logger
+	}
+}
+
+// NewSharedProvider instantiates a SharedProvider runner with an
+// OS executor using the supplied options.
+func NewSharedProvider(opts ...SharedProviderOption) *SharedProvider {
 	sr := &SharedProvider{
-		logger:             l,
-		nativeProviderPath: nativeProviderPath,
-		nativeProviderName: nativeProviderName,
-		protocolVersion:    defaultProtocolVersion,
-		executor:           exec.New(),
-		clock:              clock.RealClock{},
-		mu:                 &sync.Mutex{},
+		protocolVersion: defaultProtocolVersion,
+		executor:        exec.New(),
+		clock:           clock.RealClock{},
+		mu:              &sync.Mutex{},
 	}
 	for _, o := range opts {
 		o(sr)
@@ -129,8 +165,10 @@ func (sr *SharedProvider) Start() (string, error) { //nolint:gocyclo
 		log.Debug("Shared gRPC server is running...", "reattachConfig", sr.reattachConfig)
 		return sr.reattachConfig, nil
 	}
+	log.Debug("Provider runner not yet started. Will fork a new native provider.")
 	errCh := make(chan error, 1)
 	reattachCh := make(chan string, 1)
+	sr.stopCh = make(chan bool, 1)
 
 	go func() {
 		defer close(errCh)
@@ -152,6 +190,7 @@ func (sr *SharedProvider) Start() (string, error) { //nolint:gocyclo
 			errCh <- err
 			return
 		}
+		log.Debug("Forked new native provider.")
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
 			t := scanner.Text()
@@ -162,9 +201,19 @@ func (sr *SharedProvider) Start() (string, error) { //nolint:gocyclo
 			reattachCh <- fmt.Sprintf(fmtReattachEnv, sr.nativeProviderName, sr.protocolVersion, os.Getpid(), matches[1])
 			break
 		}
-		if err := cmd.Wait(); err != nil {
+
+		waitErrCh := make(chan error, 1)
+		go func() {
+			defer close(waitErrCh)
+			waitErrCh <- cmd.Wait()
+		}()
+		select {
+		case err := <-waitErrCh:
 			log.Info("Native Terraform provider process error", "error", err)
 			errCh <- err
+		case <-sr.stopCh:
+			cmd.Stop()
+			log.Debug("Stopped the provider runner.")
 		}
 	}()
 
@@ -177,4 +226,18 @@ func (sr *SharedProvider) Start() (string, error) { //nolint:gocyclo
 	case <-sr.clock.After(reattachTimeout):
 		return "", errors.Errorf(errFmtTimeout, reattachTimeout)
 	}
+}
+
+// Stop attempts to stop a shared gRPC server if it's already running.
+func (sr *SharedProvider) Stop() error {
+	sr.mu.Lock()
+	defer sr.mu.Unlock()
+	sr.logger.Debug("Attempting to stop the provider runner.")
+	if sr.stopCh == nil {
+		return errors.New("shared provider process not started yet")
+	}
+	sr.stopCh <- true
+	close(sr.stopCh)
+	sr.stopCh = nil
+	return nil
 }

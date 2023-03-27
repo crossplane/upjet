@@ -26,6 +26,10 @@ import (
 	"github.com/upbound/upjet/pkg/terraform"
 )
 
+const (
+	testPath = "test/path"
+)
+
 var (
 	errBoom      = errors.New("boom")
 	exampleState = &json.StateV4{
@@ -154,7 +158,7 @@ func TestConnect(t *testing.T) {
 				},
 				store: StoreFns{
 					WorkspaceFn: func(_ context.Context, _ resource.SecretClient, _ resource.Terraformed, _ terraform.Setup, _ *config.Resource) (*terraform.Workspace, error) {
-						return nil, nil
+						return terraform.NewWorkspace(testPath), nil
 					},
 				},
 			},

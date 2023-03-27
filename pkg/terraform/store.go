@@ -16,9 +16,11 @@ package terraform
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -37,10 +39,6 @@ import (
 	"github.com/upbound/upjet/pkg/resource"
 )
 
-const (
-	fmtEnv = "%s=%s"
-)
-
 // SetupFn is a function that returns Terraform setup which contains
 // provider requirement, configuration and Terraform version.
 type SetupFn func(ctx context.Context, client client.Client, mg xpresource.Managed) (Setup, error)
@@ -56,6 +54,48 @@ type ProviderRequirement struct {
 
 // ProviderConfiguration holds the setup configuration body
 type ProviderConfiguration map[string]any
+
+// ToProviderHandle converts a provider configuration to a handle
+// for the provider scheduler.
+func (pc ProviderConfiguration) ToProviderHandle() (ProviderHandle, error) {
+	h := strings.Join(getSortedKeyValuePairs("", pc), ",")
+	hash := sha256.New()
+	if _, err := hash.Write([]byte(h)); err != nil {
+		return InvalidProviderHandle, errors.Wrap(err, "cannot convert provider configuration to scheduler handle")
+	}
+	return ProviderHandle(fmt.Sprintf("%x", hash.Sum(nil))), nil
+}
+
+func getSortedKeyValuePairs(parent string, m map[string]any) []string {
+	result := make([]string, 0, len(m))
+	sortedKeys := make([]string, 0, len(m))
+	for k := range m {
+		sortedKeys = append(sortedKeys, k)
+	}
+	sort.Strings(sortedKeys)
+	for _, k := range sortedKeys {
+		v := m[k]
+		switch t := v.(type) {
+		case []string:
+			result = append(result, fmt.Sprintf("%q:%q", parent+k, strings.Join(t, ",")))
+		case map[string]any:
+			result = append(result, getSortedKeyValuePairs(parent+k+".", t)...)
+		case []map[string]any:
+			cArr := make([]string, 0, len(t))
+			for i, e := range t {
+				cArr = append(cArr, getSortedKeyValuePairs(fmt.Sprintf("%s%s[%d].", parent, k, i), e)...)
+			}
+			result = append(result, fmt.Sprintf("%q:%q", parent+k, strings.Join(cArr, ",")))
+		case *string:
+			if t != nil {
+				result = append(result, fmt.Sprintf("%q:%q", parent+k, *t))
+			}
+		default:
+			result = append(result, fmt.Sprintf("%q:%q", parent+k, t))
+		}
+	}
+	return result
+}
 
 // Setup holds values for the Terraform version and setup
 // requirements and configuration body
@@ -78,6 +118,12 @@ type Setup struct {
 	// not part of the Terraform AWS Provider configuration, so it could be
 	// made available only by this map.
 	ClientMetadata map[string]string
+
+	// Scheduler specifies the provider scheduler to be used for the Terraform
+	// workspace being setup. If not set, no scheduler is configured and
+	// the lifecycle of Terraform provider processes will be managed by
+	// the Terraform CLI.
+	Scheduler ProviderScheduler
 }
 
 // Map returns the Setup object in map form. The initial reason was so that
@@ -105,13 +151,6 @@ func WithFs(fs afero.Fs) WorkspaceStoreOption {
 	}
 }
 
-// WithProviderRunner sets the ProviderRunner to be used.
-func WithProviderRunner(pr ProviderRunner) WorkspaceStoreOption {
-	return func(ws *WorkspaceStore) {
-		ws.providerRunner = pr
-	}
-}
-
 // WithProcessReportInterval enables the upjet.terraform.running_processes
 // metric, which periodically reports the total number of Terraform CLI and
 // Terraform provider processes in the system.
@@ -121,15 +160,23 @@ func WithProcessReportInterval(d time.Duration) WorkspaceStoreOption {
 	}
 }
 
+// WithDisableInit disables `terraform init` invocations in case
+// workspace initialization is not needed (e.g., when using the
+// shared gRPC server runtime).
+func WithDisableInit(disable bool) WorkspaceStoreOption {
+	return func(ws *WorkspaceStore) {
+		ws.disableInit = disable
+	}
+}
+
 // NewWorkspaceStore returns a new WorkspaceStore.
 func NewWorkspaceStore(l logging.Logger, opts ...WorkspaceStoreOption) *WorkspaceStore {
 	ws := &WorkspaceStore{
-		store:          map[types.UID]*Workspace{},
-		logger:         l,
-		mu:             sync.Mutex{},
-		fs:             afero.Afero{Fs: afero.NewOsFs()},
-		executor:       exec.New(),
-		providerRunner: NewNoOpProviderRunner(),
+		store:    map[types.UID]*Workspace{},
+		logger:   l,
+		mu:       sync.Mutex{},
+		fs:       afero.Afero{Fs: afero.NewOsFs()},
+		executor: exec.New(),
 	}
 	for _, f := range opts {
 		f(ws)
@@ -149,11 +196,11 @@ type WorkspaceStore struct {
 	// cause rehashing in some cases.
 	store                 map[types.UID]*Workspace
 	logger                logging.Logger
-	providerRunner        ProviderRunner
 	mu                    sync.Mutex
 	processReportInterval time.Duration
 	fs                    afero.Afero
 	executor              exec.Interface
+	disableInit           bool
 }
 
 // Workspace makes sure the Terraform workspace for the given resource is ready
@@ -184,35 +231,37 @@ func (ws *WorkspaceStore) Workspace(ctx context.Context, c resource.SecretClient
 	if err := fp.EnsureTFState(ctx); err != nil {
 		return nil, errors.Wrap(err, "cannot ensure tfstate file")
 	}
-	isNeedProviderUpgrade, err := fp.needProviderUpgrade()
-	if err != nil {
-		return nil, errors.Wrap(err, "cannot check if a Terraform dependency update is required")
+
+	isNeedProviderUpgrade := false
+	if !ws.disableInit {
+		isNeedProviderUpgrade, err = fp.needProviderUpgrade()
+		if err != nil {
+			return nil, errors.Wrap(err, "cannot check if a Terraform dependency update is required")
+		}
 	}
-	if err := fp.WriteMainTF(); err != nil {
+
+	if w.ProviderHandle, err = fp.WriteMainTF(); err != nil {
 		return nil, errors.Wrap(err, "cannot write main tf file")
 	}
 	if isNeedProviderUpgrade {
-		out, err := w.runTF(ctx, metrics.ModeSync, "init", "-upgrade", "-input=false")
+		out, err := w.runTF(ctx, ModeSync, "init", "-upgrade", "-input=false")
 		w.logger.Debug("init -upgrade ended", "out", ts.filterSensitiveInformation(string(out)))
 		if err != nil {
 			return w, errors.Wrapf(err, "cannot upgrade workspace: %s", ts.filterSensitiveInformation(string(out)))
 		}
 	}
-	attachmentConfig, err := ws.providerRunner.Start()
-	if err != nil {
-		return nil, err
+	if ws.disableInit {
+		return w, nil
 	}
 	_, err = ws.fs.Stat(filepath.Join(dir, ".terraform.lock.hcl"))
 	if xpresource.Ignore(os.IsNotExist, err) != nil {
 		return nil, errors.Wrap(err, "cannot stat init lock file")
 	}
-	w.env = append(w.env, fmt.Sprintf(fmtEnv, envReattachConfig, attachmentConfig))
-
 	// We need to initialize only if the workspace hasn't been initialized yet.
 	if !os.IsNotExist(err) {
 		return w, nil
 	}
-	out, err := w.runTF(ctx, metrics.ModeSync, "init", "-input=false")
+	out, err := w.runTF(ctx, ModeSync, "init", "-input=false")
 	w.logger.Debug("init ended", "out", ts.filterSensitiveInformation(string(out)))
 	return w, errors.Wrapf(err, "cannot init workspace: %s", ts.filterSensitiveInformation(string(out)))
 }
@@ -234,7 +283,7 @@ func (ws *WorkspaceStore) Remove(obj xpresource.Object) error {
 }
 
 func (ws *WorkspaceStore) initMetrics() {
-	for _, mode := range []metrics.ExecMode{metrics.ModeSync, metrics.ModeASync} {
+	for _, mode := range []ExecMode{ModeSync, ModeASync} {
 		for _, subcommand := range []string{"init", "apply", "destroy", "plan"} {
 			metrics.CLIExecutions.WithLabelValues(subcommand, mode.String()).Set(0)
 		}

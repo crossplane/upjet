@@ -26,6 +26,11 @@ type Workspace interface {
 	Plan(context.Context) (terraform.PlanResult, error)
 }
 
+// ProviderSharer shares a native provider process with the receiver.
+type ProviderSharer interface {
+	UseProvider(inuse terraform.InUse, attachmentConfig string)
+}
+
 // Store is where we can get access to the Terraform workspace of given resource.
 type Store interface {
 	Workspace(ctx context.Context, c resource.SecretClient, tr resource.Terraformed, ts terraform.Setup, cfg *config.Resource) (*terraform.Workspace, error)
