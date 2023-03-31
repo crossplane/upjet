@@ -18,7 +18,7 @@ MRs.
 tests. This metric is important because the terraform provider process reaches 
 this consumption value. So, if you use a machine with lower memory, some 
 `OOMKilled` errors may be observed for the provider pod. In short, these values 
-are recommended for memory.
+are the minimum recommendation for memory.
 
 **CPU (Avg.)** represents the average consumption of the CPU. The unit of this 
 metric is the number of cores. 
