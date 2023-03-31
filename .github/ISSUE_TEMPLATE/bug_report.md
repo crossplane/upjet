@@ -1,7 +1,7 @@
 ---
 name: Bug Report
 about: Help us diagnose and fix bugs in Upjet
-labels: bug
+labels: bug,needs:triage
 ---
 <!--
 Thank you for helping to improve Upjet!
