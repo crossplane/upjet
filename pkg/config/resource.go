@@ -301,4 +301,9 @@ type Resource struct {
 	// MetaResource is the metadata associated with the resource scraped from
 	// the Terraform registry.
 	MetaResource *registry.Resource
+
+	// Path is the resource path for the API server endpoint. It defaults to
+	// the plural name of the generated CRD. Overriding this sets both the
+	// path and the plural name for the generated CRD.
+	Path string
 }
