@@ -208,7 +208,13 @@ func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames) {
 	// Note(turkenh): We want atProvider to be a superset of forProvider, so
 	// we always add the field as an observation field and then add it as a
 	// parameter field if it's not an observation (only) field, i.e. parameter.
-	r.addObservationField(f, field)
+	//
+	// We do this only if tf tag is not set to "-" because otherwise it won't
+	// be populated from the tfstate. We typically set tf tag to "-" for
+	// sensitive fields which were replaced with secretKeyRefs.
+	if f.TFTag != "-" {
+		r.addObservationField(f, field)
+	}
 	if !IsObservation(f.Schema) {
 		if f.AsBlocksMode {
 			f.TFTag = strings.TrimSuffix(f.TFTag, ",omitempty")
