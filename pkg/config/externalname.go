@@ -63,6 +63,7 @@ func ParameterAsIdentifier(param string) ExternalName {
 		param,
 		param + "_prefix",
 	}
+	e.IdentifierFields = []string{param}
 	return e
 }
 
