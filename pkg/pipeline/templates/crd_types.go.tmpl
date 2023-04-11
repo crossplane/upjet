@@ -37,6 +37,7 @@ type {{ .CRD.Kind }}Status struct {
 type {{ .CRD.Kind }} struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
+	{{- .CRD.ValidationRules }}
 	Spec              {{ .CRD.Kind }}Spec   `json:"spec"`
 	Status            {{ .CRD.Kind }}Status `json:"status,omitempty"`
 }

@@ -90,6 +90,7 @@ func (cg *CRDGenerator) Generate(cfg *config.Resource) (string, error) {
 			"Kind":            cfg.Kind,
 			"ForProviderType": gen.ForProviderType.Obj().Name(),
 			"AtProviderType":  gen.AtProviderType.Obj().Name(),
+			"ValidationRules": gen.ValidationRules,
 			"Path":            cfg.Path,
 		},
 		"Provider": map[string]string{
