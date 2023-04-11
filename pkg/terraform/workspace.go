@@ -355,7 +355,7 @@ type ImportResult RefreshResult
 
 // Import makes a blocking terraform import call where only the state file
 // is changed with the current state of the resource.
-func (w *Workspace) Import(ctx context.Context, tr resource.Terraformed) (ImportResult, error) {
+func (w *Workspace) Import(ctx context.Context, tr resource.Terraformed) (ImportResult, error) { // nolint:gocyclo
 	switch {
 	case w.LastOperation.IsRunning():
 		return ImportResult{
@@ -374,7 +374,7 @@ func (w *Workspace) Import(ctx context.Context, tr resource.Terraformed) (Import
 
 	// Note(turkenh): We remove the state file since the import command wouldn't work if tfstate contains
 	// the resource already.
-	if err := w.fs.Remove(filepath.Join(w.dir, "terraform.tfstate")); err != nil {
+	if err := w.fs.Remove(filepath.Join(w.dir, "terraform.tfstate")); err != nil && !os.IsNotExist(err) {
 		return ImportResult{}, errors.Wrap(err, "cannot remove terraform.tfstate file")
 	}
 
@@ -390,7 +390,7 @@ func (w *Workspace) Import(ctx context.Context, tr resource.Terraformed) (Import
 				Exists: false,
 			}, nil
 		}
-		return ImportResult{}, errors.WithMessage(errors.New("import failed"), string(out))
+		return ImportResult{}, errors.WithMessage(errors.New("import failed"), w.filterFn(string(out)))
 	}
 	raw, err := w.fs.ReadFile(filepath.Join(w.dir, "terraform.tfstate"))
 	if err != nil {
