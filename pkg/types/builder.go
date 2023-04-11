@@ -277,6 +277,14 @@ func (r *resource) addParameterField(f *Field, field *types.Var) {
 }
 
 func (r *resource) addObservationField(f *Field, field *types.Var) {
+	for _, obsF := range r.obsFields {
+		if obsF.Name() == field.Name() {
+			// If the field is already added, we don't add it again.
+			// Some nested types could have been previously added as an
+			// observation type while building their schema: https://github.com/upbound/upjet/blob/b89baca4ae24c8fbd8eb403c353ca18916093e5e/pkg/types/builder.go#L206
+			return
+		}
+	}
 	r.obsFields = append(r.obsFields, field)
 	r.obsTags = append(r.obsTags, fmt.Sprintf(`json:"%s" tf:"%s"`, f.JSONTag, f.TFTag))
 }

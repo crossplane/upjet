@@ -204,10 +204,18 @@ func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames) {
 	}
 
 	field := types.NewField(token.NoPos, g.Package, f.FieldNameCamel, f.FieldType, false)
-	switch {
-	case IsObservation(f.Schema):
+
+	// Note(turkenh): We want atProvider to be a superset of forProvider, so
+	// we always add the field as an observation field and then add it as a
+	// parameter field if it's not an observation (only) field, i.e. parameter.
+	//
+	// We do this only if tf tag is not set to "-" because otherwise it won't
+	// be populated from the tfstate. We typically set tf tag to "-" for
+	// sensitive fields which were replaced with secretKeyRefs.
+	if f.TFTag != "-" {
 		r.addObservationField(f, field)
-	default:
+	}
+	if !IsObservation(f.Schema) {
 		if f.AsBlocksMode {
 			f.TFTag = strings.TrimSuffix(f.TFTag, ",omitempty")
 		}
@@ -219,6 +227,14 @@ func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames) {
 	}
 
 	g.comments.AddFieldComment(typeNames.ParameterTypeName, f.FieldNameCamel, f.Comment.Build())
+	// Note(turkenh): We don't want reference resolver to be generated for
+	// fields under status.atProvider. So, we don't want reference comments to
+	// be added, hence we are unsetting reference on the field comment just
+	// before adding it as an observation field.
+	f.Comment.Reference = config.Reference{}
+	// Note(turkenh): We don't need required/optional markers for observation
+	// fields.
+	f.Comment.Required = nil
 	g.comments.AddFieldComment(typeNames.ObservationTypeName, f.FieldNameCamel, f.Comment.Build())
 }
 
