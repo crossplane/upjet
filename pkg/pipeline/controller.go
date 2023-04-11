@@ -52,7 +52,13 @@ func (cg *ControllerGenerator) Generate(cfg *config.Resource, typesPkgPath strin
 		"UseAsync":               cfg.UseAsync,
 		"ResourceType":           cfg.Name,
 		"Initializers":           cfg.InitializerFns,
-		"FeaturesPackageAlias":   ctrlFile.Imports.UsePackage(featuresPkgPath),
+	}
+
+	// If the provider has a features package, add it to the controller template.
+	// This is to ensure we don't break existing providers that don't have a
+	// features package (yet).
+	if featuresPkgPath != "" {
+		vars["FeaturesPackageAlias"] = ctrlFile.Imports.UsePackage(featuresPkgPath)
 	}
 
 	filePath := filepath.Join(cg.ControllerGroupDir, strings.ToLower(cfg.Kind), "zz_controller.go")

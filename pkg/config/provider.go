@@ -70,6 +70,10 @@ type Provider struct {
 	// "github.com/upbound/provider-aws"
 	ModulePath string
 
+	// FeaturesPackage is the relative package patch for the features package to
+	// configure the features behind the feature gates.
+	FeaturesPackage string
+
 	// BasePackages keeps lists of base packages that needs to be registered as
 	// API and controllers. Typically, we expect to see ProviderConfig packages
 	// here.
@@ -169,6 +173,13 @@ func WithDefaultResourceOptions(opts ...ResourceOption) ProviderOption {
 func WithReferenceInjectors(refInjectors []ReferenceInjector) ProviderOption {
 	return func(p *Provider) {
 		p.refInjectors = refInjectors
+	}
+}
+
+// WithFeaturesPackage configures FeaturesPackage for this Provider.
+func WithFeaturesPackage(s string) ProviderOption {
+	return func(p *Provider) {
+		p.FeaturesPackage = s
 	}
 }
 

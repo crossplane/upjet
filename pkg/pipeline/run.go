@@ -78,11 +78,11 @@ func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
 					Resource:           resources[name],
 					ParametersTypeName: paramTypeName,
 				})
-				// Note(turkenh): With the following, we are assuming that the
-				// generated provider will have a features package under
-				// internal/features. This is a reasonable assumption for now
-				// but we may want to make it configurable in the future.
-				featuresPkgPath := fmt.Sprintf("%s/internal/features", pc.ModulePath)
+
+				featuresPkgPath := ""
+				if pc.FeaturesPackage != "" {
+					featuresPkgPath = filepath.Join(pc.ModulePath, pc.FeaturesPackage)
+				}
 				ctrlPkgPath, err := ctrlGen.Generate(resources[name], versionGen.Package().Path(), featuresPkgPath)
 				if err != nil {
 					panic(errors.Wrapf(err, "cannot generate controller for resource %s", name))

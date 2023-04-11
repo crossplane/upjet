@@ -49,9 +49,11 @@ func Setup(mgr ctrl.Manager, o tjcontroller.Options) error {
 		managed.WithConnectionPublishers(cps...),
 		managed.WithPollInterval(o.PollInterval),
 	}
+	{{- if .FeaturesPackageAlias }}
 	if o.Features.Enabled({{ .FeaturesPackageAlias }}EnableAlphaManagementPolicies) {
 		opts = append(opts, managed.WithManagementPolicies())
 	}
+	{{- end}}
 	r := managed.NewReconciler(mgr, xpresource.ManagedKind({{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind), opts...)
 
 	return ctrl.NewControllerManagedBy(mgr).
