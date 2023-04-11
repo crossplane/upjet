@@ -275,10 +275,10 @@ type resource struct {
 func (r *resource) addParameterField(f *Field, field *types.Var) {
 	req := !f.Schema.Optional
 	// Note(turkenh): We are collecting the top level required parameters that
-	// are not identifier fields. This is to generate CEL validation rules for
-	// those parameters not to require them if management policy is set Observe
-	// Only. In other words, if we are not creating or managing the resource, we
-	// don't need to provide those parameters which are:
+	// are not identifier fields. This is for generating CEL validation rules for
+	// those parameters and not to require them if the management policy is set
+	// Observe Only. In other words, if we are not creating or managing the
+	// resource, we don't need to provide those parameters which are:
 	// - req => required
 	// - !f.Identifier => not identifiers - i.e. region, zone, etc.
 	// - len(f.CanonicalPaths) == 1 => top level, i.e. not a nested field

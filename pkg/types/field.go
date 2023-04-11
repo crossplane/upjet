@@ -96,6 +96,9 @@ func NewField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema,
 	}
 
 	for _, ident := range cfg.ExternalName.IdentifierFields {
+		// TODO(turkenh): Could there be a nested identifier field? No, known
+		// cases so far but we would need to handle that if/once there is one,
+		// which is missing here.
 		if ident == snakeFieldName {
 			f.Identifier = true
 			break
