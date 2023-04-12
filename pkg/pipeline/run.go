@@ -56,9 +56,14 @@ func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
 		apiVersionPkgList = append(apiVersionPkgList, filepath.Join(pc.ModulePath, p))
 	}
 	// Add ProviderConfig controller package to the list of controller packages.
-	controllerPkgList := make([]string, 0)
+	controllerPkgMap := make(map[string][]string)
 	for _, p := range pc.BasePackages.Controller {
-		controllerPkgList = append(controllerPkgList, filepath.Join(pc.ModulePath, p))
+		tokens := strings.Split(p, "/")
+		group := tokens[len(tokens)-1]
+		if group == "providerconfig" {
+			group = pc.ShortName
+		}
+		controllerPkgMap[group] = append(controllerPkgMap[group], filepath.Join(pc.ModulePath, p))
 	}
 	count := 0
 	for group, versions := range resourcesGroups {
@@ -87,7 +92,8 @@ func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
 				if err != nil {
 					panic(errors.Wrapf(err, "cannot generate controller for resource %s", name))
 				}
-				controllerPkgList = append(controllerPkgList, ctrlPkgPath)
+				sGroup := strings.Split(group, ".")[0]
+				controllerPkgMap[sGroup] = append(controllerPkgMap[sGroup], ctrlPkgPath)
 				if err := exampleGen.Generate(group, version, resources[name]); err != nil {
 					panic(errors.Wrapf(err, "cannot generate example manifest for resource %s", name))
 				}
@@ -112,7 +118,8 @@ func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
 	if err := NewRegisterGenerator(rootDir, pc.ModulePath).Generate(apiVersionPkgList); err != nil {
 		panic(errors.Wrap(err, "cannot generate register file"))
 	}
-	if err := NewSetupGenerator(rootDir, pc.ModulePath).Generate(controllerPkgList); err != nil {
+	// TODO: make a separate generator for the provider main program
+	if err := NewSetupGenerator(rootDir, pc.ModulePath).Generate(controllerPkgMap, pc.MainTemplate); err != nil {
 		panic(errors.Wrap(err, "cannot generate setup file"))
 	}
 

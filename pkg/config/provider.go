@@ -89,6 +89,10 @@ type Provider struct {
 	// can add "aws_waf.*" to the list.
 	SkipList []string
 
+	// MainTemplate is the template string to be used to render the
+	// provider subpackage main program.
+	MainTemplate string
+
 	// skippedResourceNames is a list of Terraform resource names
 	// available in the Terraform provider schema, but
 	// not in the include list or in the skip list, meaning that
@@ -180,6 +184,12 @@ func WithReferenceInjectors(refInjectors []ReferenceInjector) ProviderOption {
 func WithFeaturesPackage(s string) ProviderOption {
 	return func(p *Provider) {
 		p.FeaturesPackage = s
+	}
+}
+
+func WithMainTemplate(template string) ProviderOption {
+	return func(p *Provider) {
+		p.MainTemplate = template
 	}
 }
 
