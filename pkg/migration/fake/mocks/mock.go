@@ -220,6 +220,20 @@ func (mr *MockManagedMockRecorder) GetManagedFields() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetManagedFields", reflect.TypeOf((*MockManaged)(nil).GetManagedFields))
 }
 
+// GetManagementPolicy mocks base method.
+func (m *MockManaged) GetManagementPolicy() v1.ManagementPolicy {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetManagementPolicy")
+	ret0, _ := ret[0].(v1.ManagementPolicy)
+	return ret0
+}
+
+// GetManagementPolicy indicates an expected call of GetManagementPolicy.
+func (mr *MockManagedMockRecorder) GetManagementPolicy() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetManagementPolicy", reflect.TypeOf((*MockManaged)(nil).GetManagementPolicy))
+}
+
 // GetName mocks base method.
 func (m *MockManaged) GetName() string {
 	m.ctrl.T.Helper()
@@ -508,6 +522,18 @@ func (m *MockManaged) SetManagedFields(arg0 []v10.ManagedFieldsEntry) {
 func (mr *MockManagedMockRecorder) SetManagedFields(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetManagedFields", reflect.TypeOf((*MockManaged)(nil).SetManagedFields), arg0)
+}
+
+// SetManagementPolicy mocks base method.
+func (m *MockManaged) SetManagementPolicy(arg0 v1.ManagementPolicy) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetManagementPolicy", arg0)
+}
+
+// SetManagementPolicy indicates an expected call of SetManagementPolicy.
+func (mr *MockManagedMockRecorder) SetManagementPolicy(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetManagementPolicy", reflect.TypeOf((*MockManaged)(nil).SetManagementPolicy), arg0)
 }
 
 // SetName mocks base method.

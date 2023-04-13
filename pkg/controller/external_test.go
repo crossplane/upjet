@@ -51,6 +51,7 @@ type WorkspaceFns struct {
 	DestroyAsyncFn func(callback terraform.CallbackFn) error
 	DestroyFn      func(ctx context.Context) error
 	RefreshFn      func(ctx context.Context) (terraform.RefreshResult, error)
+	ImportFn       func(ctx context.Context, tr resource.Terraformed) (terraform.ImportResult, error)
 	PlanFn         func(ctx context.Context) (terraform.PlanResult, error)
 }
 
@@ -76,6 +77,10 @@ func (c WorkspaceFns) Refresh(ctx context.Context) (terraform.RefreshResult, err
 
 func (c WorkspaceFns) Plan(ctx context.Context) (terraform.PlanResult, error) {
 	return c.PlanFn(ctx)
+}
+
+func (c WorkspaceFns) Import(ctx context.Context, tr resource.Terraformed) (terraform.ImportResult, error) {
+	return c.ImportFn(ctx, tr)
 }
 
 type StoreFns struct {
@@ -310,9 +315,6 @@ func TestObserve(t *testing.T) {
 							State:  exampleState,
 						}, nil
 					},
-					PlanFn: func(_ context.Context) (terraform.PlanResult, error) {
-						return terraform.PlanResult{UpToDate: true}, nil
-					},
 				},
 			},
 			want: want{
@@ -320,6 +322,112 @@ func TestObserve(t *testing.T) {
 					ResourceExists:          true,
 					ResourceUpToDate:        true,
 					ResourceLateInitialized: true,
+				},
+			},
+		},
+		"ObserveOnlyAsyncInProgress": {
+			args: args{
+				obj: &fake.Terraformed{
+					Managed: xpfake.Managed{
+						Manageable: xpfake.Manageable{
+							Policy: xpv1.ManagementObserveOnly,
+						},
+						ConditionedStatus: xpv1.ConditionedStatus{
+							Conditions: []xpv1.Condition{xpv1.Available()},
+						},
+					},
+				},
+				w: WorkspaceFns{
+					ImportFn: func(ctx context.Context, tr resource.Terraformed) (terraform.ImportResult, error) {
+						return terraform.ImportResult{
+							ASyncInProgress: true,
+						}, nil
+					},
+				},
+			},
+			want: want{
+				obs: managed.ExternalObservation{
+					ResourceExists:   true,
+					ResourceUpToDate: true,
+				},
+			},
+		},
+		"ObserveOnlyImportFails": {
+			args: args{
+				obj: &fake.Terraformed{
+					Managed: xpfake.Managed{
+						Manageable: xpfake.Manageable{
+							Policy: xpv1.ManagementObserveOnly,
+						},
+						ConditionedStatus: xpv1.ConditionedStatus{
+							Conditions: []xpv1.Condition{xpv1.Available()},
+						},
+					},
+				},
+				w: WorkspaceFns{
+					ImportFn: func(ctx context.Context, tr resource.Terraformed) (terraform.ImportResult, error) {
+						return terraform.ImportResult{}, errBoom
+					},
+				},
+			},
+			want: want{
+				err: errors.Wrap(errBoom, errImport),
+			},
+		},
+		"ObserveOnlyDoesNotExist": {
+			args: args{
+				obj: &fake.Terraformed{
+					Managed: xpfake.Managed{
+						Manageable: xpfake.Manageable{
+							Policy: xpv1.ManagementObserveOnly,
+						},
+						ConditionedStatus: xpv1.ConditionedStatus{
+							Conditions: []xpv1.Condition{xpv1.Available()},
+						},
+					},
+				},
+				w: WorkspaceFns{
+					ImportFn: func(ctx context.Context, tr resource.Terraformed) (terraform.ImportResult, error) {
+						return terraform.ImportResult{
+							Exists: false,
+						}, nil
+					},
+				},
+			},
+			want: want{
+				obs: managed.ExternalObservation{
+					ResourceExists: false,
+				},
+			},
+		},
+		"ObserveOnlySuccess": {
+			args: args{
+				obj: &fake.Terraformed{
+					Managed: xpfake.Managed{
+						Manageable: xpfake.Manageable{
+							Policy: xpv1.ManagementObserveOnly,
+						},
+						ConditionedStatus: xpv1.ConditionedStatus{
+							Conditions: []xpv1.Condition{xpv1.Available()},
+						},
+					},
+				},
+				w: WorkspaceFns{
+					ImportFn: func(ctx context.Context, tr resource.Terraformed) (terraform.ImportResult, error) {
+						return terraform.ImportResult{
+							Exists: true,
+							State:  exampleState,
+						}, nil
+					},
+					PlanFn: func(_ context.Context) (terraform.PlanResult, error) {
+						return terraform.PlanResult{UpToDate: true}, nil
+					},
+				},
+			},
+			want: want{
+				obs: managed.ExternalObservation{
+					ResourceExists:   true,
+					ResourceUpToDate: true,
 				},
 			},
 		},

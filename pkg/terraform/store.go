@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
+	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/mitchellh/go-ps"
 	"github.com/pkg/errors"
@@ -37,6 +38,10 @@ import (
 	"github.com/upbound/upjet/pkg/config"
 	"github.com/upbound/upjet/pkg/metrics"
 	"github.com/upbound/upjet/pkg/resource"
+)
+
+const (
+	errGetID = "cannot get id"
 )
 
 // SetupFn is a function that returns Terraform setup which contains
@@ -228,7 +233,13 @@ func (ws *WorkspaceStore) Workspace(ctx context.Context, c resource.SecretClient
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot create a new file producer")
 	}
-	if err := fp.EnsureTFState(ctx); err != nil {
+
+	w.terraformID, err = fp.Config.ExternalName.GetIDFn(ctx, meta.GetExternalName(fp.Resource), fp.parameters, fp.Setup.Map())
+	if err != nil {
+		return nil, errors.Wrap(err, errGetID)
+	}
+
+	if err := fp.EnsureTFState(ctx, w.terraformID); err != nil {
 		return nil, errors.Wrap(err, "cannot ensure tfstate file")
 	}
 

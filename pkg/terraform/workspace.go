@@ -30,6 +30,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 
 	"github.com/upbound/upjet/pkg/metrics"
+	"github.com/upbound/upjet/pkg/resource"
 	"github.com/upbound/upjet/pkg/resource/json"
 	tferrors "github.com/upbound/upjet/pkg/terraform/errors"
 )
@@ -149,6 +150,8 @@ type Workspace struct {
 	mu            *sync.Mutex
 
 	filterFn func(string) string
+
+	terraformID string
 }
 
 // UseProvider shares a native provider with the receiver Workspace.
@@ -343,6 +346,63 @@ func (w *Workspace) Plan(ctx context.Context) (PlanResult, error) {
 	return PlanResult{
 		Exists:   p.Changes.Add == 0,
 		UpToDate: p.Changes.Change == 0,
+	}, nil
+}
+
+// ImportResult contains information about the current state of the resource.
+// Same as RefreshResult.
+type ImportResult RefreshResult
+
+// Import makes a blocking terraform import call where only the state file
+// is changed with the current state of the resource.
+func (w *Workspace) Import(ctx context.Context, tr resource.Terraformed) (ImportResult, error) { // nolint:gocyclo
+	switch {
+	case w.LastOperation.IsRunning():
+		return ImportResult{
+			ASyncInProgress: w.LastOperation.Type == "apply" || w.LastOperation.Type == "destroy",
+		}, nil
+	case w.LastOperation.IsEnded():
+		defer w.LastOperation.Flush()
+	}
+	// Note(turkenh): This resource does not have an ID, we cannot import it. This happens with identifier from
+	// provider case, and we simply return does not exist in this case.
+	if len(w.terraformID) == 0 {
+		return ImportResult{
+			Exists: false,
+		}, nil
+	}
+
+	// Note(turkenh): We remove the state file since the import command wouldn't work if tfstate contains
+	// the resource already.
+	if err := w.fs.Remove(filepath.Join(w.dir, "terraform.tfstate")); err != nil && !os.IsNotExist(err) {
+		return ImportResult{}, errors.Wrap(err, "cannot remove terraform.tfstate file")
+	}
+
+	out, err := w.runTF(ctx, ModeSync, "import", "-input=false", "-lock=false", fmt.Sprintf("%s.%s", tr.GetTerraformResourceType(), tr.GetName()), w.terraformID)
+	w.logger.Debug("import ended", "out", w.filterFn(string(out)))
+	if err != nil {
+		// Note(turkenh): This is not a great way to check if the resource does not exist, but it is the only
+		// way we can do it for now. Terraform import does not return a proper exit code for this case or
+		// does not support -json flag to parse the returning error in a better way.
+		// https://github.com/hashicorp/terraform/blob/93f9cff99ffbb8d536b276a1be40a2c45ca4a67f/internal/terraform/node_resource_import.go#L235
+		if strings.Contains(string(out), "Cannot import non-existent remote object") {
+			return ImportResult{
+				Exists: false,
+			}, nil
+		}
+		return ImportResult{}, errors.WithMessage(errors.New("import failed"), w.filterFn(string(out)))
+	}
+	raw, err := w.fs.ReadFile(filepath.Join(w.dir, "terraform.tfstate"))
+	if err != nil {
+		return ImportResult{}, errors.Wrap(err, "cannot read terraform state file")
+	}
+	s := &json.StateV4{}
+	if err := json.JSParser.Unmarshal(raw, s); err != nil {
+		return ImportResult{}, errors.Wrap(err, "cannot unmarshal tfstate file")
+	}
+	return ImportResult{
+		Exists: s.GetAttributes() != nil,
+		State:  s,
 	}, nil
 }
 

@@ -78,7 +78,12 @@ func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
 					Resource:           resources[name],
 					ParametersTypeName: paramTypeName,
 				})
-				ctrlPkgPath, err := ctrlGen.Generate(resources[name], versionGen.Package().Path())
+
+				featuresPkgPath := ""
+				if pc.FeaturesPackage != "" {
+					featuresPkgPath = filepath.Join(pc.ModulePath, pc.FeaturesPackage)
+				}
+				ctrlPkgPath, err := ctrlGen.Generate(resources[name], versionGen.Package().Path(), featuresPkgPath)
 				if err != nil {
 					panic(errors.Wrapf(err, "cannot generate controller for resource %s", name))
 				}

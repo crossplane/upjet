@@ -24,7 +24,6 @@ const (
 	errWriteTFStateFile  = "cannot write terraform.tfstate file"
 	errWriteMainTFFile   = "cannot write main.tf.json file"
 	errCheckIfStateEmpty = "cannot check whether the state is empty"
-	errGetID             = "cannot get id"
 	errMarshalAttributes = "cannot marshal produced state attributes"
 	errInsertTimeouts    = "cannot insert timeouts metadata to private raw"
 	errReadTFState       = "cannot read terraform.tfstate file"
@@ -140,7 +139,7 @@ func (fp *FileProducer) WriteMainTF() (ProviderHandle, error) {
 
 // EnsureTFState writes the Terraform state that should exist in the filesystem
 // to start any Terraform operation.
-func (fp *FileProducer) EnsureTFState(ctx context.Context) error { //nolint:gocyclo
+func (fp *FileProducer) EnsureTFState(ctx context.Context, tfID string) error { //nolint:gocyclo
 	// TODO(muvaf): Reduce the cyclomatic complexity by separating the attributes
 	// generation into its own function/interface.
 	empty, err := fp.isStateEmpty()
@@ -164,11 +163,7 @@ func (fp *FileProducer) EnsureTFState(ctx context.Context) error { //nolint:gocy
 	for k, v := range fp.observation {
 		base[k] = v
 	}
-	id, err := fp.Config.ExternalName.GetIDFn(ctx, meta.GetExternalName(fp.Resource), fp.parameters, fp.Setup.Map())
-	if err != nil {
-		return errors.Wrap(err, errGetID)
-	}
-	base["id"] = id
+	base["id"] = tfID
 	attr, err := json.JSParser.Marshal(base)
 	if err != nil {
 		return errors.Wrap(err, errMarshalAttributes)
