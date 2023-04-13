@@ -5,8 +5,10 @@ Copyright 2022 Upbound Inc.
 package controller
 
 import (
-	"github.com/crossplane/crossplane-runtime/pkg/controller"
+	"crypto/tls"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	"github.com/crossplane/crossplane-runtime/pkg/controller"
 
 	"github.com/upbound/upjet/pkg/config"
 	"github.com/upbound/upjet/pkg/terraform"
@@ -33,4 +35,13 @@ type Options struct {
 	// resource. Setting this enables External Secret Stores for the controller
 	// by adding connection.DetailsManager as a ConnectionPublisher.
 	SecretStoreConfigGVK *schema.GroupVersionKind
+
+	// ESSOptions for External Secret Stores.
+	ESSOptions *ESSOptions
+}
+
+// ESSOptions for External Secret Stores.
+type ESSOptions struct {
+	TLSConfig     *tls.Config
+	TLSSecretName *string
 }
