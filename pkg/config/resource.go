@@ -15,6 +15,7 @@ import (
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
@@ -225,6 +226,11 @@ func NewTagger(kube client.Client, fieldName string) *Tagger {
 
 // Initialize is a custom initializer for setting external tags
 func (t *Tagger) Initialize(ctx context.Context, mg xpresource.Managed) error {
+	if mg.GetManagementPolicy() == xpv1.ManagementObserveOnly {
+		// We don't want to add tags to the spec.forProvider if the resource is
+		// in ObserveOnly mode.
+		return nil
+	}
 	paved, err := fieldpath.PaveObject(mg)
 	if err != nil {
 		return err
