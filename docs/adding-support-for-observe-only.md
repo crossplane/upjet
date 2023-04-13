@@ -2,9 +2,8 @@
 
 ## (Re)generating a provider with Management Policies
 
-
-
-Go to the repo of the provider, e.g. upbound/provider-aws, on your local.
+Check out the provider repo, e.g., upbound/provider-aws, and go to the project
+directory on your local machine.
 
 1. Generate with management policy and update crossplane-runtime dependency:
 
@@ -103,9 +102,9 @@ Go to the repo of the provider, e.g. upbound/provider-aws, on your local.
 
 ## Testing: Locally Running the Provider with Management Policies Enabled
 
-1. Create a fresh K8s cluster
-2. Apply CRDs
-3. Run the provider with `--enable-management-policies`
+1. Create a fresh Kubernetes cluster.
+2. Apply all of the provider's CRDs with `kubectl apply -f package/crds`.
+3. Run the provider with `--enable-management-policies`.
 
    You can update the `run` target in the Makefile as below
 
@@ -131,7 +130,8 @@ Go to the repo of the provider, e.g. upbound/provider-aws, on your local.
     make run
     ```
 
-4. Create some resources in the AWS console and try observing them by creating a managed resource with `managementPolicy: ObserveOnly`
+4. Create some resources in the provider's management console and try observing
+them by creating a managed resource with `managementPolicy: ObserveOnly`.
 
     For example:
 
@@ -146,12 +146,17 @@ Go to the repo of the provider, e.g. upbound/provider-aws, on your local.
         region: us-west-1
     ```
    
-    You should see the managed resource is ready & synced and the status is 
-    updated with the actual state of the resource.
+    You should see the managed resource is ready & synced:
 
     ```bash
     NAME                              READY   SYNCED   EXTERNAL-NAME                     AGE
     an-existing-dbinstance            True    True     an-existing-dbinstance            3m
     ```
-    
+
+    and the `status.atProvider` is updated with the actual state of the resource:
+
+    ```bash
+    kubectl get instance.rds.aws.upbound.io an-existing-dbinstance -o yaml
+    ```
+
 > Please note: You would need the `terraform` executable installed on your local machine.
