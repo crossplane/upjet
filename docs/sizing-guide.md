@@ -83,7 +83,48 @@ concurrent reconcilers to be used with each managed resource controller. Upjet
 executes certain Terrafom CLI commands asynchronously and this may result in 
 more than the `max-reconcile-rate` CLI invocations to be in flight at a given time.
 
+## Adding Configuration Parameters to ControllerConfig
+
+To apply the configuration parameters mentioned above, 
+you need to add them as arguments to the `ControllerConfig`.
+
+In the example below you can see the options specified under the
+`spec.args` section.
+
+You can apply this configuration by running `kubectl apply -f`
+and referencing the local file path with the config.
+
+```
+apiVersion: pkg.crossplane.io/v1alpha1
+kind: ControllerConfig
+metadata:
+  name: example-config
+spec:
+  args: 
+    - --max-reconcile-rate=20
+    - --provider-ttl=250
+---
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-aws
+spec:
+  package: xpkg.upbound.io/upbound/provider-aws:v0.32.1
+  controllerConfigRef:
+    name: example-config
+```
+Note: Due to ControllerConfig being marked as deprecated, you will get the following 
+warning, which you can ignore for now:
+
+```
+Warning: This API is deprecated and is scheduled to be removed in a future release.
+```
+
+Please take a look at the Crossplane documentation for more information about
+[ControllerConfig].
+
 [provider-aws]: https://github.com/upbound/provider-aws/issues/576
 [provider-azure]: https://github.com/upbound/provider-azure/issues/404
 [provider-gcp]: https://github.com/upbound/provider-gcp/issues/255
 [time.ParseDuration syntax]: https://pkg.go.dev/time#ParseDuration
+[ControllerConfig]: https://docs.crossplane.io/v1.11/concepts/packages/#speccontrollerconfigref:~:text=that%20is%20installed.-,spec.controllerConfigRef,-Warning
