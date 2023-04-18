@@ -223,6 +223,42 @@ func TestTemplatedGetIDFn(t *testing.T) {
 				id: "olala/paramval:myname/configval",
 			},
 		},
+		"TemplateFunctionToLower": {
+			reason: "Should work with a call of ToLower.",
+			args: args{
+				tmpl:         "olala/{{ .parameters.ola | ToLower }}:{{ .external_name }}/{{ .setup.configuration.oma | ToLower }}",
+				externalName: "myname",
+				parameters: map[string]any{
+					"ola": "ALL_CAPITAL",
+				},
+				setup: map[string]any{
+					"configuration": map[string]any{
+						"oma": "CamelCase",
+					},
+				},
+			},
+			want: want{
+				id: "olala/all_capital:myname/camelcase",
+			},
+		},
+		"TemplateFunctionToUpper": {
+			reason: "Should work with a call of ToUpper.",
+			args: args{
+				tmpl:         "olala/{{ .parameters.ola | ToUpper }}:{{ .external_name }}/{{ .setup.configuration.oma | ToUpper }}",
+				externalName: "myname",
+				parameters: map[string]any{
+					"ola": "all_small",
+				},
+				setup: map[string]any{
+					"configuration": map[string]any{
+						"oma": "CamelCase",
+					},
+				},
+			},
+			want: want{
+				id: "olala/ALL_SMALL:myname/CAMELCASE",
+			},
+		},
 	}
 	for n, tc := range cases {
 		t.Run(n, func(t *testing.T) {
