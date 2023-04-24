@@ -22,6 +22,14 @@ type terraformedInput struct {
 	ParametersTypeName string
 }
 
+const (
+	// TODO: we should be careful that there may also exist short groups with
+	// these names. We can consider making these configurable by the provider
+	// maintainer.
+	configPackageName   = "config"
+	monolithPackageName = "monolith"
+)
+
 // Run runs the Upjet code generation pipelines.
 func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
 	// Note(turkenh): nolint reasoning - this is the main function of the code
@@ -58,12 +66,9 @@ func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
 	// Add ProviderConfig controller package to the list of controller packages.
 	controllerPkgMap := make(map[string][]string)
 	for _, p := range pc.BasePackages.Controller {
-		tokens := strings.Split(p, "/")
-		group := tokens[len(tokens)-1]
-		if group == "providerconfig" {
-			group = pc.ShortName
-		}
-		controllerPkgMap[group] = append(controllerPkgMap[group], filepath.Join(pc.ModulePath, p))
+		path := filepath.Join(pc.ModulePath, p)
+		controllerPkgMap[configPackageName] = append(controllerPkgMap[configPackageName], path)
+		controllerPkgMap[monolithPackageName] = append(controllerPkgMap[monolithPackageName], path)
 	}
 	count := 0
 	for group, versions := range resourcesGroups {
@@ -94,6 +99,7 @@ func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
 				}
 				sGroup := strings.Split(group, ".")[0]
 				controllerPkgMap[sGroup] = append(controllerPkgMap[sGroup], ctrlPkgPath)
+				controllerPkgMap[monolithPackageName] = append(controllerPkgMap[monolithPackageName], ctrlPkgPath)
 				if err := exampleGen.Generate(group, version, resources[name]); err != nil {
 					panic(errors.Wrapf(err, "cannot generate example manifest for resource %s", name))
 				}

@@ -12,9 +12,9 @@ import (
 	{{ .Imports }}
 )
 
-// Setup_{{ .Group }} creates all controllers with the supplied logger and adds them to
+// Setup{{ .Group }} creates all controllers with the supplied logger and adds them to
 // the supplied manager.
-func Setup_{{ .Group }}(mgr ctrl.Manager, o controller.Options) error {
+func Setup{{ .Group }}(mgr ctrl.Manager, o controller.Options) error {
 	for _, setup := range []func(ctrl.Manager, controller.Options) error{
 		{{- range $alias := .Aliases }}
 		{{ $alias }}Setup,

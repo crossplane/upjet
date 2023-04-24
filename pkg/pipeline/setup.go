@@ -6,6 +6,7 @@ package pipeline
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -35,35 +36,45 @@ type SetupGenerator struct {
 	ModulePath         string
 }
 
-// Generate writes the setup file with the content produced using given
-// list of version packages.
-
+// Generate writes the setup file and the corresponding provider main file
+// using the given list of version packages.
 func (sg *SetupGenerator) Generate(versionPkgMap map[string][]string, mainTemplate string) error {
-	t, err := template.New("main").Parse(mainTemplate)
-	if err != nil {
-		return errors.Wrap(err, "failed to parse provider main program template")
+	var t *template.Template
+	if len(mainTemplate) != 0 {
+		tmpl, err := template.New("main").Parse(mainTemplate)
+		if err != nil {
+			return errors.Wrap(err, "failed to parse the provider main program template")
+		}
+		t = tmpl
+	}
+	if t == nil {
+		return errors.Wrap(sg.generate("", versionPkgMap[monolithPackageName]), "failed to generate the controller setup file")
 	}
 	for g, versionPkgList := range versionPkgMap {
 		if err := sg.generate(g, versionPkgList); err != nil {
-			return errors.Wrapf(err, "failed to generate controller setup file for group: %s", g)
+			return errors.Wrapf(err, "failed to generate the controller setup file for group: %s", g)
 		}
-		if err := writeMainProgram(sg.ProviderPath, g, t); err != nil {
+		if err := generateProviderMain(sg.ProviderPath, g, t); err != nil {
 			return errors.Wrapf(err, "failed to write main program for group: %s", g)
 		}
 	}
 	return nil
 }
 
-func writeMainProgram(providerPath, group string, t *template.Template) error {
+func generateProviderMain(providerPath, group string, t *template.Template) error {
 	f := filepath.Join(providerPath, group)
-	if err := os.MkdirAll(f, 0755); err != nil {
+	if err := os.MkdirAll(f, 0750); err != nil {
 		return errors.Wrapf(err, "failed to mkdir provider main program path: %s", f)
 	}
-	m, err := os.OpenFile(filepath.Join(f, "main.go"), os.O_WRONLY|os.O_CREATE, 0755)
+	m, err := os.OpenFile(filepath.Join(filepath.Clean(f), "zz_main.go"), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return errors.Wrap(err, "failed to open provider main program file")
 	}
-	defer m.Close()
+	defer func() {
+		if err := m.Close(); err != nil {
+			log.Fatalf("Failed to close the templated main %q: %s", f, err.Error())
+		}
+	}()
 	if err := t.Execute(m, map[string]any{
 		"Group": group,
 	}); err != nil {
@@ -82,10 +93,19 @@ func (sg *SetupGenerator) generate(group string, versionPkgList []string) error 
 	for i, pkgPath := range versionPkgList {
 		aliases[i] = setupFile.Imports.UsePackage(pkgPath)
 	}
+	g := ""
+	if len(group) != 0 {
+		g = "_" + group
+	}
 	vars := map[string]any{
 		"Aliases": aliases,
-		"Group":   group,
+		"Group":   g,
 	}
-	filePath := filepath.Join(sg.LocalDirectoryPath, fmt.Sprintf("zz_%s_setup.go", group))
+	filePath := ""
+	if len(group) == 0 {
+		filePath = filepath.Join(sg.LocalDirectoryPath, "zz_setup.go")
+	} else {
+		filePath = filepath.Join(sg.LocalDirectoryPath, fmt.Sprintf("zz_%s_setup.go", group))
+	}
 	return errors.Wrap(setupFile.Write(filePath, vars, os.ModePerm), "cannot write setup file")
 }

@@ -90,7 +90,10 @@ type Provider struct {
 	SkipList []string
 
 	// MainTemplate is the template string to be used to render the
-	// provider subpackage main program.
+	// provider subpackage main program. If this is set, the generated provider
+	// is broken up into subpackage families partitioned across the API groups.
+	// A monolithic provider is also generated to
+	// ensure backwards-compatibility.
 	MainTemplate string
 
 	// skippedResourceNames is a list of Terraform resource names
