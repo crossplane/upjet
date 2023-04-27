@@ -124,8 +124,9 @@ func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
 	if err := NewRegisterGenerator(rootDir, pc.ModulePath).Generate(apiVersionPkgList); err != nil {
 		panic(errors.Wrap(err, "cannot generate register file"))
 	}
-	// TODO: make a separate generator for the provider main program
-	if err := NewSetupGenerator(rootDir, pc.ModulePath).Generate(controllerPkgMap, pc.MainTemplate); err != nil {
+	// Generate the provider,
+	// i.e. the setup function and optionally the provider's main program.
+	if err := NewProviderGenerator(rootDir, pc.ModulePath).Generate(controllerPkgMap, pc.MainTemplate); err != nil {
 		panic(errors.Wrap(err, "cannot generate setup file"))
 	}
 

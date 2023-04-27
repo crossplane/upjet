@@ -18,9 +18,9 @@ import (
 	"github.com/upbound/upjet/pkg/pipeline/templates"
 )
 
-// NewSetupGenerator returns a new SetupGenerator.
-func NewSetupGenerator(rootDir, modulePath string) *SetupGenerator {
-	return &SetupGenerator{
+// NewProviderGenerator returns a new ProviderGenerator.
+func NewProviderGenerator(rootDir, modulePath string) *ProviderGenerator {
+	return &ProviderGenerator{
 		ProviderPath:       filepath.Join(rootDir, "cmd", "provider"),
 		LocalDirectoryPath: filepath.Join(rootDir, "internal", "controller"),
 		LicenseHeaderPath:  filepath.Join(rootDir, "hack", "boilerplate.go.txt"),
@@ -28,8 +28,8 @@ func NewSetupGenerator(rootDir, modulePath string) *SetupGenerator {
 	}
 }
 
-// SetupGenerator generates controller setup file.
-type SetupGenerator struct {
+// ProviderGenerator generates controller setup file.
+type ProviderGenerator struct {
 	ProviderPath       string
 	LocalDirectoryPath string
 	LicenseHeaderPath  string
@@ -38,7 +38,7 @@ type SetupGenerator struct {
 
 // Generate writes the setup file and the corresponding provider main file
 // using the given list of version packages.
-func (sg *SetupGenerator) Generate(versionPkgMap map[string][]string, mainTemplate string) error {
+func (sg *ProviderGenerator) Generate(versionPkgMap map[string][]string, mainTemplate string) error {
 	var t *template.Template
 	if len(mainTemplate) != 0 {
 		tmpl, err := template.New("main").Parse(mainTemplate)
@@ -83,7 +83,7 @@ func generateProviderMain(providerPath, group string, t *template.Template) erro
 	return nil
 }
 
-func (sg *SetupGenerator) generate(group string, versionPkgList []string) error {
+func (sg *ProviderGenerator) generate(group string, versionPkgList []string) error {
 	setupFile := wrapper.NewFile(filepath.Join(sg.ModulePath, "apis"), "apis", templates.SetupTemplate,
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath(sg.LicenseHeaderPath),
