@@ -15,6 +15,7 @@ import (
 	"github.com/muvaf/typewriter/pkg/wrapper"
 	"github.com/pkg/errors"
 
+	"github.com/upbound/upjet/pkg/config"
 	"github.com/upbound/upjet/pkg/pipeline/templates"
 )
 
@@ -48,7 +49,7 @@ func (sg *ProviderGenerator) Generate(versionPkgMap map[string][]string, mainTem
 		t = tmpl
 	}
 	if t == nil {
-		return errors.Wrap(sg.generate("", versionPkgMap[monolithPackageName]), "failed to generate the controller setup file")
+		return errors.Wrap(sg.generate("", versionPkgMap[config.PackageNameMonolith]), "failed to generate the controller setup file")
 	}
 	for g, versionPkgList := range versionPkgMap {
 		if err := sg.generate(g, versionPkgList); err != nil {

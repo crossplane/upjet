@@ -13,6 +13,19 @@ import (
 	tjname "github.com/upbound/upjet/pkg/types/name"
 )
 
+const (
+	// PackageNameConfig is the name of the provider subpackage that contains
+	// the base resources (e.g., ProviderConfig, ProviderConfigUsage,
+	// StoreConfig. etc.).
+	// TODO: we should be careful that there may also exist short groups with
+	// these names. We can consider making these configurable by the provider
+	// maintainer.
+	PackageNameConfig = "config"
+	// PackageNameMonolith is the name of the backwards-compatible
+	// provider subpackage that contains the all the resources.
+	PackageNameMonolith = "monolith"
+)
+
 // Commonly used resource configurations.
 var (
 	DefaultBasePackages = BasePackages{
@@ -21,9 +34,14 @@ var (
 			"apis/v1alpha1",
 			"apis/v1beta1",
 		},
+		//nolint:staticcheck
 		Controller: []string{
 			// Default package for ProviderConfig controllers
 			"internal/controller/providerconfig",
+		},
+		ControllerMap: map[string]string{
+			// Default package for ProviderConfig controllers
+			"internal/controller/providerconfig": PackageNameConfig,
 		},
 	}
 
