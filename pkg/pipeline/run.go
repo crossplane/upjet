@@ -22,14 +22,6 @@ type terraformedInput struct {
 	ParametersTypeName string
 }
 
-const (
-	// TODO: we should be careful that there may also exist short groups with
-	// these names. We can consider making these configurable by the provider
-	// maintainer.
-	configPackageName   = "config"
-	monolithPackageName = "monolith"
-)
-
 // Run runs the Upjet code generation pipelines.
 func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
 	// Note(turkenh): nolint reasoning - this is the main function of the code
@@ -65,10 +57,35 @@ func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
 	}
 	// Add ProviderConfig controller package to the list of controller packages.
 	controllerPkgMap := make(map[string][]string)
+	// new API takes precedence
+	for p, g := range pc.BasePackages.ControllerMap {
+		path := filepath.Join(pc.ModulePath, p)
+		controllerPkgMap[g] = append(controllerPkgMap[g], path)
+		controllerPkgMap[config.PackageNameMonolith] = append(controllerPkgMap[config.PackageNameMonolith], path)
+	}
+	//nolint:staticcheck
 	for _, p := range pc.BasePackages.Controller {
 		path := filepath.Join(pc.ModulePath, p)
-		controllerPkgMap[configPackageName] = append(controllerPkgMap[configPackageName], path)
-		controllerPkgMap[monolithPackageName] = append(controllerPkgMap[monolithPackageName], path)
+		found := false
+		for _, p := range controllerPkgMap[config.PackageNameConfig] {
+			if path == p {
+				found = true
+				break
+			}
+		}
+		if !found {
+			controllerPkgMap[config.PackageNameConfig] = append(controllerPkgMap[config.PackageNameConfig], path)
+		}
+		found = false
+		for _, p := range controllerPkgMap[config.PackageNameMonolith] {
+			if path == p {
+				found = true
+				break
+			}
+		}
+		if !found {
+			controllerPkgMap[config.PackageNameMonolith] = append(controllerPkgMap[config.PackageNameMonolith], path)
+		}
 	}
 	count := 0
 	for group, versions := range resourcesGroups {
@@ -99,7 +116,7 @@ func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
 				}
 				sGroup := strings.Split(group, ".")[0]
 				controllerPkgMap[sGroup] = append(controllerPkgMap[sGroup], ctrlPkgPath)
-				controllerPkgMap[monolithPackageName] = append(controllerPkgMap[monolithPackageName], ctrlPkgPath)
+				controllerPkgMap[config.PackageNameMonolith] = append(controllerPkgMap[config.PackageNameMonolith], ctrlPkgPath)
 				if err := exampleGen.Generate(group, version, resources[name]); err != nil {
 					panic(errors.Wrapf(err, "cannot generate example manifest for resource %s", name))
 				}

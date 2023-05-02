@@ -40,11 +40,15 @@ func (cc ResourceConfiguratorChain) Configure(r *Resource) {
 	}
 }
 
-// BasePackages keeps lists of base packages that needs to be registered as API
+// BasePackages keeps lists of packages that needs to be registered as API
 // and controllers. Typically, we expect to see ProviderConfig packages here.
+// These APIs and controllers belong to non-generated (manually maintained)
+// resources.
 type BasePackages struct {
 	APIVersion []string
-	Controller []string
+	// Deprecated: Use ControllerMap instead.
+	Controller    []string
+	ControllerMap map[string]string
 }
 
 // Provider holds configuration for a provider to be generated with Upjet.
