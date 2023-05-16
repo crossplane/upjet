@@ -54,7 +54,7 @@ func TestNewKubernetesSource(t *testing.T) {
 			s := runtime.NewScheme()
 			r := NewRegistry(s)
 			// register a dummy converter so that MRs will be observed
-			r.converters = map[schema.GroupVersionKind]Converter{tc.args.gvks[0]: nil}
+			r.resourceConverters = map[schema.GroupVersionKind]ResourceConverter{tc.args.gvks[0]: nil}
 			dynamicClient := fake.NewSimpleDynamicClient(s,
 				&unstructured.Unstructured{Object: unstructuredAwsVpc},
 				&unstructured.Unstructured{Object: unstructuredResourceGroup})

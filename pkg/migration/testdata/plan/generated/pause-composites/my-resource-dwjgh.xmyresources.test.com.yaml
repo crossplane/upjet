@@ -1,37 +1,6 @@
 apiVersion: test.com/v1alpha1
 kind: XMyResource
 metadata:
-  annotations: {}
-  creationTimestamp: "2022-12-13T18:38:30Z"
-  finalizers:
-  - composite.apiextensions.crossplane.io
-  generateName: my-resource-
-  generation: 2
-  labels:
-    crossplane.io/claim-name: my-resource
-    crossplane.io/claim-namespace: upbound-system
-    crossplane.io/composite: my-resource-dwjgh
+  annotations:
+    crossplane.io/paused: "true"
   name: my-resource-dwjgh
-  resourceVersion: "368861"
-  uid: 443f32ec-670e-4bfe-8976-e2c73e91a011
-spec:
-  claimRef:
-    apiVersion: test.com/v1alpha1
-    kind: MyResource
-    name: my-resource
-    namespace: upbound-system
-  compositionRef:
-    name: example-migrated
-  compositionUpdatePolicy: Automatic
-  parameters:
-    region: us-west-1
-    tagValue: demo-test
-  resourceRefs:
-  - apiVersion: fakesourceapi/v1alpha1
-    kind: VPC
-status:
-  conditions:
-  - lastTransitionTime: "2022-12-13T18:38:31Z"
-    reason: Creating
-    status: "False"
-    type: Ready

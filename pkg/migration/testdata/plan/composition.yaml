@@ -9,6 +9,10 @@ spec:
     apiVersion: test.com/v1alpha1
     kind: XMyResource
   patchSets:
+    - name: not-referenced
+      patches:
+        - fromFieldPath: "spec.parameters.tagValue"
+          toFieldPath: spec.forProvider.myTag
     - name: ps1
       patches:
         - fromFieldPath: "spec.parameters.tagValue"
@@ -29,6 +33,10 @@ spec:
       patches:
         - fromFieldPath: "spec.parameters.tagValue"
           toFieldPath: metadata.labels["a.b.c.d.e.f/tag-value"]
+    - name: ps6
+      patches:
+        - fromFieldPath: "spec.parameters.tagValue"
+          toFieldPath: spec.forProvider.tags[3].value
   resources:
     - base:
         apiVersion: fakesourceapi/v1alpha1
@@ -60,5 +68,7 @@ spec:
           patchSetName: ps4
         - type: PatchSet
           patchSetName: ps5
+        - type: PatchSet
+          patchSetName: ps6
         - fromFieldPath: "spec.parameters.tagValue"
           toFieldPath: spec.forProvider.param

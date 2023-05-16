@@ -146,3 +146,22 @@ func convertToComposition(u map[string]interface{}) (*xpv1.Composition, error) {
 	c := &xpv1.Composition{}
 	return c, errors.Wrap(k8sjson.UnmarshalCaseSensitivePreserveInts(buff, c), "failed to unmarshal into a v1.Composition")
 }
+
+func addNameGVK(u unstructured.Unstructured, target map[string]any) map[string]any {
+	if target == nil {
+		target = make(map[string]any)
+	}
+	target["apiVersion"] = u.GetAPIVersion()
+	target["kind"] = u.GetKind()
+	m := target["metadata"]
+	if m == nil {
+		m = make(map[string]any)
+	}
+	metadata := m.(map[string]any)
+	metadata["name"] = u.GetName()
+	if len(u.GetNamespace()) != 0 {
+		metadata["namespace"] = u.GetNamespace()
+	}
+	target["metadata"] = m
+	return target
+}

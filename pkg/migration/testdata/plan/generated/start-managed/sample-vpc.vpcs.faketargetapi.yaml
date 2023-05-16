@@ -1,14 +1,6 @@
 apiVersion: faketargetapi/v1alpha1
 kind: VPC
 metadata:
-  annotations: {}
+  annotations:
+    crossplane.io/paused: "false"
   name: sample-vpc
-mockManaged:
-  ctrl: null
-  recorder: null
-spec:
-  forProvider:
-    cidrBlock: 172.16.0.0/16
-    region: us-west-1
-    tags:
-      tag1: value1
