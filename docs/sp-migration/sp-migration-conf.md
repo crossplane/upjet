@@ -20,45 +20,8 @@ kubectl patch $(kubectl get managed -o name) -p '{"spec":{"deletionPolicy":"Orph
 3. Generate smaller provider manifests
 
 ```bash
-version_aws=v0.37.0
-version_azure=v0.34.0
-version_gcp=v0.34.0
-
-rm -f "sp-manual.yaml" && touch "sp-manual.yaml"
-rm -f "sp-family-manual.yaml" && touch "sp-family-manual.yaml"
-kubectl get managed --no-headers -o jsonpath='{range .items[*]}{.apiVersion}{"\n"}{end}' | grep -E '(aws|gcp|azure).upbound.io' | sort | uniq | while read -r line
-do
-  service=$(echo "${line}" | cut -d. -f1)
-  provider=$(echo "${line}" | cut -d. -f2)
-  if [ "${provider}" = "upbound" ]; then
-    # azure.upbound.io is an exception where apiVersion does not contain the service name
-    # we have those resources in the family package
-    provider="azure"
-  fi
-  eval version=\$"version_${provider}"
-
-  for sp in config ${service}; do
-    filename="sp-manual.yaml"
-    providername="${provider}-${sp}"
-    
-    if [ "${sp}" = "config" ] || [ "${sp}" = "azure" ]; then
-      # azure.upbound.io is an exception where apiVersion does not contain the service name
-      # we have those resources in the family package
-      providername="family-$provider"
-      filename="sp-family-manual.yaml"
-    fi
-    if ! cat "${filename}" | grep provider-${providername}:${version} > /dev/null; then
-    echo "apiVersion: pkg.crossplane.io/v1
-kind: Provider
-metadata:
-  name: upbound-release-candidates-provider-${providername}
-spec:
-  package: xpkg.upbound.io/upbound-release-candidates/provider-${providername}:${version}
-  revisionActivationPolicy: Manual" >> "${filename}"
-    echo "---" >> "${filename}"
-    fi
-  done
-done
+export KUBECONFIG=<path of the Kubeconfig file>
+./generate-manifests.sh
 ```
 
 4. Install family providers with `revisionActivationPolicy: Manual`:
@@ -131,22 +94,11 @@ kubectl get managed
 kubectl get provider.pkg
 ```
 
-10. Find new dependencies and add them to `dependsOn`:
+10. Find new dependencies and add them to `dependsOn` field in the `crossplane.yaml` file:
 
 ```bash
-providers=( "aws:v0.37.0" "gcp:v0.34.0" "azure:v0.34.0" )
-
-for pp in ${providers[@]}; do 
-  provider="${pp%%:*}"
-  version="${pp##*:}"
-  smaller=$(grep -irn ${provider}.upbound.io/v1beta1 ${CONF_PATH} | awk '{print $3}'| cut -d '.' -f 1 | sort | uniq)
-  
-  for s in ${smaller[@]}; do
-    if [ $s != "azure" ]; then
-      echo "- provider: xpkg.upbound.io/upbound-release-candidates/provider-$provider-$s";echo  "  version:  \">=$version\"";
-    fi
-  done  
-done
+export CONF_PATH=<root path of the configuration files>
+./find-dependencies.sh
 ```
 
 12. Build/push/update the configuration to the new version
