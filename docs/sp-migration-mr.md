@@ -27,7 +27,7 @@ kubectl get managed --no-headers -o jsonpath='{range .items[*]}{.apiVersion}{"\n
 do
   service=$(echo "${line}" | cut -d. -f1)
   provider=$(echo "${line}" | cut -d. -f2)
-  if [[ ${provider} == "upbound" ]]; then
+  if [ "${provider}" = "upbound" ]; then
     # azure.upbound.io is an exception where apiVersion does not contain the service name
     # we have those resources in the family package
     provider="azure"
@@ -38,12 +38,12 @@ do
     filename="sp-manual.yaml"
     providername="${provider}-${sp}"
     
-    if [[ "${sp}" == "config" ]] || [[ "${sp}" == "azure" ]]; then
-    # azure.upbound.io is an exception where apiVersion does not contain the service name
-    # we have those resources in the family package
-    providername="family-$provider"
-    filename="sp-family-manual.yaml"
-  fi
+    if [ "${sp}" = "config" ] || [ "${sp}" = "azure" ]; then
+      # azure.upbound.io is an exception where apiVersion does not contain the service name
+      # we have those resources in the family package
+      providername="family-$provider"
+      filename="sp-family-manual.yaml"
+    fi
     if ! cat "${filename}" | grep provider-${providername}:${version} > /dev/null; then
     echo "apiVersion: pkg.crossplane.io/v1
 kind: Provider
@@ -58,22 +58,22 @@ spec:
 done
 ```
 
-4. Install config providers with `revisionActivationPolicy: Manual`:
+4. Install family providers with `revisionActivationPolicy: Manual`:
 
 
-Verify that `sp-config-manual.yaml` files are generated with the correct content
-
-```bash
-cat sp-config-manual.yaml
-```
-
-Install the config provider(s)
+Verify that `sp-family-manual.yaml` files are generated with the correct content
 
 ```bash
-kubectl apply -f sp-config-manual.yaml
+cat sp-family-manual.yaml
 ```
 
-Make sure the config provider(s) are in `Installed: False` and `Healthy: True` state:
+Install the family provider(s)
+
+```bash
+kubectl apply -f sp-family-manual.yaml
+```
+
+Make sure the family provider(s) are in `Installed: False` and `Healthy: True` state:
 
 ```bash
 kubectl get providers.pkg
@@ -88,7 +88,7 @@ Verify that `sp-manual.yaml` files are generated with the correct content
 cat sp-manual.yaml
 ```
 
-Install the config provider
+Install the smallers providers
 
 ```bash
 kubectl apply -f sp-manual.yaml
@@ -109,9 +109,9 @@ kubectl delete provider.pkg $PROVIDER_NAME
 7. Update smaller providers with `revisionActivationPolicy:Automatic`:
 
 ```bash
-sed 's/revisionActivationPolicy: Manual/revisionActivationPolicy: Automatic/' sp-config-manual.yaml > sp-config-automatic.yaml
+sed 's/revisionActivationPolicy: Manual/revisionActivationPolicy: Automatic/' sp-family-manual.yaml > sp-family-automatic.yaml
 
-kubectl apply -f sp-config-automatic.yaml
+kubectl apply -f sp-family-automatic.yaml
 ```
 
 
