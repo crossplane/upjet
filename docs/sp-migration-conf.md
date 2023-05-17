@@ -6,7 +6,7 @@
 ```bash
 kubectl get managed -o yaml > backup-mrs.yaml
 kubectl get composite -o yaml > backup-composites.yaml
-kubectl get claim -n $NAMESPACE -o yaml > backup-claims.yaml
+kubectl get claim --all-namespaces -o yaml > backup-claims.yaml
 ```
 
 2. Update deletion policy to `Orphan`:
@@ -30,7 +30,7 @@ kubectl get managed --no-headers -o jsonpath='{range .items[*]}{.apiVersion}{"\n
 do
   service=$(echo "${line}" | cut -d. -f1)
   provider=$(echo "${line}" | cut -d. -f2)
-  if [[ ${provider} == "upbound" ]]; then
+  if [ "${provider}" = "upbound" ]; then
     # azure.upbound.io is an exception where apiVersion does not contain the service name
     # we have those resources in the family package
     provider="azure"
@@ -41,12 +41,12 @@ do
     filename="sp-manual.yaml"
     providername="${provider}-${sp}"
     
-    if [[ "${sp}" == "config" ]] || [[ "${sp}" == "azure" ]]; then
-    # azure.upbound.io is an exception where apiVersion does not contain the service name
-    # we have those resources in the family package
-    providername="family-$provider"
-    filename="sp-family-manual.yaml"
-  fi
+    if [ "${sp}" = "config" ] || [ "${sp}" = "azure" ]; then
+      # azure.upbound.io is an exception where apiVersion does not contain the service name
+      # we have those resources in the family package
+      providername="family-$provider"
+      filename="sp-family-manual.yaml"
+    fi
     if ! cat "${filename}" | grep provider-${providername}:${version} > /dev/null; then
     echo "apiVersion: pkg.crossplane.io/v1
 kind: Provider
@@ -61,7 +61,7 @@ spec:
 done
 ```
 
-4. Install config providers with `revisionActivationPolicy: Manual`:
+4. Install family providers with `revisionActivationPolicy: Manual`:
 
 Verify that `sp-family-manual.yaml` files are generated with the correct content
 
@@ -89,7 +89,7 @@ Verify that `sp-manual.yaml` files are generated with the correct content
 cat sp-manual.yaml
 ```
 
-Install the family provider
+Install the smallers providers
 
 ```bash
 kubectl apply -f sp-manual.yaml
