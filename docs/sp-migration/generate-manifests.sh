@@ -1,8 +1,11 @@
 #!/bin/sh
 set -e
 
+# shellcheck disable=SC2034
 version_aws=v0.37.0
+# shellcheck disable=SC2034
 version_azure=v0.34.0
+# shellcheck disable=SC2034
 version_gcp=v0.34.0
 
 rm -f "sp-manual.yaml" && touch "sp-manual.yaml"
@@ -37,7 +40,8 @@ do
       providername="family-$provider"
       filename="sp-family-manual.yaml"
     fi
-    if ! cat "${filename}" | grep provider-${providername}:${version} > /dev/null; then
+    # shellcheck disable=SC2154
+    if ! grep provider-"${providername}:${version}" "${filename}" > /dev/null; then
     echo "apiVersion: pkg.crossplane.io/v1
 kind: Provider
 metadata:
