@@ -1,5 +1,5 @@
 
-# Configuration Migration to Smaller Providers
+# Migration to Smaller Providers
 
 1. Backup managed resource, composite and claim manifests:
 
@@ -10,14 +10,13 @@ kubectl get claim --all-namespaces -o yaml > backup-claims.yaml
 ```
 
 2. Update deletion policy to `Orphan`:
-
-P.S: If this field is used in the composition files, we need to have special treatment
+P.S: If this field is used in the managed resources, we need to have special treatment
 
 ```bash
 kubectl patch $(kubectl get managed -o name) -p '{"spec":{"deletionPolicy":"Orphan"}}' --type=merge
 ```
 
-3. Generate smaller provider manifests
+3. Generate smaller provider manifests with the script:
 
 ```bash
 export KUBECONFIG=<path of the Kubeconfig file>
@@ -72,7 +71,16 @@ Make sure the smaller providers are in `Installed: False` and `Healthy: True` st
 kubectl get providers.pkg
 ```
 
-6. Remove monolith provider(s) from dependsOn. Build/push and update the configuration
+6. If you installed monolith provider(s) as a configuration dependency; set `spec.skipDependencyResoultion: true` and 
+remove the configuration dependency from the lock resource to prevent reinstallation of the monolith provider(s).
+
+```bash
+kubectl patch configuration.pkg $CONFIGURATION_NAME -p '{"spec":{"skipDependencyResolution": true}}' --type=merge
+
+kubectl edit lock lock
+# remove `packages` array item where `type: Configuration` and `dependencies[0].package is the monolith provider
+# example lock resources can be found docs/sp-migration/example-lock-before.yaml and docs/sp-migration/example-lock-after.yaml
+```
 
 7. Delete monolith provider(s):
 
@@ -102,17 +110,18 @@ kubectl get managed
 kubectl get provider.pkg
 ```
 
-10. Find new dependencies and add them to `dependsOn` field in the `crossplane.yaml` file:
+10. If you want to add smaller providers to the configuration's `dependsOn` list, please follow the [guide] and build/push/update
+the configuration to the new version. Once the configuration is updated, change `skipDependencyResolution` to `false` again:
 
 ```bash
-export CONF_PATH=<root path of the configuration files>
-./find-dependencies.sh
+kubectl patch configuration.pkg $CONFIGURATION_NAME -p '{"spec":{"skipDependencyResolution": false}}' --type=merge
 ```
 
-12. Build/push/update the configuration to the new version
-
-13. Update deletion policy to `Delete`:
+11. Update deletion policy to `Delete`:
+P.S: If this field is used in the managed resources, we need to have special treatment
 
 ```bash
 kubectl patch $(kubectl get managed -o name) -p '{"spec":{"deletionPolicy":"Delete"}}' --type=merge
 ```
+
+[guide]: configuration-dependencies.md

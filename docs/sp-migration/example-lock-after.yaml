@@ -1,0 +1,16 @@
+apiVersion: pkg.crossplane.io/v1beta1
+kind: Lock
+metadata:
+  creationTimestamp: "2023-05-16T14:37:01Z"
+  finalizers:
+    - lock.pkg.crossplane.io
+  generation: 99
+  name: lock
+  resourceVersion: "1969272"
+  uid: aa60ed13-ec55-4047-b409-b96beb9fe286
+packages:
+  - dependencies: []
+    name: upbound-provider-gcp-a206c0fc297b
+    source: xpkg.upbound.io/upbound/provider-gcp
+    type: Provider
+    version: v0.32.0
