@@ -40,12 +40,16 @@ example organization name to be used.
     export TERRAFORM_DOCS_PATH := website/docs/r
     ```
 
-   You can find `TERRAFORM_PROVIDER_SOURCE` and `TERRAFORM_PROVIDER_VERSION` in
-   [Terraform GitHub provider] documentation by hitting the "**USE PROVIDER**"
-   button. Check [this line in controller Dockerfile] to see how these
-   variables are used to build the provider plugin binary. `TERRAFORM_DOCS_PATH`
-   is the directory where resource documentation is stored in the repository of
-   the Terraform provider.
+   - TERRAFORM_PROVIDER_SOURCE: You can find this variable in [Terraform GitHub provider] documentation by hitting the "**USE PROVIDER**" button. 
+   - TERRAFORM_PROVIDER_REPO: You can find this variable in [Terraform GitHub provider] documentation by clicking the "**Report an issue**" link. 
+   - TERRAFORM_PROVIDER_VERSION: You can find this variable in [Terraform GitHub provider] documentation by hitting the "**USE PROVIDER**" button.
+   - TERRAFORM_PROVIDER_DOWNLOAD_NAME: terraform-provider-<Lower case provider name (ex. github)>.
+   - TERRAFORM_NATIVE_PROVIDER_BINARY: terraform-provider-github_v<TERRAFORM_PROVIDER_VERSION>_x5
+   - TERRAFORM_DOCS_PATH: You can find this by going to the terraform provider repository => click `website` => click `docs` => click `resources`(where resource documentation is stored).
+
+   Check [this line in controller Dockerfile] to see how `TERRAFORM_PROVIDER_SOURCE` and `TERRAFORM_PROVIDER_VERSION` are used to build the provider plugin binary.
+
+   Please make sure your organization name in `PROJECT_REPO` is correct.
 
 5. Implement `ProviderConfig` logic. In `upjet-provider-template`, there is already
    a boilerplate code in file `internal/clients/github.go` which
@@ -57,11 +61,13 @@ example organization name to be used.
 
    ```go
    const (
+     ...
      keyBaseURL = "base_url"
      keyOwner = "owner"
      keyToken = "token"
    )
-
+   ```
+   ```go
    func TerraformSetupBuilder(version, providerSource, providerVersion string) terraform.SetupFn {
      ...
      // set provider configuration
@@ -91,6 +97,7 @@ example organization name to be used.
    // ExternalNameConfigs contains all external name configurations for this
    // provider.
    var ExternalNameConfigs = map[string]config.ExternalName{
+     ...
      // Name is a parameter and it is also used to import the resource.
      "github_repository": config.NameAsIdentifier,
      // The import ID consists of several parameters. We'll use branch name as
@@ -98,6 +105,8 @@ example organization name to be used.
      "github_branch": config.TemplatedStringAsIdentifier("branch", "{{ .parameters.repository }}:{{ .external_name }}:{{ .parameters.source_branch }}"),
    }
    ```
+
+   Please take a look at the Configuring a Resource documentation for more information about [external name configuration].
 
 7. Finally, we would need to add some custom configurations for these two
    resources as follows:
@@ -107,6 +116,8 @@ example organization name to be used.
    mkdir config/repository
    # Create custom configuration directory for whole branch group
    mkdir config/branch
+   # remove the sample directory which was a configuration in the template
+   rm -rf config/null
    ```
 
    ```bash
@@ -157,10 +168,9 @@ example organization name to be used.
    import (
        ...
 
-       tjconfig "github.com/upbound/upjet/pkg/config"
-       "github.com/upbound/upjet/pkg/types/conversion/cli"
-       "github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+       ujconfig "github.com/upbound/upjet/pkg/config"
 
+   -   "github.com/myorg/provider-github/config/null"
    +   "github.com/myorg/provider-github/config/branch"
    +   "github.com/myorg/provider-github/config/repository"
     )
@@ -182,6 +192,11 @@ example organization name to be used.
 
 
 8. Now we can generate our Upjet Provider:
+
+   Before we run make generate ensure to install `goimports`
+   ```
+   go install golang.org/x/tools/cmd/goimports@latest
+   ```
 
    ```bash
    make generate
@@ -287,6 +302,8 @@ Now let's test our generated resources.
 
 5. Run the provider:
 
+   Please make sure Terraform is installed before running the "make run" command, you can check [this guide](https://developer.hashicorp.com/terraform/downloads).
+   
    ```bash
    make run
    ```
@@ -343,3 +360,4 @@ Now let's test our generated resources.
 [this line in controller Dockerfile]: https://github.com/upbound/upjet-provider-template/blob/main/cluster/images/upjet-provider-template/Dockerfile#L20-L28
 [terraform-plugin-sdk]: https://github.com/hashicorp/terraform-plugin-sdk
 [new-resource-short]: add-new-resource-short.md
+[external name configuration]: https://github.com/upbound/upjet/blob/main/docs/add-new-resource-long.md#external-name
