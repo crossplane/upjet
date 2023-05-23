@@ -12,7 +12,7 @@ rm -f "sp-manual.yaml" && touch "sp-manual.yaml"
 rm -f "sp-family-manual.yaml" && touch "sp-family-manual.yaml"
 
 if [ -n "$CONF_PATH" ]; then
-  echo "Generating manifests from $CONF_PATH"
+  echo "Generating manifests from $CONF_PATH. No runtime Managed Resources will be included"
   apiGroups=$(grep -rh apiVersion: "$CONF_PATH" | grep -E '(aws|gcp|azure).upbound.io' | sort | uniq | tr -d '[:blank:]'| cut -d ":" -f 2)
 else
   echo "Generating manifests from current cluster"

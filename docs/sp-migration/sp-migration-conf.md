@@ -25,7 +25,7 @@ export KUBECONFIG=<path of the Kubeconfig file>
 ```
 
 Alternatively, you can generate the provider manifests out of the local
-Configuration files
+Configuration files. No runtime Managed Resources will be included in this case.
 
 ```bash
 export CONF_PATH=<root path of the configuration files>
