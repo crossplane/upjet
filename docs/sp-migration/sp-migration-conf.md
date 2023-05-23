@@ -24,6 +24,14 @@ export KUBECONFIG=<path of the Kubeconfig file>
 ./generate-manifests.sh
 ```
 
+Alternatively, you can generate the provider manifests out of the local
+Configuration files. No runtime Managed Resources will be included in this case.
+
+```bash
+export CONF_PATH=<root path of the configuration files>
+./generate-manifests.sh
+```
+
 4. Install family providers with `revisionActivationPolicy: Manual`:
 
 Verify that `sp-family-manual.yaml` files are generated with the correct content
