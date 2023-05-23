@@ -116,8 +116,6 @@ example organization name to be used.
    mkdir config/repository
    # Create custom configuration directory for whole branch group
    mkdir config/branch
-   # remove the sample directory which was a configuration in the template
-   rm -rf config/null
    ```
 
    ```bash
