@@ -16,8 +16,12 @@ package migration
 
 import (
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
+	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	xpv1 "github.com/crossplane/crossplane/apis/apiextensions/v1"
+	xpmetav1 "github.com/crossplane/crossplane/apis/pkg/meta/v1"
+	xpmetav1alpha1 "github.com/crossplane/crossplane/apis/pkg/meta/v1alpha1"
 	"github.com/pkg/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -27,6 +31,7 @@ import (
 
 const (
 	errFromUnstructured      = "failed to convert from unstructured.Unstructured to the managed resource type"
+	errFromUnstructuredConf  = "failed to convert from unstructured.Unstructured to Crossplane Configuration metadata"
 	errToUnstructured        = "failed to convert from the managed resource type to unstructured.Unstructured"
 	errRawExtensionUnmarshal = "failed to unmarshal runtime.RawExtension"
 
@@ -164,4 +169,48 @@ func addNameGVK(u unstructured.Unstructured, target map[string]any) map[string]a
 	}
 	target["metadata"] = m
 	return target
+}
+
+func toManagedResource(c runtime.ObjectCreater, u unstructured.Unstructured) (resource.Managed, bool, error) {
+	gvk := u.GroupVersionKind()
+	if gvk == xpv1.CompositionGroupVersionKind {
+		return nil, false, nil
+	}
+	obj, err := c.New(gvk)
+	if err != nil {
+		return nil, false, errors.Wrapf(err, errFmtNewObject, gvk)
+	}
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, obj); err != nil {
+		return nil, false, errors.Wrap(err, errFromUnstructured)
+	}
+	mg, ok := obj.(resource.Managed)
+	return mg, ok, nil
+}
+
+func toConfigurationV1(u unstructured.Unstructured) (*xpmetav1.Configuration, error) {
+	conf := &xpmetav1.Configuration{}
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, conf); err != nil {
+		return nil, errors.Wrap(err, errFromUnstructuredConf)
+	}
+	return conf, nil
+}
+
+func toConfigurationV1Alpha1(u unstructured.Unstructured) (*xpmetav1alpha1.Configuration, error) {
+	conf := &xpmetav1alpha1.Configuration{}
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, conf); err != nil {
+		return nil, errors.Wrap(err, errFromUnstructuredConf)
+	}
+	return conf, nil
+}
+
+func toConfiguration(u unstructured.Unstructured) (metav1.Object, error) {
+	var conf metav1.Object
+	var err error
+	switch u.GroupVersionKind().Version {
+	case "v1alpha1":
+		conf, err = toConfigurationV1Alpha1(u)
+	default:
+		conf, err = toConfigurationV1(u)
+	}
+	return conf, err
 }

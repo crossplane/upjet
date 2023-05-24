@@ -20,9 +20,12 @@ import (
 	"path/filepath"
 	"testing"
 
+	xpmetav1alpha1 "github.com/crossplane/crossplane/apis/pkg/meta/v1alpha1"
+
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	v1 "github.com/crossplane/crossplane/apis/apiextensions/v1"
+	xpmetav1 "github.com/crossplane/crossplane/apis/pkg/meta/v1"
 	"github.com/google/go-cmp/cmp"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -95,7 +98,7 @@ func TestGeneratePlan(t *testing.T) {
 						re:        AllCompositions,
 						converter: &testConverter{},
 					},
-				}),
+				}, nil),
 			},
 			want: want{
 				migrationPlanPath: "testdata/plan/generated/migration_plan.yaml",
@@ -111,6 +114,34 @@ func TestGeneratePlan(t *testing.T) {
 					"create-new-managed/sample-vpc.vpcs.faketargetapi.yaml",
 				},
 			},
+		},
+		"PlanWithConfigurationV1": {
+			fields: fields{
+				source: newTestSource(map[string]Metadata{
+					"testdata/plan/configurationv1.yaml": {}}),
+				target: newTestTarget(),
+				registry: getRegistryWithConverters(nil, nil, []configurationConverter{
+					{
+						re:        AllConfigurations,
+						converter: &testConverter{},
+					},
+				}),
+			},
+			want: want{},
+		},
+		"PlanWithConfigurationV1Alpha1": {
+			fields: fields{
+				source: newTestSource(map[string]Metadata{
+					"testdata/plan/configurationv1alpha1.yaml": {}}),
+				target: newTestTarget(),
+				registry: getRegistryWithConverters(nil, nil, []configurationConverter{
+					{
+						re:        AllConfigurations,
+						converter: &testConverter{},
+					},
+				}),
+			},
+			want: want{},
 		},
 	}
 	for name, tt := range tests {
@@ -239,6 +270,26 @@ func (f *testTarget) Delete(o UnstructuredWithMetadata) error {
 
 type testConverter struct{}
 
+func (f *testConverter) ConfigurationV1(c *xpmetav1.Configuration) error {
+	c.Spec.DependsOn = []xpmetav1.Dependency{
+		{
+			Provider: ptrFromString("xpkg.upbound.io/upbound/provider-aws-eks"),
+			Version:  ">=v0.17.0",
+		},
+	}
+	return nil
+}
+
+func (f *testConverter) ConfigurationV1Alpha1(c *xpmetav1alpha1.Configuration) error {
+	c.Spec.DependsOn = []xpmetav1alpha1.Dependency{
+		{
+			Provider: ptrFromString("xpkg.upbound.io/upbound/provider-aws-eks"),
+			Version:  ">=v0.17.0",
+		},
+	}
+	return nil
+}
+
 func (f *testConverter) PatchSets(psMap map[string]*v1.PatchSet) error {
 	psMap["ps1"].Patches[0].ToFieldPath = ptrFromString(`spec.forProvider.tags["key3"]`)
 	psMap["ps6"].Patches[0].ToFieldPath = ptrFromString(`spec.forProvider.tags["key4"]`)
@@ -249,13 +300,16 @@ func ptrFromString(s string) *string {
 	return &s
 }
 
-func getRegistryWithConverters(converters map[schema.GroupVersionKind]delegatingConverter, psConverters []patchSetConverter) *Registry {
+func getRegistryWithConverters(converters map[schema.GroupVersionKind]delegatingConverter, psConverters []patchSetConverter, confConverters []configurationConverter) *Registry {
 	scheme := runtime.NewScheme()
 	scheme.AddKnownTypeWithName(fake.MigrationSourceGVK, &fake.MigrationSourceObject{})
 	scheme.AddKnownTypeWithName(fake.MigrationTargetGVK, &fake.MigrationTargetObject{})
 	r := NewRegistry(scheme)
 	for _, c := range psConverters {
 		r.RegisterPatchSetConverter(c.re, c.converter)
+	}
+	for _, c := range confConverters {
+		r.RegisterConfigurationConverter(c.re, c.converter)
 	}
 	for gvk, d := range converters {
 		r.RegisterConversionFunctions(gvk, d.rFn, d.cmpFn, nil)

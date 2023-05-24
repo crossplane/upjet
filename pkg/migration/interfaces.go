@@ -17,6 +17,8 @@ package migration
 import (
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	xpv1 "github.com/crossplane/crossplane/apis/apiextensions/v1"
+	xpmetav1 "github.com/crossplane/crossplane/apis/pkg/meta/v1"
+	xpmetav1alpha1 "github.com/crossplane/crossplane/apis/pkg/meta/v1alpha1"
 )
 
 // ResourceConverter converts a managed resource from
@@ -69,6 +71,18 @@ type PatchSetConverter interface {
 	PatchSets(psMap map[string]*xpv1.PatchSet) error
 }
 
+// ConfigurationConverter converts a Crossplane Configuration's metadata.
+type ConfigurationConverter interface {
+	// ConfigurationV1 takes a Crossplane Configuration v1 metadata,
+	// converts it, and stores the converted metadata in its argument.
+	// Returns any errors encountered during the conversion.
+	ConfigurationV1(configuration *xpmetav1.Configuration) error
+	// ConfigurationV1Alpha1 takes a Crossplane Configuration v1alpha1
+	// metadata, converts it, and stores the converted metadata in its
+	// argument. Returns any errors encountered during the conversion.
+	ConfigurationV1Alpha1(configuration *xpmetav1alpha1.Configuration) error
+}
+
 // Source is a source for reading resource manifests
 type Source interface {
 	// HasNext returns `true` if the Source implementation has a next manifest
@@ -87,4 +101,19 @@ type Target interface {
 	Put(o UnstructuredWithMetadata) error
 	// Delete deletes a resource manifest from this Target
 	Delete(o UnstructuredWithMetadata) error
+}
+
+// Executor is a migration plan executor.
+type Executor interface {
+	// Init initializes an executor using the supplied executor specific
+	// configuration data.
+	Init(config any) error
+	// Step asks the executor to execute the next step passing any available
+	// context from the previous step, and returns any new context to be passed
+	// to the next step if there exists one.
+	Step(s Step, ctx any) (any, error)
+	// Destroy is called when all the steps have been executed,
+	// or a step has returned an error, and we would like to stop
+	// executing the plan.
+	Destroy() error
 }

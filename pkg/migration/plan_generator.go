@@ -21,6 +21,10 @@ import (
 	"strings"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	xpmetav1alpha1 "github.com/crossplane/crossplane/apis/pkg/meta/v1alpha1"
+
 	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
@@ -28,6 +32,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/resource/unstructured/claim"
 	"github.com/crossplane/crossplane-runtime/pkg/resource/unstructured/composite"
 	xpv1 "github.com/crossplane/crossplane/apis/apiextensions/v1"
+	xpmetav1 "github.com/crossplane/crossplane/apis/pkg/meta/v1"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -45,7 +50,8 @@ const (
 	errCompositePause          = "failed to pause composite resource"
 	errCompositesEdit          = "failed to edit composite resources"
 	errCompositesStart         = "failed to start composite resources"
-	errCompositionMigrate      = "failed to migrate the composition"
+	errCompositionMigrateFmt   = "failed to migrate the composition: %s"
+	errConfigurationMigrateFmt = "failed to migrate the configuration: %s"
 	errComposedTemplateBase    = "failed to migrate the base of a composed template"
 	errComposedTemplateMigrate = "failed to migrate the composed templates of the composition"
 	errResourceOutput          = "failed to output migrated resource"
@@ -197,17 +203,25 @@ func (pg *PlanGenerator) convert() error { //nolint: gocyclo
 			return errors.Wrap(err, errSourceNext)
 		}
 		switch gvk := o.Object.GroupVersionKind(); gvk {
+		case xpmetav1.ConfigurationGroupVersionKind, xpmetav1alpha1.ConfigurationGroupVersionKind:
+			target, converted, err := pg.convertConfiguration(o)
+			if err != nil {
+				return errors.Wrapf(err, errConfigurationMigrateFmt, o.Object.GetName())
+			}
+			if converted {
+				fmt.Printf("converted configuration: %v\n", target)
+			}
 		case xpv1.CompositionGroupVersionKind:
 			target, converted, err := pg.convertComposition(o)
 			if err != nil {
-				return errors.Wrap(err, errCompositionMigrate)
+				return errors.Wrapf(err, errCompositionMigrateFmt, o.Object.GetName())
 			}
 			if converted {
 				migratedName := fmt.Sprintf("%s-migrated", o.Object.GetName())
 				convertedComposition[o.Object.GetName()] = migratedName
 				target.Object.SetName(migratedName)
 				if err := pg.stepNewComposition(target); err != nil {
-					return errors.Wrap(err, errCompositionMigrate)
+					return errors.Wrapf(err, errCompositionMigrateFmt, o.Object.GetName())
 				}
 			}
 		default:
@@ -314,20 +328,38 @@ func assertMetadataName(parentName string, resources []resource.Managed) {
 	}
 }
 
-func toManagedResource(c runtime.ObjectCreater, u unstructured.Unstructured) (resource.Managed, bool, error) {
-	gvk := u.GroupVersionKind()
-	if gvk == xpv1.CompositionGroupVersionKind {
-		return nil, false, nil
+func (pg *PlanGenerator) convertConfiguration(o UnstructuredWithMetadata) (*UnstructuredWithMetadata, bool, error) {
+	isConverted := false
+	var conf metav1.Object
+	var err error
+	for _, confConv := range pg.registry.configurationConverters {
+		if confConv.re == nil || confConv.converter == nil || !confConv.re.MatchString(o.Object.GetName()) {
+			continue
+		}
+
+		conf, err = toConfiguration(o.Object)
+		if err != nil {
+			return nil, false, err
+		}
+		switch o.Object.GroupVersionKind().Version {
+		case "v1alpha1":
+			err = confConv.converter.ConfigurationV1Alpha1(conf.(*xpmetav1alpha1.Configuration))
+		default:
+			err = confConv.converter.ConfigurationV1(conf.(*xpmetav1.Configuration))
+		}
+		if err != nil {
+			return nil, false, errors.Wrapf(err, "failed to call converter on Configuration: %s", conf.GetName())
+		}
+		// TODO: if a configuration converter only converts a specific version,
+		// (or does not convert the given configuration),
+		// we will have a false positive. Better to compute and check
+		// a diff here.
+		isConverted = true
 	}
-	obj, err := c.New(gvk)
-	if err != nil {
-		return nil, false, errors.Wrapf(err, errFmtNewObject, gvk)
-	}
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, obj); err != nil {
-		return nil, false, errors.Wrap(err, errFromUnstructured)
-	}
-	mg, ok := obj.(resource.Managed)
-	return mg, ok, nil
+	return &UnstructuredWithMetadata{
+		Object:   ToSanitizedUnstructured(conf),
+		Metadata: o.Metadata,
+	}, isConverted, nil
 }
 
 func (pg *PlanGenerator) convertComposition(o UnstructuredWithMetadata) (*UnstructuredWithMetadata, bool, error) { // nolint:gocyclo
@@ -344,7 +376,7 @@ func (pg *PlanGenerator) convertComposition(o UnstructuredWithMetadata) (*Unstru
 	for _, cmp := range comp.Spec.Resources {
 		u, err := FromRawExtension(cmp.Base)
 		if err != nil {
-			return nil, false, errors.Wrap(err, errCompositionMigrate)
+			return nil, false, errors.Wrapf(err, errCompositionMigrateFmt, o.Object.GetName())
 		}
 		gvk := u.GroupVersionKind()
 		converted, ok, err := pg.convertResource(UnstructuredWithMetadata{
