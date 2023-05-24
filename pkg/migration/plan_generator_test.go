@@ -20,6 +20,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/google/go-cmp/cmp/cmpopts"
+
 	xpmetav1alpha1 "github.com/crossplane/crossplane/apis/pkg/meta/v1alpha1"
 
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
@@ -52,6 +54,14 @@ func TestGeneratePlan(t *testing.T) {
 		fields fields
 		want   want
 	}{
+		"EmptyPlan": {
+			fields: fields{
+				source:   newTestSource(map[string]Metadata{}),
+				target:   newTestTarget(),
+				registry: getRegistryWithConverters(nil, nil, nil),
+			},
+			want: want{},
+		},
 		"PlanWithManagedResourceAndClaim": {
 			fields: fields{
 				source: newTestSource(map[string]Metadata{
@@ -127,7 +137,12 @@ func TestGeneratePlan(t *testing.T) {
 					},
 				}),
 			},
-			want: want{},
+			want: want{
+				migrationPlanPath: "testdata/plan/generated/configurationv1_migration_plan.yaml",
+				migratedResourceNames: []string{
+					"edit-configurations/platform-ref-aws.configurations.meta.pkg.crossplane.io_v1.yaml",
+				},
+			},
 		},
 		"PlanWithConfigurationV1Alpha1": {
 			fields: fields{
@@ -141,7 +156,12 @@ func TestGeneratePlan(t *testing.T) {
 					},
 				}),
 			},
-			want: want{},
+			want: want{
+				migrationPlanPath: "testdata/plan/generated/configurationv1alpha1_migration_plan.yaml",
+				migratedResourceNames: []string{
+					"edit-configurations/platform-ref-aws.configurations.meta.pkg.crossplane.io_v1alpha1.yaml",
+				},
+			},
 		},
 	}
 	for name, tt := range tests {
@@ -160,7 +180,7 @@ func TestGeneratePlan(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to load plan file from path %s: %v", tt.want.migrationPlanPath, err)
 			}
-			if diff := cmp.Diff(p, &pg.Plan); diff != "" {
+			if diff := cmp.Diff(p, &pg.Plan, cmpopts.IgnoreUnexported(Spec{})); diff != "" {
 				t.Errorf("GeneratePlan(): -wantPlan, +gotPlan: %s", diff)
 			}
 			// compare generated migration files with the expected ones
@@ -318,10 +338,19 @@ func getRegistryWithConverters(converters map[schema.GroupVersionKind]delegating
 }
 
 func loadPlan(planPath string) (*Plan, error) {
+	if planPath == "" {
+		return emptyPlan(), nil
+	}
 	buff, err := os.ReadFile(planPath)
 	if err != nil {
 		return nil, err
 	}
 	p := &Plan{}
 	return p, k8syaml.Unmarshal(buff, p)
+}
+
+func emptyPlan() *Plan {
+	return &Plan{
+		Version: versionV010,
+	}
 }

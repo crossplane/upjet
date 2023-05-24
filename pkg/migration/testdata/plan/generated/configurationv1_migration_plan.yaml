@@ -1,0 +1,10 @@
+spec:
+  steps:
+  - patch:
+      type: merge
+      files:
+      - edit-configurations/platform-ref-aws.configurations.meta.pkg.crossplane.io_v1.yaml
+    name: edit-configurations
+    type: Patch
+
+version: 0.1.0
