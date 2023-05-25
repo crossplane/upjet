@@ -53,7 +53,7 @@ type Spec struct {
 	// Steps are the migration plan's steps that are expected
 	// to complete a migration when executed in order.
 	Steps   []Step `json:"steps,omitempty"`
-	stepMap map[step]*Step
+	stepMap map[string]*Step
 }
 
 // StepType is the type used to name a migration step

@@ -18,7 +18,12 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"regexp"
 	"testing"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	xppkgv1 "github.com/crossplane/crossplane/apis/pkg/v1"
 
 	"github.com/google/go-cmp/cmp/cmpopts"
 
@@ -58,7 +63,7 @@ func TestGeneratePlan(t *testing.T) {
 			fields: fields{
 				source:   newTestSource(map[string]Metadata{}),
 				target:   newTestTarget(),
-				registry: getRegistryWithConverters(nil, nil, nil),
+				registry: getRegistryWithConverters(nil, nil, nil, nil),
 			},
 			want: want{},
 		},
@@ -108,7 +113,7 @@ func TestGeneratePlan(t *testing.T) {
 						re:        AllCompositions,
 						converter: &testConverter{},
 					},
-				}, nil),
+				}, nil, nil),
 			},
 			want: want{
 				migrationPlanPath: "testdata/plan/generated/migration_plan.yaml",
@@ -133,13 +138,14 @@ func TestGeneratePlan(t *testing.T) {
 				registry: getRegistryWithConverters(nil, nil, []configurationConverter{
 					{
 						re:        AllConfigurations,
-						converter: &testConverter{},
+						converter: &configurationTestConverter{},
 					},
-				}),
+				}, nil),
 			},
 			want: want{
 				migrationPlanPath: "testdata/plan/generated/configurationv1_migration_plan.yaml",
 				migratedResourceNames: []string{
+					"skip-dependency-resolution/platform-ref-aws.configurations.meta.pkg.crossplane.io_v1.yaml",
 					"edit-configurations/platform-ref-aws.configurations.meta.pkg.crossplane.io_v1.yaml",
 				},
 			},
@@ -152,14 +158,82 @@ func TestGeneratePlan(t *testing.T) {
 				registry: getRegistryWithConverters(nil, nil, []configurationConverter{
 					{
 						re:        AllConfigurations,
-						converter: &testConverter{},
+						converter: &configurationTestConverter{},
 					},
-				}),
+				}, nil),
 			},
 			want: want{
 				migrationPlanPath: "testdata/plan/generated/configurationv1alpha1_migration_plan.yaml",
 				migratedResourceNames: []string{
+					"skip-dependency-resolution/platform-ref-aws.configurations.meta.pkg.crossplane.io_v1alpha1.yaml",
 					"edit-configurations/platform-ref-aws.configurations.meta.pkg.crossplane.io_v1alpha1.yaml",
+				},
+			},
+		},
+		"PlanWithProviderPackageV1": {
+			fields: fields{
+				source: newTestSource(map[string]Metadata{
+					"testdata/plan/providerv1.yaml": {}}),
+				target: newTestTarget(),
+				registry: getRegistryWithConverters(nil, nil, nil,
+					[]providerPackageConverter{
+						{
+							re:        regexp.MustCompile(`xpkg.upbound.io/upbound/provider-aws:.+`),
+							converter: &monolithProviderToFamilyConfigConverter{},
+						},
+						{
+							re:        regexp.MustCompile(`xpkg.upbound.io/upbound/provider-aws:.+`),
+							converter: &monolithicProviderToSSOPConverter{},
+						},
+					}),
+			},
+			want: want{
+				migrationPlanPath: "testdata/plan/generated/providerv1_migration_plan.yaml",
+				migratedResourceNames: []string{
+					"new-ssop/provider-family-aws.providers.pkg.crossplane.io_v1.yaml",
+					"new-ssop/provider-aws-ec2.providers.pkg.crossplane.io_v1.yaml",
+					"new-ssop/provider-aws-eks.providers.pkg.crossplane.io_v1.yaml",
+					"activate-ssop/provider-family-aws.providers.pkg.crossplane.io_v1.yaml",
+					"activate-ssop/provider-aws-ec2.providers.pkg.crossplane.io_v1.yaml",
+					"activate-ssop/provider-aws-eks.providers.pkg.crossplane.io_v1.yaml",
+				},
+			},
+		},
+		"PlanWithProviderPackageV1AndConfigurationV1": {
+			fields: fields{
+				source: newTestSource(map[string]Metadata{
+					"testdata/plan/providerv1.yaml":      {},
+					"testdata/plan/configurationv1.yaml": {}}),
+				target: newTestTarget(),
+				registry: getRegistryWithConverters(nil, nil,
+					[]configurationConverter{
+						{
+							re:        AllConfigurations,
+							converter: &configurationTestConverter{},
+						},
+					},
+					[]providerPackageConverter{
+						{
+							re:        regexp.MustCompile(`xpkg.upbound.io/upbound/provider-aws:.+`),
+							converter: &monolithProviderToFamilyConfigConverter{},
+						},
+						{
+							re:        regexp.MustCompile(`xpkg.upbound.io/upbound/provider-aws:.+`),
+							converter: &monolithicProviderToSSOPConverter{},
+						},
+					}),
+			},
+			want: want{
+				migrationPlanPath: "testdata/plan/generated/configurationv1_providerv1_migration_plan.yaml",
+				migratedResourceNames: []string{
+					"skip-dependency-resolution/platform-ref-aws.configurations.meta.pkg.crossplane.io_v1.yaml",
+					"edit-configurations/platform-ref-aws.configurations.meta.pkg.crossplane.io_v1.yaml",
+					"new-ssop/provider-family-aws.providers.pkg.crossplane.io_v1.yaml",
+					"new-ssop/provider-aws-ec2.providers.pkg.crossplane.io_v1.yaml",
+					"new-ssop/provider-aws-eks.providers.pkg.crossplane.io_v1.yaml",
+					"activate-ssop/provider-family-aws.providers.pkg.crossplane.io_v1.yaml",
+					"activate-ssop/provider-aws-ec2.providers.pkg.crossplane.io_v1.yaml",
+					"activate-ssop/provider-aws-eks.providers.pkg.crossplane.io_v1.yaml",
 				},
 			},
 		},
@@ -290,26 +364,6 @@ func (f *testTarget) Delete(o UnstructuredWithMetadata) error {
 
 type testConverter struct{}
 
-func (f *testConverter) ConfigurationV1(c *xpmetav1.Configuration) error {
-	c.Spec.DependsOn = []xpmetav1.Dependency{
-		{
-			Provider: ptrFromString("xpkg.upbound.io/upbound/provider-aws-eks"),
-			Version:  ">=v0.17.0",
-		},
-	}
-	return nil
-}
-
-func (f *testConverter) ConfigurationV1Alpha1(c *xpmetav1alpha1.Configuration) error {
-	c.Spec.DependsOn = []xpmetav1alpha1.Dependency{
-		{
-			Provider: ptrFromString("xpkg.upbound.io/upbound/provider-aws-eks"),
-			Version:  ">=v0.17.0",
-		},
-	}
-	return nil
-}
-
 func (f *testConverter) PatchSets(psMap map[string]*v1.PatchSet) error {
 	psMap["ps1"].Patches[0].ToFieldPath = ptrFromString(`spec.forProvider.tags["key3"]`)
 	psMap["ps6"].Patches[0].ToFieldPath = ptrFromString(`spec.forProvider.tags["key4"]`)
@@ -320,7 +374,7 @@ func ptrFromString(s string) *string {
 	return &s
 }
 
-func getRegistryWithConverters(converters map[schema.GroupVersionKind]delegatingConverter, psConverters []patchSetConverter, confConverters []configurationConverter) *Registry {
+func getRegistryWithConverters(converters map[schema.GroupVersionKind]delegatingConverter, psConverters []patchSetConverter, confConverters []configurationConverter, pkgconverters []providerPackageConverter) *Registry {
 	scheme := runtime.NewScheme()
 	scheme.AddKnownTypeWithName(fake.MigrationSourceGVK, &fake.MigrationSourceObject{})
 	scheme.AddKnownTypeWithName(fake.MigrationTargetGVK, &fake.MigrationTargetObject{})
@@ -331,8 +385,11 @@ func getRegistryWithConverters(converters map[schema.GroupVersionKind]delegating
 	for _, c := range confConverters {
 		r.RegisterConfigurationConverter(c.re, c.converter)
 	}
+	for _, c := range pkgconverters {
+		r.RegisterProviderPackageConverter(c.re, c.converter)
+	}
 	for gvk, d := range converters {
-		r.RegisterConversionFunctions(gvk, d.rFn, d.cmpFn, nil)
+		r.RegisterAPIConversionFunctions(gvk, d.rFn, d.cmpFn, nil)
 	}
 	return r
 }
@@ -353,4 +410,75 @@ func emptyPlan() *Plan {
 	return &Plan{
 		Version: versionV010,
 	}
+}
+
+type configurationTestConverter struct{}
+
+func (cc *configurationTestConverter) ConfigurationV1(c *xpmetav1.Configuration) error {
+	c.Spec.DependsOn = []xpmetav1.Dependency{
+		{
+			Provider: ptrFromString("xpkg.upbound.io/upbound/provider-aws-eks"),
+			Version:  ">=v0.17.0",
+		},
+	}
+	return nil
+}
+
+func (cc *configurationTestConverter) ConfigurationV1Alpha1(c *xpmetav1alpha1.Configuration) error {
+	c.Spec.DependsOn = []xpmetav1alpha1.Dependency{
+		{
+			Provider: ptrFromString("xpkg.upbound.io/upbound/provider-aws-eks"),
+			Version:  ">=v0.17.0",
+		},
+	}
+	return nil
+}
+
+type monolithProviderToFamilyConfigConverter struct{}
+
+func (c *monolithProviderToFamilyConfigConverter) ProviderPackageV1(_ xppkgv1.Provider) ([]xppkgv1.Provider, error) {
+	ap := xppkgv1.ManualActivation
+	return []xppkgv1.Provider{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "provider-family-aws",
+			},
+			Spec: xppkgv1.ProviderSpec{
+				PackageSpec: xppkgv1.PackageSpec{
+					Package:                  "xpkg.upbound.io/upbound/provider-family-aws:v0.37.0",
+					RevisionActivationPolicy: &ap,
+				},
+			},
+		},
+	}, nil
+}
+
+type monolithicProviderToSSOPConverter struct{}
+
+func (c *monolithicProviderToSSOPConverter) ProviderPackageV1(_ xppkgv1.Provider) ([]xppkgv1.Provider, error) {
+	ap := xppkgv1.ManualActivation
+	return []xppkgv1.Provider{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "provider-aws-ec2",
+			},
+			Spec: xppkgv1.ProviderSpec{
+				PackageSpec: xppkgv1.PackageSpec{
+					Package:                  "xpkg.upbound.io/upbound/provider-aws-ec2:v0.37.0",
+					RevisionActivationPolicy: &ap,
+				},
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "provider-aws-eks",
+			},
+			Spec: xppkgv1.ProviderSpec{
+				PackageSpec: xppkgv1.PackageSpec{
+					Package:                  "xpkg.upbound.io/upbound/provider-aws-eks:v0.37.0",
+					RevisionActivationPolicy: &ap,
+				},
+			},
+		},
+	}, nil
 }

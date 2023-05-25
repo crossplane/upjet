@@ -20,6 +20,7 @@ import (
 	xpv1 "github.com/crossplane/crossplane/apis/apiextensions/v1"
 	xpmetav1 "github.com/crossplane/crossplane/apis/pkg/meta/v1"
 	xpmetav1alpha1 "github.com/crossplane/crossplane/apis/pkg/meta/v1alpha1"
+	xppkgv1 "github.com/crossplane/crossplane/apis/pkg/v1"
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -30,8 +31,10 @@ import (
 )
 
 const (
-	errFromUnstructured      = "failed to convert from unstructured.Unstructured to the managed resource type"
-	errFromUnstructuredConf  = "failed to convert from unstructured.Unstructured to Crossplane Configuration metadata"
+	errFromUnstructured         = "failed to convert from unstructured.Unstructured to the managed resource type"
+	errFromUnstructuredConf     = "failed to convert from unstructured.Unstructured to Crossplane Configuration metadata"
+	errFromUnstructuredProvider = "failed to convert from unstructured.Unstructured to Crossplane Provider package"
+	// errFromUnstructuredLock     = "failed to convert from unstructured.Unstructured to Crossplane package lock"
 	errToUnstructured        = "failed to convert from the managed resource type to unstructured.Unstructured"
 	errRawExtensionUnmarshal = "failed to unmarshal runtime.RawExtension"
 
@@ -152,12 +155,17 @@ func convertToComposition(u map[string]interface{}) (*xpv1.Composition, error) {
 	return c, errors.Wrap(k8sjson.UnmarshalCaseSensitivePreserveInts(buff, c), "failed to unmarshal into a v1.Composition")
 }
 
-func addNameGVK(u unstructured.Unstructured, target map[string]any) map[string]any {
+func addGVK(u unstructured.Unstructured, target map[string]any) map[string]any {
 	if target == nil {
 		target = make(map[string]any)
 	}
 	target["apiVersion"] = u.GetAPIVersion()
 	target["kind"] = u.GetKind()
+	return target
+}
+
+func addNameGVK(u unstructured.Unstructured, target map[string]any) map[string]any {
+	target = addGVK(u, target)
 	m := target["metadata"]
 	if m == nil {
 		m = make(map[string]any)
@@ -214,3 +222,19 @@ func toConfiguration(u unstructured.Unstructured) (metav1.Object, error) {
 	}
 	return conf, err
 }
+
+func toProviderPackage(u unstructured.Unstructured) (*xppkgv1.Provider, error) {
+	pkg := &xppkgv1.Provider{}
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, pkg); err != nil {
+		return nil, errors.Wrap(err, errFromUnstructuredProvider)
+	}
+	return pkg, nil
+}
+
+/*func toPackageLock(u unstructured.Unstructured) (*xppkgv1beta1.Lock, error) {
+	lock := &xppkgv1beta1.Lock{}
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, lock); err != nil {
+		return nil, errors.Wrap(err, errFromUnstructuredLock)
+	}
+	return lock, nil
+}*/

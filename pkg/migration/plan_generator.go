@@ -19,6 +19,9 @@ import (
 	"reflect"
 	"time"
 
+	xppkgv1 "github.com/crossplane/crossplane/apis/pkg/v1"
+	xppkgv1beta1 "github.com/crossplane/crossplane/apis/pkg/v1beta1"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	xpmetav1alpha1 "github.com/crossplane/crossplane/apis/pkg/meta/v1alpha1"
@@ -45,6 +48,7 @@ const (
 	errCompositesStart         = "failed to start composite resources"
 	errCompositionMigrateFmt   = "failed to migrate the composition: %s"
 	errConfigurationMigrateFmt = "failed to migrate the configuration: %s"
+	errProviderMigrateFmt      = "failed to migrate the Provider package: %s"
 	errComposedTemplateBase    = "failed to migrate the base of a composed template"
 	errComposedTemplateMigrate = "failed to migrate the composed templates of the composition"
 	errResourceOutput          = "failed to output migrated resource"
@@ -94,6 +98,7 @@ type PlanGenerator struct {
 	source   Source
 	target   Target
 	registry *Registry
+	subSteps map[step]string
 	// Plan is the migration.Plan whose steps are expected
 	// to complete a migration when they're executed in order.
 	Plan Plan
@@ -116,6 +121,7 @@ func NewPlanGenerator(registry *Registry, source Source, target Target, opts ...
 		source:   source,
 		target:   target,
 		registry: registry,
+		subSteps: map[step]string{},
 	}
 	for _, o := range opts {
 		o(pg)
@@ -129,7 +135,7 @@ func NewPlanGenerator(registry *Registry, source Source, target Target, opts ...
 // PlanGenerator.Plan variable if the generation is successful
 // (i.e., no errors are reported).
 func (pg *PlanGenerator) GeneratePlan() error {
-	pg.Plan.Spec.stepMap = make(map[step]*Step)
+	pg.Plan.Spec.stepMap = make(map[string]*Step)
 	pg.Plan.Version = versionV010
 	defer pg.commitSteps()
 	return errors.Wrap(pg.convert(), errPlanGeneration)
@@ -189,7 +195,7 @@ func (pg *PlanGenerator) convert() error { //nolint: gocyclo
 				return errors.Wrapf(err, errConfigurationMigrateFmt, o.Object.GetName())
 			}
 			if converted {
-				if err := pg.stepEditConfiguration(o.Object, target, getVersionedName(target.Object)); err != nil {
+				if err := pg.stepEditConfiguration(o, target); err != nil {
 					return err
 				}
 			}
@@ -206,6 +212,17 @@ func (pg *PlanGenerator) convert() error { //nolint: gocyclo
 					return errors.Wrapf(err, errCompositionMigrateFmt, o.Object.GetName())
 				}
 			}
+		case xppkgv1.ProviderGroupVersionKind:
+			isConverted, err := pg.convertProviderPackage(o)
+			if err != nil {
+				return errors.Wrap(err, errProviderMigrateFmt)
+			}
+			if isConverted {
+				if err := pg.stepDeleteMonolith(o); err != nil {
+					return err
+				}
+			}
+		case xppkgv1beta1.LockGroupVersionKind:
 		default:
 			if o.Metadata.Category == CategoryComposite {
 				if err := pg.stepPauseComposite(&o); err != nil {
@@ -342,6 +359,43 @@ func (pg *PlanGenerator) convertConfiguration(o UnstructuredWithMetadata) (*Unst
 		Object:   ToSanitizedUnstructured(conf),
 		Metadata: o.Metadata,
 	}, isConverted, nil
+}
+
+func (pg *PlanGenerator) convertProviderPackage(o UnstructuredWithMetadata) (bool, error) {
+	pkg, err := toProviderPackage(o.Object)
+	if err != nil {
+		return false, err
+	}
+	isConverted := false
+	for _, pkgConv := range pg.registry.providerPackageConverters {
+		if pkgConv.re == nil || pkgConv.converter == nil || !pkgConv.re.MatchString(pkg.Spec.Package) {
+			continue
+		}
+		targetPkgs, err := pkgConv.converter.ProviderPackageV1(*pkg)
+		if err != nil {
+			return false, errors.Wrapf(err, "failed to call converter on Provider package: %s", pkg.Spec.Package)
+		}
+		// TODO: if a configuration converter only converts a specific version,
+		// (or does not convert the given configuration),
+		// we will have a false positive. Better to compute and check
+		// a diff here.
+		isConverted = true
+		converted := make([]*UnstructuredWithMetadata, 0, len(targetPkgs))
+		for _, p := range targetPkgs {
+			p := p
+			converted = append(converted, &UnstructuredWithMetadata{
+				Object:   ToSanitizedUnstructured(&p),
+				Metadata: o.Metadata,
+			})
+		}
+		if err := pg.stepNewSSOPs(o, converted); err != nil {
+			return false, err
+		}
+		if err := pg.stepActivateSSOPs(converted); err != nil {
+			return false, err
+		}
+	}
+	return isConverted, nil
 }
 
 func (pg *PlanGenerator) convertComposition(o UnstructuredWithMetadata) (*UnstructuredWithMetadata, bool, error) { // nolint:gocyclo

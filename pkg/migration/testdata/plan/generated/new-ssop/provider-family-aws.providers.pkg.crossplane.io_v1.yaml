@@ -1,0 +1,7 @@
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-family-aws
+spec:
+  package: xpkg.upbound.io/upbound/provider-family-aws:v0.37.0
+  revisionActivationPolicy: Manual

@@ -21,6 +21,8 @@ import (
 	xpv1 "github.com/crossplane/crossplane/apis/apiextensions/v1"
 	xpmetav1 "github.com/crossplane/crossplane/apis/pkg/meta/v1"
 	xpmetav1alpha1 "github.com/crossplane/crossplane/apis/pkg/meta/v1alpha1"
+	xppkgv1 "github.com/crossplane/crossplane/apis/pkg/v1"
+	xppkgv1beta1 "github.com/crossplane/crossplane/apis/pkg/v1beta1"
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -59,17 +61,29 @@ type configurationConverter struct {
 	converter ConfigurationConverter
 }
 
+type providerPackageConverter struct {
+	// re is the regular expression against which a Provider package's
+	// reference will be matched to determine whether the conversion function
+	// will be invoked.
+	re *regexp.Regexp
+	// converter is the ProviderPackageConverter to be run on the
+	// Provider package.
+	converter ProviderPackageConverter
+}
+
 // Registry is a registry of `migration.Converter`s keyed with
 // the associated `schema.GroupVersionKind`s and an associated
 // runtime.Scheme with which the corresponding types are registered.
 type Registry struct {
-	resourceConverters      map[schema.GroupVersionKind]ResourceConverter
-	templateConverters      map[schema.GroupVersionKind]ComposedTemplateConverter
-	patchSetConverters      []patchSetConverter
-	configurationConverters []configurationConverter
-	scheme                  *runtime.Scheme
-	claimTypes              []schema.GroupVersionKind
-	compositeTypes          []schema.GroupVersionKind
+	resourceConverters        map[schema.GroupVersionKind]ResourceConverter
+	templateConverters        map[schema.GroupVersionKind]ComposedTemplateConverter
+	patchSetConverters        []patchSetConverter
+	configurationConverters   []configurationConverter
+	providerPackageConverters []providerPackageConverter
+	packageLockConverters     []PackageLockConverter
+	scheme                    *runtime.Scheme
+	claimTypes                []schema.GroupVersionKind
+	compositeTypes            []schema.GroupVersionKind
 }
 
 // NewRegistry returns a new Registry initialized with
@@ -135,15 +149,52 @@ func (r *Registry) RegisterConfigurationConverter(re *regexp.Regexp, confConv Co
 	})
 }
 
+// RegisterConfigurationV1ConversionFunction registers the specified
+// ConfigurationV1ConversionFn for the v1 configurations whose name match
+// the given regular expression.
 func (r *Registry) RegisterConfigurationV1ConversionFunction(re *regexp.Regexp, confConversionFn ConfigurationV1ConversionFn) {
 	r.RegisterConfigurationConverter(re, &delegatingConverter{
 		confV1Fn: confConversionFn,
 	})
 }
 
+// RegisterConfigurationV1Alpha1ConversionFunction registers the specified
+// ConfigurationV1Alpha1ConversionFn for the v1alpha1 configurations
+// whose name match the given regular expression.
 func (r *Registry) RegisterConfigurationV1Alpha1ConversionFunction(re *regexp.Regexp, confConversionFn ConfigurationV1Alpha1ConversionFn) {
 	r.RegisterConfigurationConverter(re, &delegatingConverter{
 		confV1Alpha1Fn: confConversionFn,
+	})
+}
+
+// RegisterProviderPackageConverter registers the given ProviderPackageConverter
+// for the provider packages whose references match the given regular expression.
+func (r *Registry) RegisterProviderPackageConverter(re *regexp.Regexp, pkgConv ProviderPackageConverter) {
+	r.providerPackageConverters = append(r.providerPackageConverters, providerPackageConverter{
+		re:        re,
+		converter: pkgConv,
+	})
+}
+
+// RegisterProviderPackageV1ConversionFunction registers the specified
+// ProviderPackageV1ConversionFn for the provider v1 packages whose reference
+// match the given regular expression.
+func (r *Registry) RegisterProviderPackageV1ConversionFunction(re *regexp.Regexp, pkgConversionFn ProviderPackageV1ConversionFn) {
+	r.RegisterProviderPackageConverter(re, &delegatingConverter{
+		providerPackageV1Fn: pkgConversionFn,
+	})
+}
+
+// RegisterPackageLockConverter registers the given PackageLockConverter.
+func (r *Registry) RegisterPackageLockConverter(lockConv PackageLockConverter) {
+	r.packageLockConverters = append(r.packageLockConverters, lockConv)
+}
+
+// RegisterPackageLockV1Beta1ConversionFunction registers the specified
+// RegisterPackageLockV1Beta1ConversionFunction for the package v1beta1 locks.
+func (r *Registry) RegisterPackageLockV1Beta1ConversionFunction(lockConversionFn PackageLockV1Beta1ConversionFn) {
+	r.RegisterPackageLockConverter(&delegatingConverter{
+		packageLockV1Beta1Fn: lockConversionFn,
 	})
 }
 
@@ -200,7 +251,8 @@ func (r *Registry) GetAllRegisteredGVKs() []schema.GroupVersionKind {
 	gvks = append(gvks, r.claimTypes...)
 	gvks = append(gvks, r.compositeTypes...)
 	gvks = append(gvks, r.GetManagedResourceGVKs()...)
-	gvks = append(gvks, xpv1.CompositionGroupVersionKind, xpmetav1.ConfigurationGroupVersionKind, xpmetav1alpha1.ConfigurationGroupVersionKind)
+	gvks = append(gvks, xpv1.CompositionGroupVersionKind, xpmetav1.ConfigurationGroupVersionKind, xpmetav1alpha1.ConfigurationGroupVersionKind,
+		xppkgv1.ProviderGroupVersionKind, xppkgv1beta1.LockGroupVersionKind)
 	return gvks
 }
 
@@ -228,12 +280,38 @@ type ConfigurationV1ConversionFn func(configuration *xpmetav1.Configuration) err
 // Configuration metadata.
 type ConfigurationV1Alpha1ConversionFn func(configuration *xpmetav1alpha1.Configuration) error
 
+// PackageLockV1Beta1ConversionFn is a function that converts the specified
+// migration source package v1beta1 lock to the migration target
+// package lock.
+type PackageLockV1Beta1ConversionFn func(pkg *xppkgv1beta1.Lock) error
+
+// ProviderPackageV1ConversionFn is a function that converts the specified
+// migration source provider v1 package to the migration target
+// Provider package(s).
+type ProviderPackageV1ConversionFn func(pkg xppkgv1.Provider) ([]xppkgv1.Provider, error)
+
 type delegatingConverter struct {
-	rFn            ResourceConversionFn
-	cmpFn          ComposedTemplateConversionFn
-	psFn           PatchSetsConversionFn
-	confV1Fn       ConfigurationV1ConversionFn
-	confV1Alpha1Fn ConfigurationV1Alpha1ConversionFn
+	rFn                  ResourceConversionFn
+	cmpFn                ComposedTemplateConversionFn
+	psFn                 PatchSetsConversionFn
+	confV1Fn             ConfigurationV1ConversionFn
+	confV1Alpha1Fn       ConfigurationV1Alpha1ConversionFn
+	providerPackageV1Fn  ProviderPackageV1ConversionFn
+	packageLockV1Beta1Fn PackageLockV1Beta1ConversionFn
+}
+
+func (d *delegatingConverter) PackageLockV1Beta1(lock *xppkgv1beta1.Lock) error {
+	if d.packageLockV1Beta1Fn == nil {
+		return nil
+	}
+	return d.packageLockV1Beta1Fn(lock)
+}
+
+func (d *delegatingConverter) ProviderPackageV1(pkg xppkgv1.Provider) ([]xppkgv1.Provider, error) {
+	if d.providerPackageV1Fn == nil {
+		return []xppkgv1.Provider{pkg}, nil
+	}
+	return d.providerPackageV1Fn(pkg)
 }
 
 func (d *delegatingConverter) ConfigurationV1(c *xpmetav1.Configuration) error {
@@ -276,13 +354,13 @@ func (d *delegatingConverter) ComposedTemplate(sourceTemplate xpv1.ComposedTempl
 	return d.cmpFn(sourceTemplate, convertedTemplates...)
 }
 
-// RegisterConversionFunctions registers the supplied ResourceConversionFn and
+// RegisterAPIConversionFunctions registers the supplied ResourceConversionFn and
 // ComposedTemplateConversionFn for the specified GVK, and the supplied
 // PatchSetsConversionFn for all the discovered Compositions.
 // The specified GVK must belong to a Crossplane managed resource type and
 // the type must already have been registered with this registry's scheme
 // by calling Registry.AddToScheme.
-func (r *Registry) RegisterConversionFunctions(gvk schema.GroupVersionKind, rFn ResourceConversionFn, cmpFn ComposedTemplateConversionFn, psFn PatchSetsConversionFn) {
+func (r *Registry) RegisterAPIConversionFunctions(gvk schema.GroupVersionKind, rFn ResourceConversionFn, cmpFn ComposedTemplateConversionFn, psFn PatchSetsConversionFn) {
 	d := &delegatingConverter{
 		rFn:   rFn,
 		cmpFn: cmpFn,
@@ -290,4 +368,15 @@ func (r *Registry) RegisterConversionFunctions(gvk schema.GroupVersionKind, rFn 
 	}
 	r.RegisterPatchSetConverter(AllCompositions, d)
 	r.RegisterCompositionConverter(gvk, d)
+}
+
+// RegisterConversionFunctions registers the supplied ResourceConversionFn and
+// ComposedTemplateConversionFn for the specified GVK, and the supplied
+// PatchSetsConversionFn for all the discovered Compositions.
+// The specified GVK must belong to a Crossplane managed resource type and
+// the type must already have been registered with this registry's scheme
+// by calling Registry.AddToScheme.
+// Deprecated: Use RegisterAPIConversionFunctions instead.
+func (r *Registry) RegisterConversionFunctions(gvk schema.GroupVersionKind, rFn ResourceConversionFn, cmpFn ComposedTemplateConversionFn, psFn PatchSetsConversionFn) {
+	r.RegisterAPIConversionFunctions(gvk, rFn, cmpFn, psFn)
 }

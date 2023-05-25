@@ -52,18 +52,29 @@ func setPatchStep(name string, s *Step) {
 	s.Patch.Type = PatchTypeMerge
 }
 
+func setDeleteStep(name string, s *Step) {
+	s.Name = name
+	s.Type = StepTypeDelete
+	deletePolicy := FinalizerPolicyRemove
+	s.Delete = &DeleteStep{
+		Options: &DeleteOptions{
+			FinalizerPolicy: &deletePolicy,
+		},
+	}
+}
+
 func (pg *PlanGenerator) commitSteps() {
 	if len(pg.Plan.Spec.stepMap) == 0 {
 		return
 	}
 	pg.Plan.Spec.Steps = make([]Step, 0, len(pg.Plan.Spec.stepMap))
-	keys := make([]int, 0, len(pg.Plan.Spec.stepMap))
+	keys := make([]string, 0, len(pg.Plan.Spec.stepMap))
 	for s := range pg.Plan.Spec.stepMap {
-		keys = append(keys, int(s))
+		keys = append(keys, s)
 	}
-	sort.Ints(keys)
+	sort.Strings(keys)
 	for _, s := range keys {
-		pg.Plan.Spec.Steps = append(pg.Plan.Spec.Steps, *pg.Plan.Spec.stepMap[step(s)])
+		pg.Plan.Spec.Steps = append(pg.Plan.Spec.Steps, *pg.Plan.Spec.stepMap[s])
 	}
 }
 

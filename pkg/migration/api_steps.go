@@ -222,50 +222,44 @@ func (pg *PlanGenerator) stepEditClaims(claims []UnstructuredWithMetadata, conve
 // "migration templates" instead of a static plan. But a static plan should be
 // fine as a start.
 func (pg *PlanGenerator) stepAPI(s step) *Step { // nolint:gocyclo // all steps under a single clause for readability
-	if pg.Plan.Spec.stepMap[s] != nil {
-		return pg.Plan.Spec.stepMap[s]
+	stepKey := strconv.Itoa(int(s))
+	if pg.Plan.Spec.stepMap[stepKey] != nil {
+		return pg.Plan.Spec.stepMap[stepKey]
 	}
 
-	pg.Plan.Spec.stepMap[s] = &Step{}
+	pg.Plan.Spec.stepMap[stepKey] = &Step{}
 	switch s { // nolint:exhaustive
 	case stepPauseManaged:
-		setPatchStep("pause-managed", pg.Plan.Spec.stepMap[s])
+		setPatchStep("pause-managed", pg.Plan.Spec.stepMap[stepKey])
 
 	case stepPauseComposites:
-		setPatchStep("pause-composites", pg.Plan.Spec.stepMap[s])
+		setPatchStep("pause-composites", pg.Plan.Spec.stepMap[stepKey])
 
 	case stepCreateNewManaged:
-		setApplyStep("create-new-managed", pg.Plan.Spec.stepMap[s])
+		setApplyStep("create-new-managed", pg.Plan.Spec.stepMap[stepKey])
 
 	case stepNewCompositions:
-		setApplyStep("new-compositions", pg.Plan.Spec.stepMap[s])
+		setApplyStep("new-compositions", pg.Plan.Spec.stepMap[stepKey])
 
 	case stepEditComposites:
-		setPatchStep("edit-composites", pg.Plan.Spec.stepMap[s])
+		setPatchStep("edit-composites", pg.Plan.Spec.stepMap[stepKey])
 
 	case stepEditClaims:
-		setPatchStep("edit-claims", pg.Plan.Spec.stepMap[s])
+		setPatchStep("edit-claims", pg.Plan.Spec.stepMap[stepKey])
 
 	case stepDeletionPolicyOrphan:
-		setPatchStep("deletion-policy-orphan", pg.Plan.Spec.stepMap[s])
+		setPatchStep("deletion-policy-orphan", pg.Plan.Spec.stepMap[stepKey])
 
 	case stepDeleteOldManaged:
-		pg.Plan.Spec.stepMap[s].Name = "delete-old-managed"
-		pg.Plan.Spec.stepMap[s].Type = StepTypeDelete
-		deletePolicy := FinalizerPolicyRemove
-		pg.Plan.Spec.stepMap[s].Delete = &DeleteStep{
-			Options: &DeleteOptions{
-				FinalizerPolicy: &deletePolicy,
-			},
-		}
+		setDeleteStep("delete-old-managed", pg.Plan.Spec.stepMap[stepKey])
 
 	case stepStartManaged:
-		setPatchStep("start-managed", pg.Plan.Spec.stepMap[s])
+		setPatchStep("start-managed", pg.Plan.Spec.stepMap[stepKey])
 
 	case stepStartComposites:
-		setPatchStep("start-composites", pg.Plan.Spec.stepMap[s])
+		setPatchStep("start-composites", pg.Plan.Spec.stepMap[stepKey])
 	default:
 		panic(fmt.Sprintf(errInvalidStepFmt, s))
 	}
-	return pg.Plan.Spec.stepMap[s]
+	return pg.Plan.Spec.stepMap[stepKey]
 }
