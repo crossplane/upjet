@@ -1,6 +1,0 @@
-apiVersion: meta.pkg.crossplane.io/v1
-kind: Configuration
-metadata:
-  name: platform-ref-aws
-spec:
-  skipDependencyResolution: true

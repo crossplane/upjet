@@ -73,16 +73,25 @@ type PatchSetConverter interface {
 	PatchSets(psMap map[string]*xpv1.PatchSet) error
 }
 
-// ConfigurationConverter converts a Crossplane Configuration's metadata.
-type ConfigurationConverter interface {
-	// ConfigurationV1 takes a Crossplane Configuration v1 metadata,
+// ConfigurationMetadataConverter converts a Crossplane Configuration's metadata.
+type ConfigurationMetadataConverter interface {
+	// ConfigurationMetadataV1 takes a Crossplane Configuration v1 metadata,
 	// converts it, and stores the converted metadata in its argument.
 	// Returns any errors encountered during the conversion.
-	ConfigurationV1(configuration *xpmetav1.Configuration) error
-	// ConfigurationV1Alpha1 takes a Crossplane Configuration v1alpha1
+	ConfigurationMetadataV1(configuration *xpmetav1.Configuration) error
+	// ConfigurationMetadataV1Alpha1 takes a Crossplane Configuration v1alpha1
 	// metadata, converts it, and stores the converted metadata in its
 	// argument. Returns any errors encountered during the conversion.
-	ConfigurationV1Alpha1(configuration *xpmetav1alpha1.Configuration) error
+	ConfigurationMetadataV1Alpha1(configuration *xpmetav1alpha1.Configuration) error
+}
+
+// ConfigurationPackageConverter converts a Crossplane configuration package.
+type ConfigurationPackageConverter interface {
+	// ConfigurationPackageV1 takes a Crossplane Configuration v1 package,
+	// converts it possibly to multiple packages and returns
+	// the converted configuration package.
+	// Returns any errors encountered during the conversion.
+	ConfigurationPackageV1(pkg *xppkgv1.Configuration) error
 }
 
 // ProviderPackageConverter converts a Crossplane provider package.

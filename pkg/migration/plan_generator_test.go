@@ -63,7 +63,7 @@ func TestGeneratePlan(t *testing.T) {
 			fields: fields{
 				source:   newTestSource(map[string]Metadata{}),
 				target:   newTestTarget(),
-				registry: getRegistryWithConverters(nil, nil, nil, nil),
+				registry: getRegistryWithConverters(nil, nil, nil, nil, nil),
 			},
 			want: want{},
 		},
@@ -113,7 +113,7 @@ func TestGeneratePlan(t *testing.T) {
 						re:        AllCompositions,
 						converter: &testConverter{},
 					},
-				}, nil, nil),
+				}, nil, nil, nil),
 			},
 			want: want{
 				migrationPlanPath: "testdata/plan/generated/migration_plan.yaml",
@@ -135,18 +135,17 @@ func TestGeneratePlan(t *testing.T) {
 				source: newTestSource(map[string]Metadata{
 					"testdata/plan/configurationv1.yaml": {}}),
 				target: newTestTarget(),
-				registry: getRegistryWithConverters(nil, nil, []configurationConverter{
+				registry: getRegistryWithConverters(nil, nil, []configurationMetadataConverter{
 					{
 						re:        AllConfigurations,
-						converter: &configurationTestConverter{},
+						converter: &configurationMetaTestConverter{},
 					},
-				}, nil),
+				}, nil, nil),
 			},
 			want: want{
 				migrationPlanPath: "testdata/plan/generated/configurationv1_migration_plan.yaml",
 				migratedResourceNames: []string{
-					"skip-dependency-resolution/platform-ref-aws.configurations.meta.pkg.crossplane.io_v1.yaml",
-					"edit-configurations/platform-ref-aws.configurations.meta.pkg.crossplane.io_v1.yaml",
+					"edit-configuration-metadata/platform-ref-aws.configurations.meta.pkg.crossplane.io_v1.yaml",
 				},
 			},
 		},
@@ -155,18 +154,17 @@ func TestGeneratePlan(t *testing.T) {
 				source: newTestSource(map[string]Metadata{
 					"testdata/plan/configurationv1alpha1.yaml": {}}),
 				target: newTestTarget(),
-				registry: getRegistryWithConverters(nil, nil, []configurationConverter{
+				registry: getRegistryWithConverters(nil, nil, []configurationMetadataConverter{
 					{
 						re:        AllConfigurations,
-						converter: &configurationTestConverter{},
+						converter: &configurationMetaTestConverter{},
 					},
-				}, nil),
+				}, nil, nil),
 			},
 			want: want{
 				migrationPlanPath: "testdata/plan/generated/configurationv1alpha1_migration_plan.yaml",
 				migratedResourceNames: []string{
-					"skip-dependency-resolution/platform-ref-aws.configurations.meta.pkg.crossplane.io_v1alpha1.yaml",
-					"edit-configurations/platform-ref-aws.configurations.meta.pkg.crossplane.io_v1alpha1.yaml",
+					"edit-configuration-metadata/platform-ref-aws.configurations.meta.pkg.crossplane.io_v1alpha1.yaml",
 				},
 			},
 		},
@@ -175,7 +173,7 @@ func TestGeneratePlan(t *testing.T) {
 				source: newTestSource(map[string]Metadata{
 					"testdata/plan/providerv1.yaml": {}}),
 				target: newTestTarget(),
-				registry: getRegistryWithConverters(nil, nil, nil,
+				registry: getRegistryWithConverters(nil, nil, nil, nil,
 					[]providerPackageConverter{
 						{
 							re:        regexp.MustCompile(`xpkg.upbound.io/upbound/provider-aws:.+`),
@@ -202,14 +200,21 @@ func TestGeneratePlan(t *testing.T) {
 		"PlanWithProviderPackageV1AndConfigurationV1": {
 			fields: fields{
 				source: newTestSource(map[string]Metadata{
-					"testdata/plan/providerv1.yaml":      {},
-					"testdata/plan/configurationv1.yaml": {}}),
+					"testdata/plan/providerv1.yaml":         {},
+					"testdata/plan/configurationv1.yaml":    {},
+					"testdata/plan/configurationpkgv1.yaml": {},
+				}),
 				target: newTestTarget(),
 				registry: getRegistryWithConverters(nil, nil,
-					[]configurationConverter{
+					[]configurationMetadataConverter{
 						{
 							re:        AllConfigurations,
-							converter: &configurationTestConverter{},
+							converter: &configurationMetaTestConverter{},
+						},
+					}, []configurationPackageConverter{
+						{
+							re:        regexp.MustCompile(`xpkg.upbound.io/upbound/provider-ref-aws:.+`),
+							converter: &configurationPackageTestConverter{},
 						},
 					},
 					[]providerPackageConverter{
@@ -226,8 +231,10 @@ func TestGeneratePlan(t *testing.T) {
 			want: want{
 				migrationPlanPath: "testdata/plan/generated/configurationv1_providerv1_migration_plan.yaml",
 				migratedResourceNames: []string{
-					"skip-dependency-resolution/platform-ref-aws.configurations.meta.pkg.crossplane.io_v1.yaml",
-					"edit-configurations/platform-ref-aws.configurations.meta.pkg.crossplane.io_v1.yaml",
+					"disable-dependency-resolution/platform-ref-aws.configurations.pkg.crossplane.io_v1.yaml",
+					"edit-configuration-package/platform-ref-aws.configurations.pkg.crossplane.io_v1.yaml",
+					"enable-dependency-resolution/platform-ref-aws.configurations.pkg.crossplane.io_v1.yaml",
+					"edit-configuration-metadata/platform-ref-aws.configurations.meta.pkg.crossplane.io_v1.yaml",
 					"new-ssop/provider-family-aws.providers.pkg.crossplane.io_v1.yaml",
 					"new-ssop/provider-aws-ec2.providers.pkg.crossplane.io_v1.yaml",
 					"new-ssop/provider-aws-eks.providers.pkg.crossplane.io_v1.yaml",
@@ -374,7 +381,8 @@ func ptrFromString(s string) *string {
 	return &s
 }
 
-func getRegistryWithConverters(converters map[schema.GroupVersionKind]delegatingConverter, psConverters []patchSetConverter, confConverters []configurationConverter, pkgconverters []providerPackageConverter) *Registry {
+func getRegistryWithConverters(converters map[schema.GroupVersionKind]delegatingConverter, psConverters []patchSetConverter, confMetaConverters []configurationMetadataConverter, confPackageConverters []configurationPackageConverter,
+	providerPkgConverters []providerPackageConverter) *Registry {
 	scheme := runtime.NewScheme()
 	scheme.AddKnownTypeWithName(fake.MigrationSourceGVK, &fake.MigrationSourceObject{})
 	scheme.AddKnownTypeWithName(fake.MigrationTargetGVK, &fake.MigrationTargetObject{})
@@ -382,10 +390,13 @@ func getRegistryWithConverters(converters map[schema.GroupVersionKind]delegating
 	for _, c := range psConverters {
 		r.RegisterPatchSetConverter(c.re, c.converter)
 	}
-	for _, c := range confConverters {
+	for _, c := range confMetaConverters {
 		r.RegisterConfigurationConverter(c.re, c.converter)
 	}
-	for _, c := range pkgconverters {
+	for _, c := range confPackageConverters {
+		r.RegisterConfigurationPackageConverter(c.re, c.converter)
+	}
+	for _, c := range providerPkgConverters {
 		r.RegisterProviderPackageConverter(c.re, c.converter)
 	}
 	for gvk, d := range converters {
@@ -412,9 +423,16 @@ func emptyPlan() *Plan {
 	}
 }
 
-type configurationTestConverter struct{}
+type configurationPackageTestConverter struct{}
 
-func (cc *configurationTestConverter) ConfigurationV1(c *xpmetav1.Configuration) error {
+func (c *configurationPackageTestConverter) ConfigurationPackageV1(pkg *xppkgv1.Configuration) error {
+	pkg.Spec.Package = "xpkg.upbound.io/upbound/provider-ref-aws:v0.2.0-ssop"
+	return nil
+}
+
+type configurationMetaTestConverter struct{}
+
+func (cc *configurationMetaTestConverter) ConfigurationMetadataV1(c *xpmetav1.Configuration) error {
 	c.Spec.DependsOn = []xpmetav1.Dependency{
 		{
 			Provider: ptrFromString("xpkg.upbound.io/upbound/provider-aws-eks"),
@@ -424,7 +442,7 @@ func (cc *configurationTestConverter) ConfigurationV1(c *xpmetav1.Configuration)
 	return nil
 }
 
-func (cc *configurationTestConverter) ConfigurationV1Alpha1(c *xpmetav1alpha1.Configuration) error {
+func (cc *configurationMetaTestConverter) ConfigurationMetadataV1Alpha1(c *xpmetav1alpha1.Configuration) error {
 	c.Spec.DependsOn = []xpmetav1alpha1.Dependency{
 		{
 			Provider: ptrFromString("xpkg.upbound.io/upbound/provider-aws-eks"),

@@ -51,14 +51,24 @@ type patchSetConverter struct {
 	converter PatchSetConverter
 }
 
-type configurationConverter struct {
+type configurationMetadataConverter struct {
 	// re is the regular expression against which a Configuration's name
 	// will be matched to determine whether the conversion function
 	// will be invoked.
 	re *regexp.Regexp
-	// converter is the ConfigurationConverter to be run on the Configuration's
+	// converter is the ConfigurationMetadataConverter to be run on the Configuration's
 	// metadata.
-	converter ConfigurationConverter
+	converter ConfigurationMetadataConverter
+}
+
+type configurationPackageConverter struct {
+	// re is the regular expression against which a Configuration package's
+	// reference will be matched to determine whether the conversion function
+	// will be invoked.
+	re *regexp.Regexp
+	// converter is the ConfigurationPackageConverter to be run on the
+	// Configuration package.
+	converter ConfigurationPackageConverter
 }
 
 type providerPackageConverter struct {
@@ -75,15 +85,16 @@ type providerPackageConverter struct {
 // the associated `schema.GroupVersionKind`s and an associated
 // runtime.Scheme with which the corresponding types are registered.
 type Registry struct {
-	resourceConverters        map[schema.GroupVersionKind]ResourceConverter
-	templateConverters        map[schema.GroupVersionKind]ComposedTemplateConverter
-	patchSetConverters        []patchSetConverter
-	configurationConverters   []configurationConverter
-	providerPackageConverters []providerPackageConverter
-	packageLockConverters     []PackageLockConverter
-	scheme                    *runtime.Scheme
-	claimTypes                []schema.GroupVersionKind
-	compositeTypes            []schema.GroupVersionKind
+	resourceConverters             map[schema.GroupVersionKind]ResourceConverter
+	templateConverters             map[schema.GroupVersionKind]ComposedTemplateConverter
+	patchSetConverters             []patchSetConverter
+	configurationConverters        []configurationMetadataConverter
+	configurationPackageConverters []configurationPackageConverter
+	providerPackageConverters      []providerPackageConverter
+	packageLockConverters          []PackageLockConverter
+	scheme                         *runtime.Scheme
+	claimTypes                     []schema.GroupVersionKind
+	compositeTypes                 []schema.GroupVersionKind
 }
 
 // NewRegistry returns a new Registry initialized with
@@ -140,30 +151,49 @@ func (r *Registry) RegisterPatchSetConverter(re *regexp.Regexp, psConv PatchSetC
 	})
 }
 
-// RegisterConfigurationConverter registers the given ConfigurationConverter
+// RegisterConfigurationConverter registers the given ConfigurationMetadataConverter
 // for the configurations whose name match the given regular expression.
-func (r *Registry) RegisterConfigurationConverter(re *regexp.Regexp, confConv ConfigurationConverter) {
-	r.configurationConverters = append(r.configurationConverters, configurationConverter{
+func (r *Registry) RegisterConfigurationConverter(re *regexp.Regexp, confConv ConfigurationMetadataConverter) {
+	r.configurationConverters = append(r.configurationConverters, configurationMetadataConverter{
 		re:        re,
 		converter: confConv,
 	})
 }
 
-// RegisterConfigurationV1ConversionFunction registers the specified
-// ConfigurationV1ConversionFn for the v1 configurations whose name match
+// RegisterConfigurationMetadataV1ConversionFunction registers the specified
+// ConfigurationMetadataV1ConversionFn for the v1 configurations whose name match
 // the given regular expression.
-func (r *Registry) RegisterConfigurationV1ConversionFunction(re *regexp.Regexp, confConversionFn ConfigurationV1ConversionFn) {
+func (r *Registry) RegisterConfigurationMetadataV1ConversionFunction(re *regexp.Regexp, confConversionFn ConfigurationMetadataV1ConversionFn) {
 	r.RegisterConfigurationConverter(re, &delegatingConverter{
-		confV1Fn: confConversionFn,
+		confMetaV1Fn: confConversionFn,
 	})
 }
 
-// RegisterConfigurationV1Alpha1ConversionFunction registers the specified
-// ConfigurationV1Alpha1ConversionFn for the v1alpha1 configurations
+// RegisterConfigurationMetadataV1Alpha1ConversionFunction registers the specified
+// ConfigurationMetadataV1Alpha1ConversionFn for the v1alpha1 configurations
 // whose name match the given regular expression.
-func (r *Registry) RegisterConfigurationV1Alpha1ConversionFunction(re *regexp.Regexp, confConversionFn ConfigurationV1Alpha1ConversionFn) {
+func (r *Registry) RegisterConfigurationMetadataV1Alpha1ConversionFunction(re *regexp.Regexp, confConversionFn ConfigurationMetadataV1Alpha1ConversionFn) {
 	r.RegisterConfigurationConverter(re, &delegatingConverter{
-		confV1Alpha1Fn: confConversionFn,
+		confMetaV1Alpha1Fn: confConversionFn,
+	})
+}
+
+// RegisterConfigurationPackageConverter registers the specified
+// ConfigurationPackageConverter for the Configuration v1 packages whose reference
+// match the given regular expression.
+func (r *Registry) RegisterConfigurationPackageConverter(re *regexp.Regexp, pkgConv ConfigurationPackageConverter) {
+	r.configurationPackageConverters = append(r.configurationPackageConverters, configurationPackageConverter{
+		re:        re,
+		converter: pkgConv,
+	})
+}
+
+// RegisterConfigurationPackageV1ConversionFunction registers the specified
+// ConfigurationPackageV1ConversionFn for the Configuration v1 packages whose reference
+// match the given regular expression.
+func (r *Registry) RegisterConfigurationPackageV1ConversionFunction(re *regexp.Regexp, confConversionFn ConfigurationPackageV1ConversionFn) {
+	r.RegisterConfigurationPackageConverter(re, &delegatingConverter{
+		confPackageV1Fn: confConversionFn,
 	})
 }
 
@@ -244,15 +274,18 @@ func (r *Registry) GetCompositionGVKs() []schema.GroupVersionKind {
 
 // GetAllRegisteredGVKs returns a list of registered GVKs
 // including v1.CompositionGroupVersionKind,
-// metav1.ConfigurationGroupVersionKind and
-// metav1alpha1.ConfigurationGroupVersionKind.
+// metav1.ConfigurationGroupVersionKind,
+// metav1alpha1.ConfigurationGroupVersionKind
+// pkg.ConfigurationGroupVersionKind,
+// pkg.ProviderGroupVersionKind,
+// pkg.LockGroupVersionKind.
 func (r *Registry) GetAllRegisteredGVKs() []schema.GroupVersionKind {
 	gvks := make([]schema.GroupVersionKind, 0, len(r.claimTypes)+len(r.compositeTypes)+len(r.resourceConverters)+len(r.templateConverters)+1)
 	gvks = append(gvks, r.claimTypes...)
 	gvks = append(gvks, r.compositeTypes...)
 	gvks = append(gvks, r.GetManagedResourceGVKs()...)
 	gvks = append(gvks, xpv1.CompositionGroupVersionKind, xpmetav1.ConfigurationGroupVersionKind, xpmetav1alpha1.ConfigurationGroupVersionKind,
-		xppkgv1.ProviderGroupVersionKind, xppkgv1beta1.LockGroupVersionKind)
+		xppkgv1.ConfigurationGroupVersionKind, xppkgv1.ProviderGroupVersionKind, xppkgv1beta1.LockGroupVersionKind)
 	return gvks
 }
 
@@ -270,20 +303,25 @@ type ComposedTemplateConversionFn func(sourceTemplate xpv1.ComposedTemplate, con
 // schema to the migration target provider's schema.
 type PatchSetsConversionFn func(psMap map[string]*xpv1.PatchSet) error
 
-// ConfigurationV1ConversionFn is a function that converts the specified
+// ConfigurationMetadataV1ConversionFn is a function that converts the specified
 // migration source Configuration v1 metadata to the migration target
 // Configuration metadata.
-type ConfigurationV1ConversionFn func(configuration *xpmetav1.Configuration) error
+type ConfigurationMetadataV1ConversionFn func(configuration *xpmetav1.Configuration) error
 
-// ConfigurationV1Alpha1ConversionFn is a function that converts the specified
+// ConfigurationMetadataV1Alpha1ConversionFn is a function that converts the specified
 // migration source Configuration v1alpha1 metadata to the migration target
 // Configuration metadata.
-type ConfigurationV1Alpha1ConversionFn func(configuration *xpmetav1alpha1.Configuration) error
+type ConfigurationMetadataV1Alpha1ConversionFn func(configuration *xpmetav1alpha1.Configuration) error
 
 // PackageLockV1Beta1ConversionFn is a function that converts the specified
 // migration source package v1beta1 lock to the migration target
 // package lock.
 type PackageLockV1Beta1ConversionFn func(pkg *xppkgv1beta1.Lock) error
+
+// ConfigurationPackageV1ConversionFn is a function that converts the specified
+// migration source Configuration v1 package to the migration target
+// Configuration package(s).
+type ConfigurationPackageV1ConversionFn func(pkg *xppkgv1.Configuration) error
 
 // ProviderPackageV1ConversionFn is a function that converts the specified
 // migration source provider v1 package to the migration target
@@ -294,10 +332,18 @@ type delegatingConverter struct {
 	rFn                  ResourceConversionFn
 	cmpFn                ComposedTemplateConversionFn
 	psFn                 PatchSetsConversionFn
-	confV1Fn             ConfigurationV1ConversionFn
-	confV1Alpha1Fn       ConfigurationV1Alpha1ConversionFn
+	confMetaV1Fn         ConfigurationMetadataV1ConversionFn
+	confMetaV1Alpha1Fn   ConfigurationMetadataV1Alpha1ConversionFn
+	confPackageV1Fn      ConfigurationPackageV1ConversionFn
 	providerPackageV1Fn  ProviderPackageV1ConversionFn
 	packageLockV1Beta1Fn PackageLockV1Beta1ConversionFn
+}
+
+func (d *delegatingConverter) ConfigurationPackageV1(pkg *xppkgv1.Configuration) error {
+	if d.confPackageV1Fn == nil {
+		return nil
+	}
+	return d.confPackageV1Fn(pkg)
 }
 
 func (d *delegatingConverter) PackageLockV1Beta1(lock *xppkgv1beta1.Lock) error {
@@ -314,18 +360,18 @@ func (d *delegatingConverter) ProviderPackageV1(pkg xppkgv1.Provider) ([]xppkgv1
 	return d.providerPackageV1Fn(pkg)
 }
 
-func (d *delegatingConverter) ConfigurationV1(c *xpmetav1.Configuration) error {
-	if d.confV1Fn == nil {
+func (d *delegatingConverter) ConfigurationMetadataV1(c *xpmetav1.Configuration) error {
+	if d.confMetaV1Fn == nil {
 		return nil
 	}
-	return d.confV1Fn(c)
+	return d.confMetaV1Fn(c)
 }
 
-func (d *delegatingConverter) ConfigurationV1Alpha1(c *xpmetav1alpha1.Configuration) error {
-	if d.confV1Alpha1Fn == nil {
+func (d *delegatingConverter) ConfigurationMetadataV1Alpha1(c *xpmetav1alpha1.Configuration) error {
+	if d.confMetaV1Alpha1Fn == nil {
 		return nil
 	}
-	return d.confV1Alpha1Fn(c)
+	return d.confMetaV1Alpha1Fn(c)
 }
 
 func (d *delegatingConverter) PatchSets(psMap map[string]*xpv1.PatchSet) error {

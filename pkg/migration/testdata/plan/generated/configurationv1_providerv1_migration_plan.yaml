@@ -16,8 +16,8 @@ spec:
     - patch:
         type: merge
         files:
-          - skip-dependency-resolution/platform-ref-aws.configurations.meta.pkg.crossplane.io_v1.yaml
-      name: skip-dependency-resolution
+          - disable-dependency-resolution/platform-ref-aws.configurations.pkg.crossplane.io_v1.yaml
+      name: disable-dependency-resolution
       type: Patch
 
     - delete:
@@ -49,8 +49,22 @@ spec:
     - patch:
         type: merge
         files:
-          - edit-configurations/platform-ref-aws.configurations.meta.pkg.crossplane.io_v1.yaml
-      name: edit-configurations
+          - edit-configuration-metadata/platform-ref-aws.configurations.meta.pkg.crossplane.io_v1.yaml
+      name: edit-configuration-metadata
+      type: Patch
+
+    - patch:
+        type: merge
+        files:
+          - edit-configuration-package/platform-ref-aws.configurations.pkg.crossplane.io_v1.yaml
+      name: edit-configuration-package
+      type: Patch
+
+    - patch:
+        type: merge
+        files:
+          - enable-dependency-resolution/platform-ref-aws.configurations.pkg.crossplane.io_v1.yaml
+      name: enable-dependency-resolution
       type: Patch
 
 version: 0.1.0

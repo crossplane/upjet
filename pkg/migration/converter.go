@@ -31,9 +31,10 @@ import (
 )
 
 const (
-	errFromUnstructured         = "failed to convert from unstructured.Unstructured to the managed resource type"
-	errFromUnstructuredConf     = "failed to convert from unstructured.Unstructured to Crossplane Configuration metadata"
-	errFromUnstructuredProvider = "failed to convert from unstructured.Unstructured to Crossplane Provider package"
+	errFromUnstructured            = "failed to convert from unstructured.Unstructured to the managed resource type"
+	errFromUnstructuredConfMeta    = "failed to convert from unstructured.Unstructured to Crossplane Configuration metadata"
+	errFromUnstructuredConfPackage = "failed to convert from unstructured.Unstructured to Crossplane Configuration package"
+	errFromUnstructuredProvider    = "failed to convert from unstructured.Unstructured to Crossplane Provider package"
 	// errFromUnstructuredLock     = "failed to convert from unstructured.Unstructured to Crossplane package lock"
 	errToUnstructured        = "failed to convert from the managed resource type to unstructured.Unstructured"
 	errRawExtensionUnmarshal = "failed to unmarshal runtime.RawExtension"
@@ -195,30 +196,38 @@ func toManagedResource(c runtime.ObjectCreater, u unstructured.Unstructured) (re
 	return mg, ok, nil
 }
 
-func toConfigurationV1(u unstructured.Unstructured) (*xpmetav1.Configuration, error) {
+func toConfigurationPackageV1(u unstructured.Unstructured) (*xppkgv1.Configuration, error) {
+	conf := &xppkgv1.Configuration{}
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, conf); err != nil {
+		return nil, errors.Wrap(err, errFromUnstructuredConfPackage)
+	}
+	return conf, nil
+}
+
+func toConfigurationMetadataV1(u unstructured.Unstructured) (*xpmetav1.Configuration, error) {
 	conf := &xpmetav1.Configuration{}
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, conf); err != nil {
-		return nil, errors.Wrap(err, errFromUnstructuredConf)
+		return nil, errors.Wrap(err, errFromUnstructuredConfMeta)
 	}
 	return conf, nil
 }
 
-func toConfigurationV1Alpha1(u unstructured.Unstructured) (*xpmetav1alpha1.Configuration, error) {
+func toConfigurationMetadataV1Alpha1(u unstructured.Unstructured) (*xpmetav1alpha1.Configuration, error) {
 	conf := &xpmetav1alpha1.Configuration{}
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, conf); err != nil {
-		return nil, errors.Wrap(err, errFromUnstructuredConf)
+		return nil, errors.Wrap(err, errFromUnstructuredConfMeta)
 	}
 	return conf, nil
 }
 
-func toConfiguration(u unstructured.Unstructured) (metav1.Object, error) {
+func toConfigurationMetadata(u unstructured.Unstructured) (metav1.Object, error) {
 	var conf metav1.Object
 	var err error
 	switch u.GroupVersionKind().Version {
 	case "v1alpha1":
-		conf, err = toConfigurationV1Alpha1(u)
+		conf, err = toConfigurationMetadataV1Alpha1(u)
 	default:
-		conf, err = toConfigurationV1(u)
+		conf, err = toConfigurationMetadataV1(u)
 	}
 	return conf, err
 }

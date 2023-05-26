@@ -19,17 +19,13 @@ import (
 	"reflect"
 	"time"
 
-	xppkgv1 "github.com/crossplane/crossplane/apis/pkg/v1"
-	xppkgv1beta1 "github.com/crossplane/crossplane/apis/pkg/v1beta1"
-
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	xpmetav1alpha1 "github.com/crossplane/crossplane/apis/pkg/meta/v1alpha1"
-
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	xpv1 "github.com/crossplane/crossplane/apis/apiextensions/v1"
 	xpmetav1 "github.com/crossplane/crossplane/apis/pkg/meta/v1"
+	xpmetav1alpha1 "github.com/crossplane/crossplane/apis/pkg/meta/v1alpha1"
+	xppkgv1 "github.com/crossplane/crossplane/apis/pkg/v1"
+	xppkgv1beta1 "github.com/crossplane/crossplane/apis/pkg/v1beta1"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -38,28 +34,29 @@ import (
 )
 
 const (
-	errSourceHasNext           = "failed to generate migration plan: Could not check next object from source"
-	errSourceNext              = "failed to generate migration plan: Could not get next object from source"
-	errUnstructuredConvert     = "failed to convert from unstructured object to v1.Composition"
-	errUnstructuredMarshal     = "failed to marshal unstructured object to JSON"
-	errResourceMigrate         = "failed to migrate resource"
-	errCompositePause          = "failed to pause composite resource"
-	errCompositesEdit          = "failed to edit composite resources"
-	errCompositesStart         = "failed to start composite resources"
-	errCompositionMigrateFmt   = "failed to migrate the composition: %s"
-	errConfigurationMigrateFmt = "failed to migrate the configuration: %s"
-	errProviderMigrateFmt      = "failed to migrate the Provider package: %s"
-	errComposedTemplateBase    = "failed to migrate the base of a composed template"
-	errComposedTemplateMigrate = "failed to migrate the composed templates of the composition"
-	errResourceOutput          = "failed to output migrated resource"
-	errResourceOrphan          = "failed to orphan managed resource"
-	errCompositionOutput       = "failed to output migrated composition"
-	errCompositeOutput         = "failed to output migrated composite"
-	errClaimOutput             = "failed to output migrated claim"
-	errClaimsEdit              = "failed to edit claims"
-	errPlanGeneration          = "failed to generate the migration plan"
-	errPause                   = "failed to store a paused manifest"
-	errMissingGVK              = "managed resource is missing its GVK. Resource converters must set GVKs on any managed resources they newly generate."
+	errSourceHasNext                   = "failed to generate migration plan: Could not check next object from source"
+	errSourceNext                      = "failed to generate migration plan: Could not get next object from source"
+	errUnstructuredConvert             = "failed to convert from unstructured object to v1.Composition"
+	errUnstructuredMarshal             = "failed to marshal unstructured object to JSON"
+	errResourceMigrate                 = "failed to migrate resource"
+	errCompositePause                  = "failed to pause composite resource"
+	errCompositesEdit                  = "failed to edit composite resources"
+	errCompositesStart                 = "failed to start composite resources"
+	errCompositionMigrateFmt           = "failed to migrate the composition: %s"
+	errConfigurationMetadataMigrateFmt = "failed to migrate the configuration metadata: %s"
+	errConfigurationPackageMigrateFmt  = "failed to migrate the configuration package: %s"
+	errProviderMigrateFmt              = "failed to migrate the Provider package: %s"
+	errComposedTemplateBase            = "failed to migrate the base of a composed template"
+	errComposedTemplateMigrate         = "failed to migrate the composed templates of the composition"
+	errResourceOutput                  = "failed to output migrated resource"
+	errResourceOrphan                  = "failed to orphan managed resource"
+	errCompositionOutput               = "failed to output migrated composition"
+	errCompositeOutput                 = "failed to output migrated composite"
+	errClaimOutput                     = "failed to output migrated claim"
+	errClaimsEdit                      = "failed to edit claims"
+	errPlanGeneration                  = "failed to generate the migration plan"
+	errPause                           = "failed to store a paused manifest"
+	errMissingGVK                      = "managed resource is missing its GVK. Resource converters must set GVKs on any managed resources they newly generate."
 )
 
 const (
@@ -189,13 +186,17 @@ func (pg *PlanGenerator) convert() error { //nolint: gocyclo
 			return errors.Wrap(err, errSourceNext)
 		}
 		switch gvk := o.Object.GroupVersionKind(); gvk {
+		case xppkgv1.ConfigurationGroupVersionKind:
+			if err := pg.convertConfigurationPackage(o); err != nil {
+				return errors.Wrapf(err, errConfigurationPackageMigrateFmt, o.Object.GetName())
+			}
 		case xpmetav1.ConfigurationGroupVersionKind, xpmetav1alpha1.ConfigurationGroupVersionKind:
-			target, converted, err := pg.convertConfiguration(o)
+			target, converted, err := pg.convertConfigurationMetadata(o)
 			if err != nil {
-				return errors.Wrapf(err, errConfigurationMigrateFmt, o.Object.GetName())
+				return errors.Wrapf(err, errConfigurationMetadataMigrateFmt, o.Object.GetName())
 			}
 			if converted {
-				if err := pg.stepEditConfiguration(o, target); err != nil {
+				if err := pg.stepEditConfigurationMetadata(o, target); err != nil {
 					return err
 				}
 			}
@@ -325,77 +326,6 @@ func assertMetadataName(parentName string, resources []resource.Managed) {
 		}
 		resources[i].SetGenerateName(fmt.Sprintf("%s-", parentName))
 	}
-}
-
-func (pg *PlanGenerator) convertConfiguration(o UnstructuredWithMetadata) (*UnstructuredWithMetadata, bool, error) {
-	isConverted := false
-	var conf metav1.Object
-	var err error
-	for _, confConv := range pg.registry.configurationConverters {
-		if confConv.re == nil || confConv.converter == nil || !confConv.re.MatchString(o.Object.GetName()) {
-			continue
-		}
-
-		conf, err = toConfiguration(o.Object)
-		if err != nil {
-			return nil, false, err
-		}
-		switch o.Object.GroupVersionKind().Version {
-		case "v1alpha1":
-			err = confConv.converter.ConfigurationV1Alpha1(conf.(*xpmetav1alpha1.Configuration))
-		default:
-			err = confConv.converter.ConfigurationV1(conf.(*xpmetav1.Configuration))
-		}
-		if err != nil {
-			return nil, false, errors.Wrapf(err, "failed to call converter on Configuration: %s", conf.GetName())
-		}
-		// TODO: if a configuration converter only converts a specific version,
-		// (or does not convert the given configuration),
-		// we will have a false positive. Better to compute and check
-		// a diff here.
-		isConverted = true
-	}
-	return &UnstructuredWithMetadata{
-		Object:   ToSanitizedUnstructured(conf),
-		Metadata: o.Metadata,
-	}, isConverted, nil
-}
-
-func (pg *PlanGenerator) convertProviderPackage(o UnstructuredWithMetadata) (bool, error) {
-	pkg, err := toProviderPackage(o.Object)
-	if err != nil {
-		return false, err
-	}
-	isConverted := false
-	for _, pkgConv := range pg.registry.providerPackageConverters {
-		if pkgConv.re == nil || pkgConv.converter == nil || !pkgConv.re.MatchString(pkg.Spec.Package) {
-			continue
-		}
-		targetPkgs, err := pkgConv.converter.ProviderPackageV1(*pkg)
-		if err != nil {
-			return false, errors.Wrapf(err, "failed to call converter on Provider package: %s", pkg.Spec.Package)
-		}
-		// TODO: if a configuration converter only converts a specific version,
-		// (or does not convert the given configuration),
-		// we will have a false positive. Better to compute and check
-		// a diff here.
-		isConverted = true
-		converted := make([]*UnstructuredWithMetadata, 0, len(targetPkgs))
-		for _, p := range targetPkgs {
-			p := p
-			converted = append(converted, &UnstructuredWithMetadata{
-				Object:   ToSanitizedUnstructured(&p),
-				Metadata: o.Metadata,
-			})
-		}
-		if err := pg.stepNewSSOPs(o, converted); err != nil {
-			return false, err
-		}
-		if err := pg.stepActivateSSOPs(converted); err != nil {
-			return false, err
-		}
-	}
-	return isConverted, nil
 }
 
 func (pg *PlanGenerator) convertComposition(o UnstructuredWithMetadata) (*UnstructuredWithMetadata, bool, error) { // nolint:gocyclo

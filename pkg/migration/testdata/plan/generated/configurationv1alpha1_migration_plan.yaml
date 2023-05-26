@@ -3,15 +3,8 @@ spec:
   - patch:
       type: merge
       files:
-        - skip-dependency-resolution/platform-ref-aws.configurations.meta.pkg.crossplane.io_v1alpha1.yaml
-    name: skip-dependency-resolution
-    type: Patch
-
-  - patch:
-      type: merge
-      files:
-      - edit-configurations/platform-ref-aws.configurations.meta.pkg.crossplane.io_v1alpha1.yaml
-    name: edit-configurations
+      - edit-configuration-metadata/platform-ref-aws.configurations.meta.pkg.crossplane.io_v1alpha1.yaml
+    name: edit-configuration-metadata
     type: Patch
 
 version: 0.1.0
