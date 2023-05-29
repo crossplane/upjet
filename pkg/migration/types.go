@@ -66,6 +66,8 @@ const (
 	StepTypePatch StepType = "Patch"
 	// StepTypeDelete denotes a delete step
 	StepTypeDelete StepType = "Delete"
+	// StepTypeExec executes the command with provided args
+	StepTypeExec StepType = "Exec"
 )
 
 // Step represents a step in the generated migration plan
@@ -83,6 +85,8 @@ type Step struct {
 	// Delete contains the information needed to run an StepTypeDelete step.
 	// Must be set when the Step.Type is StepTypeDelete.
 	Delete *DeleteStep `json:"delete,omitempty"`
+	// Exec contains the information needed to run a StepTypeExec step.
+	Exec *ExecStep `json:"exec,omitempty"`
 }
 
 // ApplyStep represents an apply step in which an array of manifests
@@ -131,6 +135,14 @@ type DeleteOptions struct {
 	// FinalizerPolicy denotes the policy to be used regarding
 	// the managed reconciler's finalizer
 	FinalizerPolicy *FinalizerPolicy `json:"finalizerPolicy,omitempty"`
+}
+
+// ExecStep represents an exec command with its arguments
+type ExecStep struct {
+	// Command is the command to run
+	Command string `json:"command"`
+	// Args is the arguments of the command
+	Args []string `json:"args"`
 }
 
 // GroupVersionKind represents the GVK for an object's kind.
