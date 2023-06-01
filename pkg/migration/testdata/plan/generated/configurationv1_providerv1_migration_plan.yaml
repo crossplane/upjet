@@ -1,0 +1,70 @@
+spec:
+  steps:
+    - apply:
+        files:
+          - new-ssop/provider-family-aws.providers.pkg.crossplane.io_v1.yaml
+      name: new-ssop
+      type: Apply
+
+    - apply:
+        files:
+          - new-ssop/provider-aws-ec2.providers.pkg.crossplane.io_v1.yaml
+          - new-ssop/provider-aws-eks.providers.pkg.crossplane.io_v1.yaml
+      name: new-ssop
+      type: Apply
+
+    - patch:
+        type: merge
+        files:
+          - disable-dependency-resolution/platform-ref-aws.configurations.pkg.crossplane.io_v1.yaml
+      name: disable-dependency-resolution
+      type: Patch
+
+    - delete:
+        options:
+          finalizerPolicy: Remove
+        resources:
+          - group: pkg.crossplane.io
+            kind: Provider
+            name: provider-aws
+            version: v1
+      name: delete-monolithic-provider
+      type: Delete
+
+    - patch:
+        type: merge
+        files:
+          - activate-ssop/provider-family-aws.providers.pkg.crossplane.io_v1.yaml
+      name: activate-ssop
+      type: Patch
+
+    - patch:
+        type: merge
+        files:
+          - activate-ssop/provider-aws-ec2.providers.pkg.crossplane.io_v1.yaml
+          - activate-ssop/provider-aws-eks.providers.pkg.crossplane.io_v1.yaml
+      name: activate-ssop
+      type: Patch
+
+    - patch:
+        type: merge
+        files:
+          - edit-configuration-metadata/platform-ref-aws.configurations.meta.pkg.crossplane.io_v1.yaml
+      name: edit-configuration-metadata
+      type: Patch
+
+    - patch:
+        type: merge
+        files:
+          - edit-configuration-package/platform-ref-aws.configurations.pkg.crossplane.io_v1.yaml
+      name: edit-configuration-package
+      type: Patch
+
+    - patch:
+        type: merge
+        files:
+          - enable-dependency-resolution/platform-ref-aws.configurations.pkg.crossplane.io_v1.yaml
+      name: enable-dependency-resolution
+      type: Patch
+
+version: 0.1.0

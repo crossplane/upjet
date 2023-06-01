@@ -17,6 +17,10 @@ package migration
 import (
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	xpv1 "github.com/crossplane/crossplane/apis/apiextensions/v1"
+	xpmetav1 "github.com/crossplane/crossplane/apis/pkg/meta/v1"
+	xpmetav1alpha1 "github.com/crossplane/crossplane/apis/pkg/meta/v1alpha1"
+	xppkgv1 "github.com/crossplane/crossplane/apis/pkg/v1"
+	xppkgv1beta1 "github.com/crossplane/crossplane/apis/pkg/v1beta1"
 )
 
 // ResourceConverter converts a managed resource from
@@ -69,6 +73,44 @@ type PatchSetConverter interface {
 	PatchSets(psMap map[string]*xpv1.PatchSet) error
 }
 
+// ConfigurationMetadataConverter converts a Crossplane Configuration's metadata.
+type ConfigurationMetadataConverter interface {
+	// ConfigurationMetadataV1 takes a Crossplane Configuration v1 metadata,
+	// converts it, and stores the converted metadata in its argument.
+	// Returns any errors encountered during the conversion.
+	ConfigurationMetadataV1(configuration *xpmetav1.Configuration) error
+	// ConfigurationMetadataV1Alpha1 takes a Crossplane Configuration v1alpha1
+	// metadata, converts it, and stores the converted metadata in its
+	// argument. Returns any errors encountered during the conversion.
+	ConfigurationMetadataV1Alpha1(configuration *xpmetav1alpha1.Configuration) error
+}
+
+// ConfigurationPackageConverter converts a Crossplane configuration package.
+type ConfigurationPackageConverter interface {
+	// ConfigurationPackageV1 takes a Crossplane Configuration v1 package,
+	// converts it possibly to multiple packages and returns
+	// the converted configuration package.
+	// Returns any errors encountered during the conversion.
+	ConfigurationPackageV1(pkg *xppkgv1.Configuration) error
+}
+
+// ProviderPackageConverter converts a Crossplane provider package.
+type ProviderPackageConverter interface {
+	// ProviderPackageV1 takes a Crossplane Provider v1 package,
+	// converts it possibly to multiple packages and returns the
+	// converted provider packages.
+	// Returns any errors encountered during the conversion.
+	ProviderPackageV1(pkg xppkgv1.Provider) ([]xppkgv1.Provider, error)
+}
+
+// PackageLockConverter converts a Crossplane package lock.
+type PackageLockConverter interface {
+	// PackageLockV1Beta1 takes a Crossplane v1beta1 package lock,
+	// converts it, and stores the converted lock in its argument.
+	// Returns any errors encountered during the conversion.
+	PackageLockV1Beta1(lock *xppkgv1beta1.Lock) error
+}
+
 // Source is a source for reading resource manifests
 type Source interface {
 	// HasNext returns `true` if the Source implementation has a next manifest
@@ -87,4 +129,19 @@ type Target interface {
 	Put(o UnstructuredWithMetadata) error
 	// Delete deletes a resource manifest from this Target
 	Delete(o UnstructuredWithMetadata) error
+}
+
+// Executor is a migration plan executor.
+type Executor interface {
+	// Init initializes an executor using the supplied executor specific
+	// configuration data.
+	Init(config any) error
+	// Step asks the executor to execute the next step passing any available
+	// context from the previous step, and returns any new context to be passed
+	// to the next step if there exists one.
+	Step(s Step, ctx any) (any, error)
+	// Destroy is called when all the steps have been executed,
+	// or a step has returned an error, and we would like to stop
+	// executing the plan.
+	Destroy() error
 }

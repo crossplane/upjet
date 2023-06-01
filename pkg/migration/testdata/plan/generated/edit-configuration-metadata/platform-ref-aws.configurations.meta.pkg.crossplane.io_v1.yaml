@@ -1,0 +1,8 @@
+apiVersion: meta.pkg.crossplane.io/v1
+kind: Configuration
+metadata:
+  name: platform-ref-aws
+spec:
+  dependsOn:
+    - provider: xpkg.upbound.io/upbound/provider-aws-eks
+      version: ">=v0.17.0"
