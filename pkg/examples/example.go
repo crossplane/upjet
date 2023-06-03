@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -105,8 +104,11 @@ func (eg *Generator) StoreExamples() error { // nolint:gocyclo
 				}
 			}
 		}
+
+		newBuff := bytes.TrimSuffix(buff.Bytes(), []byte("\n---\n\n"))
+
 		// no sensitive info in the example manifest
-		if err := ioutil.WriteFile(pm.ManifestPath, buff.Bytes(), 0600); err != nil {
+		if err := os.WriteFile(pm.ManifestPath, newBuff, 0600); err != nil {
 			return errors.Wrapf(err, "cannot write example manifest file %s for resource %s", pm.ManifestPath, rn)
 		}
 	}
