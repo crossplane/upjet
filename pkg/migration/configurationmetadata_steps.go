@@ -46,7 +46,7 @@ func (pg *PlanGenerator) convertConfigurationMetadata(o UnstructuredWithMetadata
 	isConverted := false
 	var conf metav1.Object
 	var err error
-	for _, confConv := range pg.registry.configurationConverters {
+	for _, confConv := range pg.registry.configurationMetaConverters {
 		if confConv.re == nil || confConv.converter == nil || !confConv.re.MatchString(o.Object.GetName()) {
 			continue
 		}

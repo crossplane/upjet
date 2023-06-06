@@ -30,6 +30,7 @@ const (
 
 // Resource categories
 const (
+	categoryUnknown Category = ""
 	// CategoryClaim category for composite claim resources
 	CategoryClaim Category = "Claim"
 	// CategoryComposite category for composite resources

@@ -15,6 +15,10 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+var (
+	_ Source = &KubernetesSource{}
+)
+
 // KubernetesSource is a source implementation to read resources from Kubernetes
 // cluster.
 type KubernetesSource struct {
@@ -96,6 +100,12 @@ func (ks *KubernetesSource) Next() (UnstructuredWithMetadata, error) {
 		return item, nil
 	}
 	return UnstructuredWithMetadata{}, errors.New("no more elements")
+}
+
+// Reset resets the source so that resources can be reread from the beginning.
+func (ks *KubernetesSource) Reset() error {
+	ks.index = 0
+	return nil
 }
 
 // InitializeDynamicClient returns a dynamic client
