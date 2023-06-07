@@ -20,6 +20,13 @@ spec:
       name: disable-dependency-resolution
       type: Patch
 
+    - patch:
+        type: merge
+        files:
+          - edit-package-lock/lock.locks.pkg.crossplane.io_v1beta1.yaml
+      name: edit-package-lock
+      type: Patch
+
     - delete:
         options:
           finalizerPolicy: Remove

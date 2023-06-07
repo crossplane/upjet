@@ -19,14 +19,11 @@ import (
 	"sort"
 	"strings"
 
-	"k8s.io/apimachinery/pkg/util/rand"
-
-	"k8s.io/apimachinery/pkg/util/jsonmergepatch"
-
 	"github.com/pkg/errors"
-
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/json"
+	"k8s.io/apimachinery/pkg/util/jsonmergepatch"
+	"k8s.io/apimachinery/pkg/util/rand"
 )
 
 type step int

@@ -33,6 +33,8 @@ var (
 	AllCompositions = regexp.MustCompile(`.*`)
 	// AllConfigurations matches all metav1.Configuration names.
 	AllConfigurations = regexp.MustCompile(`.*`)
+	// CrossplaneLockName is the Crossplane package lock's `metadata.name`
+	CrossplaneLockName = regexp.MustCompile(`^lock$`)
 )
 
 const (
@@ -81,6 +83,15 @@ type providerPackageConverter struct {
 	converter ProviderPackageConverter
 }
 
+type packageLockConverter struct {
+	// re is the regular expression against which a package Lock's name
+	// will be matched to determine whether the conversion function
+	// will be invoked.
+	re *regexp.Regexp
+	// converter is the PackageLockConverter to be run on the package Lock.
+	converter PackageLockConverter
+}
+
 // Registry is a registry of `migration.Converter`s keyed with
 // the associated `schema.GroupVersionKind`s and an associated
 // runtime.Scheme with which the corresponding types are registered.
@@ -92,7 +103,7 @@ type Registry struct {
 	configurationMetaConverters    []configurationMetadataConverter
 	configurationPackageConverters []configurationPackageConverter
 	providerPackageConverters      []providerPackageConverter
-	packageLockConverters          []PackageLockConverter
+	packageLockConverters          []packageLockConverter
 	scheme                         *runtime.Scheme
 	claimTypes                     []schema.GroupVersionKind
 	compositeTypes                 []schema.GroupVersionKind
@@ -218,14 +229,17 @@ func (r *Registry) RegisterProviderPackageV1ConversionFunction(re *regexp.Regexp
 }
 
 // RegisterPackageLockConverter registers the given PackageLockConverter.
-func (r *Registry) RegisterPackageLockConverter(lockConv PackageLockConverter) {
-	r.packageLockConverters = append(r.packageLockConverters, lockConv)
+func (r *Registry) RegisterPackageLockConverter(re *regexp.Regexp, lockConv PackageLockConverter) {
+	r.packageLockConverters = append(r.packageLockConverters, packageLockConverter{
+		re:        re,
+		converter: lockConv,
+	})
 }
 
 // RegisterPackageLockV1Beta1ConversionFunction registers the specified
 // RegisterPackageLockV1Beta1ConversionFunction for the package v1beta1 locks.
-func (r *Registry) RegisterPackageLockV1Beta1ConversionFunction(lockConversionFn PackageLockV1Beta1ConversionFn) {
-	r.RegisterPackageLockConverter(&delegatingConverter{
+func (r *Registry) RegisterPackageLockV1Beta1ConversionFunction(re *regexp.Regexp, lockConversionFn PackageLockV1Beta1ConversionFn) {
+	r.RegisterPackageLockConverter(re, &delegatingConverter{
 		packageLockV1Beta1Fn: lockConversionFn,
 	})
 }

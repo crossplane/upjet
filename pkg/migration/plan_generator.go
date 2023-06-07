@@ -48,6 +48,7 @@ const (
 	errConfigurationMetadataMigrateFmt = "failed to migrate the configuration metadata: %s"
 	errConfigurationPackageMigrateFmt  = "failed to migrate the configuration package: %s"
 	errProviderMigrateFmt              = "failed to migrate the Provider package: %s"
+	errLockMigrateFmt                  = "failed to migrate the package lock: %s"
 	errComposedTemplateBase            = "failed to migrate the base of a composed template"
 	errComposedTemplateMigrate         = "failed to migrate the composed templates of the composition"
 	errResourceOutput                  = "failed to output migrated resource"
@@ -256,6 +257,9 @@ func (pg *PlanGenerator) convert() error { //nolint: gocyclo
 				}
 			}
 		case xppkgv1beta1.LockGroupVersionKind:
+			if err := pg.convertPackageLock(o); err != nil {
+				return errors.Wrapf(err, errLockMigrateFmt, o.Object.GetName())
+			}
 		default:
 			if o.Metadata.Category == CategoryComposite {
 				if err := pg.stepPauseComposite(&o); err != nil {

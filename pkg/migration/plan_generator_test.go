@@ -27,6 +27,7 @@ import (
 	xpmetav1 "github.com/crossplane/crossplane/apis/pkg/meta/v1"
 	xpmetav1alpha1 "github.com/crossplane/crossplane/apis/pkg/meta/v1alpha1"
 	xppkgv1 "github.com/crossplane/crossplane/apis/pkg/v1"
+	xppkgv1beta1 "github.com/crossplane/crossplane/apis/pkg/v1beta1"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -212,6 +213,7 @@ func TestGeneratePlan(t *testing.T) {
 					"testdata/plan/providerv1.yaml":         {},
 					"testdata/plan/configurationv1.yaml":    {},
 					"testdata/plan/configurationpkgv1.yaml": {},
+					"testdata/plan/lockv1beta1.yaml":        {},
 				}),
 				target: newTestTarget(),
 				registry: getRegistry(
@@ -230,6 +232,10 @@ func TestGeneratePlan(t *testing.T) {
 					withProviderPackageConverter(providerPackageConverter{
 						re:        regexp.MustCompile(`xpkg.upbound.io/upbound/provider-aws:.+`),
 						converter: &monolithicProviderToSSOPConverter{},
+					}),
+					withPackageLockConverter(packageLockConverter{
+						re:        CrossplaneLockName,
+						converter: &lockConverter{},
 					})),
 			},
 			want: want{
@@ -245,6 +251,7 @@ func TestGeneratePlan(t *testing.T) {
 					"activate-ssop/provider-family-aws.providers.pkg.crossplane.io_v1.yaml",
 					"activate-ssop/provider-aws-ec2.providers.pkg.crossplane.io_v1.yaml",
 					"activate-ssop/provider-aws-eks.providers.pkg.crossplane.io_v1.yaml",
+					"edit-package-lock/lock.locks.pkg.crossplane.io_v1beta1.yaml",
 				},
 			},
 		},
@@ -433,6 +440,12 @@ func withProviderPackageConverter(c providerPackageConverter) registryOption {
 	}
 }
 
+func withPackageLockConverter(c packageLockConverter) registryOption {
+	return func(r *Registry) {
+		r.RegisterPackageLockConverter(c.re, c.converter)
+	}
+}
+
 func withPreProcessor(c Category, pp UnstructuredPreProcessor) registryOption {
 	return func(r *Registry) {
 		r.RegisterPreProcessor(c, pp)
@@ -544,6 +557,18 @@ func (c *monolithicProviderToSSOPConverter) ProviderPackageV1(_ xppkgv1.Provider
 			},
 		},
 	}, nil
+}
+
+type lockConverter struct{}
+
+func (p *lockConverter) PackageLockV1Beta1(lock *xppkgv1beta1.Lock) error {
+	lock.Packages = append(lock.Packages, xppkgv1beta1.LockPackage{
+		Name:    "test-provider",
+		Type:    xppkgv1beta1.ProviderPackageType,
+		Source:  "xpkg.upbound.io/upbound/test-provider",
+		Version: "vX.Y.Z",
+	})
+	return nil
 }
 
 type preProcessor struct {
