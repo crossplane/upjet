@@ -446,3 +446,14 @@ func (r *Registry) RegisterConversionFunctions(gvk schema.GroupVersionKind, rFn 
 func (r *Registry) RegisterPreProcessor(category Category, pp UnstructuredPreProcessor) {
 	r.unstructuredPreProcessors[category] = append(r.unstructuredPreProcessors[category], pp)
 }
+
+// PreProcessor is a function type to convert pre-processor functions to
+// UnstructuredPreProcessor.
+type PreProcessor func(u UnstructuredWithMetadata) error
+
+func (pp PreProcessor) PreProcess(u UnstructuredWithMetadata) error {
+	if pp == nil {
+		return nil
+	}
+	return pp(u)
+}

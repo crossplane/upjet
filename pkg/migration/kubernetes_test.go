@@ -114,7 +114,7 @@ func TestNewKubernetesSource(t *testing.T) {
 				},
 			}
 
-			ks, err := NewKubernetesSource(r, dynamicClient, memory.NewMemCacheClient(client.Discovery()))
+			ks, err := NewKubernetesSource(dynamicClient, memory.NewMemCacheClient(client.Discovery()), WithRegistry(r))
 			if diff := cmp.Diff(tc.want.err, err); diff != "" {
 				t.Errorf("\nNext(...): -want, +got:\n%s", diff)
 			}

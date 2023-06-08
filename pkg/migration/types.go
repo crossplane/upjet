@@ -32,13 +32,13 @@ const (
 const (
 	categoryUnknown Category = ""
 	// CategoryClaim category for composite claim resources
-	CategoryClaim Category = "Claim"
+	CategoryClaim Category = "claim"
 	// CategoryComposite category for composite resources
-	CategoryComposite Category = "Composite"
+	CategoryComposite Category = "composite"
 	// CategoryComposition category for compositions
-	CategoryComposition Category = "Composition"
+	CategoryComposition Category = "composition"
 	// CategoryManaged category for managed resources
-	CategoryManaged Category = "Managed"
+	CategoryManaged Category = "managed"
 )
 
 // Plan represents a migration plan for migrating managed resources,
@@ -170,6 +170,11 @@ type Resource struct {
 
 // Category specifies if a resource is a Claim, Composite or a Managed resource
 type Category string
+
+// String returns a string representing the receiver Category.
+func (c Category) String() string {
+	return string(c)
+}
 
 // Metadata holds metadata for an object read from a Source
 type Metadata struct {
