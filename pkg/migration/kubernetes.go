@@ -2,6 +2,8 @@ package migration
 
 import (
 	"context"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -12,21 +14,58 @@ import (
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/discovery/cached/disk"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/util/homedir"
+)
+
+const (
+	errKubernetesSourceInit = "failed to initialize the migration Kubernetes source"
 )
 
 var (
-	_ Source = &KubernetesSource{}
+	_               Source = &KubernetesSource{}
+	defaultCacheDir        = filepath.Join(homedir.HomeDir(), ".kube", "cache")
 )
 
 // KubernetesSource is a source implementation to read resources from Kubernetes
 // cluster.
 type KubernetesSource struct {
-	index           int
-	items           []UnstructuredWithMetadata
-	dynamicClient   dynamic.Interface
-	discoveryClient discovery.DiscoveryInterface
-	rootAPIGroup    string
+	index                 int
+	items                 []UnstructuredWithMetadata
+	dynamicClient         dynamic.Interface
+	cachedDiscoveryClient discovery.CachedDiscoveryInterface
+	restMapper            meta.RESTMapper
+	cacheDir              string
+}
+
+// KubernetesSourceOption sets an option for a KubernetesSource.
+type KubernetesSourceOption func(source *KubernetesSource)
+
+// WithCacheDir sets the cache directory for the disk cached discovery client
+// used by a KubernetesSource.
+func WithCacheDir(cacheDir string) KubernetesSourceOption {
+	return func(s *KubernetesSource) {
+		s.cacheDir = cacheDir
+	}
+}
+
+// NewKubernetesSourceFromKubeConfig initializes a new KubernetesSource using
+// the specified kube config file and KubernetesSourceOptions.
+func NewKubernetesSourceFromKubeConfig(r *Registry, kubeconfigPath string, opts ...KubernetesSourceOption) (*KubernetesSource, error) {
+	ks := &KubernetesSource{}
+	for _, o := range opts {
+		o(ks)
+	}
+	dynamicClient, err := InitializeDynamicClient(kubeconfigPath)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to initialize a Kubernetes dynamic client from kubeconfig: %s", kubeconfigPath)
+	}
+	cachedDiscoveryClient, err := InitializeDiscoveryClient(kubeconfigPath, ks.cacheDir)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to initialize a Kubernetes discovery client from kubeconfig: %s", kubeconfigPath)
+	}
+	return NewKubernetesSource(r, dynamicClient, cachedDiscoveryClient)
 }
 
 // NewKubernetesSource returns a KubernetesSource
@@ -37,51 +76,47 @@ type KubernetesSource struct {
 // Group:   "ec2.aws.upbound.io",
 // Version: "v1beta1",
 // Kind:    "VPC",
-func NewKubernetesSource(r *Registry, dynamicClient dynamic.Interface, discoveryClient discovery.DiscoveryInterface, rootAPIGroup string) (*KubernetesSource, error) {
+func NewKubernetesSource(r *Registry, dynamicClient dynamic.Interface, discoveryClient discovery.CachedDiscoveryInterface) (*KubernetesSource, error) {
 	ks := &KubernetesSource{
-		dynamicClient:   dynamicClient,
-		discoveryClient: discoveryClient,
-		rootAPIGroup:    rootAPIGroup,
+		dynamicClient:         dynamicClient,
+		cachedDiscoveryClient: discoveryClient,
+		restMapper:            restmapper.NewDeferredDiscoveryRESTMapper(discoveryClient),
 	}
+	return ks, errors.Wrap(ks.init(r), errKubernetesSourceInit)
+}
+
+func (ks *KubernetesSource) init(r *Registry) error {
 	if err := ks.getResources(r.claimTypes, CategoryClaim); err != nil {
-		return nil, errors.Wrap(err, "cannot get claims")
+		return errors.Wrap(err, "cannot get claims")
 	}
 	if err := ks.getResources(r.compositeTypes, CategoryComposite); err != nil {
-		return nil, errors.Wrap(err, "cannot get composites")
+		return errors.Wrap(err, "cannot get composites")
 	}
 	if err := ks.getResources(r.GetCompositionGVKs(), CategoryComposition); err != nil {
-		return nil, errors.Wrap(err, "cannot get compositions")
+		return errors.Wrap(err, "cannot get compositions")
 	}
-	if err := ks.getResources(nil, CategoryManaged); err != nil {
-		return nil, errors.Wrap(err, "cannot get managed resources")
-	}
-	return ks, nil
+	return errors.Wrap(ks.getResources(r.GetManagedResourceGVKs(), CategoryManaged), "cannot get managed resources")
 }
 
 func (ks *KubernetesSource) getResources(gvks []schema.GroupVersionKind, category Category) error {
-	if category == CategoryManaged {
-		if err := ks.getManagedResources(ks.rootAPIGroup); err != nil {
-			return errors.Wrap(err, "cannot list resources")
+	for _, gvk := range gvks {
+		m, err := ks.restMapper.RESTMapping(gvk.GroupKind(), gvk.Version)
+		if err != nil {
+			return errors.Wrapf(err, "cannot get REST mappings for GVK: %s", gvk.String())
 		}
-	} else {
-		for _, gvk := range gvks {
-			// TODO: we are not using discovery as of now (to be reconsidered).
-			// This will not in all cases.
-			pluralGVR, _ := meta.UnsafeGuessKindToResource(gvk)
-			ri := ks.dynamicClient.Resource(pluralGVR)
-			unstructuredList, err := ri.List(context.TODO(), metav1.ListOptions{})
-			if err != nil {
-				return errors.Wrap(err, "cannot list resources")
-			}
-			for _, u := range unstructuredList.Items {
-				ks.items = append(ks.items, UnstructuredWithMetadata{
-					Object: u,
-					Metadata: Metadata{
-						Path:     string(u.GetUID()),
-						Category: category,
-					},
-				})
-			}
+		ri := ks.dynamicClient.Resource(m.Resource)
+		unstructuredList, err := ri.List(context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			return errors.Wrapf(err, "cannot list resources of GVR: %s", m.Resource.String())
+		}
+		for _, u := range unstructuredList.Items {
+			ks.items = append(ks.items, UnstructuredWithMetadata{
+				Object: u,
+				Metadata: Metadata{
+					Path:     string(u.GetUID()),
+					Category: category,
+				},
+			})
 		}
 	}
 	return nil
@@ -121,54 +156,28 @@ func InitializeDynamicClient(kubeconfigPath string) (dynamic.Interface, error) {
 	return dynamicClient, nil
 }
 
-func InitializeDiscoveryClient(kubeconfigPath string) (*disk.CachedDiscoveryClient, error) {
+func InitializeDiscoveryClient(kubeconfigPath, cacheDir string) (*disk.CachedDiscoveryClient, error) {
 	config, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot create rest config object")
 	}
-	return disk.NewCachedDiscoveryClientForConfig(config, "", "", time.Duration(10*time.Minute)) // nolint:unconvert
+
+	if cacheDir == "" {
+		cacheDir = defaultCacheDir
+	}
+	httpCacheDir := filepath.Join(cacheDir, "http")
+	discoveryCacheDir := computeDiscoverCacheDir(filepath.Join(cacheDir, "discovery"), config.Host)
+	return disk.NewCachedDiscoveryClientForConfig(config, discoveryCacheDir, httpCacheDir, 10*time.Minute)
 }
 
-func (ks *KubernetesSource) getManagedResources(rootAPIGroup string) error {
-	groups, err := ks.discoveryClient.ServerGroups()
-	if err != nil {
-		return errors.Wrap(err, "cannot get API groups")
-	}
-	for _, group := range groups.Groups {
-		if strings.Contains(group.Name, rootAPIGroup) {
-			gv := schema.GroupVersion{
-				Group:   group.Name,
-				Version: group.Versions[0].Version,
-			}.String()
-			resources, err := ks.discoveryClient.ServerResourcesForGroupVersion(gv)
-			if err != nil {
-				return errors.Wrap(err, "cannot get resources")
-			}
-			for _, resource := range resources.APIResources {
-				// Exclude status subresources from discovery process
-				if strings.Contains(resource.Name, "/status") {
-					continue
-				}
-				pluralGVR := schema.GroupVersionResource{
-					Group:    group.Name,
-					Version:  group.Versions[0].Version,
-					Resource: resource.Name,
-				}
-				list, err := ks.dynamicClient.Resource(pluralGVR).List(context.TODO(), metav1.ListOptions{})
-				if err != nil {
-					return errors.Wrap(err, "cannot list resources")
-				}
-				for _, l := range list.Items {
-					ks.items = append(ks.items, UnstructuredWithMetadata{
-						Object: l,
-						Metadata: Metadata{
-							Path:     string(l.GetUID()),
-							Category: CategoryManaged,
-						},
-					})
-				}
-			}
-		}
-	}
-	return nil
+// overlyCautiousIllegalFileCharacters matches characters that *might* not be supported.  Windows is really restrictive, so this is really restrictive
+var overlyCautiousIllegalFileCharacters = regexp.MustCompile(`[^(\w/.)]`)
+
+// computeDiscoverCacheDir takes the parentDir and the host and comes up with a "usually non-colliding" name.
+func computeDiscoverCacheDir(parentDir, host string) string {
+	// strip the optional scheme from host if its there:
+	schemelessHost := strings.Replace(strings.Replace(host, "https://", "", 1), "http://", "", 1)
+	// now do a simple collapse of non-AZ09 characters.  Collisions are possible but unlikely.  Even if we do collide the problem is short lived
+	safeHost := overlyCautiousIllegalFileCharacters.ReplaceAllString(schemelessHost, "_")
+	return filepath.Join(parentDir, safeHost)
 }
