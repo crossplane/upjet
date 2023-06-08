@@ -42,7 +42,7 @@ const (
 	errConfigurationMetadataOutput = "failed to output configuration JSON merge document"
 )
 
-func (pg *PlanGenerator) convertConfigurationMetadata(o UnstructuredWithMetadata) (*UnstructuredWithMetadata, bool, error) {
+func (pg *PlanGenerator) convertConfigurationMetadata(o UnstructuredWithMetadata) error {
 	isConverted := false
 	var conf metav1.Object
 	var err error
@@ -53,7 +53,7 @@ func (pg *PlanGenerator) convertConfigurationMetadata(o UnstructuredWithMetadata
 
 		conf, err = toConfigurationMetadata(o.Object)
 		if err != nil {
-			return nil, false, err
+			return err
 		}
 		switch o.Object.GroupVersionKind().Version {
 		case "v1alpha1":
@@ -62,7 +62,7 @@ func (pg *PlanGenerator) convertConfigurationMetadata(o UnstructuredWithMetadata
 			err = confConv.converter.ConfigurationMetadataV1(conf.(*xpmetav1.Configuration))
 		}
 		if err != nil {
-			return nil, false, errors.Wrapf(err, "failed to call converter on Configuration: %s", conf.GetName())
+			return errors.Wrapf(err, "failed to call converter on Configuration: %s", conf.GetName())
 		}
 		// TODO: if a configuration converter only converts a specific version,
 		// (or does not convert the given configuration),
@@ -70,10 +70,13 @@ func (pg *PlanGenerator) convertConfigurationMetadata(o UnstructuredWithMetadata
 		// a diff here.
 		isConverted = true
 	}
-	return &UnstructuredWithMetadata{
+	if !isConverted {
+		return nil
+	}
+	return pg.stepEditConfigurationMetadata(o, &UnstructuredWithMetadata{
 		Object:   ToSanitizedUnstructured(conf),
 		Metadata: o.Metadata,
-	}, isConverted, nil
+	})
 }
 
 func (pg *PlanGenerator) stepConfiguration(s step) *Step {

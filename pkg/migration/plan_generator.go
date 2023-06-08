@@ -224,14 +224,8 @@ func (pg *PlanGenerator) convert() error { //nolint: gocyclo
 				return errors.Wrapf(err, errConfigurationPackageMigrateFmt, o.Object.GetName())
 			}
 		case xpmetav1.ConfigurationGroupVersionKind, xpmetav1alpha1.ConfigurationGroupVersionKind:
-			target, converted, err := pg.convertConfigurationMetadata(o)
-			if err != nil {
+			if err := pg.convertConfigurationMetadata(o); err != nil {
 				return errors.Wrapf(err, errConfigurationMetadataMigrateFmt, o.Object.GetName())
-			}
-			if converted {
-				if err := pg.stepEditConfigurationMetadata(o, target); err != nil {
-					return err
-				}
 			}
 		case xpv1.CompositionGroupVersionKind:
 			target, converted, err := pg.convertComposition(o)
