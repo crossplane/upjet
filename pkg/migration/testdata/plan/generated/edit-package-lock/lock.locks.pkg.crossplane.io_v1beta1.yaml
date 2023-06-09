@@ -1,0 +1,14 @@
+apiVersion: pkg.crossplane.io/v1beta1
+kind: Lock
+metadata:
+  name: lock
+packages:
+  - name: provider-aws
+    type: Provider
+    source: xpkg.upbound.io/upbound/provider-aws
+    version: v0.36.0
+  - name: test-provider
+    type: Provider
+    source: xpkg.upbound.io/upbound/test-provider
+    version: vX.Y.Z
+

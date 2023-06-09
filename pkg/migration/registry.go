@@ -33,6 +33,8 @@ var (
 	AllCompositions = regexp.MustCompile(`.*`)
 	// AllConfigurations matches all metav1.Configuration names.
 	AllConfigurations = regexp.MustCompile(`.*`)
+	// CrossplaneLockName is the Crossplane package lock's `metadata.name`
+	CrossplaneLockName = regexp.MustCompile(`^lock$`)
 )
 
 const (
@@ -81,17 +83,27 @@ type providerPackageConverter struct {
 	converter ProviderPackageConverter
 }
 
+type packageLockConverter struct {
+	// re is the regular expression against which a package Lock's name
+	// will be matched to determine whether the conversion function
+	// will be invoked.
+	re *regexp.Regexp
+	// converter is the PackageLockConverter to be run on the package Lock.
+	converter PackageLockConverter
+}
+
 // Registry is a registry of `migration.Converter`s keyed with
 // the associated `schema.GroupVersionKind`s and an associated
 // runtime.Scheme with which the corresponding types are registered.
 type Registry struct {
+	unstructuredPreProcessors      map[Category][]UnstructuredPreProcessor
 	resourceConverters             map[schema.GroupVersionKind]ResourceConverter
 	templateConverters             map[schema.GroupVersionKind]ComposedTemplateConverter
 	patchSetConverters             []patchSetConverter
-	configurationConverters        []configurationMetadataConverter
+	configurationMetaConverters    []configurationMetadataConverter
 	configurationPackageConverters []configurationPackageConverter
 	providerPackageConverters      []providerPackageConverter
-	packageLockConverters          []PackageLockConverter
+	packageLockConverters          []packageLockConverter
 	scheme                         *runtime.Scheme
 	claimTypes                     []schema.GroupVersionKind
 	compositeTypes                 []schema.GroupVersionKind
@@ -101,9 +113,10 @@ type Registry struct {
 // the specified runtime.Scheme.
 func NewRegistry(scheme *runtime.Scheme) *Registry {
 	return &Registry{
-		resourceConverters: make(map[schema.GroupVersionKind]ResourceConverter),
-		templateConverters: make(map[schema.GroupVersionKind]ComposedTemplateConverter),
-		scheme:             scheme,
+		resourceConverters:        make(map[schema.GroupVersionKind]ResourceConverter),
+		templateConverters:        make(map[schema.GroupVersionKind]ComposedTemplateConverter),
+		unstructuredPreProcessors: make(map[Category][]UnstructuredPreProcessor),
+		scheme:                    scheme,
 	}
 }
 
@@ -151,10 +164,10 @@ func (r *Registry) RegisterPatchSetConverter(re *regexp.Regexp, psConv PatchSetC
 	})
 }
 
-// RegisterConfigurationConverter registers the given ConfigurationMetadataConverter
+// RegisterConfigurationMetadataConverter registers the given ConfigurationMetadataConverter
 // for the configurations whose name match the given regular expression.
-func (r *Registry) RegisterConfigurationConverter(re *regexp.Regexp, confConv ConfigurationMetadataConverter) {
-	r.configurationConverters = append(r.configurationConverters, configurationMetadataConverter{
+func (r *Registry) RegisterConfigurationMetadataConverter(re *regexp.Regexp, confConv ConfigurationMetadataConverter) {
+	r.configurationMetaConverters = append(r.configurationMetaConverters, configurationMetadataConverter{
 		re:        re,
 		converter: confConv,
 	})
@@ -164,7 +177,7 @@ func (r *Registry) RegisterConfigurationConverter(re *regexp.Regexp, confConv Co
 // ConfigurationMetadataV1ConversionFn for the v1 configurations whose name match
 // the given regular expression.
 func (r *Registry) RegisterConfigurationMetadataV1ConversionFunction(re *regexp.Regexp, confConversionFn ConfigurationMetadataV1ConversionFn) {
-	r.RegisterConfigurationConverter(re, &delegatingConverter{
+	r.RegisterConfigurationMetadataConverter(re, &delegatingConverter{
 		confMetaV1Fn: confConversionFn,
 	})
 }
@@ -173,7 +186,7 @@ func (r *Registry) RegisterConfigurationMetadataV1ConversionFunction(re *regexp.
 // ConfigurationMetadataV1Alpha1ConversionFn for the v1alpha1 configurations
 // whose name match the given regular expression.
 func (r *Registry) RegisterConfigurationMetadataV1Alpha1ConversionFunction(re *regexp.Regexp, confConversionFn ConfigurationMetadataV1Alpha1ConversionFn) {
-	r.RegisterConfigurationConverter(re, &delegatingConverter{
+	r.RegisterConfigurationMetadataConverter(re, &delegatingConverter{
 		confMetaV1Alpha1Fn: confConversionFn,
 	})
 }
@@ -216,14 +229,17 @@ func (r *Registry) RegisterProviderPackageV1ConversionFunction(re *regexp.Regexp
 }
 
 // RegisterPackageLockConverter registers the given PackageLockConverter.
-func (r *Registry) RegisterPackageLockConverter(lockConv PackageLockConverter) {
-	r.packageLockConverters = append(r.packageLockConverters, lockConv)
+func (r *Registry) RegisterPackageLockConverter(re *regexp.Regexp, lockConv PackageLockConverter) {
+	r.packageLockConverters = append(r.packageLockConverters, packageLockConverter{
+		re:        re,
+		converter: lockConv,
+	})
 }
 
 // RegisterPackageLockV1Beta1ConversionFunction registers the specified
 // RegisterPackageLockV1Beta1ConversionFunction for the package v1beta1 locks.
-func (r *Registry) RegisterPackageLockV1Beta1ConversionFunction(lockConversionFn PackageLockV1Beta1ConversionFn) {
-	r.RegisterPackageLockConverter(&delegatingConverter{
+func (r *Registry) RegisterPackageLockV1Beta1ConversionFunction(re *regexp.Regexp, lockConversionFn PackageLockV1Beta1ConversionFn) {
+	r.RegisterPackageLockConverter(re, &delegatingConverter{
 		packageLockV1Beta1Fn: lockConversionFn,
 	})
 }
@@ -425,4 +441,19 @@ func (r *Registry) RegisterAPIConversionFunctions(gvk schema.GroupVersionKind, r
 // Deprecated: Use RegisterAPIConversionFunctions instead.
 func (r *Registry) RegisterConversionFunctions(gvk schema.GroupVersionKind, rFn ResourceConversionFn, cmpFn ComposedTemplateConversionFn, psFn PatchSetsConversionFn) {
 	r.RegisterAPIConversionFunctions(gvk, rFn, cmpFn, psFn)
+}
+
+func (r *Registry) RegisterPreProcessor(category Category, pp UnstructuredPreProcessor) {
+	r.unstructuredPreProcessors[category] = append(r.unstructuredPreProcessors[category], pp)
+}
+
+// PreProcessor is a function type to convert pre-processor functions to
+// UnstructuredPreProcessor.
+type PreProcessor func(u UnstructuredWithMetadata) error
+
+func (pp PreProcessor) PreProcess(u UnstructuredWithMetadata) error {
+	if pp == nil {
+		return nil
+	}
+	return pp(u)
 }

@@ -21,6 +21,7 @@ import (
 	xpmetav1 "github.com/crossplane/crossplane/apis/pkg/meta/v1"
 	xpmetav1alpha1 "github.com/crossplane/crossplane/apis/pkg/meta/v1alpha1"
 	xppkgv1 "github.com/crossplane/crossplane/apis/pkg/v1"
+	xppkgv1beta1 "github.com/crossplane/crossplane/apis/pkg/v1beta1"
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -35,9 +36,9 @@ const (
 	errFromUnstructuredConfMeta    = "failed to convert from unstructured.Unstructured to Crossplane Configuration metadata"
 	errFromUnstructuredConfPackage = "failed to convert from unstructured.Unstructured to Crossplane Configuration package"
 	errFromUnstructuredProvider    = "failed to convert from unstructured.Unstructured to Crossplane Provider package"
-	// errFromUnstructuredLock     = "failed to convert from unstructured.Unstructured to Crossplane package lock"
-	errToUnstructured        = "failed to convert from the managed resource type to unstructured.Unstructured"
-	errRawExtensionUnmarshal = "failed to unmarshal runtime.RawExtension"
+	errFromUnstructuredLock        = "failed to convert from unstructured.Unstructured to Crossplane package lock"
+	errToUnstructured              = "failed to convert from the managed resource type to unstructured.Unstructured"
+	errRawExtensionUnmarshal       = "failed to unmarshal runtime.RawExtension"
 
 	errFmtPavedDelete = "failed to delete fieldpath %q from paved"
 )
@@ -145,10 +146,12 @@ func FromGroupVersionKind(gvk schema.GroupVersionKind) GroupVersionKind {
 	}
 }
 
-// workaround for:
+// ToComposition converts the specified unstructured.Unstructured to
+// a Crossplane Composition.
+// Workaround for:
 // https://github.com/kubernetes-sigs/structured-merge-diff/issues/230
-func convertToComposition(u map[string]interface{}) (*xpv1.Composition, error) {
-	buff, err := json.Marshal(u)
+func ToComposition(u unstructured.Unstructured) (*xpv1.Composition, error) {
+	buff, err := json.Marshal(u.Object)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to marshal map to JSON")
 	}
@@ -240,10 +243,19 @@ func toProviderPackage(u unstructured.Unstructured) (*xppkgv1.Provider, error) {
 	return pkg, nil
 }
 
-/*func toPackageLock(u unstructured.Unstructured) (*xppkgv1beta1.Lock, error) {
+func getCategory(u unstructured.Unstructured) Category {
+	switch u.GroupVersionKind() {
+	case xpv1.CompositionGroupVersionKind:
+		return CategoryComposition
+	default:
+		return categoryUnknown
+	}
+}
+
+func toPackageLock(u unstructured.Unstructured) (*xppkgv1beta1.Lock, error) {
 	lock := &xppkgv1beta1.Lock{}
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, lock); err != nil {
 		return nil, errors.Wrap(err, errFromUnstructuredLock)
 	}
 	return lock, nil
-}*/
+}

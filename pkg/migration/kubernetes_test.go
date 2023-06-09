@@ -8,7 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	fake2 "k8s.io/client-go/discovery/fake"
+	"k8s.io/client-go/discovery/cached/memory"
 	"k8s.io/client-go/dynamic/fake"
 	fakeclientset "k8s.io/client-go/kubernetes/fake"
 )
@@ -33,6 +33,11 @@ func TestNewKubernetesSource(t *testing.T) {
 						Group:   "ec2.aws.crossplane.io",
 						Version: "v1beta1",
 						Kind:    "VPC",
+					},
+					{
+						Group:   "azure.crossplane.io",
+						Version: "v1beta1",
+						Kind:    "ResourceGroup",
 					},
 				},
 			},
@@ -64,8 +69,11 @@ func TestNewKubernetesSource(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			s := runtime.NewScheme()
 			r := NewRegistry(s)
-			// register a dummy converter so that MRs will be observed
-			r.resourceConverters = map[schema.GroupVersionKind]ResourceConverter{tc.args.gvks[0]: nil}
+			// register a dummy converter for the test GVKs
+			r.resourceConverters = map[schema.GroupVersionKind]ResourceConverter{}
+			for _, gvk := range tc.args.gvks {
+				r.resourceConverters[gvk] = nil
+			}
 			dynamicClient := fake.NewSimpleDynamicClientWithCustomListKinds(s,
 				map[schema.GroupVersionResource]string{
 					{
@@ -89,21 +97,24 @@ func TestNewKubernetesSource(t *testing.T) {
 				{
 					GroupVersion: "ec2.aws.crossplane.io/v1beta1",
 					APIResources: []metav1.APIResource{
-						{Name: "vpcs"},
+						{
+							Name: "vpcs",
+							Kind: "VPC",
+						},
 					},
 				},
 				{
 					GroupVersion: "azure.crossplane.io/v1beta1",
 					APIResources: []metav1.APIResource{
-						{Name: "resourcegroups"},
+						{
+							Name: "resourcegroups",
+							Kind: "ResourceGroup",
+						},
 					},
 				},
 			}
-			fakeDiscovery, ok := client.Discovery().(*fake2.FakeDiscovery)
-			if !ok {
-				t.Fatalf("couldn't convert Discovery() to *FakeDiscovery")
-			}
-			ks, err := NewKubernetesSource(r, dynamicClient, fakeDiscovery, "crossplane.io")
+
+			ks, err := NewKubernetesSource(dynamicClient, memory.NewMemCacheClient(client.Discovery()), WithRegistry(r))
 			if diff := cmp.Diff(tc.want.err, err); diff != "" {
 				t.Errorf("\nNext(...): -want, +got:\n%s", diff)
 			}

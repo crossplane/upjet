@@ -13,6 +13,11 @@ import (
 	sigsyaml "sigs.k8s.io/yaml"
 )
 
+var (
+	_ Source = &FileSystemSource{}
+	_ Target = &FileSystemTarget{}
+)
+
 // FileSystemSource is a source implementation to read resources from filesystem
 type FileSystemSource struct {
 	index int
@@ -62,7 +67,8 @@ func NewFileSystemSource(dir string, opts ...FileSystemSourceOption) (*FileSyste
 		fs.items = append(fs.items, UnstructuredWithMetadata{
 			Object: *u,
 			Metadata: Metadata{
-				Path: path,
+				Path:     path,
+				Category: getCategory(*u),
 			},
 		})
 
@@ -87,6 +93,12 @@ func (fs *FileSystemSource) Next() (UnstructuredWithMetadata, error) {
 		return item, nil
 	}
 	return UnstructuredWithMetadata{}, errors.New("no more elements")
+}
+
+// Reset resets the source so that resources can be reread from the beginning.
+func (fs *FileSystemSource) Reset() error {
+	fs.index = 0
+	return nil
 }
 
 // FileSystemTarget is a target implementation to write/patch/delete resources to file system

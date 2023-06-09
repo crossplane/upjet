@@ -120,6 +120,11 @@ type Source interface {
 	// Next returns the next resource manifest available or
 	// any errors encountered while reading the next resource manifest.
 	Next() (UnstructuredWithMetadata, error)
+	// Reset resets the Source so that it can read the manifests
+	// from the beginning. There is no guarantee that the Source
+	// will return the same set of manifests or it will return
+	// them in the same order after a reset.
+	Reset() error
 }
 
 // Target is a target where resource manifests can be manipulated
@@ -144,4 +149,15 @@ type Executor interface {
 	// or a step has returned an error, and we would like to stop
 	// executing the plan.
 	Destroy() error
+}
+
+// UnstructuredPreProcessor allows manifests read by the Source
+// to be pre-processed before the converters are run
+// It's not possible to do any conversions via the pre-processors,
+// and they only allow migrators to extract information from
+// the manifests read by the Source before any converters are run.
+type UnstructuredPreProcessor interface {
+	// PreProcess is called for a manifest read by the Source
+	// before any converters are run.
+	PreProcess(u UnstructuredWithMetadata) error
 }

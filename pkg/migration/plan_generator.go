@@ -36,6 +36,8 @@ import (
 const (
 	errSourceHasNext                   = "failed to generate migration plan: Could not check next object from source"
 	errSourceNext                      = "failed to generate migration plan: Could not get next object from source"
+	errPreProcessFmt                   = "failed to pre-process the manifest of category %q"
+	errSourceReset                     = "failed to generate migration plan: Could not get reset the source"
 	errUnstructuredConvert             = "failed to convert from unstructured object to v1.Composition"
 	errUnstructuredMarshal             = "failed to marshal unstructured object to JSON"
 	errResourceMigrate                 = "failed to migrate resource"
@@ -46,6 +48,7 @@ const (
 	errConfigurationMetadataMigrateFmt = "failed to migrate the configuration metadata: %s"
 	errConfigurationPackageMigrateFmt  = "failed to migrate the configuration package: %s"
 	errProviderMigrateFmt              = "failed to migrate the Provider package: %s"
+	errLockMigrateFmt                  = "failed to migrate the package lock: %s"
 	errComposedTemplateBase            = "failed to migrate the base of a composed template"
 	errComposedTemplateMigrate         = "failed to migrate the composed templates of the composition"
 	errResourceOutput                  = "failed to output migrated resource"
@@ -135,7 +138,37 @@ func (pg *PlanGenerator) GeneratePlan() error {
 	pg.Plan.Spec.stepMap = make(map[string]*Step)
 	pg.Plan.Version = versionV010
 	defer pg.commitSteps()
+	if err := pg.preProcess(); err != nil {
+		return err
+	}
+	if err := pg.source.Reset(); err != nil {
+		return errors.Wrap(err, errSourceReset)
+	}
 	return errors.Wrap(pg.convert(), errPlanGeneration)
+}
+
+func (pg *PlanGenerator) preProcess() error {
+	if len(pg.registry.unstructuredPreProcessors) == 0 {
+		return nil
+	}
+	for hasNext, err := pg.source.HasNext(); ; hasNext, err = pg.source.HasNext() {
+		if err != nil {
+			return errors.Wrap(err, errSourceHasNext)
+		}
+		if !hasNext {
+			break
+		}
+		o, err := pg.source.Next()
+		if err != nil {
+			return errors.Wrap(err, errSourceNext)
+		}
+		for _, pp := range pg.registry.unstructuredPreProcessors[o.Metadata.Category] {
+			if err := pp.PreProcess(o); err != nil {
+				return errors.Wrapf(err, errPreProcessFmt, o.Metadata.Category)
+			}
+		}
+	}
+	return nil
 }
 
 func (pg *PlanGenerator) convertPatchSets(o UnstructuredWithMetadata) ([]string, error) {
@@ -147,7 +180,7 @@ func (pg *PlanGenerator) convertPatchSets(o UnstructuredWithMetadata) ([]string,
 		if !psConv.re.MatchString(o.Object.GetName()) {
 			continue
 		}
-		c, err := convertToComposition(o.Object.Object)
+		c, err := ToComposition(o.Object)
 		if err != nil {
 			return nil, errors.Wrap(err, errUnstructuredConvert)
 		}
@@ -191,14 +224,8 @@ func (pg *PlanGenerator) convert() error { //nolint: gocyclo
 				return errors.Wrapf(err, errConfigurationPackageMigrateFmt, o.Object.GetName())
 			}
 		case xpmetav1.ConfigurationGroupVersionKind, xpmetav1alpha1.ConfigurationGroupVersionKind:
-			target, converted, err := pg.convertConfigurationMetadata(o)
-			if err != nil {
+			if err := pg.convertConfigurationMetadata(o); err != nil {
 				return errors.Wrapf(err, errConfigurationMetadataMigrateFmt, o.Object.GetName())
-			}
-			if converted {
-				if err := pg.stepEditConfigurationMetadata(o, target); err != nil {
-					return err
-				}
 			}
 		case xpv1.CompositionGroupVersionKind:
 			target, converted, err := pg.convertComposition(o)
@@ -224,6 +251,9 @@ func (pg *PlanGenerator) convert() error { //nolint: gocyclo
 				}
 			}
 		case xppkgv1beta1.LockGroupVersionKind:
+			if err := pg.convertPackageLock(o); err != nil {
+				return errors.Wrapf(err, errLockMigrateFmt, o.Object.GetName())
+			}
 		default:
 			if o.Metadata.Category == CategoryComposite {
 				if err := pg.stepPauseComposite(&o); err != nil {
@@ -333,7 +363,7 @@ func (pg *PlanGenerator) convertComposition(o UnstructuredWithMetadata) (*Unstru
 	if err != nil {
 		return nil, false, errors.Wrap(err, "failed to convert patch sets")
 	}
-	comp, err := convertToComposition(o.Object.Object)
+	comp, err := ToComposition(o.Object)
 	if err != nil {
 		return nil, false, errors.Wrap(err, errUnstructuredConvert)
 	}
