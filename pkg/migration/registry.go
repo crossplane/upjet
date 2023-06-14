@@ -104,6 +104,7 @@ type Registry struct {
 	configurationPackageConverters []configurationPackageConverter
 	providerPackageConverters      []providerPackageConverter
 	packageLockConverters          []packageLockConverter
+	categoricalConverters          map[Category][]CategoricalConverter
 	scheme                         *runtime.Scheme
 	claimTypes                     []schema.GroupVersionKind
 	compositeTypes                 []schema.GroupVersionKind
@@ -236,6 +237,20 @@ func (r *Registry) RegisterPackageLockConverter(re *regexp.Regexp, lockConv Pack
 	})
 }
 
+// RegisterCategoricalConverter registers the specified CategoricalConverter
+// for the specified Category of resources.
+func (r *Registry) RegisterCategoricalConverter(c Category, converter CategoricalConverter) {
+	r.categoricalConverters[c] = append(r.categoricalConverters[c], converter)
+}
+
+// RegisterCategoricalConverterFunction registers the specified
+// CategoricalConverterFunctionFn for the specified Category.
+func (r *Registry) RegisterCategoricalConverterFunction(c Category, converterFn CategoricalConverterFunctionFn) {
+	r.RegisterCategoricalConverter(c, &delegatingConverter{
+		categoricalConverterFn: converterFn,
+	})
+}
+
 // RegisterPackageLockV1Beta1ConversionFunction registers the specified
 // RegisterPackageLockV1Beta1ConversionFunction for the package v1beta1 locks.
 func (r *Registry) RegisterPackageLockV1Beta1ConversionFunction(re *regexp.Regexp, lockConversionFn PackageLockV1Beta1ConversionFn) {
@@ -344,15 +359,29 @@ type ConfigurationPackageV1ConversionFn func(pkg *xppkgv1.Configuration) error
 // Provider package(s).
 type ProviderPackageV1ConversionFn func(pkg xppkgv1.Provider) ([]xppkgv1.Provider, error)
 
+// CategoricalConverterFunctionFn is a function that converts resources of a
+// Category. Because it receives an unstructured argument, it should be
+// used for implementing generic conversion functions acting on a specific
+// category.
+type CategoricalConverterFunctionFn func(u *UnstructuredWithMetadata) error
+
 type delegatingConverter struct {
-	rFn                  ResourceConversionFn
-	cmpFn                ComposedTemplateConversionFn
-	psFn                 PatchSetsConversionFn
-	confMetaV1Fn         ConfigurationMetadataV1ConversionFn
-	confMetaV1Alpha1Fn   ConfigurationMetadataV1Alpha1ConversionFn
-	confPackageV1Fn      ConfigurationPackageV1ConversionFn
-	providerPackageV1Fn  ProviderPackageV1ConversionFn
-	packageLockV1Beta1Fn PackageLockV1Beta1ConversionFn
+	rFn                    ResourceConversionFn
+	cmpFn                  ComposedTemplateConversionFn
+	psFn                   PatchSetsConversionFn
+	confMetaV1Fn           ConfigurationMetadataV1ConversionFn
+	confMetaV1Alpha1Fn     ConfigurationMetadataV1Alpha1ConversionFn
+	confPackageV1Fn        ConfigurationPackageV1ConversionFn
+	providerPackageV1Fn    ProviderPackageV1ConversionFn
+	packageLockV1Beta1Fn   PackageLockV1Beta1ConversionFn
+	categoricalConverterFn CategoricalConverterFunctionFn
+}
+
+func (d *delegatingConverter) Convert(u *UnstructuredWithMetadata) error {
+	if d.categoricalConverterFn == nil {
+		return nil
+	}
+	return d.categoricalConverterFn(u)
 }
 
 func (d *delegatingConverter) ConfigurationPackageV1(pkg *xppkgv1.Configuration) error {

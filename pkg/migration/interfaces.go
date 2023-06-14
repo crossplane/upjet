@@ -161,3 +161,12 @@ type UnstructuredPreProcessor interface {
 	// before any converters are run.
 	PreProcess(u UnstructuredWithMetadata) error
 }
+
+// CategoricalConverter is a converter that converts resources of a given
+// Category. Because it receives an unstructured argument, it should be
+// used for implementing generic conversion functions acting on a specific
+// category, such as setting a deletion policy on all the managed resources
+// observed by the migration Source.
+type CategoricalConverter interface {
+	Convert(u *UnstructuredWithMetadata) error
+}

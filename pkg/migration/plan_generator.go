@@ -202,6 +202,26 @@ func (pg *PlanGenerator) convertPatchSets(o UnstructuredWithMetadata) ([]string,
 	return converted, nil
 }
 
+func (pg *PlanGenerator) categoricalConvert(u *UnstructuredWithMetadata) error {
+	if u.Metadata.Category == categoryUnknown {
+		return nil
+	}
+	converters := pg.registry.categoricalConverters[u.Metadata.Category]
+	if converters == nil {
+		return nil
+	}
+	// TODO: if a categorical converter does not convert the given object,
+	// we will have a false positive. Better to compute and check
+	// a diff here.
+	for _, converter := range converters {
+		if err := converter.Convert(u); err != nil {
+			return errors.Wrapf(err, "failed to convert unstructured object of category: %s", u.Metadata.Category)
+		}
+	}
+	// TODO: add patch step for the object
+	return nil
+}
+
 func (pg *PlanGenerator) convert() error { //nolint: gocyclo
 	convertedMR := make(map[corev1.ObjectReference][]UnstructuredWithMetadata)
 	convertedComposition := make(map[string]string)
