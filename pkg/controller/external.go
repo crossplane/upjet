@@ -13,6 +13,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/pkg/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/upbound/upjet/pkg/config"
@@ -35,6 +36,7 @@ const (
 	errDestroy           = "cannot destroy"
 	errStatusUpdate      = "cannot update status of custom resource"
 	errScheduleProvider  = "cannot schedule native Terraform provider process"
+	errUpdateAnnotations = "cannot update managed resource annotations"
 )
 
 // Option allows you to configure Connector.
@@ -105,6 +107,7 @@ func (c *Connector) Connect(ctx context.Context, mg xpresource.Managed) (managed
 		callback:          c.callback,
 		providerScheduler: ts.Scheduler,
 		providerHandle:    ws.ProviderHandle,
+		kube:              c.kube,
 		logger:            c.logger.WithValues("uid", mg.GetUID()),
 	}, nil
 }
@@ -115,6 +118,7 @@ type external struct {
 	callback          CallbackProvider
 	providerScheduler terraform.ProviderScheduler
 	providerHandle    terraform.ProviderHandle
+	kube              client.Client
 	logger            logging.Logger
 }
 
@@ -155,13 +159,18 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 		return managed.ExternalObservation{}, errors.New(errUnexpectedObject)
 	}
 
+	policySet := sets.New[xpv1.ManagementAction](tr.GetManagementPolicies()...)
+
 	// Note(turkenh): We don't need to check if the management policies are
 	// enabled or not because the crossplane-runtime's managed reconciler already
-	// does that for us. In other words, if the management policy is set to
-	// "ObserveOnly" without management policies being enabled, the managed
+	// does that for us. In other words, if the management policies are set
+	// without management policies being enabled, the managed
 	// reconciler will error out before reaching this point.
 	// https://github.com/crossplane/crossplane-runtime/pull/384/files#diff-97300a2543f95f5a2ada3560bf47dd7334e237e27976574d15d1cddef2e66c01R696
-	if tr.GetManagementPolicy() == xpv1.ManagementObserveOnly {
+	// Note (lsviben) We are only using import instead of refresh if the
+	// management policies do not contain create or update as they need the
+	// required fields to be set, which is not the case for import.
+	if !policySet.HasAny(xpv1.ManagementActionCreate, xpv1.ManagementActionUpdate, xpv1.ManagementActionAll) {
 		return e.Import(ctx, tr)
 	}
 
@@ -199,18 +208,39 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot set observation")
 	}
 
+	// NOTE(lsviben) although the annotations were supposed to be set and the
+	// managed resource updated during the Create step, we are checking and
+	// updating the annotations here due to the fact that in most cases, the
+	// Create step is done asynchronously and the managed resource is not
+	// updated with the annotations. That is why below we are prioritizing the
+	// annotations update before anything else. We are setting lateInitialized
+	// to true so that the reconciler updates the managed resource. This
+	// behavior conflicts with management policies in which LateInitialize is
+	// turned off. To circumvent this, we are checking if the management policy
+	// does not contain LateInitialize and if it does not, we are updating the
+	// annotations manually.
 	annotationsUpdated, err := resource.SetCriticalAnnotations(tr, e.config, tfstate, string(res.State.GetPrivateRaw()))
 	if err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot set critical annotations")
+	}
+	policyHasLateInit := policySet.HasAny(xpv1.ManagementActionLateInitialize, xpv1.ManagementActionAll)
+	if annotationsUpdated && !policyHasLateInit {
+		if err := e.kube.Update(ctx, mg); err != nil {
+			return managed.ExternalObservation{}, errors.Wrap(err, errUpdateAnnotations)
+		}
+		annotationsUpdated = false
 	}
 	conn, err := resource.GetConnectionDetails(tfstate, tr, e.config)
 	if err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot get connection details")
 	}
 
-	lateInitedParams, err := tr.LateInitialize(res.State.GetAttributes())
-	if err != nil {
-		return managed.ExternalObservation{}, errors.Wrap(err, "cannot late initialize parameters")
+	var lateInitedParams bool
+	if policyHasLateInit {
+		lateInitedParams, err = tr.LateInitialize(res.State.GetAttributes())
+		if err != nil {
+			return managed.ExternalObservation{}, errors.Wrap(err, "cannot late initialize parameters")
+		}
 	}
 	markedAvailable := tr.GetCondition(xpv1.TypeReady).Equal(xpv1.Available())
 

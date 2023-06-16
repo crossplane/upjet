@@ -15,6 +15,7 @@ import (
 	xpfake "github.com/crossplane/crossplane-runtime/pkg/resource/fake"
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -42,6 +43,10 @@ var (
 				},
 			},
 		},
+	}
+	exampleCriticalAnnotations = map[string]string{
+		resource.AnnotationKeyPrivateRawAttribute: "",
+		xpmeta.AnnotationKeyExternalName:          "some-id",
 	}
 )
 
@@ -182,12 +187,14 @@ func TestConnect(t *testing.T) {
 
 func TestObserve(t *testing.T) {
 	type args struct {
-		w   Workspace
-		obj xpresource.Managed
+		w      Workspace
+		obj    xpresource.Managed
+		client client.Client
 	}
 	type want struct {
-		obs managed.ExternalObservation
-		err error
+		obs       managed.ExternalObservation
+		condition *xpv1.Condition
+		err       error
 	}
 	cases := map[string]struct {
 		reason string
@@ -205,7 +212,13 @@ func TestObserve(t *testing.T) {
 		"RefreshFailed": {
 			reason: "It should return error if we cannot refresh",
 			args: args{
-				obj: &fake.Terraformed{},
+				obj: &fake.Terraformed{
+					Managed: xpfake.Managed{
+						Manageable: xpfake.Manageable{
+							Policy: xpv1.ManagementPolicies{xpv1.ManagementActionAll},
+						},
+					},
+				},
 				w: WorkspaceFns{
 					RefreshFn: func(_ context.Context) (terraform.RefreshResult, error) {
 						return terraform.RefreshResult{}, errBoom
@@ -219,7 +232,13 @@ func TestObserve(t *testing.T) {
 		"RefreshNotFound": {
 			reason: "It should not report error in case resource is not found",
 			args: args{
-				obj: &fake.Terraformed{},
+				obj: &fake.Terraformed{
+					Managed: xpfake.Managed{
+						Manageable: xpfake.Manageable{
+							Policy: xpv1.ManagementPolicies{xpv1.ManagementActionAll},
+						},
+					},
+				},
 				w: WorkspaceFns{
 					RefreshFn: func(_ context.Context) (terraform.RefreshResult, error) {
 						return terraform.RefreshResult{Exists: false}, nil
@@ -230,7 +249,13 @@ func TestObserve(t *testing.T) {
 		"RefreshInProgress": {
 			reason: "It should report exists and up-to-date if an operation is ongoing",
 			args: args{
-				obj: &fake.Terraformed{},
+				obj: &fake.Terraformed{
+					Managed: xpfake.Managed{
+						Manageable: xpfake.Manageable{
+							Policy: xpv1.ManagementPolicies{xpv1.ManagementActionAll},
+						},
+					},
+				},
 				w: WorkspaceFns{
 					RefreshFn: func(_ context.Context) (terraform.RefreshResult, error) {
 						return terraform.RefreshResult{
@@ -249,7 +274,19 @@ func TestObserve(t *testing.T) {
 		"TransitionToReady": {
 			reason: "We should mark the resource as ready if the refresh succeeds and there is no ongoing operation",
 			args: args{
-				obj: &fake.Terraformed{},
+				obj: &fake.Terraformed{
+					Managed: xpfake.Managed{
+						ConditionedStatus: xpv1.ConditionedStatus{
+							// empty
+						},
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: exampleCriticalAnnotations,
+						},
+						Manageable: xpfake.Manageable{
+							Policy: xpv1.ManagementPolicies{xpv1.ManagementActionAll},
+						},
+					},
+				},
 				w: WorkspaceFns{
 					RefreshFn: func(_ context.Context) (terraform.RefreshResult, error) {
 						return terraform.RefreshResult{
@@ -266,6 +303,7 @@ func TestObserve(t *testing.T) {
 					ConnectionDetails:       nil,
 					ResourceLateInitialized: false,
 				},
+				condition: available(),
 			},
 		},
 		"PlanFailed": {
@@ -274,12 +312,13 @@ func TestObserve(t *testing.T) {
 				obj: &fake.Terraformed{
 					Managed: xpfake.Managed{
 						ObjectMeta: metav1.ObjectMeta{
-							Annotations: map[string]string{
-								xpmeta.AnnotationKeyExternalName: "some-id",
-							},
+							Annotations: exampleCriticalAnnotations,
 						},
 						ConditionedStatus: xpv1.ConditionedStatus{
 							Conditions: []xpv1.Condition{xpv1.Available()},
+						},
+						Manageable: xpfake.Manageable{
+							Policy: xpv1.ManagementPolicies{xpv1.ManagementActionAll},
 						},
 					},
 				},
@@ -299,12 +338,16 @@ func TestObserve(t *testing.T) {
 				err: errors.Wrap(errBoom, errPlan),
 			},
 		},
-		"Success": {
+		"AnnotationsUpdated": {
+			reason: "We should update annotations if they are not up-to-date as a priority",
 			args: args{
 				obj: &fake.Terraformed{
 					Managed: xpfake.Managed{
 						ConditionedStatus: xpv1.ConditionedStatus{
 							Conditions: []xpv1.Condition{xpv1.Available()},
+						},
+						Manageable: xpfake.Manageable{
+							Policy: xpv1.ManagementPolicies{xpv1.ManagementActionAll},
 						},
 					},
 				},
@@ -326,11 +369,12 @@ func TestObserve(t *testing.T) {
 			},
 		},
 		"ObserveOnlyAsyncInProgress": {
+			reason: "We should report exists and up-to-date if an operation is ongoing and the policy is observe-only",
 			args: args{
 				obj: &fake.Terraformed{
 					Managed: xpfake.Managed{
 						Manageable: xpfake.Manageable{
-							Policy: xpv1.ManagementObserveOnly,
+							Policy: xpv1.ManagementPolicies{xpv1.ManagementActionObserve},
 						},
 						ConditionedStatus: xpv1.ConditionedStatus{
 							Conditions: []xpv1.Condition{xpv1.Available()},
@@ -353,11 +397,12 @@ func TestObserve(t *testing.T) {
 			},
 		},
 		"ObserveOnlyImportFails": {
+			reason: "We should report an error if the import fails and the policy is observe-only",
 			args: args{
 				obj: &fake.Terraformed{
 					Managed: xpfake.Managed{
 						Manageable: xpfake.Manageable{
-							Policy: xpv1.ManagementObserveOnly,
+							Policy: xpv1.ManagementPolicies{xpv1.ManagementActionObserve},
 						},
 						ConditionedStatus: xpv1.ConditionedStatus{
 							Conditions: []xpv1.Condition{xpv1.Available()},
@@ -375,11 +420,12 @@ func TestObserve(t *testing.T) {
 			},
 		},
 		"ObserveOnlyDoesNotExist": {
+			reason: "We should report if the resource does not exist and the policy is observe-only",
 			args: args{
 				obj: &fake.Terraformed{
 					Managed: xpfake.Managed{
 						Manageable: xpfake.Manageable{
-							Policy: xpv1.ManagementObserveOnly,
+							Policy: xpv1.ManagementPolicies{xpv1.ManagementActionObserve},
 						},
 						ConditionedStatus: xpv1.ConditionedStatus{
 							Conditions: []xpv1.Condition{xpv1.Available()},
@@ -405,10 +451,13 @@ func TestObserve(t *testing.T) {
 				obj: &fake.Terraformed{
 					Managed: xpfake.Managed{
 						Manageable: xpfake.Manageable{
-							Policy: xpv1.ManagementObserveOnly,
+							Policy: xpv1.ManagementPolicies{xpv1.ManagementActionObserve},
 						},
 						ConditionedStatus: xpv1.ConditionedStatus{
-							Conditions: []xpv1.Condition{xpv1.Available()},
+							// empty
+						},
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: exampleCriticalAnnotations,
 						},
 					},
 				},
@@ -429,18 +478,134 @@ func TestObserve(t *testing.T) {
 					ResourceExists:   true,
 					ResourceUpToDate: true,
 				},
+				condition: available(),
+			},
+		},
+		"TransitionToReadyManagementPolicyDefault": {
+			reason: "We should mark the resource as ready if the refresh succeeds and there is no ongoing operation",
+			args: args{
+				obj: &fake.Terraformed{
+					Managed: xpfake.Managed{
+						Manageable: xpfake.Manageable{
+							Policy: xpv1.ManagementPolicies{xpv1.ManagementActionAll},
+						},
+						ConditionedStatus: xpv1.ConditionedStatus{
+							// empty
+						},
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: exampleCriticalAnnotations,
+						},
+					},
+				},
+				w: WorkspaceFns{
+					RefreshFn: func(_ context.Context) (terraform.RefreshResult, error) {
+						return terraform.RefreshResult{
+							Exists: true,
+							State:  exampleState,
+						}, nil
+					},
+				},
+			},
+			want: want{
+				obs: managed.ExternalObservation{
+					ResourceExists:          true,
+					ResourceUpToDate:        true,
+					ConnectionDetails:       nil,
+					ResourceLateInitialized: false,
+				},
+				condition: available(),
+			},
+		},
+		"AnnotationsUpdatedManuallyManagementPolicyNoLateInit": {
+			reason: "We should update annotations manually if they are not up-to-date and the policy is not late-init",
+			args: args{
+				client: &test.MockClient{
+					MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+						if diff := cmp.Diff(exampleCriticalAnnotations, obj.GetAnnotations()); diff != "" {
+							reason := "Critical annotations should be updated"
+							t.Errorf("\nReason: %s\n-want, +got:\n%s", reason, diff)
+						}
+						return nil
+					},
+				},
+				obj: &fake.Terraformed{
+					Managed: xpfake.Managed{
+						ConditionedStatus: xpv1.ConditionedStatus{
+							// empty
+						},
+						Manageable: xpfake.Manageable{
+							Policy: xpv1.ManagementPolicies{xpv1.ManagementActionCreate},
+						},
+					},
+				},
+				w: WorkspaceFns{
+					RefreshFn: func(_ context.Context) (terraform.RefreshResult, error) {
+						return terraform.RefreshResult{
+							Exists: true,
+							State:  exampleState,
+						}, nil
+					},
+				},
+			},
+			want: want{
+				obs: managed.ExternalObservation{
+					ResourceExists:   true,
+					ResourceUpToDate: true,
+				},
+				condition: available(),
+			},
+		},
+		"AnnotationsUpdatedManuallyManagementPolicyNoLateInitError": {
+			reason: "Should handle the error of updating annotations manually if they are not up-to-date and the policy is not late-init",
+			args: args{
+				client: &test.MockClient{
+					MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+						return errBoom
+					},
+				},
+				obj: &fake.Terraformed{
+					Managed: xpfake.Managed{
+						Manageable: xpfake.Manageable{
+							Policy: xpv1.ManagementPolicies{xpv1.ManagementActionCreate},
+						},
+					},
+				},
+				w: WorkspaceFns{
+					RefreshFn: func(_ context.Context) (terraform.RefreshResult, error) {
+						return terraform.RefreshResult{
+							Exists: true,
+							State:  exampleState,
+						}, nil
+					},
+				},
+			},
+			want: want{
+				err: errors.Wrap(errBoom, errUpdateAnnotations),
 			},
 		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			e := &external{workspace: tc.w, config: config.DefaultResource("upjet_resource", nil, nil)}
-			_, err := e.Observe(context.TODO(), tc.args.obj)
+			e := &external{workspace: tc.w, config: config.DefaultResource("upjet_resource", nil, nil), kube: tc.args.client}
+			observation, err := e.Observe(context.TODO(), tc.args.obj)
+			if diff := cmp.Diff(tc.want.obs, observation); diff != "" {
+				t.Errorf("\n%s\nObserve(...): -want observation, +got observation:\n%s", tc.reason, diff)
+			}
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nObserve(...): -want error, +got error:\n%s", tc.reason, diff)
 			}
+			if tc.want.condition != nil {
+				if diff := cmp.Diff(*tc.want.condition, tc.args.obj.GetCondition(tc.want.condition.Type), cmpopts.IgnoreTypes(metav1.Time{})); diff != "" {
+					t.Errorf("\n%s\nObserve(...): -want condition, +got condition:\n%s", tc.reason, diff)
+				}
+			}
 		})
 	}
+}
+
+func available() *xpv1.Condition {
+	c := xpv1.Available()
+	return &c
 }
 
 func TestCreate(t *testing.T) {
