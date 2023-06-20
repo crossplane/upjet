@@ -116,6 +116,7 @@ func NewRegistry(scheme *runtime.Scheme) *Registry {
 	return &Registry{
 		resourceConverters:        make(map[schema.GroupVersionKind]ResourceConverter),
 		templateConverters:        make(map[schema.GroupVersionKind]ComposedTemplateConverter),
+		categoricalConverters:     make(map[Category][]CategoricalConverter),
 		unstructuredPreProcessors: make(map[Category][]UnstructuredPreProcessor),
 		scheme:                    scheme,
 	}

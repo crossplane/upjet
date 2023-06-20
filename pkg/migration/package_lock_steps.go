@@ -61,10 +61,10 @@ func (pg *PlanGenerator) stepEditPackageLock(source UnstructuredWithMetadata, t 
 	if err != nil {
 		return err
 	}
-	return errors.Wrap(pg.target.Put(UnstructuredWithMetadata{
+	return errors.Wrapf(pg.target.Put(UnstructuredWithMetadata{
 		Object: unstructured.Unstructured{
 			Object: addNameGVK(t.Object, patchMap),
 		},
 		Metadata: t.Metadata,
-	}), errEditConfigurationPackageFmt)
+	}), errEditConfigurationPackageFmt, t.Object.GetName())
 }

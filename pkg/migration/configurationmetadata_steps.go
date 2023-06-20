@@ -28,7 +28,8 @@ import (
 
 const (
 	// configuration migration steps follow any existing API migration steps
-	stepNewServiceScopedProvider = iota + stepAPIEnd + 1
+	stepOrphanMRs = iota + stepAPIEnd + 1
+	stepNewServiceScopedProvider
 	stepConfigurationPackageDisableDepResolution
 	stepEditPackageLock
 	stepDeleteMonolithicProvider
@@ -36,7 +37,17 @@ const (
 	stepEditConfigurationMetadata
 	stepEditConfigurationPackage
 	stepConfigurationPackageEnableDepResolution
+	stepRevertOrphanMRs
+	stepConfigurationEnd
 )
+
+func getConfigurationMigrationSteps() []step {
+	steps := make([]step, 0, stepConfigurationEnd-stepAPIEnd-1)
+	for i := stepAPIEnd + 1; i < stepConfigurationEnd; i++ {
+		steps = append(steps, i)
+	}
+	return steps
+}
 
 const (
 	errConfigurationMetadataOutput = "failed to output configuration JSON merge document"
@@ -107,6 +118,10 @@ func (pg *PlanGenerator) stepConfigurationWithSubStep(s step, newSubStep bool) *
 
 	pg.Plan.Spec.stepMap[stepKey] = &Step{}
 	switch s { // nolint:gocritic,exhaustive
+	case stepOrphanMRs:
+		setPatchStep("deletion-policy-orphan", pg.Plan.Spec.stepMap[stepKey])
+	case stepRevertOrphanMRs:
+		setPatchStep("deletion-policy-delete", pg.Plan.Spec.stepMap[stepKey])
 	case stepNewServiceScopedProvider:
 		setApplyStep("new-ssop", pg.Plan.Spec.stepMap[stepKey])
 	case stepConfigurationPackageDisableDepResolution:

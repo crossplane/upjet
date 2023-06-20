@@ -45,6 +45,7 @@ func TestGeneratePlan(t *testing.T) {
 		source   Source
 		target   *testTarget
 		registry *Registry
+		opts     []PlanGeneratorOption
 	}
 	type want struct {
 		err               error
@@ -154,6 +155,7 @@ func TestGeneratePlan(t *testing.T) {
 						re:        AllConfigurations,
 						converter: &configurationMetaTestConverter{},
 					})),
+				opts: []PlanGeneratorOption{WithEnableConfigurationMigrationSteps()},
 			},
 			want: want{
 				migrationPlanPath: "testdata/plan/generated/configurationv1_migration_plan.yaml",
@@ -172,6 +174,7 @@ func TestGeneratePlan(t *testing.T) {
 						re:        AllConfigurations,
 						converter: &configurationMetaTestConverter{},
 					})),
+				opts: []PlanGeneratorOption{WithEnableConfigurationMigrationSteps()},
 			},
 			want: want{
 				migrationPlanPath: "testdata/plan/generated/configurationv1alpha1_migration_plan.yaml",
@@ -194,6 +197,7 @@ func TestGeneratePlan(t *testing.T) {
 						re:        regexp.MustCompile(`xpkg.upbound.io/upbound/provider-aws:.+`),
 						converter: &monolithicProviderToSSOPConverter{},
 					})),
+				opts: []PlanGeneratorOption{WithEnableConfigurationMigrationSteps()},
 			},
 			want: want{
 				migrationPlanPath: "testdata/plan/generated/providerv1_migration_plan.yaml",
@@ -207,13 +211,15 @@ func TestGeneratePlan(t *testing.T) {
 				},
 			},
 		},
-		"PlanWithProviderPackageV1AndConfigurationV1": {
+		"PlanForConfigurationPackageMigration": {
 			fields: fields{
 				source: newTestSource(map[string]Metadata{
 					"testdata/plan/providerv1.yaml":         {},
 					"testdata/plan/configurationv1.yaml":    {},
 					"testdata/plan/configurationpkgv1.yaml": {},
 					"testdata/plan/lockv1beta1.yaml":        {},
+					"testdata/plan/sourcevpc.yaml":          {Category: CategoryManaged},
+					"testdata/plan/sourcevpc2.yaml":         {Category: CategoryManaged},
 				}),
 				target: newTestTarget(),
 				registry: getRegistry(
@@ -236,10 +242,12 @@ func TestGeneratePlan(t *testing.T) {
 					withPackageLockConverter(packageLockConverter{
 						re:        CrossplaneLockName,
 						converter: &lockConverter{},
-					})),
+					}),
+				),
+				opts: []PlanGeneratorOption{WithEnableConfigurationMigrationSteps()},
 			},
 			want: want{
-				migrationPlanPath: "testdata/plan/generated/configurationv1_providerv1_migration_plan.yaml",
+				migrationPlanPath: "testdata/plan/generated/configurationv1_pkg_migration_plan.yaml",
 				migratedResourceNames: []string{
 					"disable-dependency-resolution/platform-ref-aws.configurations.pkg.crossplane.io_v1.yaml",
 					"edit-configuration-package/platform-ref-aws.configurations.pkg.crossplane.io_v1.yaml",
@@ -252,13 +260,15 @@ func TestGeneratePlan(t *testing.T) {
 					"activate-ssop/provider-aws-ec2.providers.pkg.crossplane.io_v1.yaml",
 					"activate-ssop/provider-aws-eks.providers.pkg.crossplane.io_v1.yaml",
 					"edit-package-lock/lock.locks.pkg.crossplane.io_v1beta1.yaml",
+					"deletion-policy-orphan/sample-vpc.vpcs.fakesourceapi_v1alpha1.yaml",
+					"deletion-policy-delete/sample-vpc.vpcs.fakesourceapi_v1alpha1.yaml",
 				},
 			},
 		},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			pg := NewPlanGenerator(tt.fields.registry, tt.fields.source, tt.fields.target)
+			pg := NewPlanGenerator(tt.fields.registry, tt.fields.source, tt.fields.target, tt.fields.opts...)
 			err := pg.GeneratePlan()
 			// compare error state
 			if diff := cmp.Diff(tt.want.err, err, test.EquateErrors()); diff != "" {

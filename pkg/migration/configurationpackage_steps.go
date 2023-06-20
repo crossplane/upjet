@@ -17,11 +17,16 @@ package migration
 import (
 	"fmt"
 
+	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
+
+	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 const (
+	errSetDeletionPolicyFmt        = "failed to put the patch file to set the deletion policy to %q: %s"
 	errEditConfigurationPackageFmt = `failed to put the edited Configuration package: %s`
 )
 
@@ -103,10 +108,45 @@ func (pg *PlanGenerator) stepEditConfigurationPackage(source UnstructuredWithMet
 	if err != nil {
 		return err
 	}
-	return errors.Wrap(pg.target.Put(UnstructuredWithMetadata{
+	return errors.Wrapf(pg.target.Put(UnstructuredWithMetadata{
 		Object: unstructured.Unstructured{
 			Object: addNameGVK(t.Object, patchMap),
 		},
 		Metadata: t.Metadata,
-	}), errEditConfigurationPackageFmt)
+	}), errEditConfigurationPackageFmt, t.Object.GetName())
+}
+
+func (pg *PlanGenerator) stepOrhanMR(u UnstructuredWithMetadata) (bool, error) {
+	return pg.stepSetDeletionPolicy(u, stepOrphanMRs, v1.DeletionOrphan)
+}
+
+func (pg *PlanGenerator) stepRevertOrhanMR(u UnstructuredWithMetadata) (bool, error) {
+	return pg.stepSetDeletionPolicy(u, stepRevertOrphanMRs, v1.DeletionDelete)
+}
+
+func (pg *PlanGenerator) stepSetDeletionPolicy(u UnstructuredWithMetadata, step step, policy v1.DeletionPolicy) (bool, error) {
+	if !pg.stepEnabled(step) {
+		return false, nil
+	}
+	pv := fieldpath.Pave(u.Object.Object)
+	p, err := pv.GetString("spec.deletionPolicy")
+	if err != nil && !fieldpath.IsNotFound(err) {
+		return false, errors.Wrapf(err, "failed to get the current deletion policy from MR: %s", u.Object.GetName())
+	}
+	if err == nil && v1.DeletionPolicy(p) == policy {
+		return false, nil
+	}
+	s := pg.stepConfiguration(step)
+	u.Metadata.Path = fmt.Sprintf("%s/%s.yaml", s.Name, getVersionedName(u.Object))
+	s.Patch.Files = append(s.Patch.Files, u.Metadata.Path)
+	return true, errors.Wrapf(pg.target.Put(UnstructuredWithMetadata{
+		Object: unstructured.Unstructured{
+			Object: addNameGVK(u.Object, map[string]any{
+				"spec": map[string]any{
+					"deletionPolicy": string(policy),
+				},
+			}),
+		},
+		Metadata: u.Metadata,
+	}), errSetDeletionPolicyFmt, policy, u.Object.GetName())
 }

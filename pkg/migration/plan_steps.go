@@ -75,6 +75,15 @@ func (pg *PlanGenerator) commitSteps() {
 	}
 }
 
+func (pg *PlanGenerator) stepEnabled(s step) bool {
+	for _, i := range pg.enabledSteps {
+		if i == s {
+			return true
+		}
+	}
+	return false
+}
+
 func computeJSONMergePathDoc(source, target unstructured.Unstructured) (map[string]any, error) {
 	sourceBuff, err := source.MarshalJSON()
 	if err != nil {

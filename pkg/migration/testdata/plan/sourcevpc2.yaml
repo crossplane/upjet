@@ -1,0 +1,12 @@
+apiVersion: fakesourceapi/v1alpha1
+kind: VPC
+metadata:
+  name: sample-vpc2
+spec:
+  deletionPolicy: Orphan
+  forProvider:
+    region: us-west-1
+    cidrBlock: 192.168.0.0/16
+    tags:
+      - key: tag1
+        value: value1

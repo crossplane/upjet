@@ -90,15 +90,26 @@ func WithSkipGVKs(gvk ...schema.GroupVersionKind) PlanGeneratorOption {
 	}
 }
 
+// WithEnableConfigurationMigrationSteps enables only
+// the configuration migration steps.
+// TODO: to be replaced with a higher abstraction encapsulating
+// migration scenarios.
+func WithEnableConfigurationMigrationSteps() PlanGeneratorOption {
+	return func(pg *PlanGenerator) {
+		pg.enabledSteps = getConfigurationMigrationSteps()
+	}
+}
+
 // PlanGenerator generates a migration.Plan reading the manifests available
 // from `source`, converting managed resources and compositions using the
 // available `migration.Converter`s registered in the `registry` and
 // writing the output manifests to the specified `target`.
 type PlanGenerator struct {
-	source   Source
-	target   Target
-	registry *Registry
-	subSteps map[step]string
+	source       Source
+	target       Target
+	registry     *Registry
+	subSteps     map[step]string
+	enabledSteps []step
 	// Plan is the migration.Plan whose steps are expected
 	// to complete a migration when they're executed in order.
 	Plan Plan
@@ -118,10 +129,11 @@ type PlanGenerator struct {
 // Source and Target and the default converter Registry.
 func NewPlanGenerator(registry *Registry, source Source, target Target, opts ...PlanGeneratorOption) PlanGenerator {
 	pg := &PlanGenerator{
-		source:   source,
-		target:   target,
-		registry: registry,
-		subSteps: map[step]string{},
+		source:       source,
+		target:       target,
+		registry:     registry,
+		subSteps:     map[step]string{},
+		enabledSteps: getAPIMigrationSteps(),
 	}
 	for _, o := range opts {
 		o(pg)
@@ -206,6 +218,8 @@ func (pg *PlanGenerator) categoricalConvert(u *UnstructuredWithMetadata) error {
 	if u.Metadata.Category == categoryUnknown {
 		return nil
 	}
+	source := *u
+	source.Object = *u.Object.DeepCopy()
 	converters := pg.registry.categoricalConverters[u.Metadata.Category]
 	if converters == nil {
 		return nil
@@ -218,8 +232,7 @@ func (pg *PlanGenerator) categoricalConvert(u *UnstructuredWithMetadata) error {
 			return errors.Wrapf(err, "failed to convert unstructured object of category: %s", u.Metadata.Category)
 		}
 	}
-	// TODO: add patch step for the object
-	return nil
+	return pg.stepEditCategory(source, u)
 }
 
 func (pg *PlanGenerator) convert() error { //nolint: gocyclo
@@ -238,6 +251,11 @@ func (pg *PlanGenerator) convert() error { //nolint: gocyclo
 		if err != nil {
 			return errors.Wrap(err, errSourceNext)
 		}
+
+		if err := pg.categoricalConvert(&o); err != nil {
+			return err
+		}
+
 		switch gvk := o.Object.GroupVersionKind(); gvk {
 		case xppkgv1.ConfigurationGroupVersionKind:
 			if err := pg.convertConfigurationPackage(o); err != nil {

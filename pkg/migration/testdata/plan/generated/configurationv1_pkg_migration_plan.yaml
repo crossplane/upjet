@@ -1,5 +1,12 @@
 spec:
   steps:
+    - patch:
+        type: merge
+        files:
+          - deletion-policy-orphan/sample-vpc.vpcs.fakesourceapi_v1alpha1.yaml
+      name: deletion-policy-orphan
+      type: Patch
+
     - apply:
         files:
           - new-ssop/provider-family-aws.providers.pkg.crossplane.io_v1.yaml
@@ -72,6 +79,13 @@ spec:
         files:
           - enable-dependency-resolution/platform-ref-aws.configurations.pkg.crossplane.io_v1.yaml
       name: enable-dependency-resolution
+      type: Patch
+
+    - patch:
+        type: merge
+        files:
+          - deletion-policy-delete/sample-vpc.vpcs.fakesourceapi_v1alpha1.yaml
+      name: deletion-policy-delete
       type: Patch
 
 version: 0.1.0
