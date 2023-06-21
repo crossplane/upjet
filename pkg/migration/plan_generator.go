@@ -135,6 +135,7 @@ func (s *sources) Reset() error {
 			return err
 		}
 	}
+	s.i = 0
 	return nil
 }
 
@@ -167,7 +168,7 @@ type PlanGenerator struct {
 // Source and Target and the default converter Registry.
 func NewPlanGenerator(registry *Registry, source Source, target Target, opts ...PlanGeneratorOption) PlanGenerator {
 	pg := &PlanGenerator{
-		source:       source,
+		source:       &sources{backends: []Source{source}},
 		target:       target,
 		registry:     registry,
 		subSteps:     map[step]string{},
