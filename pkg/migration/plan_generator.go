@@ -90,6 +90,14 @@ func WithSkipGVKs(gvk ...schema.GroupVersionKind) PlanGeneratorOption {
 	}
 }
 
+// WithMultipleSources can be used to configure multiple sources for a
+// PlanGenerator.
+func WithMultipleSources(source ...Source) PlanGeneratorOption {
+	return func(pg *PlanGenerator) {
+		pg.source = &sources{backends: source}
+	}
+}
+
 // WithEnableConfigurationMigrationSteps enables only
 // the configuration migration steps.
 // TODO: to be replaced with a higher abstraction encapsulating
@@ -98,6 +106,36 @@ func WithEnableConfigurationMigrationSteps() PlanGeneratorOption {
 	return func(pg *PlanGenerator) {
 		pg.enabledSteps = getConfigurationMigrationSteps()
 	}
+}
+
+type sources struct {
+	backends []Source
+	i        int
+}
+
+func (s *sources) HasNext() (bool, error) {
+	if s.i >= len(s.backends) {
+		return false, nil
+	}
+	ok, err := s.backends[s.i].HasNext()
+	if err != nil || ok {
+		return ok, err
+	}
+	s.i++
+	return s.HasNext()
+}
+
+func (s *sources) Next() (UnstructuredWithMetadata, error) {
+	return s.backends[s.i].Next()
+}
+
+func (s *sources) Reset() error {
+	for _, src := range s.backends {
+		if err := src.Reset(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // PlanGenerator generates a migration.Plan reading the manifests available
