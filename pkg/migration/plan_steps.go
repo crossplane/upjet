@@ -60,6 +60,14 @@ func setDeleteStep(name string, s *Step) {
 	}
 }
 
+func setExecStep(name string, s *Step) {
+	s.Name = name
+	s.Type = StepTypeExec
+	s.Exec = &ExecStep{
+		Command: "sh",
+	}
+}
+
 func (pg *PlanGenerator) commitSteps() {
 	if len(pg.Plan.Spec.stepMap) == 0 {
 		return

@@ -43,7 +43,7 @@ func newFakeExec(err error) *testingexec.FakeExec {
 		CommandScript: []testingexec.FakeCommandAction{
 			func(_ string, _ ...string) k8sExec.Cmd {
 				return &testingexec.FakeCmd{
-					RunScript: []testingexec.FakeAction{
+					CombinedOutputScript: []testingexec.FakeAction{
 						func() ([]byte, []byte, error) {
 							return nil, nil, err
 						},

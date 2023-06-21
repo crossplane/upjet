@@ -28,13 +28,20 @@ import (
 
 const (
 	// configuration migration steps follow any existing API migration steps
-	stepOrphanMRs = iota + stepAPIEnd + 1
+	stepBackupMRs = iota + stepAPIEnd + 1
+	stepBackupComposites
+	stepBackupClaims
+	stepOrphanMRs
 	stepNewServiceScopedProvider
+	stepCheckHealthNewServiceScopedProvider
 	stepConfigurationPackageDisableDepResolution
 	stepEditPackageLock
 	stepDeleteMonolithicProvider
 	stepActivateServiceScopedProviderRevision
+	stepCheckInstallationServiceScopedProviderRevision
 	stepEditConfigurationMetadata
+	stepBuildConfiguration
+	stepPushConfiguration
 	stepEditConfigurationPackage
 	stepConfigurationPackageEnableDepResolution
 	stepRevertOrphanMRs
@@ -138,6 +145,20 @@ func (pg *PlanGenerator) stepConfigurationWithSubStep(s step, newSubStep bool) *
 		setPatchStep("activate-ssop", pg.Plan.Spec.stepMap[stepKey])
 	case stepEditConfigurationMetadata:
 		setPatchStep("edit-configuration-metadata", pg.Plan.Spec.stepMap[stepKey])
+	case stepBackupMRs:
+		setExecStep("backup-managed-resources", pg.Plan.Spec.stepMap[stepKey])
+	case stepBackupComposites:
+		setExecStep("backup-composite-resources", pg.Plan.Spec.stepMap[stepKey])
+	case stepBackupClaims:
+		setExecStep("backup-claim-resources", pg.Plan.Spec.stepMap[stepKey])
+	case stepCheckHealthNewServiceScopedProvider:
+		setExecStep("wait-for-healthy", pg.Plan.Spec.stepMap[stepKey])
+	case stepCheckInstallationServiceScopedProviderRevision:
+		setExecStep("wait-for-installed", pg.Plan.Spec.stepMap[stepKey])
+	case stepBuildConfiguration:
+		setExecStep("build-configuration", pg.Plan.Spec.stepMap[stepKey])
+	case stepPushConfiguration:
+		setExecStep("push-configuration", pg.Plan.Spec.stepMap[stepKey])
 	default:
 		panic(fmt.Sprintf(errInvalidStepFmt, s))
 	}

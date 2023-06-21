@@ -1,10 +1,50 @@
 spec:
   steps:
+  - exec:
+      command: sh
+      args:
+        - "-c"
+        - "'kubectl get managed -o yaml > backup/managed-resources.yaml'"
+    name: backup-managed-resources
+    type: Exec
+
+  - exec:
+      command: sh
+      args:
+        - "-c"
+        - "'kubectl get composite -o yaml > backup/composite-resources.yaml'"
+    name: backup-composite-resources
+    type: Exec
+
+  - exec:
+      command: sh
+      args:
+        - "-c"
+        - "'kubectl get claim --all-namespaces -o yaml > backup/claim-resources.yaml'"
+    name: backup-claim-resources
+    type: Exec
+
   - patch:
       type: merge
       files:
       - edit-configuration-metadata/platform-ref-aws.configurations.meta.pkg.crossplane.io_v1alpha1.yaml
     name: edit-configuration-metadata
     type: Patch
+
+  - exec:
+      command: sh
+      args:
+        - "-c"
+        - "'up xpkg build --name test-smaller-provider-migration.xpkg --package-root=package --examples-root=examples'"
+    name: build-configuration
+    type: Exec
+
+  - exec:
+      command: sh
+      args:
+        - "-c"
+        - "'up xpkg push ${ORG}/${PLATFORM}:${TAG} -f package/test-smaller-provider-migration.xpkg'"
+    name: push-configuration
+    type: Exec
 
 version: 0.1.0

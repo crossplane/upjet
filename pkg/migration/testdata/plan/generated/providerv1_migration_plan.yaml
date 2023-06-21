@@ -13,6 +13,30 @@ spec:
     name: new-ssop
     type: Apply
 
+  - exec:
+      command: sh
+      args:
+        - "-c"
+        - "'kubectl wait provider.pkg provider-family-aws --for condition=Healthy'"
+    name: wait-for-healthy
+    type: Exec
+
+  - exec:
+      command: sh
+      args:
+        - "-c"
+        - "'kubectl wait provider.pkg provider-aws-ec2 --for condition=Healthy'"
+    name: wait-for-healthy
+    type: Exec
+
+  - exec:
+      command: sh
+      args:
+        - "-c"
+        - "'kubectl wait provider.pkg provider-aws-eks --for condition=Healthy'"
+    name: wait-for-healthy
+    type: Exec
+
   - delete:
       options:
         finalizerPolicy: Remove
@@ -38,5 +62,29 @@ spec:
         - activate-ssop/provider-aws-eks.providers.pkg.crossplane.io_v1.yaml
     name: activate-ssop
     type: Patch
+
+  - exec:
+      command: sh
+      args:
+        - "-c"
+        - "'kubectl wait provider.pkg provider-family-aws --for condition=Installed'"
+    name: wait-for-installed
+    type: Exec
+
+  - exec:
+      command: sh
+      args:
+        - "-c"
+        - "'kubectl wait provider.pkg provider-aws-ec2 --for condition=Installed'"
+    name: wait-for-installed
+    type: Exec
+
+  - exec:
+      command: sh
+      args:
+        - "-c"
+        - "'kubectl wait provider.pkg provider-aws-eks --for condition=Installed'"
+    name: wait-for-installed
+    type: Exec
 
 version: 0.1.0

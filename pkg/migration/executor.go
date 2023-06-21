@@ -54,8 +54,9 @@ func (f ForkExecutor) Step(s Step, ctx any) (any, error) {
 
 	cmd := f.executor.Command(s.Exec.Command, s.Exec.Args...)
 	cmd.SetEnv(os.Environ())
-
-	if err := cmd.Run(); err != nil {
+	out, err := cmd.CombinedOutput()
+	fmt.Println(string(out))
+	if err != nil {
 		return nil, errors.Wrap(err, fmt.Sprintf("could not execute step %s", s.Name))
 	}
 
