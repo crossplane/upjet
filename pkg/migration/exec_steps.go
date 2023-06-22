@@ -2,6 +2,7 @@ package migration
 
 import (
 	"fmt"
+
 	"github.com/pkg/errors"
 )
 

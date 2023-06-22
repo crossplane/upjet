@@ -26,7 +26,7 @@ const (
 	errActivateSSOP      = "failed to put the activated SSOP package: %s"
 )
 
-func (pg *PlanGenerator) convertProviderPackage(o UnstructuredWithMetadata) (bool, error) {
+func (pg *PlanGenerator) convertProviderPackage(o UnstructuredWithMetadata) (bool, error) { //nolint:gocyclo
 	pkg, err := toProviderPackage(o.Object)
 	if err != nil {
 		return false, err

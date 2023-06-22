@@ -16,7 +16,6 @@ package migration
 
 import (
 	"bytes"
-	testingexec "k8s.io/utils/exec/testing"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -36,6 +35,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/yaml"
+	testingexec "k8s.io/utils/exec/testing"
 	k8syaml "sigs.k8s.io/yaml"
 
 	"github.com/upbound/upjet/pkg/migration/fake"
