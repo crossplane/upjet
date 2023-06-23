@@ -127,3 +127,8 @@ func getVersionedName(u unstructured.Unstructured) string {
 	}
 	return fmt.Sprintf("%s_%s", qName, v)
 }
+
+func getKindGroupName(u unstructured.Unstructured) string {
+	gvk := u.GroupVersionKind()
+	return fmt.Sprintf("%ss.%s", strings.ToLower(gvk.Kind), gvk.Group)
+}

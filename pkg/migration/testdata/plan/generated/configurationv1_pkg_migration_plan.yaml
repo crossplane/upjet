@@ -6,6 +6,8 @@ spec:
           - "-c"
           - "'kubectl get managed -o yaml > backup/managed-resources.yaml'"
       name: backup-managed-resources
+      manualExecution:
+        - "sh -c 'kubectl get managed -o yaml > backup/managed-resources.yaml'"
       type: Exec
 
     - exec:
@@ -14,6 +16,8 @@ spec:
           - "-c"
           - "'kubectl get composite -o yaml > backup/composite-resources.yaml'"
       name: backup-composite-resources
+      manualExecution:
+        - "sh -c 'kubectl get composite -o yaml > backup/composite-resources.yaml'"
       type: Exec
 
     - exec:
@@ -22,6 +26,8 @@ spec:
           - "-c"
           - "'kubectl get claim --all-namespaces -o yaml > backup/claim-resources.yaml'"
       name: backup-claim-resources
+      manualExecution:
+        - "sh -c 'kubectl get claim --all-namespaces -o yaml > backup/claim-resources.yaml'"
       type: Exec
 
     - patch:
@@ -29,12 +35,16 @@ spec:
         files:
           - deletion-policy-orphan/sample-vpc.vpcs.fakesourceapi_v1alpha1.yaml
       name: deletion-policy-orphan
+      manualExecution:
+        - "kubectl patch vpcs.fakesourceapi sample-vpc --type='merge' --patch-file deletion-policy-orphan/sample-vpc.vpcs.fakesourceapi_v1alpha1.yaml"
       type: Patch
 
     - apply:
         files:
           - new-ssop/provider-family-aws.providers.pkg.crossplane.io_v1.yaml
       name: new-ssop
+      manualExecution:
+        - "kubectl apply -f new-ssop/provider-family-aws.providers.pkg.crossplane.io_v1.yaml"
       type: Apply
 
     - apply:
@@ -42,6 +52,9 @@ spec:
           - new-ssop/provider-aws-ec2.providers.pkg.crossplane.io_v1.yaml
           - new-ssop/provider-aws-eks.providers.pkg.crossplane.io_v1.yaml
       name: new-ssop
+      manualExecution:
+        - "kubectl apply -f new-ssop/provider-aws-ec2.providers.pkg.crossplane.io_v1.yaml"
+        - "kubectl apply -f new-ssop/provider-aws-eks.providers.pkg.crossplane.io_v1.yaml"
       type: Apply
 
     - exec:
@@ -50,6 +63,8 @@ spec:
           - "-c"
           - "'kubectl wait provider.pkg provider-family-aws --for condition=Healthy'"
       name: wait-for-healthy
+      manualExecution:
+        - "sh -c 'kubectl wait provider.pkg provider-family-aws --for condition=Healthy'"
       type: Exec
 
     - exec:
@@ -58,6 +73,8 @@ spec:
           - "-c"
           - "'kubectl wait provider.pkg provider-aws-ec2 --for condition=Healthy'"
       name: wait-for-healthy
+      manualExecution:
+        - "sh -c 'kubectl wait provider.pkg provider-aws-ec2 --for condition=Healthy'"
       type: Exec
 
     - exec:
@@ -66,6 +83,8 @@ spec:
           - "-c"
           - "'kubectl wait provider.pkg provider-aws-eks --for condition=Healthy'"
       name: wait-for-healthy
+      manualExecution:
+        - "sh -c 'kubectl wait provider.pkg provider-aws-eks --for condition=Healthy'"
       type: Exec
 
     - patch:
@@ -73,6 +92,8 @@ spec:
         files:
           - disable-dependency-resolution/platform-ref-aws.configurations.pkg.crossplane.io_v1.yaml
       name: disable-dependency-resolution
+      manualExecution:
+        - "kubectl patch configurations.pkg.crossplane.io platform-ref-aws --type='merge' --patch-file disable-dependency-resolution/platform-ref-aws.configurations.pkg.crossplane.io_v1.yaml"
       type: Patch
 
     - patch:
@@ -80,6 +101,8 @@ spec:
         files:
           - edit-package-lock/lock.locks.pkg.crossplane.io_v1beta1.yaml
       name: edit-package-lock
+      manualExecution:
+        - "kubectl patch locks.pkg.crossplane.io lock --type='merge' --patch-file edit-package-lock/lock.locks.pkg.crossplane.io_v1beta1.yaml"
       type: Patch
 
     - delete:
@@ -91,6 +114,8 @@ spec:
             name: provider-aws
             version: v1
       name: delete-monolithic-provider
+      manualExecution:
+        - "kubectl delete providers.pkg.crossplane.io provider-aws"
       type: Delete
 
     - patch:
@@ -98,6 +123,8 @@ spec:
         files:
           - activate-ssop/provider-family-aws.providers.pkg.crossplane.io_v1.yaml
       name: activate-ssop
+      manualExecution:
+        - "kubectl patch providers.pkg.crossplane.io provider-family-aws --type='merge' --patch-file activate-ssop/provider-family-aws.providers.pkg.crossplane.io_v1.yaml"
       type: Patch
 
     - patch:
@@ -106,6 +133,9 @@ spec:
           - activate-ssop/provider-aws-ec2.providers.pkg.crossplane.io_v1.yaml
           - activate-ssop/provider-aws-eks.providers.pkg.crossplane.io_v1.yaml
       name: activate-ssop
+      manualExecution:
+        - "kubectl patch providers.pkg.crossplane.io provider-aws-ec2 --type='merge' --patch-file activate-ssop/provider-aws-ec2.providers.pkg.crossplane.io_v1.yaml"
+        - "kubectl patch providers.pkg.crossplane.io provider-aws-eks --type='merge' --patch-file activate-ssop/provider-aws-eks.providers.pkg.crossplane.io_v1.yaml"
       type: Patch
 
     - exec:
@@ -114,6 +144,8 @@ spec:
           - "-c"
           - "'kubectl wait provider.pkg provider-family-aws --for condition=Installed'"
       name: wait-for-installed
+      manualExecution:
+        - "sh -c 'kubectl wait provider.pkg provider-family-aws --for condition=Installed'"
       type: Exec
 
     - exec:
@@ -122,6 +154,8 @@ spec:
           - "-c"
           - "'kubectl wait provider.pkg provider-aws-ec2 --for condition=Installed'"
       name: wait-for-installed
+      manualExecution:
+        - "sh -c 'kubectl wait provider.pkg provider-aws-ec2 --for condition=Installed'"
       type: Exec
 
     - exec:
@@ -130,6 +164,8 @@ spec:
           - "-c"
           - "'kubectl wait provider.pkg provider-aws-eks --for condition=Installed'"
       name: wait-for-installed
+      manualExecution:
+        - "sh -c 'kubectl wait provider.pkg provider-aws-eks --for condition=Installed'"
       type: Exec
 
     - patch:
@@ -137,6 +173,8 @@ spec:
         files:
           - edit-configuration-metadata/platform-ref-aws.configurations.meta.pkg.crossplane.io_v1.yaml
       name: edit-configuration-metadata
+      manualExecution:
+        - "kubectl patch configurations.meta.pkg.crossplane.io platform-ref-aws --type='merge' --patch-file edit-configuration-metadata/platform-ref-aws.configurations.meta.pkg.crossplane.io_v1.yaml"
       type: Patch
 
     - exec:
@@ -145,6 +183,8 @@ spec:
           - "-c"
           - "'up xpkg build --name test-smaller-provider-migration.xpkg --package-root=package --examples-root=examples'"
       name: build-configuration
+      manualExecution:
+        - "sh -c 'up xpkg build --name test-smaller-provider-migration.xpkg --package-root=package --examples-root=examples'"
       type: Exec
 
     - exec:
@@ -153,6 +193,8 @@ spec:
           - "-c"
           - "'up xpkg push ${ORG}/${PLATFORM}:${TAG} -f package/test-smaller-provider-migration.xpkg'"
       name: push-configuration
+      manualExecution:
+        - "sh -c 'up xpkg push ${ORG}/${PLATFORM}:${TAG} -f package/test-smaller-provider-migration.xpkg'"
       type: Exec
 
     - patch:
@@ -160,6 +202,8 @@ spec:
         files:
           - edit-configuration-package/platform-ref-aws.configurations.pkg.crossplane.io_v1.yaml
       name: edit-configuration-package
+      manualExecution:
+        - "kubectl patch configurations.pkg.crossplane.io platform-ref-aws --type='merge' --patch-file edit-configuration-package/platform-ref-aws.configurations.pkg.crossplane.io_v1.yaml"
       type: Patch
 
     - patch:
@@ -167,6 +211,8 @@ spec:
         files:
           - enable-dependency-resolution/platform-ref-aws.configurations.pkg.crossplane.io_v1.yaml
       name: enable-dependency-resolution
+      manualExecution:
+        - "kubectl patch configurations.pkg.crossplane.io platform-ref-aws --type='merge' --patch-file enable-dependency-resolution/platform-ref-aws.configurations.pkg.crossplane.io_v1.yaml"
       type: Patch
 
     - patch:
@@ -174,6 +220,8 @@ spec:
         files:
           - deletion-policy-delete/sample-vpc.vpcs.fakesourceapi_v1alpha1.yaml
       name: deletion-policy-delete
+      manualExecution:
+        - "kubectl patch vpcs.fakesourceapi sample-vpc --type='merge' --patch-file deletion-policy-delete/sample-vpc.vpcs.fakesourceapi_v1alpha1.yaml"
       type: Patch
 
 version: 0.1.0

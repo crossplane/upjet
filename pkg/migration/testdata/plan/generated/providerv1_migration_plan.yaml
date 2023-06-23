@@ -4,6 +4,8 @@ spec:
       files:
         - new-ssop/provider-family-aws.providers.pkg.crossplane.io_v1.yaml
     name: new-ssop
+    manualExecution:
+      - "kubectl apply -f new-ssop/provider-family-aws.providers.pkg.crossplane.io_v1.yaml"
     type: Apply
 
   - apply:
@@ -11,6 +13,9 @@ spec:
       - new-ssop/provider-aws-ec2.providers.pkg.crossplane.io_v1.yaml
       - new-ssop/provider-aws-eks.providers.pkg.crossplane.io_v1.yaml
     name: new-ssop
+    manualExecution:
+      - "kubectl apply -f new-ssop/provider-aws-ec2.providers.pkg.crossplane.io_v1.yaml"
+      - "kubectl apply -f new-ssop/provider-aws-eks.providers.pkg.crossplane.io_v1.yaml"
     type: Apply
 
   - exec:
@@ -19,6 +24,8 @@ spec:
         - "-c"
         - "'kubectl wait provider.pkg provider-family-aws --for condition=Healthy'"
     name: wait-for-healthy
+    manualExecution:
+      - "sh -c 'kubectl wait provider.pkg provider-family-aws --for condition=Healthy'"
     type: Exec
 
   - exec:
@@ -27,6 +34,8 @@ spec:
         - "-c"
         - "'kubectl wait provider.pkg provider-aws-ec2 --for condition=Healthy'"
     name: wait-for-healthy
+    manualExecution:
+      - "sh -c 'kubectl wait provider.pkg provider-aws-ec2 --for condition=Healthy'"
     type: Exec
 
   - exec:
@@ -35,6 +44,8 @@ spec:
         - "-c"
         - "'kubectl wait provider.pkg provider-aws-eks --for condition=Healthy'"
     name: wait-for-healthy
+    manualExecution:
+      - "sh -c 'kubectl wait provider.pkg provider-aws-eks --for condition=Healthy'"
     type: Exec
 
   - delete:
@@ -46,6 +57,8 @@ spec:
           name: provider-aws
           version: v1
     name: delete-monolithic-provider
+    manualExecution:
+      - "kubectl delete providers.pkg.crossplane.io provider-aws"
     type: Delete
 
   - patch:
@@ -53,6 +66,8 @@ spec:
       files:
         - activate-ssop/provider-family-aws.providers.pkg.crossplane.io_v1.yaml
     name: activate-ssop
+    manualExecution:
+      - "kubectl patch providers.pkg.crossplane.io provider-family-aws --type='merge' --patch-file activate-ssop/provider-family-aws.providers.pkg.crossplane.io_v1.yaml"
     type: Patch
 
   - patch:
@@ -61,6 +76,9 @@ spec:
         - activate-ssop/provider-aws-ec2.providers.pkg.crossplane.io_v1.yaml
         - activate-ssop/provider-aws-eks.providers.pkg.crossplane.io_v1.yaml
     name: activate-ssop
+    manualExecution:
+      - "kubectl patch providers.pkg.crossplane.io provider-aws-ec2 --type='merge' --patch-file activate-ssop/provider-aws-ec2.providers.pkg.crossplane.io_v1.yaml"
+      - "kubectl patch providers.pkg.crossplane.io provider-aws-eks --type='merge' --patch-file activate-ssop/provider-aws-eks.providers.pkg.crossplane.io_v1.yaml"
     type: Patch
 
   - exec:
@@ -69,6 +87,8 @@ spec:
         - "-c"
         - "'kubectl wait provider.pkg provider-family-aws --for condition=Installed'"
     name: wait-for-installed
+    manualExecution:
+      - "sh -c 'kubectl wait provider.pkg provider-family-aws --for condition=Installed'"
     type: Exec
 
   - exec:
@@ -77,6 +97,8 @@ spec:
         - "-c"
         - "'kubectl wait provider.pkg provider-aws-ec2 --for condition=Installed'"
     name: wait-for-installed
+    manualExecution:
+      - "sh -c 'kubectl wait provider.pkg provider-aws-ec2 --for condition=Installed'"
     type: Exec
 
   - exec:
@@ -85,6 +107,8 @@ spec:
         - "-c"
         - "'kubectl wait provider.pkg provider-aws-eks --for condition=Installed'"
     name: wait-for-installed
+    manualExecution:
+      - "sh -c 'kubectl wait provider.pkg provider-aws-eks --for condition=Installed'"
     type: Exec
 
 version: 0.1.0

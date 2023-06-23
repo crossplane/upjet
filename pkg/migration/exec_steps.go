@@ -2,6 +2,7 @@ package migration
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/pkg/errors"
 )
@@ -22,6 +23,7 @@ func (pg *PlanGenerator) stepBackupAllResources() error {
 func (pg *PlanGenerator) stepBackupManagedResources() error {
 	s := pg.stepConfiguration(stepBackupMRs)
 	s.Exec.Args = []string{"-c", "'kubectl get managed -o yaml > backup/managed-resources.yaml'"}
+	s.ManualExecution = []string{strings.Join([]string{s.Exec.Command, strings.Join(s.Exec.Args, " ")}, " ")}
 	if err := execCommand(pg, s); err != nil {
 		return err
 	}
@@ -31,6 +33,7 @@ func (pg *PlanGenerator) stepBackupManagedResources() error {
 func (pg *PlanGenerator) stepBackupCompositeResources() error {
 	s := pg.stepConfiguration(stepBackupComposites)
 	s.Exec.Args = []string{"-c", "'kubectl get composite -o yaml > backup/composite-resources.yaml'"}
+	s.ManualExecution = []string{strings.Join([]string{s.Exec.Command, strings.Join(s.Exec.Args, " ")}, " ")}
 	if err := execCommand(pg, s); err != nil {
 		return err
 	}
@@ -40,6 +43,7 @@ func (pg *PlanGenerator) stepBackupCompositeResources() error {
 func (pg *PlanGenerator) stepBackupClaims() error {
 	s := pg.stepConfiguration(stepBackupClaims)
 	s.Exec.Args = []string{"-c", "'kubectl get claim --all-namespaces -o yaml > backup/claim-resources.yaml'"}
+	s.ManualExecution = []string{strings.Join([]string{s.Exec.Command, strings.Join(s.Exec.Args, " ")}, " ")}
 	if err := execCommand(pg, s); err != nil {
 		return err
 	}
@@ -50,6 +54,7 @@ func (pg *PlanGenerator) stepCheckHealthOfNewProvider(source UnstructuredWithMet
 	for _, t := range targets {
 		s := pg.stepConfigurationWithSubStep(stepCheckHealthNewServiceScopedProvider, true)
 		s.Exec.Args = []string{"-c", fmt.Sprintf("'kubectl wait provider.pkg %s --for condition=Healthy'", t.Object.GetName())}
+		s.ManualExecution = []string{strings.Join([]string{s.Exec.Command, strings.Join(s.Exec.Args, " ")}, " ")}
 		t.Object.Object = addGVK(source.Object, t.Object.Object)
 		t.Metadata.Path = fmt.Sprintf("%s/%s.yaml", s.Name, getVersionedName(t.Object))
 		if err := execCommand(pg, s); err != nil {
@@ -63,6 +68,7 @@ func (pg *PlanGenerator) stepCheckInstallationOfNewProvider(source UnstructuredW
 	for _, t := range targets {
 		s := pg.stepConfigurationWithSubStep(stepCheckInstallationServiceScopedProviderRevision, true)
 		s.Exec.Args = []string{"-c", fmt.Sprintf("'kubectl wait provider.pkg %s --for condition=Installed'", t.Object.GetName())}
+		s.ManualExecution = []string{strings.Join([]string{s.Exec.Command, strings.Join(s.Exec.Args, " ")}, " ")}
 		t.Object.Object = addGVK(source.Object, t.Object.Object)
 		t.Metadata.Path = fmt.Sprintf("%s/%s.yaml", s.Name, getVersionedName(t.Object))
 		if err := execCommand(pg, s); err != nil {
@@ -75,6 +81,7 @@ func (pg *PlanGenerator) stepCheckInstallationOfNewProvider(source UnstructuredW
 func (pg *PlanGenerator) stepBuildConfiguration() error {
 	s := pg.stepConfiguration(stepBuildConfiguration)
 	s.Exec.Args = []string{"-c", "'up xpkg build --name test-smaller-provider-migration.xpkg --package-root=package --examples-root=examples'"}
+	s.ManualExecution = []string{strings.Join([]string{s.Exec.Command, strings.Join(s.Exec.Args, " ")}, " ")}
 	if err := execCommand(pg, s); err != nil {
 		return err
 	}
@@ -84,6 +91,7 @@ func (pg *PlanGenerator) stepBuildConfiguration() error {
 func (pg *PlanGenerator) stepPushConfiguration() error {
 	s := pg.stepConfiguration(stepPushConfiguration)
 	s.Exec.Args = []string{"-c", "'up xpkg push ${ORG}/${PLATFORM}:${TAG} -f package/test-smaller-provider-migration.xpkg'"}
+	s.ManualExecution = []string{strings.Join([]string{s.Exec.Command, strings.Join(s.Exec.Args, " ")}, " ")}
 	if err := execCommand(pg, s); err != nil {
 		return err
 	}

@@ -73,6 +73,7 @@ func (pg *PlanGenerator) stepDeleteMonolith(source UnstructuredWithMetadata) err
 	// delete the monolithic provider package
 	s := pg.stepConfiguration(stepDeleteMonolithicProvider)
 	source.Metadata.Path = fmt.Sprintf("%s/%s.yaml", s.Name, getVersionedName(source.Object))
+	s.ManualExecution = []string{fmt.Sprintf("kubectl delete %s %s", getKindGroupName(source.Object), source.Object.GetName())}
 	s.Delete.Resources = []Resource{
 		{
 			GroupVersionKind: FromGroupVersionKind(source.Object.GroupVersionKind()),
@@ -89,6 +90,7 @@ func (pg *PlanGenerator) stepNewSSOPs(source UnstructuredWithMetadata, targets [
 		t.Object.Object = addGVK(source.Object, t.Object.Object)
 		t.Metadata.Path = fmt.Sprintf("%s/%s.yaml", s.Name, getVersionedName(t.Object))
 		s.Apply.Files = append(s.Apply.Files, t.Metadata.Path)
+		s.ManualExecution = append(s.ManualExecution, fmt.Sprintf("kubectl apply -f %s", t.Metadata.Path))
 		if err := pg.target.Put(*t); err != nil {
 			return errors.Wrapf(err, errPutSSOPPackageFmt, t.Metadata.Path)
 		}
@@ -102,6 +104,7 @@ func (pg *PlanGenerator) stepActivateSSOPs(targets []*UnstructuredWithMetadata) 
 	for _, t := range targets {
 		t.Metadata.Path = fmt.Sprintf("%s/%s.yaml", s.Name, getVersionedName(t.Object))
 		s.Patch.Files = append(s.Patch.Files, t.Metadata.Path)
+		s.ManualExecution = append(s.ManualExecution, fmt.Sprintf("kubectl patch %s %s --type='%s' --patch-file %s", getKindGroupName(t.Object), t.Object.GetName(), s.Patch.Type, t.Metadata.Path))
 		if err := pg.target.Put(UnstructuredWithMetadata{
 			Object: unstructured.Unstructured{
 				Object: addNameGVK(t.Object, map[string]any{

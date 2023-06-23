@@ -57,6 +57,7 @@ func (pg *PlanGenerator) stepEditPackageLock(source UnstructuredWithMetadata, t 
 	s := pg.stepConfiguration(stepEditPackageLock)
 	t.Metadata.Path = fmt.Sprintf("%s/%s.yaml", s.Name, getVersionedName(t.Object))
 	s.Patch.Files = append(s.Patch.Files, t.Metadata.Path)
+	s.ManualExecution = []string{fmt.Sprintf("kubectl patch %s %s --type='%s' --patch-file %s", getKindGroupName(t.Object), t.Object.GetName(), s.Patch.Type, t.Metadata.Path)}
 	patchMap, err := computeJSONMergePathDoc(source.Object, t.Object)
 	if err != nil {
 		return err

@@ -6,6 +6,8 @@ spec:
         - "-c"
         - "'kubectl get managed -o yaml > backup/managed-resources.yaml'"
     name: backup-managed-resources
+    manualExecution:
+      - "sh -c 'kubectl get managed -o yaml > backup/managed-resources.yaml'"
     type: Exec
 
   - exec:
@@ -14,6 +16,8 @@ spec:
         - "-c"
         - "'kubectl get composite -o yaml > backup/composite-resources.yaml'"
     name: backup-composite-resources
+    manualExecution:
+      - "sh -c 'kubectl get composite -o yaml > backup/composite-resources.yaml'"
     type: Exec
 
   - exec:
@@ -22,6 +26,8 @@ spec:
         - "-c"
         - "'kubectl get claim --all-namespaces -o yaml > backup/claim-resources.yaml'"
     name: backup-claim-resources
+    manualExecution:
+      - "sh -c 'kubectl get claim --all-namespaces -o yaml > backup/claim-resources.yaml'"
     type: Exec
 
   - patch:
@@ -29,6 +35,8 @@ spec:
       files:
       - edit-configuration-metadata/platform-ref-aws.configurations.meta.pkg.crossplane.io_v1.yaml
     name: edit-configuration-metadata
+    manualExecution:
+      - "kubectl patch configurations.meta.pkg.crossplane.io platform-ref-aws --type='merge' --patch-file edit-configuration-metadata/platform-ref-aws.configurations.meta.pkg.crossplane.io_v1.yaml"
     type: Patch
 
   - exec:
@@ -37,6 +45,8 @@ spec:
         - "-c"
         - "'up xpkg build --name test-smaller-provider-migration.xpkg --package-root=package --examples-root=examples'"
     name: build-configuration
+    manualExecution:
+      - "sh -c 'up xpkg build --name test-smaller-provider-migration.xpkg --package-root=package --examples-root=examples'"
     type: Exec
 
   - exec:
@@ -45,6 +55,8 @@ spec:
         - "-c"
         - "'up xpkg push ${ORG}/${PLATFORM}:${TAG} -f package/test-smaller-provider-migration.xpkg'"
     name: push-configuration
+    manualExecution:
+      - "sh -c 'up xpkg push ${ORG}/${PLATFORM}:${TAG} -f package/test-smaller-provider-migration.xpkg'"
     type: Exec
 
 version: 0.1.0

@@ -169,6 +169,7 @@ func (pg *PlanGenerator) stepEditConfigurationMetadata(source UnstructuredWithMe
 	s := pg.stepConfiguration(stepEditConfigurationMetadata)
 	target.Metadata.Path = fmt.Sprintf("%s/%s.yaml", s.Name, getVersionedName(target.Object))
 	s.Patch.Files = append(s.Patch.Files, target.Metadata.Path)
+	s.ManualExecution = append(s.ManualExecution, fmt.Sprintf("kubectl patch %s %s --type='%s' --patch-file %s", getKindGroupName(target.Object), target.Object.GetName(), s.Patch.Type, target.Metadata.Path))
 	patchMap, err := computeJSONMergePathDoc(source.Object, target.Object)
 	if err != nil {
 		return err
