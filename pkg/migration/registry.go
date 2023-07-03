@@ -272,6 +272,16 @@ func (r *Registry) AddCompositionTypes() error {
 	return r.AddToScheme(xpv1.AddToScheme)
 }
 
+// AddCrossplanePackageTypes registers the
+// {Provider,Configuration,Lock, etc.}.pkg types with
+// the registry's scheme.
+func (r *Registry) AddCrossplanePackageTypes() error {
+	if err := r.AddToScheme(xppkgv1beta1.AddToScheme); err != nil {
+		return err
+	}
+	return r.AddToScheme(xppkgv1.AddToScheme)
+}
+
 // AddClaimType registers a new composite resource claim type
 // with the given GVK
 func (r *Registry) AddClaimType(gvk schema.GroupVersionKind) {
@@ -296,12 +306,22 @@ func (r *Registry) GetManagedResourceGVKs() []schema.GroupVersionKind {
 	return gvks
 }
 
+// GetCompositionGVKs returns the registered Composition GVKs.
 func (r *Registry) GetCompositionGVKs() []schema.GroupVersionKind {
 	// Composition types are registered with this registry's scheme
 	if _, ok := r.scheme.AllKnownTypes()[xpv1.CompositionGroupVersionKind]; ok {
 		return []schema.GroupVersionKind{xpv1.CompositionGroupVersionKind}
 	}
 	return nil
+}
+
+// GetCrossplanePackageGVKs returns the registered Crossplane package GVKs.
+func (r *Registry) GetCrossplanePackageGVKs() []schema.GroupVersionKind {
+	return []schema.GroupVersionKind{
+		xppkgv1.ProviderGroupVersionKind,
+		xppkgv1.ConfigurationGroupVersionKind,
+		xppkgv1beta1.LockGroupVersionKind,
+	}
 }
 
 // GetAllRegisteredGVKs returns a list of registered GVKs

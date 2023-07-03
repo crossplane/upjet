@@ -59,12 +59,8 @@ func (pg *PlanGenerator) convertProviderPackage(o UnstructuredWithMetadata) (boo
 		if err := pg.stepActivateSSOPs(converted); err != nil {
 			return false, err
 		}
-		if err := pg.stepCheckHealthOfNewProvider(o, converted); err != nil {
-			return false, err
-		}
-		if err := pg.stepCheckInstallationOfNewProvider(o, converted); err != nil {
-			return false, err
-		}
+		pg.stepCheckHealthOfNewProvider(o, converted)
+		pg.stepCheckInstallationOfNewProvider(o, converted)
 	}
 	return isConverted, nil
 }

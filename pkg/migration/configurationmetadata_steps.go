@@ -20,8 +20,6 @@ import (
 
 	xpmetav1 "github.com/crossplane/crossplane/apis/pkg/meta/v1"
 	xpmetav1alpha1 "github.com/crossplane/crossplane/apis/pkg/meta/v1alpha1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
@@ -62,17 +60,15 @@ const (
 
 func (pg *PlanGenerator) convertConfigurationMetadata(o UnstructuredWithMetadata) error {
 	isConverted := false
-	var conf metav1.Object
-	var err error
+	conf, err := toConfigurationMetadata(o.Object)
+	if err != nil {
+		return err
+	}
 	for _, confConv := range pg.registry.configurationMetaConverters {
 		if confConv.re == nil || confConv.converter == nil || !confConv.re.MatchString(o.Object.GetName()) {
 			continue
 		}
 
-		conf, err = toConfigurationMetadata(o.Object)
-		if err != nil {
-			return err
-		}
 		switch o.Object.GroupVersionKind().Version {
 		case "v1alpha1":
 			err = confConv.converter.ConfigurationMetadataV1Alpha1(conf.(*xpmetav1alpha1.Configuration))

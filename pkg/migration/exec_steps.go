@@ -1,106 +1,68 @@
+// Copyright 2023 Upbound Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package migration
 
 import (
 	"fmt"
-	"strings"
-
-	"github.com/pkg/errors"
 )
 
-func (pg *PlanGenerator) stepBackupAllResources() error {
-	if err := pg.stepBackupManagedResources(); err != nil {
-		return errors.Wrap(err, "cannot get backup of managed resources")
-	}
-	if err := pg.stepBackupCompositeResources(); err != nil {
-		return errors.Wrap(err, "cannot get backup of composite resources")
-	}
-	if err := pg.stepBackupClaims(); err != nil {
-		return errors.Wrap(err, "cannot get backup of claims")
-	}
-	return nil
+func (pg *PlanGenerator) stepBackupAllResources() {
+	pg.stepBackupManagedResources()
+	pg.stepBackupCompositeResources()
+	pg.stepBackupClaims()
 }
 
-func (pg *PlanGenerator) stepBackupManagedResources() error {
+func (pg *PlanGenerator) stepBackupManagedResources() {
 	s := pg.stepConfiguration(stepBackupMRs)
-	s.Exec.Args = []string{"-c", "'kubectl get managed -o yaml > backup/managed-resources.yaml'"}
-	s.ManualExecution = []string{strings.Join([]string{s.Exec.Command, strings.Join(s.Exec.Args, " ")}, " ")}
-	if err := execCommand(pg, s); err != nil {
-		return err
-	}
-	return nil
+	s.Exec.Args = []string{"-c", "kubectl get managed -o yaml > backup/managed-resources.yaml"}
 }
 
-func (pg *PlanGenerator) stepBackupCompositeResources() error {
+func (pg *PlanGenerator) stepBackupCompositeResources() {
 	s := pg.stepConfiguration(stepBackupComposites)
-	s.Exec.Args = []string{"-c", "'kubectl get composite -o yaml > backup/composite-resources.yaml'"}
-	s.ManualExecution = []string{strings.Join([]string{s.Exec.Command, strings.Join(s.Exec.Args, " ")}, " ")}
-	if err := execCommand(pg, s); err != nil {
-		return err
-	}
-	return nil
+	s.Exec.Args = []string{"-c", "kubectl get composite -o yaml > backup/composite-resources.yaml"}
 }
 
-func (pg *PlanGenerator) stepBackupClaims() error {
+func (pg *PlanGenerator) stepBackupClaims() {
 	s := pg.stepConfiguration(stepBackupClaims)
-	s.Exec.Args = []string{"-c", "'kubectl get claim --all-namespaces -o yaml > backup/claim-resources.yaml'"}
-	s.ManualExecution = []string{strings.Join([]string{s.Exec.Command, strings.Join(s.Exec.Args, " ")}, " ")}
-	if err := execCommand(pg, s); err != nil {
-		return err
-	}
-	return nil
+	s.Exec.Args = []string{"-c", "kubectl get claim --all-namespaces -o yaml > backup/claim-resources.yaml"}
 }
 
-func (pg *PlanGenerator) stepCheckHealthOfNewProvider(source UnstructuredWithMetadata, targets []*UnstructuredWithMetadata) error {
+func (pg *PlanGenerator) stepCheckHealthOfNewProvider(source UnstructuredWithMetadata, targets []*UnstructuredWithMetadata) {
 	for _, t := range targets {
 		s := pg.stepConfigurationWithSubStep(stepCheckHealthNewServiceScopedProvider, true)
-		s.Exec.Args = []string{"-c", fmt.Sprintf("'kubectl wait provider.pkg %s --for condition=Healthy'", t.Object.GetName())}
-		s.ManualExecution = []string{strings.Join([]string{s.Exec.Command, strings.Join(s.Exec.Args, " ")}, " ")}
+		s.Exec.Args = []string{"-c", fmt.Sprintf("kubectl wait provider.pkg %s --for condition=Healthy", t.Object.GetName())}
 		t.Object.Object = addGVK(source.Object, t.Object.Object)
 		t.Metadata.Path = fmt.Sprintf("%s/%s.yaml", s.Name, getVersionedName(t.Object))
-		if err := execCommand(pg, s); err != nil {
-			return err
-		}
 	}
-	return nil
 }
 
-func (pg *PlanGenerator) stepCheckInstallationOfNewProvider(source UnstructuredWithMetadata, targets []*UnstructuredWithMetadata) error {
+func (pg *PlanGenerator) stepCheckInstallationOfNewProvider(source UnstructuredWithMetadata, targets []*UnstructuredWithMetadata) {
 	for _, t := range targets {
 		s := pg.stepConfigurationWithSubStep(stepCheckInstallationServiceScopedProviderRevision, true)
-		s.Exec.Args = []string{"-c", fmt.Sprintf("'kubectl wait provider.pkg %s --for condition=Installed'", t.Object.GetName())}
-		s.ManualExecution = []string{strings.Join([]string{s.Exec.Command, strings.Join(s.Exec.Args, " ")}, " ")}
+		s.Exec.Args = []string{"-c", fmt.Sprintf("kubectl wait provider.pkg %s --for condition=Installed", t.Object.GetName())}
 		t.Object.Object = addGVK(source.Object, t.Object.Object)
 		t.Metadata.Path = fmt.Sprintf("%s/%s.yaml", s.Name, getVersionedName(t.Object))
-		if err := execCommand(pg, s); err != nil {
-			return err
-		}
 	}
-	return nil
 }
 
-func (pg *PlanGenerator) stepBuildConfiguration() error {
+func (pg *PlanGenerator) stepBuildConfiguration() {
 	s := pg.stepConfiguration(stepBuildConfiguration)
-	s.Exec.Args = []string{"-c", "'up xpkg build --name test-smaller-provider-migration.xpkg --package-root=package --examples-root=examples'"}
-	s.ManualExecution = []string{strings.Join([]string{s.Exec.Command, strings.Join(s.Exec.Args, " ")}, " ")}
-	if err := execCommand(pg, s); err != nil {
-		return err
-	}
-	return nil
+	s.Exec.Args = []string{"-c", "up xpkg build --package-root={{PKG_ROOT}} --examples-root={{EXAMPLES_ROOT}} -o {{PKG_PATH}}"}
 }
 
-func (pg *PlanGenerator) stepPushConfiguration() error {
+func (pg *PlanGenerator) stepPushConfiguration() {
 	s := pg.stepConfiguration(stepPushConfiguration)
-	s.Exec.Args = []string{"-c", "'up xpkg push ${ORG}/${PLATFORM}:${TAG} -f package/test-smaller-provider-migration.xpkg'"}
-	s.ManualExecution = []string{strings.Join([]string{s.Exec.Command, strings.Join(s.Exec.Args, " ")}, " ")}
-	if err := execCommand(pg, s); err != nil {
-		return err
-	}
-	return nil
-}
-
-func execCommand(pg *PlanGenerator, s *Step) error {
-	if _, err := pg.forkExecutor.Step(*s, nil); err != nil {
-		return errors.Wrap(err, "command cannot executed successfully")
-	}
-	return nil
+	s.Exec.Args = []string{"-c", "up xpkg push {{TARGET_CONFIGURATION_PACKAGE}} -f {{PKG_PATH}}"}
 }

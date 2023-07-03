@@ -32,7 +32,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/rand"
-	"k8s.io/utils/exec"
 )
 
 const (
@@ -141,12 +140,6 @@ func (s *sources) Reset() error {
 	return nil
 }
 
-func WithForkExecutor(exec exec.Interface) PlanGeneratorOption {
-	return func(pg *PlanGenerator) {
-		pg.forkExecutor = NewForkExecutor(WithExecutor(exec))
-	}
-}
-
 // PlanGenerator generates a migration.Plan reading the manifests available
 // from `source`, converting managed resources and compositions using the
 // available `migration.Converter`s registered in the `registry` and
@@ -170,9 +163,6 @@ type PlanGenerator struct {
 	// is left empty, it will be a wildcard component.
 	// Exact matching with an empty group name is not possible.
 	SkipGVKs []schema.GroupVersionKind
-
-	//
-	forkExecutor *ForkExecutor
 }
 
 // NewPlanGenerator constructs a new PlanGenerator using the specified
@@ -184,7 +174,6 @@ func NewPlanGenerator(registry *Registry, source Source, target Target, opts ...
 		registry:     registry,
 		subSteps:     map[step]string{},
 		enabledSteps: getAPIMigrationSteps(),
-		forkExecutor: NewForkExecutor(WithExecutor(exec.New())),
 	}
 	for _, o := range opts {
 		o(pg)
@@ -316,15 +305,9 @@ func (pg *PlanGenerator) convert() error { //nolint: gocyclo
 			if err := pg.convertConfigurationMetadata(o); err != nil {
 				return errors.Wrapf(err, errConfigurationMetadataMigrateFmt, o.Object.GetName())
 			}
-			if err := pg.stepBackupAllResources(); err != nil {
-				return errors.Wrap(err, "cannot get backup of resources")
-			}
-			if err := pg.stepBuildConfiguration(); err != nil {
-				return errors.Wrap(err, "cannot build configuration package")
-			}
-			if err := pg.stepPushConfiguration(); err != nil {
-				return errors.Wrap(err, "cannot push configuration package")
-			}
+			pg.stepBackupAllResources()
+			pg.stepBuildConfiguration()
+			pg.stepPushConfiguration()
 		case xpv1.CompositionGroupVersionKind:
 			target, converted, err := pg.convertComposition(o)
 			if err != nil {

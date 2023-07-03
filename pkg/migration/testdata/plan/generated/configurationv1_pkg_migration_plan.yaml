@@ -4,30 +4,30 @@ spec:
         command: sh
         args:
           - "-c"
-          - "'kubectl get managed -o yaml > backup/managed-resources.yaml'"
+          - "kubectl get managed -o yaml > backup/managed-resources.yaml"
       name: backup-managed-resources
       manualExecution:
-        - "sh -c 'kubectl get managed -o yaml > backup/managed-resources.yaml'"
+        - sh -c "kubectl get managed -o yaml > backup/managed-resources.yaml"
       type: Exec
 
     - exec:
         command: sh
         args:
           - "-c"
-          - "'kubectl get composite -o yaml > backup/composite-resources.yaml'"
+          - "kubectl get composite -o yaml > backup/composite-resources.yaml"
       name: backup-composite-resources
       manualExecution:
-        - "sh -c 'kubectl get composite -o yaml > backup/composite-resources.yaml'"
+        - sh -c "kubectl get composite -o yaml > backup/composite-resources.yaml"
       type: Exec
 
     - exec:
         command: sh
         args:
           - "-c"
-          - "'kubectl get claim --all-namespaces -o yaml > backup/claim-resources.yaml'"
+          - "kubectl get claim --all-namespaces -o yaml > backup/claim-resources.yaml"
       name: backup-claim-resources
       manualExecution:
-        - "sh -c 'kubectl get claim --all-namespaces -o yaml > backup/claim-resources.yaml'"
+        - sh -c "kubectl get claim --all-namespaces -o yaml > backup/claim-resources.yaml"
       type: Exec
 
     - patch:
@@ -61,30 +61,30 @@ spec:
         command: sh
         args:
           - "-c"
-          - "'kubectl wait provider.pkg provider-family-aws --for condition=Healthy'"
+          - "kubectl wait provider.pkg provider-family-aws --for condition=Healthy"
       name: wait-for-healthy
       manualExecution:
-        - "sh -c 'kubectl wait provider.pkg provider-family-aws --for condition=Healthy'"
+        - sh -c "kubectl wait provider.pkg provider-family-aws --for condition=Healthy"
       type: Exec
 
     - exec:
         command: sh
         args:
           - "-c"
-          - "'kubectl wait provider.pkg provider-aws-ec2 --for condition=Healthy'"
+          - "kubectl wait provider.pkg provider-aws-ec2 --for condition=Healthy"
       name: wait-for-healthy
       manualExecution:
-        - "sh -c 'kubectl wait provider.pkg provider-aws-ec2 --for condition=Healthy'"
+        - sh -c "kubectl wait provider.pkg provider-aws-ec2 --for condition=Healthy"
       type: Exec
 
     - exec:
         command: sh
         args:
           - "-c"
-          - "'kubectl wait provider.pkg provider-aws-eks --for condition=Healthy'"
+          - "kubectl wait provider.pkg provider-aws-eks --for condition=Healthy"
       name: wait-for-healthy
       manualExecution:
-        - "sh -c 'kubectl wait provider.pkg provider-aws-eks --for condition=Healthy'"
+        - sh -c "kubectl wait provider.pkg provider-aws-eks --for condition=Healthy"
       type: Exec
 
     - patch:
@@ -142,30 +142,30 @@ spec:
         command: sh
         args:
           - "-c"
-          - "'kubectl wait provider.pkg provider-family-aws --for condition=Installed'"
+          - "kubectl wait provider.pkg provider-family-aws --for condition=Installed"
       name: wait-for-installed
       manualExecution:
-        - "sh -c 'kubectl wait provider.pkg provider-family-aws --for condition=Installed'"
+        - sh -c "kubectl wait provider.pkg provider-family-aws --for condition=Installed"
       type: Exec
 
     - exec:
         command: sh
         args:
           - "-c"
-          - "'kubectl wait provider.pkg provider-aws-ec2 --for condition=Installed'"
+          - "kubectl wait provider.pkg provider-aws-ec2 --for condition=Installed"
       name: wait-for-installed
       manualExecution:
-        - "sh -c 'kubectl wait provider.pkg provider-aws-ec2 --for condition=Installed'"
+        - sh -c "kubectl wait provider.pkg provider-aws-ec2 --for condition=Installed"
       type: Exec
 
     - exec:
         command: sh
         args:
           - "-c"
-          - "'kubectl wait provider.pkg provider-aws-eks --for condition=Installed'"
+          - "kubectl wait provider.pkg provider-aws-eks --for condition=Installed"
       name: wait-for-installed
       manualExecution:
-        - "sh -c 'kubectl wait provider.pkg provider-aws-eks --for condition=Installed'"
+        - sh -c "kubectl wait provider.pkg provider-aws-eks --for condition=Installed"
       type: Exec
 
     - patch:
@@ -181,20 +181,20 @@ spec:
         command: sh
         args:
           - "-c"
-          - "'up xpkg build --name test-smaller-provider-migration.xpkg --package-root=package --examples-root=examples'"
+          - "up xpkg build --package-root={{PKG_ROOT}} --examples-root={{EXAMPLES_ROOT}} -o {{PKG_PATH}}"
       name: build-configuration
       manualExecution:
-        - "sh -c 'up xpkg build --name test-smaller-provider-migration.xpkg --package-root=package --examples-root=examples'"
+        - sh -c "up xpkg build --package-root={{PKG_ROOT}} --examples-root={{EXAMPLES_ROOT}} -o {{PKG_PATH}}"
       type: Exec
 
     - exec:
         command: sh
         args:
           - "-c"
-          - "'up xpkg push ${ORG}/${PLATFORM}:${TAG} -f package/test-smaller-provider-migration.xpkg'"
+          - "up xpkg push {{TARGET_CONFIGURATION_PACKAGE}} -f {{PKG_PATH}}"
       name: push-configuration
       manualExecution:
-        - "sh -c 'up xpkg push ${ORG}/${PLATFORM}:${TAG} -f package/test-smaller-provider-migration.xpkg'"
+        - sh -c "up xpkg push {{TARGET_CONFIGURATION_PACKAGE}} -f {{PKG_PATH}}"
       type: Exec
 
     - patch:

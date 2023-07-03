@@ -35,13 +35,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/yaml"
-	testingexec "k8s.io/utils/exec/testing"
 	k8syaml "sigs.k8s.io/yaml"
 
 	"github.com/upbound/upjet/pkg/migration/fake"
 )
-
-var fakeExec = &testingexec.FakeExec{DisableScripts: true}
 
 func TestGeneratePlan(t *testing.T) {
 	type fields struct {
@@ -158,7 +155,7 @@ func TestGeneratePlan(t *testing.T) {
 						re:        AllConfigurations,
 						converter: &configurationMetaTestConverter{},
 					})),
-				opts: []PlanGeneratorOption{WithEnableConfigurationMigrationSteps(), WithForkExecutor(fakeExec)},
+				opts: []PlanGeneratorOption{WithEnableConfigurationMigrationSteps()},
 			},
 			want: want{
 				migrationPlanPath: "testdata/plan/generated/configurationv1_migration_plan.yaml",
@@ -177,7 +174,7 @@ func TestGeneratePlan(t *testing.T) {
 						re:        AllConfigurations,
 						converter: &configurationMetaTestConverter{},
 					})),
-				opts: []PlanGeneratorOption{WithEnableConfigurationMigrationSteps(), WithForkExecutor(fakeExec)},
+				opts: []PlanGeneratorOption{WithEnableConfigurationMigrationSteps()},
 			},
 			want: want{
 				migrationPlanPath: "testdata/plan/generated/configurationv1alpha1_migration_plan.yaml",
@@ -200,7 +197,7 @@ func TestGeneratePlan(t *testing.T) {
 						re:        regexp.MustCompile(`xpkg.upbound.io/upbound/provider-aws:.+`),
 						converter: &monolithicProviderToSSOPConverter{},
 					})),
-				opts: []PlanGeneratorOption{WithEnableConfigurationMigrationSteps(), WithForkExecutor(fakeExec)},
+				opts: []PlanGeneratorOption{WithEnableConfigurationMigrationSteps()},
 			},
 			want: want{
 				migrationPlanPath: "testdata/plan/generated/providerv1_migration_plan.yaml",
@@ -247,7 +244,7 @@ func TestGeneratePlan(t *testing.T) {
 						converter: &lockConverter{},
 					}),
 				),
-				opts: []PlanGeneratorOption{WithEnableConfigurationMigrationSteps(), WithForkExecutor(fakeExec)},
+				opts: []PlanGeneratorOption{WithEnableConfigurationMigrationSteps()},
 			},
 			want: want{
 				migrationPlanPath: "testdata/plan/generated/configurationv1_pkg_migration_plan.yaml",

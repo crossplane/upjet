@@ -79,8 +79,17 @@ func (pg *PlanGenerator) commitSteps() {
 	}
 	sort.Strings(keys)
 	for _, s := range keys {
+		if pg.Plan.Spec.stepMap[s].Type == StepTypeExec {
+			AddExecStepManualExecution(pg.Plan.Spec.stepMap[s])
+		}
 		pg.Plan.Spec.Steps = append(pg.Plan.Spec.Steps, *pg.Plan.Spec.stepMap[s])
 	}
+}
+
+// AddExecStepManualExecution sets the manual execution hint for
+// the specified exec step.
+func AddExecStepManualExecution(s *Step) {
+	s.ManualExecution = []string{fmt.Sprintf("%s %s %q", s.Exec.Command, s.Exec.Args[0], strings.Join(s.Exec.Args[1:], " "))}
 }
 
 func (pg *PlanGenerator) stepEnabled(s step) bool {

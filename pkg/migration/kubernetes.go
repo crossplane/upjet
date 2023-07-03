@@ -130,6 +130,9 @@ func (ks *KubernetesSource) init() error {
 	if err := ks.getGVKResources(ks.registry.GetCompositionGVKs(), CategoryComposition); err != nil {
 		return errors.Wrap(err, "cannot get compositions")
 	}
+	if err := ks.getGVKResources(ks.registry.GetCrossplanePackageGVKs(), CategoryCrossplanePackage); err != nil {
+		return errors.Wrap(err, "cannot get provider packages")
+	}
 	return errors.Wrap(ks.getGVKResources(ks.registry.GetManagedResourceGVKs(), CategoryManaged), "cannot get managed resources")
 }
 

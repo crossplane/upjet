@@ -39,6 +39,8 @@ const (
 	CategoryComposition Category = "composition"
 	// CategoryManaged category for managed resources
 	CategoryManaged Category = "managed"
+	// CategoryCrossplanePackage category for provider packages
+	CategoryCrossplanePackage Category = "package"
 )
 
 // Plan represents a migration plan for migrating managed resources,
@@ -81,16 +83,16 @@ type Step struct {
 	Type StepType `json:"type"`
 	// Apply contains the information needed to run an StepTypeApply step.
 	// Must be set when the Step.Type is StepTypeApply.
-	Apply *ApplyStep `json:"apply,omitempty"`
+	Apply *ApplyStep `json:"apply,omitempty" yaml:"apply,omitempty"`
 	// Patch contains the information needed to run a StepTypePatch step.
-	Patch *PatchStep `json:"patch,omitempty"`
+	Patch *PatchStep `json:"patch,omitempty" yaml:"patch,omitempty"`
 	// Delete contains the information needed to run an StepTypeDelete step.
 	// Must be set when the Step.Type is StepTypeDelete.
-	Delete *DeleteStep `json:"delete,omitempty"`
+	Delete *DeleteStep `json:"delete,omitempty" yaml:"delete,omitempty"`
 	// Exec contains the information needed to run a StepTypeExec step.
-	Exec *ExecStep `json:"exec,omitempty"`
+	Exec *ExecStep `json:"exec,omitempty" yaml:"exec,omitempty"`
 	// ManualExecution string is to make copy/pasting easier for folks.
-	ManualExecution []string `json:"manualExecution,omitempty"`
+	ManualExecution []string `json:"manualExecution,omitempty" yaml:"manualExecution,omitempty"`
 }
 
 // ApplyStep represents an apply step in which an array of manifests
