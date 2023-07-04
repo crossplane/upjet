@@ -41,7 +41,12 @@ func (pg *PlanGenerator) stepBackupClaims() {
 
 func (pg *PlanGenerator) stepCheckHealthOfNewProvider(source UnstructuredWithMetadata, targets []*UnstructuredWithMetadata) {
 	for _, t := range targets {
-		s := pg.stepConfigurationWithSubStep(stepCheckHealthNewServiceScopedProvider, true)
+		var s *Step
+		if len(targets) > 1 {
+			s = pg.stepConfigurationWithSubStep(stepCheckHealthNewServiceScopedProvider, true)
+		} else {
+			s = pg.stepConfigurationWithSubStep(stepCheckHealthFamilyProvider, true)
+		}
 		s.Exec.Args = []string{"-c", fmt.Sprintf("kubectl wait provider.pkg %s --for condition=Healthy", t.Object.GetName())}
 		t.Object.Object = addGVK(source.Object, t.Object.Object)
 		t.Metadata.Path = fmt.Sprintf("%s/%s.yaml", s.Name, getVersionedName(t.Object))
@@ -50,7 +55,12 @@ func (pg *PlanGenerator) stepCheckHealthOfNewProvider(source UnstructuredWithMet
 
 func (pg *PlanGenerator) stepCheckInstallationOfNewProvider(source UnstructuredWithMetadata, targets []*UnstructuredWithMetadata) {
 	for _, t := range targets {
-		s := pg.stepConfigurationWithSubStep(stepCheckInstallationServiceScopedProviderRevision, true)
+		var s *Step
+		if len(targets) > 1 {
+			s = pg.stepConfigurationWithSubStep(stepCheckInstallationServiceScopedProviderRevision, true)
+		} else {
+			s = pg.stepConfigurationWithSubStep(stepCheckInstallationFamilyProviderRevision, true)
+		}
 		s.Exec.Args = []string{"-c", fmt.Sprintf("kubectl wait provider.pkg %s --for condition=Installed", t.Object.GetName())}
 		t.Object.Object = addGVK(source.Object, t.Object.Object)
 		t.Metadata.Path = fmt.Sprintf("%s/%s.yaml", s.Name, getVersionedName(t.Object))

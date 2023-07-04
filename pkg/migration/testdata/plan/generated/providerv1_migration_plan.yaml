@@ -8,16 +8,6 @@ spec:
       - "kubectl apply -f new-ssop/provider-family-aws.providers.pkg.crossplane.io_v1.yaml"
     type: Apply
 
-  - apply:
-      files:
-      - new-ssop/provider-aws-ec2.providers.pkg.crossplane.io_v1.yaml
-      - new-ssop/provider-aws-eks.providers.pkg.crossplane.io_v1.yaml
-    name: new-ssop
-    manualExecution:
-      - "kubectl apply -f new-ssop/provider-aws-ec2.providers.pkg.crossplane.io_v1.yaml"
-      - "kubectl apply -f new-ssop/provider-aws-eks.providers.pkg.crossplane.io_v1.yaml"
-    type: Apply
-
   - exec:
       command: sh
       args:
@@ -27,6 +17,16 @@ spec:
     manualExecution:
       - sh -c "kubectl wait provider.pkg provider-family-aws --for condition=Healthy"
     type: Exec
+
+  - apply:
+      files:
+      - new-ssop/provider-aws-ec2.providers.pkg.crossplane.io_v1.yaml
+      - new-ssop/provider-aws-eks.providers.pkg.crossplane.io_v1.yaml
+    name: new-ssop
+    manualExecution:
+      - "kubectl apply -f new-ssop/provider-aws-ec2.providers.pkg.crossplane.io_v1.yaml"
+      - "kubectl apply -f new-ssop/provider-aws-eks.providers.pkg.crossplane.io_v1.yaml"
+    type: Apply
 
   - exec:
       command: sh
@@ -70,6 +70,16 @@ spec:
       - "kubectl patch providers.pkg.crossplane.io provider-family-aws --type='merge' --patch-file activate-ssop/provider-family-aws.providers.pkg.crossplane.io_v1.yaml"
     type: Patch
 
+  - exec:
+      command: sh
+      args:
+        - "-c"
+        - "kubectl wait provider.pkg provider-family-aws --for condition=Installed"
+    name: wait-for-installed
+    manualExecution:
+      - sh -c "kubectl wait provider.pkg provider-family-aws --for condition=Installed"
+    type: Exec
+
   - patch:
       type: merge
       files:
@@ -80,16 +90,6 @@ spec:
       - "kubectl patch providers.pkg.crossplane.io provider-aws-ec2 --type='merge' --patch-file activate-ssop/provider-aws-ec2.providers.pkg.crossplane.io_v1.yaml"
       - "kubectl patch providers.pkg.crossplane.io provider-aws-eks --type='merge' --patch-file activate-ssop/provider-aws-eks.providers.pkg.crossplane.io_v1.yaml"
     type: Patch
-
-  - exec:
-      command: sh
-      args:
-        - "-c"
-        - "kubectl wait provider.pkg provider-family-aws --for condition=Installed"
-    name: wait-for-installed
-    manualExecution:
-      - sh -c "kubectl wait provider.pkg provider-family-aws --for condition=Installed"
-    type: Exec
 
   - exec:
       command: sh

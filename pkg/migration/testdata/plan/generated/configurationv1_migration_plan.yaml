@@ -30,14 +30,15 @@ spec:
       - sh -c "kubectl get claim --all-namespaces -o yaml > backup/claim-resources.yaml"
     type: Exec
 
-  - patch:
-      type: merge
-      files:
-      - edit-configuration-metadata/platform-ref-aws.configurations.meta.pkg.crossplane.io_v1.yaml
+  - exec:
+      command: sh
+      args:
+        - "-c"
+        - "cp edit-configuration-metadata/platform-ref-aws.configurations.meta.pkg.crossplane.io_v1.yaml testdata/plan/configurationv1.yaml"
     name: edit-configuration-metadata
     manualExecution:
-      - "kubectl patch configurations.meta.pkg.crossplane.io platform-ref-aws --type='merge' --patch-file edit-configuration-metadata/platform-ref-aws.configurations.meta.pkg.crossplane.io_v1.yaml"
-    type: Patch
+      - sh -c "cp edit-configuration-metadata/platform-ref-aws.configurations.meta.pkg.crossplane.io_v1.yaml testdata/plan/configurationv1.yaml"
+    type: Exec
 
   - exec:
       command: sh

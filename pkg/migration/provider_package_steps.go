@@ -81,7 +81,12 @@ func (pg *PlanGenerator) stepDeleteMonolith(source UnstructuredWithMetadata) err
 
 // add steps for the new SSOPs
 func (pg *PlanGenerator) stepNewSSOPs(source UnstructuredWithMetadata, targets []*UnstructuredWithMetadata) error {
-	s := pg.stepConfigurationWithSubStep(stepNewServiceScopedProvider, true)
+	var s *Step
+	if len(targets) > 1 {
+		s = pg.stepConfigurationWithSubStep(stepNewServiceScopedProvider, true)
+	} else {
+		s = pg.stepConfigurationWithSubStep(stepNewFamilyProvider, true)
+	}
 	for _, t := range targets {
 		t.Object.Object = addGVK(source.Object, t.Object.Object)
 		t.Metadata.Path = fmt.Sprintf("%s/%s.yaml", s.Name, getVersionedName(t.Object))
@@ -96,7 +101,12 @@ func (pg *PlanGenerator) stepNewSSOPs(source UnstructuredWithMetadata, targets [
 
 // add steps for activating SSOPs
 func (pg *PlanGenerator) stepActivateSSOPs(targets []*UnstructuredWithMetadata) error {
-	s := pg.stepConfigurationWithSubStep(stepActivateServiceScopedProviderRevision, true)
+	var s *Step
+	if len(targets) > 1 {
+		s = pg.stepConfigurationWithSubStep(stepActivateServiceScopedProviderRevision, true)
+	} else {
+		s = pg.stepConfigurationWithSubStep(stepActivateFamilyProviderRevision, true)
+	}
 	for _, t := range targets {
 		t.Metadata.Path = fmt.Sprintf("%s/%s.yaml", s.Name, getVersionedName(t.Object))
 		s.Patch.Files = append(s.Patch.Files, t.Metadata.Path)

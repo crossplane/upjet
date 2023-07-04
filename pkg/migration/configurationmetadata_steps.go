@@ -29,11 +29,15 @@ const (
 	stepBackupComposites
 	stepBackupClaims
 	stepOrphanMRs
+	stepNewFamilyProvider
+	stepCheckHealthFamilyProvider
 	stepNewServiceScopedProvider
 	stepCheckHealthNewServiceScopedProvider
 	stepConfigurationPackageDisableDepResolution
 	stepEditPackageLock
 	stepDeleteMonolithicProvider
+	stepActivateFamilyProviderRevision
+	stepCheckInstallationFamilyProviderRevision
 	stepActivateServiceScopedProviderRevision
 	stepCheckInstallationServiceScopedProviderRevision
 	stepEditConfigurationMetadata
@@ -124,6 +128,8 @@ func (pg *PlanGenerator) stepConfigurationWithSubStep(s step, newSubStep bool) *
 		setPatchStep("deletion-policy-orphan", pg.Plan.Spec.stepMap[stepKey])
 	case stepRevertOrphanMRs:
 		setPatchStep("deletion-policy-delete", pg.Plan.Spec.stepMap[stepKey])
+	case stepNewFamilyProvider:
+		setApplyStep("new-ssop", pg.Plan.Spec.stepMap[stepKey])
 	case stepNewServiceScopedProvider:
 		setApplyStep("new-ssop", pg.Plan.Spec.stepMap[stepKey])
 	case stepConfigurationPackageDisableDepResolution:
@@ -136,6 +142,8 @@ func (pg *PlanGenerator) stepConfigurationWithSubStep(s step, newSubStep bool) *
 		setPatchStep("edit-package-lock", pg.Plan.Spec.stepMap[stepKey])
 	case stepDeleteMonolithicProvider:
 		setDeleteStep("delete-monolithic-provider", pg.Plan.Spec.stepMap[stepKey])
+	case stepActivateFamilyProviderRevision:
+		setPatchStep("activate-ssop", pg.Plan.Spec.stepMap[stepKey])
 	case stepActivateServiceScopedProviderRevision:
 		setPatchStep("activate-ssop", pg.Plan.Spec.stepMap[stepKey])
 	case stepEditConfigurationMetadata:
@@ -146,8 +154,12 @@ func (pg *PlanGenerator) stepConfigurationWithSubStep(s step, newSubStep bool) *
 		setExecStep("backup-composite-resources", pg.Plan.Spec.stepMap[stepKey])
 	case stepBackupClaims:
 		setExecStep("backup-claim-resources", pg.Plan.Spec.stepMap[stepKey])
+	case stepCheckHealthFamilyProvider:
+		setExecStep("wait-for-healthy", pg.Plan.Spec.stepMap[stepKey])
 	case stepCheckHealthNewServiceScopedProvider:
 		setExecStep("wait-for-healthy", pg.Plan.Spec.stepMap[stepKey])
+	case stepCheckInstallationFamilyProviderRevision:
+		setExecStep("wait-for-installed", pg.Plan.Spec.stepMap[stepKey])
 	case stepCheckInstallationServiceScopedProviderRevision:
 		setExecStep("wait-for-installed", pg.Plan.Spec.stepMap[stepKey])
 	case stepBuildConfiguration:
