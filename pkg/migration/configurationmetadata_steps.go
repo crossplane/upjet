@@ -21,7 +21,6 @@ import (
 	xpmetav1 "github.com/crossplane/crossplane/apis/pkg/meta/v1"
 	xpmetav1alpha1 "github.com/crossplane/crossplane/apis/pkg/meta/v1alpha1"
 	"github.com/pkg/errors"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 const (
@@ -55,7 +54,7 @@ func getConfigurationMigrationSteps() []step {
 }
 
 const (
-	errConfigurationMetadataOutput = "failed to output configuration JSON merge document"
+	errConfigurationMetadataOutput = "failed to output configuration YAML document"
 )
 
 func (pg *PlanGenerator) convertConfigurationMetadata(o UnstructuredWithMetadata) error {
@@ -140,7 +139,7 @@ func (pg *PlanGenerator) stepConfigurationWithSubStep(s step, newSubStep bool) *
 	case stepActivateServiceScopedProviderRevision:
 		setPatchStep("activate-ssop", pg.Plan.Spec.stepMap[stepKey])
 	case stepEditConfigurationMetadata:
-		setPatchStep("edit-configuration-metadata", pg.Plan.Spec.stepMap[stepKey])
+		setExecStep("edit-configuration-metadata", pg.Plan.Spec.stepMap[stepKey])
 	case stepBackupMRs:
 		setExecStep("backup-managed-resources", pg.Plan.Spec.stepMap[stepKey])
 	case stepBackupComposites:
@@ -164,16 +163,6 @@ func (pg *PlanGenerator) stepConfigurationWithSubStep(s step, newSubStep bool) *
 func (pg *PlanGenerator) stepEditConfigurationMetadata(source UnstructuredWithMetadata, target *UnstructuredWithMetadata) error {
 	s := pg.stepConfiguration(stepEditConfigurationMetadata)
 	target.Metadata.Path = fmt.Sprintf("%s/%s.yaml", s.Name, getVersionedName(target.Object))
-	s.Patch.Files = append(s.Patch.Files, target.Metadata.Path)
-	s.ManualExecution = append(s.ManualExecution, fmt.Sprintf("kubectl patch %s %s --type='%s' --patch-file %s", getKindGroupName(target.Object), target.Object.GetName(), s.Patch.Type, target.Metadata.Path))
-	patchMap, err := computeJSONMergePathDoc(source.Object, target.Object)
-	if err != nil {
-		return err
-	}
-	return errors.Wrap(pg.target.Put(UnstructuredWithMetadata{
-		Object: unstructured.Unstructured{
-			Object: addNameGVK(target.Object, patchMap),
-		},
-		Metadata: target.Metadata,
-	}), errConfigurationMetadataOutput)
+	s.Exec.Args = []string{"-c", fmt.Sprintf("cp %s %s", target.Metadata.Path, source.Metadata.Path)}
+	return errors.Wrap(pg.target.Put(*target), errConfigurationMetadataOutput)
 }
