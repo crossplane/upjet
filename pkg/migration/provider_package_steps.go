@@ -76,7 +76,7 @@ func (pg *PlanGenerator) convertProviderPackage(o UnstructuredWithMetadata) (boo
 
 func (pg *PlanGenerator) stepDeleteMonolith(source UnstructuredWithMetadata) error {
 	// delete the monolithic provider package
-	s := pg.stepConfiguration(stepDeleteMonolithicProvider)
+	s := pg.stepConfigurationWithSubStep(stepDeleteMonolithicProvider, true)
 	source.Metadata.Path = fmt.Sprintf("%s/%s.yaml", s.Name, getVersionedName(source.Object))
 	s.Delete.Resources = []Resource{
 		{
