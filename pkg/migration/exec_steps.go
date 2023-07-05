@@ -16,6 +16,8 @@ package migration
 
 import (
 	"fmt"
+
+	"github.com/pkg/errors"
 )
 
 func (pg *PlanGenerator) stepBackupAllResources() {
@@ -39,32 +41,42 @@ func (pg *PlanGenerator) stepBackupClaims() {
 	s.Exec.Args = []string{"-c", "kubectl get claim --all-namespaces -o yaml > backup/claim-resources.yaml"}
 }
 
-func (pg *PlanGenerator) stepCheckHealthOfNewProvider(source UnstructuredWithMetadata, targets []*UnstructuredWithMetadata) {
+func (pg *PlanGenerator) stepCheckHealthOfNewProvider(source UnstructuredWithMetadata, targets []*UnstructuredWithMetadata) error {
 	for _, t := range targets {
 		var s *Step
-		if len(targets) > 1 {
-			s = pg.stepConfigurationWithSubStep(stepCheckHealthNewServiceScopedProvider, true)
-		} else {
+		isFamilyConfig, err := checkContainsFamilyConfigProvider(targets)
+		if err != nil {
+			return errors.Wrapf(err, "could not decide whether the provider family config")
+		}
+		if isFamilyConfig {
 			s = pg.stepConfigurationWithSubStep(stepCheckHealthFamilyProvider, true)
+		} else {
+			s = pg.stepConfigurationWithSubStep(stepCheckHealthNewServiceScopedProvider, true)
 		}
 		s.Exec.Args = []string{"-c", fmt.Sprintf("kubectl wait provider.pkg %s --for condition=Healthy", t.Object.GetName())}
 		t.Object.Object = addGVK(source.Object, t.Object.Object)
 		t.Metadata.Path = fmt.Sprintf("%s/%s.yaml", s.Name, getVersionedName(t.Object))
 	}
+	return nil
 }
 
-func (pg *PlanGenerator) stepCheckInstallationOfNewProvider(source UnstructuredWithMetadata, targets []*UnstructuredWithMetadata) {
+func (pg *PlanGenerator) stepCheckInstallationOfNewProvider(source UnstructuredWithMetadata, targets []*UnstructuredWithMetadata) error {
 	for _, t := range targets {
 		var s *Step
-		if len(targets) > 1 {
-			s = pg.stepConfigurationWithSubStep(stepCheckInstallationServiceScopedProviderRevision, true)
-		} else {
+		isFamilyConfig, err := checkContainsFamilyConfigProvider(targets)
+		if err != nil {
+			return errors.Wrapf(err, "could not decide whether the provider family config")
+		}
+		if isFamilyConfig {
 			s = pg.stepConfigurationWithSubStep(stepCheckInstallationFamilyProviderRevision, true)
+		} else {
+			s = pg.stepConfigurationWithSubStep(stepCheckInstallationServiceScopedProviderRevision, true)
 		}
 		s.Exec.Args = []string{"-c", fmt.Sprintf("kubectl wait provider.pkg %s --for condition=Installed", t.Object.GetName())}
 		t.Object.Object = addGVK(source.Object, t.Object.Object)
 		t.Metadata.Path = fmt.Sprintf("%s/%s.yaml", s.Name, getVersionedName(t.Object))
 	}
+	return nil
 }
 
 func (pg *PlanGenerator) stepBuildConfiguration() {

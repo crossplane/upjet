@@ -16,7 +16,9 @@ package migration
 
 import (
 	"fmt"
+	"strings"
 
+	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
@@ -59,8 +61,12 @@ func (pg *PlanGenerator) convertProviderPackage(o UnstructuredWithMetadata) (boo
 		if err := pg.stepActivateSSOPs(converted); err != nil {
 			return false, err
 		}
-		pg.stepCheckHealthOfNewProvider(o, converted)
-		pg.stepCheckInstallationOfNewProvider(o, converted)
+		if err := pg.stepCheckHealthOfNewProvider(o, converted); err != nil {
+			return false, err
+		}
+		if err := pg.stepCheckInstallationOfNewProvider(o, converted); err != nil {
+			return false, err
+		}
 	}
 	return isConverted, nil
 }
@@ -82,10 +88,14 @@ func (pg *PlanGenerator) stepDeleteMonolith(source UnstructuredWithMetadata) err
 // add steps for the new SSOPs
 func (pg *PlanGenerator) stepNewSSOPs(source UnstructuredWithMetadata, targets []*UnstructuredWithMetadata) error {
 	var s *Step
-	if len(targets) > 1 {
-		s = pg.stepConfigurationWithSubStep(stepNewServiceScopedProvider, true)
-	} else {
+	isFamilyConfig, err := checkContainsFamilyConfigProvider(targets)
+	if err != nil {
+		return errors.Wrapf(err, "could not decide whether the provider family config")
+	}
+	if isFamilyConfig {
 		s = pg.stepConfigurationWithSubStep(stepNewFamilyProvider, true)
+	} else {
+		s = pg.stepConfigurationWithSubStep(stepNewServiceScopedProvider, true)
 	}
 	for _, t := range targets {
 		t.Object.Object = addGVK(source.Object, t.Object.Object)
@@ -102,10 +112,14 @@ func (pg *PlanGenerator) stepNewSSOPs(source UnstructuredWithMetadata, targets [
 // add steps for activating SSOPs
 func (pg *PlanGenerator) stepActivateSSOPs(targets []*UnstructuredWithMetadata) error {
 	var s *Step
-	if len(targets) > 1 {
-		s = pg.stepConfigurationWithSubStep(stepActivateServiceScopedProviderRevision, true)
-	} else {
+	isFamilyConfig, err := checkContainsFamilyConfigProvider(targets)
+	if err != nil {
+		return errors.Wrapf(err, "could not decide whether the provider family config")
+	}
+	if isFamilyConfig {
 		s = pg.stepConfigurationWithSubStep(stepActivateFamilyProviderRevision, true)
+	} else {
+		s = pg.stepConfigurationWithSubStep(stepActivateServiceScopedProviderRevision, true)
 	}
 	for _, t := range targets {
 		t.Metadata.Path = fmt.Sprintf("%s/%s.yaml", s.Name, getVersionedName(t.Object))
@@ -125,4 +139,18 @@ func (pg *PlanGenerator) stepActivateSSOPs(targets []*UnstructuredWithMetadata) 
 		}
 	}
 	return nil
+}
+
+func checkContainsFamilyConfigProvider(targets []*UnstructuredWithMetadata) (bool, error) {
+	for _, t := range targets {
+		paved := fieldpath.Pave(t.Object.Object)
+		pkg, err := paved.GetString("spec.package")
+		if err != nil {
+			return false, errors.Wrap(err, "could not get package of provider")
+		}
+		if strings.Contains(pkg, "provider-family") {
+			return true, nil
+		}
+	}
+	return false, nil
 }
