@@ -41,7 +41,6 @@ func (pg *PlanGenerator) convertConfigurationPackage(o UnstructuredWithMetadata)
 	s := pg.stepConfiguration(stepConfigurationPackageDisableDepResolution)
 	p := fmt.Sprintf("%s/%s.yaml", s.Name, getVersionedName(o.Object))
 	s.Patch.Files = append(s.Patch.Files, p)
-	s.ManualExecution = []string{fmt.Sprintf("kubectl patch %s %s --type='%s' --patch-file %s", getKindGroupName(o.Object), o.Object.GetName(), s.Patch.Type, p)}
 	if err := pg.target.Put(UnstructuredWithMetadata{
 		Object: unstructured.Unstructured{
 			Object: addNameGVK(o.Object, map[string]any{
@@ -62,7 +61,6 @@ func (pg *PlanGenerator) convertConfigurationPackage(o UnstructuredWithMetadata)
 	s = pg.stepConfiguration(stepConfigurationPackageEnableDepResolution)
 	p = fmt.Sprintf("%s/%s.yaml", s.Name, getVersionedName(o.Object))
 	s.Patch.Files = append(s.Patch.Files, p)
-	s.ManualExecution = append(s.ManualExecution, fmt.Sprintf("kubectl patch %s %s --type='%s' --patch-file %s", getKindGroupName(o.Object), o.Object.GetName(), s.Patch.Type, p))
 	if err := pg.target.Put(UnstructuredWithMetadata{
 		Object: unstructured.Unstructured{
 			Object: addNameGVK(o.Object, map[string]any{
@@ -109,7 +107,6 @@ func (pg *PlanGenerator) stepEditConfigurationPackage(source UnstructuredWithMet
 	s := pg.stepConfigurationWithSubStep(stepEditConfigurationPackage, true)
 	t.Metadata.Path = fmt.Sprintf("%s/%s.yaml", s.Name, getVersionedName(t.Object))
 	s.Patch.Files = append(s.Patch.Files, t.Metadata.Path)
-	s.ManualExecution = append(s.ManualExecution, fmt.Sprintf("kubectl patch %s %s --type='%s' --patch-file %s", getKindGroupName(t.Object), t.Object.GetName(), s.Patch.Type, t.Metadata.Path))
 	patchMap, err := computeJSONMergePathDoc(source.Object, t.Object)
 	if err != nil {
 		return err
@@ -145,7 +142,6 @@ func (pg *PlanGenerator) stepSetDeletionPolicy(u UnstructuredWithMetadata, step 
 	s := pg.stepConfiguration(step)
 	u.Metadata.Path = fmt.Sprintf("%s/%s.yaml", s.Name, getVersionedName(u.Object))
 	s.Patch.Files = append(s.Patch.Files, u.Metadata.Path)
-	s.ManualExecution = append(s.ManualExecution, fmt.Sprintf("kubectl patch %s %s --type='%s' --patch-file %s", getKindGroupName(u.Object), u.Object.GetName(), s.Patch.Type, s.Patch.Files[len(s.Patch.Files)-1]))
 	return true, errors.Wrapf(pg.target.Put(UnstructuredWithMetadata{
 		Object: unstructured.Unstructured{
 			Object: addNameGVK(u.Object, map[string]any{

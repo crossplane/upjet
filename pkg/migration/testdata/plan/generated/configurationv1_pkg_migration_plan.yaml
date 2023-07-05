@@ -36,7 +36,7 @@ spec:
           - deletion-policy-orphan/sample-vpc.vpcs.fakesourceapi_v1alpha1.yaml
       name: deletion-policy-orphan
       manualExecution:
-        - "kubectl patch vpcs.fakesourceapi sample-vpc --type='merge' --patch-file deletion-policy-orphan/sample-vpc.vpcs.fakesourceapi_v1alpha1.yaml"
+        - "kubectl patch --type='merge' -f deletion-policy-orphan/sample-vpc.vpcs.fakesourceapi_v1alpha1.yaml --patch-file deletion-policy-orphan/sample-vpc.vpcs.fakesourceapi_v1alpha1.yaml"
       type: Patch
 
     - apply:
@@ -93,7 +93,7 @@ spec:
           - disable-dependency-resolution/platform-ref-aws.configurations.pkg.crossplane.io_v1.yaml
       name: disable-dependency-resolution
       manualExecution:
-        - "kubectl patch configurations.pkg.crossplane.io platform-ref-aws --type='merge' --patch-file disable-dependency-resolution/platform-ref-aws.configurations.pkg.crossplane.io_v1.yaml"
+        - "kubectl patch --type='merge' -f disable-dependency-resolution/platform-ref-aws.configurations.pkg.crossplane.io_v1.yaml --patch-file disable-dependency-resolution/platform-ref-aws.configurations.pkg.crossplane.io_v1.yaml"
       type: Patch
 
     - patch:
@@ -102,7 +102,7 @@ spec:
           - edit-package-lock/lock.locks.pkg.crossplane.io_v1beta1.yaml
       name: edit-package-lock
       manualExecution:
-        - "kubectl patch locks.pkg.crossplane.io lock --type='merge' --patch-file edit-package-lock/lock.locks.pkg.crossplane.io_v1beta1.yaml"
+        - "kubectl patch --type='merge' -f edit-package-lock/lock.locks.pkg.crossplane.io_v1beta1.yaml --patch-file edit-package-lock/lock.locks.pkg.crossplane.io_v1beta1.yaml"
       type: Patch
 
     - delete:
@@ -115,7 +115,7 @@ spec:
             version: v1
       name: delete-monolithic-provider
       manualExecution:
-        - "kubectl delete providers.pkg.crossplane.io provider-aws"
+        - "kubectl delete Provider.pkg.crossplane.io provider-aws"
       type: Delete
 
     - patch:
@@ -124,7 +124,7 @@ spec:
           - activate-ssop/provider-family-aws.providers.pkg.crossplane.io_v1.yaml
       name: activate-ssop
       manualExecution:
-        - "kubectl patch providers.pkg.crossplane.io provider-family-aws --type='merge' --patch-file activate-ssop/provider-family-aws.providers.pkg.crossplane.io_v1.yaml"
+        - "kubectl patch --type='merge' -f activate-ssop/provider-family-aws.providers.pkg.crossplane.io_v1.yaml --patch-file activate-ssop/provider-family-aws.providers.pkg.crossplane.io_v1.yaml"
       type: Patch
 
     - exec:
@@ -144,8 +144,8 @@ spec:
           - activate-ssop/provider-aws-eks.providers.pkg.crossplane.io_v1.yaml
       name: activate-ssop
       manualExecution:
-        - "kubectl patch providers.pkg.crossplane.io provider-aws-ec2 --type='merge' --patch-file activate-ssop/provider-aws-ec2.providers.pkg.crossplane.io_v1.yaml"
-        - "kubectl patch providers.pkg.crossplane.io provider-aws-eks --type='merge' --patch-file activate-ssop/provider-aws-eks.providers.pkg.crossplane.io_v1.yaml"
+        - "kubectl patch --type='merge' -f activate-ssop/provider-aws-ec2.providers.pkg.crossplane.io_v1.yaml --patch-file activate-ssop/provider-aws-ec2.providers.pkg.crossplane.io_v1.yaml"
+        - "kubectl patch --type='merge' -f activate-ssop/provider-aws-eks.providers.pkg.crossplane.io_v1.yaml --patch-file activate-ssop/provider-aws-eks.providers.pkg.crossplane.io_v1.yaml"
       type: Patch
 
     - exec:
@@ -204,7 +204,7 @@ spec:
           - edit-configuration-package/platform-ref-aws.configurations.pkg.crossplane.io_v1.yaml
       name: edit-configuration-package
       manualExecution:
-        - "kubectl patch configurations.pkg.crossplane.io platform-ref-aws --type='merge' --patch-file edit-configuration-package/platform-ref-aws.configurations.pkg.crossplane.io_v1.yaml"
+        - "kubectl patch --type='merge' -f edit-configuration-package/platform-ref-aws.configurations.pkg.crossplane.io_v1.yaml --patch-file edit-configuration-package/platform-ref-aws.configurations.pkg.crossplane.io_v1.yaml"
       type: Patch
 
     - patch:
@@ -213,7 +213,7 @@ spec:
           - enable-dependency-resolution/platform-ref-aws.configurations.pkg.crossplane.io_v1.yaml
       name: enable-dependency-resolution
       manualExecution:
-        - "kubectl patch configurations.pkg.crossplane.io platform-ref-aws --type='merge' --patch-file enable-dependency-resolution/platform-ref-aws.configurations.pkg.crossplane.io_v1.yaml"
+        - "kubectl patch --type='merge' -f enable-dependency-resolution/platform-ref-aws.configurations.pkg.crossplane.io_v1.yaml --patch-file enable-dependency-resolution/platform-ref-aws.configurations.pkg.crossplane.io_v1.yaml"
       type: Patch
 
     - patch:
@@ -222,7 +222,7 @@ spec:
           - deletion-policy-delete/sample-vpc.vpcs.fakesourceapi_v1alpha1.yaml
       name: deletion-policy-delete
       manualExecution:
-        - "kubectl patch vpcs.fakesourceapi sample-vpc --type='merge' --patch-file deletion-policy-delete/sample-vpc.vpcs.fakesourceapi_v1alpha1.yaml"
+        - "kubectl patch --type='merge' -f deletion-policy-delete/sample-vpc.vpcs.fakesourceapi_v1alpha1.yaml --patch-file deletion-policy-delete/sample-vpc.vpcs.fakesourceapi_v1alpha1.yaml"
       type: Patch
 
 version: 0.1.0

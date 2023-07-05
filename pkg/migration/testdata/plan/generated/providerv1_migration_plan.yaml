@@ -58,7 +58,7 @@ spec:
           version: v1
     name: delete-monolithic-provider
     manualExecution:
-      - "kubectl delete providers.pkg.crossplane.io provider-aws"
+      - "kubectl delete Provider.pkg.crossplane.io provider-aws"
     type: Delete
 
   - patch:
@@ -67,7 +67,7 @@ spec:
         - activate-ssop/provider-family-aws.providers.pkg.crossplane.io_v1.yaml
     name: activate-ssop
     manualExecution:
-      - "kubectl patch providers.pkg.crossplane.io provider-family-aws --type='merge' --patch-file activate-ssop/provider-family-aws.providers.pkg.crossplane.io_v1.yaml"
+      - "kubectl patch --type='merge' -f activate-ssop/provider-family-aws.providers.pkg.crossplane.io_v1.yaml --patch-file activate-ssop/provider-family-aws.providers.pkg.crossplane.io_v1.yaml"
     type: Patch
 
   - exec:
@@ -87,8 +87,8 @@ spec:
         - activate-ssop/provider-aws-eks.providers.pkg.crossplane.io_v1.yaml
     name: activate-ssop
     manualExecution:
-      - "kubectl patch providers.pkg.crossplane.io provider-aws-ec2 --type='merge' --patch-file activate-ssop/provider-aws-ec2.providers.pkg.crossplane.io_v1.yaml"
-      - "kubectl patch providers.pkg.crossplane.io provider-aws-eks --type='merge' --patch-file activate-ssop/provider-aws-eks.providers.pkg.crossplane.io_v1.yaml"
+      - "kubectl patch --type='merge' -f activate-ssop/provider-aws-ec2.providers.pkg.crossplane.io_v1.yaml --patch-file activate-ssop/provider-aws-ec2.providers.pkg.crossplane.io_v1.yaml"
+      - "kubectl patch --type='merge' -f activate-ssop/provider-aws-eks.providers.pkg.crossplane.io_v1.yaml --patch-file activate-ssop/provider-aws-eks.providers.pkg.crossplane.io_v1.yaml"
     type: Patch
 
   - exec:

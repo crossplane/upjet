@@ -5,6 +5,8 @@ spec:
       files:
       - pause-managed/sample-vpc.vpcs.fakesourceapi.yaml
     name: pause-managed
+    manualExecution:
+      - "kubectl patch --type='merge' -f pause-managed/sample-vpc.vpcs.fakesourceapi.yaml --patch-file pause-managed/sample-vpc.vpcs.fakesourceapi.yaml"
     type: Patch
 
   - patch:
@@ -12,18 +14,24 @@ spec:
       files:
       - pause-composites/my-resource-dwjgh.xmyresources.test.com.yaml
     name: pause-composites
+    manualExecution:
+      - "kubectl patch --type='merge' -f pause-composites/my-resource-dwjgh.xmyresources.test.com.yaml --patch-file pause-composites/my-resource-dwjgh.xmyresources.test.com.yaml"
     type: Patch
 
   - apply:
       files:
       - create-new-managed/sample-vpc.vpcs.faketargetapi.yaml
     name: create-new-managed
+    manualExecution:
+      - "kubectl apply -f create-new-managed/sample-vpc.vpcs.faketargetapi.yaml"
     type: Apply
 
   - apply:
       files:
       - new-compositions/example-migrated.compositions.apiextensions.crossplane.io.yaml
     name: new-compositions
+    manualExecution:
+      - "kubectl apply -f new-compositions/example-migrated.compositions.apiextensions.crossplane.io.yaml"
     type: Apply
 
   - patch:
@@ -31,6 +39,8 @@ spec:
       files:
       - edit-composites/my-resource-dwjgh.xmyresources.test.com.yaml
     name: edit-composites
+    manualExecution:
+      - "kubectl patch --type='merge' -f edit-composites/my-resource-dwjgh.xmyresources.test.com.yaml --patch-file edit-composites/my-resource-dwjgh.xmyresources.test.com.yaml"
     type: Patch
 
   - patch:
@@ -38,6 +48,8 @@ spec:
       files:
       - edit-claims/my-resource.myresources.test.com.yaml
     name: edit-claims
+    manualExecution:
+      - "kubectl patch --type='merge' -f edit-claims/my-resource.myresources.test.com.yaml --patch-file edit-claims/my-resource.myresources.test.com.yaml"
     type: Patch
 
   - patch:
@@ -45,6 +57,8 @@ spec:
       files:
       - deletion-policy-orphan/sample-vpc.vpcs.fakesourceapi.yaml
     name: deletion-policy-orphan
+    manualExecution:
+      - "kubectl patch --type='merge' -f deletion-policy-orphan/sample-vpc.vpcs.fakesourceapi.yaml --patch-file deletion-policy-orphan/sample-vpc.vpcs.fakesourceapi.yaml"
     type: Patch
 
   - delete:
@@ -56,6 +70,8 @@ spec:
         name: sample-vpc
         version: v1alpha1
     name: delete-old-managed
+    manualExecution:
+      - "kubectl delete VPC.fakesourceapi sample-vpc"
     type: Delete
 
   - patch:
@@ -63,6 +79,8 @@ spec:
       files:
       - start-managed/sample-vpc.vpcs.faketargetapi.yaml
     name: start-managed
+    manualExecution:
+      - "kubectl patch --type='merge' -f start-managed/sample-vpc.vpcs.faketargetapi.yaml --patch-file start-managed/sample-vpc.vpcs.faketargetapi.yaml"
     type: Patch
 
   - patch:
@@ -70,6 +88,8 @@ spec:
       files:
       - start-composites/my-resource-dwjgh.xmyresources.test.com.yaml
     name: start-composites
+    manualExecution:
+      - "kubectl patch --type='merge' -f start-composites/my-resource-dwjgh.xmyresources.test.com.yaml --patch-file start-composites/my-resource-dwjgh.xmyresources.test.com.yaml"
     type: Patch
 
 version: 0.1.0
