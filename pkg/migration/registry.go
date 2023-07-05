@@ -317,6 +317,11 @@ func (r *Registry) GetCompositionGVKs() []schema.GroupVersionKind {
 
 // GetCrossplanePackageGVKs returns the registered Crossplane package GVKs.
 func (r *Registry) GetCrossplanePackageGVKs() []schema.GroupVersionKind {
+	if r.scheme.AllKnownTypes()[xppkgv1.ProviderGroupVersionKind] == nil ||
+		r.scheme.AllKnownTypes()[xppkgv1.ConfigurationGroupVersionKind] == nil ||
+		r.scheme.AllKnownTypes()[xppkgv1beta1.LockGroupVersionKind] == nil {
+		return nil
+	}
 	return []schema.GroupVersionKind{
 		xppkgv1.ProviderGroupVersionKind,
 		xppkgv1.ConfigurationGroupVersionKind,

@@ -2,14 +2,19 @@ package migration
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
 
+	"k8s.io/cli-runtime/pkg/resource"
+	"k8s.io/client-go/rest"
+
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/discovery/cached/disk"
@@ -21,6 +26,7 @@ import (
 
 const (
 	errKubernetesSourceInit = "failed to initialize the migration Kubernetes source"
+	errCategoryGetFmt       = "failed to get resources of category %q"
 )
 
 var (
@@ -40,6 +46,7 @@ type KubernetesSource struct {
 	restMapper            meta.RESTMapper
 	categoryExpander      restmapper.CategoryExpander
 	cacheDir              string
+	restConfig            *rest.Config
 }
 
 // KubernetesSourceOption sets an option for a KubernetesSource.
@@ -77,7 +84,14 @@ func NewKubernetesSourceFromKubeConfig(kubeconfigPath string, opts ...Kubernetes
 	for _, o := range opts {
 		o(ks)
 	}
+
 	var err error
+	ks.restConfig, err = clientcmd.BuildConfigFromFlags("", kubeconfigPath)
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot create rest config object")
+	}
+	ks.restConfig.ContentConfig = resource.UnstructuredPlusDefaultContentConfig()
+
 	ks.dynamicClient, err = InitializeDynamicClient(kubeconfigPath)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to initialize a Kubernetes dynamic client from kubeconfig: %s", kubeconfigPath)
@@ -131,25 +145,87 @@ func (ks *KubernetesSource) init() error {
 		return errors.Wrap(err, "cannot get compositions")
 	}
 	if err := ks.getGVKResources(ks.registry.GetCrossplanePackageGVKs(), CategoryCrossplanePackage); err != nil {
-		return errors.Wrap(err, "cannot get provider packages")
+		return errors.Wrap(err, "cannot get Crossplane packages")
 	}
 	return errors.Wrap(ks.getGVKResources(ks.registry.GetManagedResourceGVKs(), CategoryManaged), "cannot get managed resources")
 }
 
+func (ks *KubernetesSource) getMappingFor(gr schema.GroupResource) (*meta.RESTMapping, error) {
+	r := fmt.Sprintf("%s.%s", gr.Resource, gr.Group)
+	fullySpecifiedGVR, groupResource := schema.ParseResourceArg(r)
+	gvk := schema.GroupVersionKind{}
+	if fullySpecifiedGVR != nil {
+		gvk, _ = ks.restMapper.KindFor(*fullySpecifiedGVR)
+	}
+	if gvk.Empty() {
+		gvk, _ = ks.restMapper.KindFor(groupResource.WithVersion(""))
+	}
+	if !gvk.Empty() {
+		return ks.restMapper.RESTMapping(gvk.GroupKind(), gvk.Version)
+	}
+	fullySpecifiedGVK, groupKind := schema.ParseKindArg(r)
+	if fullySpecifiedGVK == nil {
+		gvk := groupKind.WithVersion("")
+		fullySpecifiedGVK = &gvk
+	}
+
+	if !fullySpecifiedGVK.Empty() {
+		if mapping, err := ks.restMapper.RESTMapping(fullySpecifiedGVK.GroupKind(), fullySpecifiedGVK.Version); err == nil {
+			return mapping, nil
+		}
+	}
+
+	mapping, err := ks.restMapper.RESTMapping(groupKind, gvk.Version)
+	if err != nil {
+		if meta.IsNoMatchError(err) {
+			return nil, errors.Errorf("the server doesn't have a resource type %q", groupResource.Resource)
+		}
+		return nil, err
+	}
+	return mapping, nil
+}
+
+// parts of this implement are taken from the implementation of
+// the "kubectl get" command:
+// https://github.com/kubernetes/kubernetes/tree/master/staging/src/k8s.io/kubectl/pkg/cmd/get
 func (ks *KubernetesSource) getCategoryResources(c Category) error {
+	if ks.restConfig == nil {
+		return errors.New("rest.Config not initialized")
+	}
 	grs, _ := ks.categoryExpander.Expand(c.String())
 	for _, gr := range grs {
-		gvrs, err := ks.restMapper.ResourcesFor(schema.GroupVersionResource{
-			Group:    gr.Group,
-			Resource: gr.Resource,
-		})
+		mapping, err := ks.getMappingFor(gr)
 		if err != nil {
-			return errors.Wrapf(err, "cannot discover GVRs for GroupResource: %s", gr.String())
+			return errors.Wrapf(err, errCategoryGetFmt, c.String())
 		}
-		for _, gvr := range gvrs {
-			if err := ks.getResourcesFor(gvr, c); err != nil {
-				return errors.Wrapf(err, "cannot get resources of the category: %s", c.String())
-			}
+		gv := mapping.GroupVersionKind.GroupVersion()
+		ks.restConfig.GroupVersion = &gv
+		if len(gv.Group) == 0 {
+			ks.restConfig.APIPath = "/api"
+		} else {
+			ks.restConfig.APIPath = "/apis"
+		}
+		client, err := rest.RESTClientFor(ks.restConfig)
+		if err != nil {
+			return errors.Wrapf(err, errCategoryGetFmt, c.String())
+		}
+		helper := resource.NewHelper(client, mapping)
+		list, err := helper.List("", mapping.GroupVersionKind.GroupVersion().String(), &metav1.ListOptions{})
+		if err != nil {
+			return errors.Wrapf(err, errCategoryGetFmt, c.String())
+		}
+		ul, ok := list.(*unstructured.UnstructuredList)
+		if !ok {
+			return errors.New("expecting list to be of type *unstructured.UnstructuredList")
+		}
+		for _, u := range ul.Items {
+			ks.items = append(ks.items, UnstructuredWithMetadata{
+				Object: u,
+				Metadata: Metadata{
+					Path:     string(u.GetUID()),
+					Category: c,
+				},
+			})
 		}
 	}
 	return nil

@@ -51,10 +51,12 @@ func getAPIMigrationSteps() []step {
 }
 
 func (pg *PlanGenerator) addStepsForManagedResource(u *UnstructuredWithMetadata) error {
-	if _, ok, err := toManagedResource(pg.registry.scheme, u.Object); err != nil || !ok {
-		// not a managed resource or unable to determine
-		// whether it's a managed resource
-		return nil // nolint:nilerr
+	if u.Metadata.Category != CategoryManaged {
+		if _, ok, err := toManagedResource(pg.registry.scheme, u.Object); err != nil || !ok {
+			// not a managed resource or unable to determine
+			// whether it's a managed resource
+			return nil // nolint:nilerr
+		}
 	}
 	qName := getQualifiedName(u.Object)
 	if err := pg.stepPauseManagedResource(u, qName); err != nil {

@@ -103,6 +103,9 @@ func (pg *PlanGenerator) convertConfigurationPackage(o UnstructuredWithMetadata)
 }
 
 func (pg *PlanGenerator) stepEditConfigurationPackage(source UnstructuredWithMetadata, t *UnstructuredWithMetadata) error {
+	if !pg.stepEnabled(stepEditConfigurationPackage) {
+		return nil
+	}
 	s := pg.stepConfigurationWithSubStep(stepEditConfigurationPackage, true)
 	t.Metadata.Path = fmt.Sprintf("%s/%s.yaml", s.Name, getVersionedName(t.Object))
 	s.Patch.Files = append(s.Patch.Files, t.Metadata.Path)
@@ -120,14 +123,14 @@ func (pg *PlanGenerator) stepEditConfigurationPackage(source UnstructuredWithMet
 }
 
 func (pg *PlanGenerator) stepOrhanMR(u UnstructuredWithMetadata) (bool, error) {
-	return pg.stepSetDeletionPolicy(u, stepOrphanMRs, v1.DeletionOrphan)
+	return pg.stepSetDeletionPolicy(u, stepOrphanMRs, v1.DeletionOrphan, true)
 }
 
 func (pg *PlanGenerator) stepRevertOrhanMR(u UnstructuredWithMetadata) (bool, error) {
-	return pg.stepSetDeletionPolicy(u, stepRevertOrphanMRs, v1.DeletionDelete)
+	return pg.stepSetDeletionPolicy(u, stepRevertOrphanMRs, v1.DeletionDelete, false)
 }
 
-func (pg *PlanGenerator) stepSetDeletionPolicy(u UnstructuredWithMetadata, step step, policy v1.DeletionPolicy) (bool, error) {
+func (pg *PlanGenerator) stepSetDeletionPolicy(u UnstructuredWithMetadata, step step, policy v1.DeletionPolicy, checkCurrentPolicy bool) (bool, error) {
 	if !pg.stepEnabled(step) {
 		return false, nil
 	}
@@ -136,13 +139,13 @@ func (pg *PlanGenerator) stepSetDeletionPolicy(u UnstructuredWithMetadata, step 
 	if err != nil && !fieldpath.IsNotFound(err) {
 		return false, errors.Wrapf(err, "failed to get the current deletion policy from MR: %s", u.Object.GetName())
 	}
-	if err == nil && v1.DeletionPolicy(p) == policy {
+	if checkCurrentPolicy && err == nil && v1.DeletionPolicy(p) == policy {
 		return false, nil
 	}
 	s := pg.stepConfiguration(step)
 	u.Metadata.Path = fmt.Sprintf("%s/%s.yaml", s.Name, getVersionedName(u.Object))
 	s.Patch.Files = append(s.Patch.Files, u.Metadata.Path)
-	s.ManualExecution = []string{fmt.Sprintf("kubectl patch %s %s --type='%s' --patch-file %s", getKindGroupName(u.Object), u.Object.GetName(), s.Patch.Type, u.Metadata.Path)}
+	s.ManualExecution = append(s.ManualExecution, fmt.Sprintf("kubectl patch %s %s --type='%s' --patch-file %s", getKindGroupName(u.Object), u.Object.GetName(), s.Patch.Type, s.Patch.Files[len(s.Patch.Files)-1]))
 	return true, errors.Wrapf(pg.target.Put(UnstructuredWithMetadata{
 		Object: unstructured.Unstructured{
 			Object: addNameGVK(u.Object, map[string]any{
