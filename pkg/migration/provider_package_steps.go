@@ -42,6 +42,9 @@ func (pg *PlanGenerator) convertProviderPackage(o UnstructuredWithMetadata) (boo
 		if err != nil {
 			return false, errors.Wrapf(err, "failed to call converter on Provider package: %s", pkg.Spec.Package)
 		}
+		if len(targetPkgs) == 0 {
+			continue
+		}
 		// TODO: if a configuration converter only converts a specific version,
 		// (or does not convert the given configuration),
 		// we will have a false positive. Better to compute and check
