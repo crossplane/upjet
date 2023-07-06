@@ -28,6 +28,8 @@ const (
 	errStepFailedFmt            = "failed to execute the step %q"
 )
 
+var _ Executor = &forkExecutor{}
+
 // forkExecutor executes Exec steps or steps with the `manualExecution` hints
 // by forking processes.
 type forkExecutor struct {
@@ -72,31 +74,33 @@ func NewForkExecutor(opts ...ForkExecutorOption) Executor {
 	return fe
 }
 
-func (f forkExecutor) Init(_ any) error {
+func (f forkExecutor) Init(_ map[string]any) error {
 	return nil
 }
 
-func (f forkExecutor) Step(s Step, _ any) (any, error) {
+func (f forkExecutor) Step(s Step, ctx map[string]any) error {
 	var cmd exec.Cmd
 	switch {
 	case s.Type == StepTypeExec:
-		return nil, errors.Wrapf(f.exec(f.executor.Command(s.Exec.Command, s.Exec.Args...)), errStepFailedFmt, s.Name)
+		f.logger.Debug("Command to be executed", "command", s.Exec.Command, "args", s.Exec.Args)
+		return errors.Wrapf(f.exec(ctx, f.executor.Command(s.Exec.Command, s.Exec.Args...)), errStepFailedFmt, s.Name)
 	// TODO: we had better have separate executors to handle the other types of
 	// steps
 	case len(s.ManualExecution) != 0:
 		for _, c := range s.ManualExecution {
+			f.logger.Debug("Command to be executed", "command", "sh", "args", []string{"-c", c})
 			cmd = f.executor.Command("sh", "-c", c)
-			if err := f.exec(cmd); err != nil {
-				return nil, errors.Wrapf(f.exec(cmd), errStepFailedFmt, s.Name)
+			if err := f.exec(ctx, cmd); err != nil {
+				return errors.Wrapf(err, errStepFailedFmt, s.Name)
 			}
 		}
-		return nil, nil
+		return nil
 	default:
-		return nil, errors.Wrap(NewUnsupportedStepTypeError(s), errForkExecutorNotSupported)
+		return errors.Wrap(NewUnsupportedStepTypeError(s), errForkExecutorNotSupported)
 	}
 }
 
-func (f forkExecutor) exec(cmd exec.Cmd) error {
+func (f forkExecutor) exec(ctx map[string]any, cmd exec.Cmd) error {
 	cmd.SetEnv(os.Environ())
 	if f.cwd != "" {
 		cmd.SetDir(f.cwd)
@@ -106,7 +110,8 @@ func (f forkExecutor) exec(cmd exec.Cmd) error {
 	if err != nil {
 		logMsg = "Command execution failed"
 	}
-	f.logger.Info(logMsg, "output", string(buff))
+	f.logger.Debug(logMsg, "output", string(buff))
+	ctx[KeyContextCombinedOutput] = buff
 	return errors.Wrapf(err, "failed to execute command")
 }
 
