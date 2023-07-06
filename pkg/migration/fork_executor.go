@@ -111,7 +111,9 @@ func (f forkExecutor) exec(ctx map[string]any, cmd exec.Cmd) error {
 		logMsg = "Command execution failed"
 	}
 	f.logger.Debug(logMsg, "output", string(buff))
-	ctx[KeyContextCombinedOutput] = buff
+	if ctx != nil {
+		ctx[KeyContextDiagnostics] = buff
+	}
 	return errors.Wrapf(err, "failed to execute command")
 }
 

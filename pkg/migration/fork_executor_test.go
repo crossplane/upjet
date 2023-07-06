@@ -112,7 +112,7 @@ func TestForkExecutorStep(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			fe := NewForkExecutor(WithExecutor(tc.fakeExec))
-			_, err := fe.Step(tc.step, nil)
+			err := fe.Step(tc.step, nil)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nStep(...): -want error, +got error:\n%s", name, diff)
 			}
