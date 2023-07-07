@@ -60,6 +60,14 @@ func setDeleteStep(name string, s *Step) {
 	}
 }
 
+func setExecStep(name string, s *Step) {
+	s.Name = name
+	s.Type = StepTypeExec
+	s.Exec = &ExecStep{
+		Command: "sh",
+	}
+}
+
 func (pg *PlanGenerator) commitSteps() {
 	if len(pg.Plan.Spec.stepMap) == 0 {
 		return
@@ -71,8 +79,39 @@ func (pg *PlanGenerator) commitSteps() {
 	}
 	sort.Strings(keys)
 	for _, s := range keys {
+		AddManualExecution(pg.Plan.Spec.stepMap[s])
 		pg.Plan.Spec.Steps = append(pg.Plan.Spec.Steps, *pg.Plan.Spec.stepMap[s])
 	}
+}
+
+// AddManualExecution sets the manual execution hint for
+// the specified step.
+func AddManualExecution(s *Step) {
+	switch s.Type {
+	case StepTypeExec:
+		s.ManualExecution = []string{fmt.Sprintf("%s %s %q", s.Exec.Command, s.Exec.Args[0], strings.Join(s.Exec.Args[1:], " "))}
+	case StepTypePatch:
+		for _, f := range s.Patch.Files {
+			s.ManualExecution = append(s.ManualExecution, fmt.Sprintf("kubectl patch --type='%s' -f %s --patch-file %s", s.Patch.Type, f, f))
+		}
+	case StepTypeApply:
+		for _, f := range s.Apply.Files {
+			s.ManualExecution = append(s.ManualExecution, fmt.Sprintf("kubectl apply -f %s", f))
+		}
+	case StepTypeDelete:
+		for _, r := range s.Delete.Resources {
+			s.ManualExecution = append(s.ManualExecution, fmt.Sprintf("kubectl delete %s %s", strings.Join([]string{r.Kind, r.Group}, "."), r.Name))
+		}
+	}
+}
+
+func (pg *PlanGenerator) stepEnabled(s step) bool {
+	for _, i := range pg.enabledSteps {
+		if i == s {
+			return true
+		}
+	}
+	return false
 }
 
 func computeJSONMergePathDoc(source, target unstructured.Unstructured) (map[string]any, error) {

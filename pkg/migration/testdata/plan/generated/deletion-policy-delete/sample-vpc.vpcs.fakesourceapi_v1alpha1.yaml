@@ -1,0 +1,6 @@
+apiVersion: fakesourceapi/v1alpha1
+kind: VPC
+metadata:
+  name: sample-vpc
+spec:
+  deletionPolicy: Delete

@@ -20,41 +20,58 @@ import (
 
 	xpmetav1 "github.com/crossplane/crossplane/apis/pkg/meta/v1"
 	xpmetav1alpha1 "github.com/crossplane/crossplane/apis/pkg/meta/v1alpha1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"github.com/pkg/errors"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 const (
 	// configuration migration steps follow any existing API migration steps
-	stepNewServiceScopedProvider = iota + stepAPIEnd + 1
+	stepBackupMRs = iota + stepAPIEnd + 1
+	stepBackupComposites
+	stepBackupClaims
+	stepOrphanMRs
+	stepNewFamilyProvider
+	stepCheckHealthFamilyProvider
+	stepNewServiceScopedProvider
+	stepCheckHealthNewServiceScopedProvider
 	stepConfigurationPackageDisableDepResolution
 	stepEditPackageLock
 	stepDeleteMonolithicProvider
+	stepActivateFamilyProviderRevision
+	stepCheckInstallationFamilyProviderRevision
 	stepActivateServiceScopedProviderRevision
+	stepCheckInstallationServiceScopedProviderRevision
 	stepEditConfigurationMetadata
+	stepBuildConfiguration
+	stepPushConfiguration
 	stepEditConfigurationPackage
 	stepConfigurationPackageEnableDepResolution
+	stepRevertOrphanMRs
+	stepConfigurationEnd
 )
 
+func getConfigurationMigrationSteps() []step {
+	steps := make([]step, 0, stepConfigurationEnd-stepAPIEnd-1)
+	for i := stepAPIEnd + 1; i < stepConfigurationEnd; i++ {
+		steps = append(steps, i)
+	}
+	return steps
+}
+
 const (
-	errConfigurationMetadataOutput = "failed to output configuration JSON merge document"
+	errConfigurationMetadataOutput = "failed to output configuration YAML document"
 )
 
 func (pg *PlanGenerator) convertConfigurationMetadata(o UnstructuredWithMetadata) error {
 	isConverted := false
-	var conf metav1.Object
-	var err error
+	conf, err := toConfigurationMetadata(o.Object)
+	if err != nil {
+		return err
+	}
 	for _, confConv := range pg.registry.configurationMetaConverters {
 		if confConv.re == nil || confConv.converter == nil || !confConv.re.MatchString(o.Object.GetName()) {
 			continue
 		}
 
-		conf, err = toConfigurationMetadata(o.Object)
-		if err != nil {
-			return err
-		}
 		switch o.Object.GroupVersionKind().Version {
 		case "v1alpha1":
 			err = confConv.converter.ConfigurationMetadataV1Alpha1(conf.(*xpmetav1alpha1.Configuration))
@@ -107,6 +124,12 @@ func (pg *PlanGenerator) stepConfigurationWithSubStep(s step, newSubStep bool) *
 
 	pg.Plan.Spec.stepMap[stepKey] = &Step{}
 	switch s { // nolint:gocritic,exhaustive
+	case stepOrphanMRs:
+		setPatchStep("deletion-policy-orphan", pg.Plan.Spec.stepMap[stepKey])
+	case stepRevertOrphanMRs:
+		setPatchStep("deletion-policy-delete", pg.Plan.Spec.stepMap[stepKey])
+	case stepNewFamilyProvider:
+		setApplyStep("new-ssop", pg.Plan.Spec.stepMap[stepKey])
 	case stepNewServiceScopedProvider:
 		setApplyStep("new-ssop", pg.Plan.Spec.stepMap[stepKey])
 	case stepConfigurationPackageDisableDepResolution:
@@ -119,10 +142,30 @@ func (pg *PlanGenerator) stepConfigurationWithSubStep(s step, newSubStep bool) *
 		setPatchStep("edit-package-lock", pg.Plan.Spec.stepMap[stepKey])
 	case stepDeleteMonolithicProvider:
 		setDeleteStep("delete-monolithic-provider", pg.Plan.Spec.stepMap[stepKey])
+	case stepActivateFamilyProviderRevision:
+		setPatchStep("activate-ssop", pg.Plan.Spec.stepMap[stepKey])
 	case stepActivateServiceScopedProviderRevision:
 		setPatchStep("activate-ssop", pg.Plan.Spec.stepMap[stepKey])
 	case stepEditConfigurationMetadata:
-		setPatchStep("edit-configuration-metadata", pg.Plan.Spec.stepMap[stepKey])
+		setExecStep("edit-configuration-metadata", pg.Plan.Spec.stepMap[stepKey])
+	case stepBackupMRs:
+		setExecStep("backup-managed-resources", pg.Plan.Spec.stepMap[stepKey])
+	case stepBackupComposites:
+		setExecStep("backup-composite-resources", pg.Plan.Spec.stepMap[stepKey])
+	case stepBackupClaims:
+		setExecStep("backup-claim-resources", pg.Plan.Spec.stepMap[stepKey])
+	case stepCheckHealthFamilyProvider:
+		setExecStep("wait-for-healthy", pg.Plan.Spec.stepMap[stepKey])
+	case stepCheckHealthNewServiceScopedProvider:
+		setExecStep("wait-for-healthy", pg.Plan.Spec.stepMap[stepKey])
+	case stepCheckInstallationFamilyProviderRevision:
+		setExecStep("wait-for-installed", pg.Plan.Spec.stepMap[stepKey])
+	case stepCheckInstallationServiceScopedProviderRevision:
+		setExecStep("wait-for-installed", pg.Plan.Spec.stepMap[stepKey])
+	case stepBuildConfiguration:
+		setExecStep("build-configuration", pg.Plan.Spec.stepMap[stepKey])
+	case stepPushConfiguration:
+		setExecStep("push-configuration", pg.Plan.Spec.stepMap[stepKey])
 	default:
 		panic(fmt.Sprintf(errInvalidStepFmt, s))
 	}
@@ -132,15 +175,6 @@ func (pg *PlanGenerator) stepConfigurationWithSubStep(s step, newSubStep bool) *
 func (pg *PlanGenerator) stepEditConfigurationMetadata(source UnstructuredWithMetadata, target *UnstructuredWithMetadata) error {
 	s := pg.stepConfiguration(stepEditConfigurationMetadata)
 	target.Metadata.Path = fmt.Sprintf("%s/%s.yaml", s.Name, getVersionedName(target.Object))
-	s.Patch.Files = append(s.Patch.Files, target.Metadata.Path)
-	patchMap, err := computeJSONMergePathDoc(source.Object, target.Object)
-	if err != nil {
-		return err
-	}
-	return errors.Wrap(pg.target.Put(UnstructuredWithMetadata{
-		Object: unstructured.Unstructured{
-			Object: addNameGVK(target.Object, patchMap),
-		},
-		Metadata: target.Metadata,
-	}), errConfigurationMetadataOutput)
+	s.Exec.Args = []string{"-c", fmt.Sprintf("cp %s %s", target.Metadata.Path, source.Metadata.Path)}
+	return errors.Wrap(pg.target.Put(*target), errConfigurationMetadataOutput)
 }

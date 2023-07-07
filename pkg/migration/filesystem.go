@@ -103,7 +103,8 @@ func (fs *FileSystemSource) Reset() error {
 
 // FileSystemTarget is a target implementation to write/patch/delete resources to file system
 type FileSystemTarget struct {
-	afero afero.Afero
+	afero  afero.Afero
+	parent string
 }
 
 // FileSystemTargetOption allows you to configure FileSystemTarget
@@ -113,6 +114,13 @@ type FileSystemTargetOption func(*FileSystemTarget)
 func FtWithFileSystem(f afero.Fs) FileSystemTargetOption {
 	return func(ft *FileSystemTarget) {
 		ft.afero = afero.Afero{Fs: f}
+	}
+}
+
+// WithParentDirectory configures the parent directory for the FileSystemTarget
+func WithParentDirectory(parent string) FileSystemTargetOption {
+	return func(ft *FileSystemTarget) {
+		ft.parent = parent
 	}
 }
 
@@ -133,11 +141,11 @@ func (ft *FileSystemTarget) Put(o UnstructuredWithMetadata) error {
 	if err != nil {
 		return errors.Wrap(err, "cannot marshal object")
 	}
-	if err := os.MkdirAll(filepath.Dir(o.Metadata.Path), 0o750); err != nil {
+	if err := os.MkdirAll(filepath.Join(ft.parent, filepath.Dir(o.Metadata.Path)), 0o750); err != nil {
 		return errors.Wrapf(err, "cannot mkdirall: %s", filepath.Dir(o.Metadata.Path))
 	}
 	if o.Metadata.Parents != "" {
-		f, err := ft.afero.OpenFile(o.Metadata.Path, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+		f, err := ft.afero.OpenFile(filepath.Join(ft.parent, o.Metadata.Path), os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 		if err != nil {
 			return errors.Wrap(err, "cannot open file")
 		}
@@ -148,7 +156,7 @@ func (ft *FileSystemTarget) Put(o UnstructuredWithMetadata) error {
 			return errors.Wrap(err, "cannot write file")
 		}
 	} else {
-		f, err := ft.afero.Create(o.Metadata.Path)
+		f, err := ft.afero.Create(filepath.Join(ft.parent, o.Metadata.Path))
 		if err != nil {
 			return errors.Wrap(err, "cannot create file")
 		}

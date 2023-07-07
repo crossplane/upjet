@@ -16,7 +16,9 @@ package migration
 
 import (
 	"fmt"
+	"strings"
 
+	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
@@ -26,7 +28,7 @@ const (
 	errActivateSSOP      = "failed to put the activated SSOP package: %s"
 )
 
-func (pg *PlanGenerator) convertProviderPackage(o UnstructuredWithMetadata) (bool, error) {
+func (pg *PlanGenerator) convertProviderPackage(o UnstructuredWithMetadata) (bool, error) { //nolint:gocyclo
 	pkg, err := toProviderPackage(o.Object)
 	if err != nil {
 		return false, err
@@ -39,6 +41,9 @@ func (pg *PlanGenerator) convertProviderPackage(o UnstructuredWithMetadata) (boo
 		targetPkgs, err := pkgConv.converter.ProviderPackageV1(*pkg)
 		if err != nil {
 			return false, errors.Wrapf(err, "failed to call converter on Provider package: %s", pkg.Spec.Package)
+		}
+		if len(targetPkgs) == 0 {
+			continue
 		}
 		// TODO: if a configuration converter only converts a specific version,
 		// (or does not convert the given configuration),
@@ -59,13 +64,19 @@ func (pg *PlanGenerator) convertProviderPackage(o UnstructuredWithMetadata) (boo
 		if err := pg.stepActivateSSOPs(converted); err != nil {
 			return false, err
 		}
+		if err := pg.stepCheckHealthOfNewProvider(o, converted); err != nil {
+			return false, err
+		}
+		if err := pg.stepCheckInstallationOfNewProvider(o, converted); err != nil {
+			return false, err
+		}
 	}
 	return isConverted, nil
 }
 
 func (pg *PlanGenerator) stepDeleteMonolith(source UnstructuredWithMetadata) error {
 	// delete the monolithic provider package
-	s := pg.stepConfiguration(stepDeleteMonolithicProvider)
+	s := pg.stepConfigurationWithSubStep(stepDeleteMonolithicProvider, true)
 	source.Metadata.Path = fmt.Sprintf("%s/%s.yaml", s.Name, getVersionedName(source.Object))
 	s.Delete.Resources = []Resource{
 		{
@@ -78,7 +89,16 @@ func (pg *PlanGenerator) stepDeleteMonolith(source UnstructuredWithMetadata) err
 
 // add steps for the new SSOPs
 func (pg *PlanGenerator) stepNewSSOPs(source UnstructuredWithMetadata, targets []*UnstructuredWithMetadata) error {
-	s := pg.stepConfigurationWithSubStep(stepNewServiceScopedProvider, true)
+	var s *Step
+	isFamilyConfig, err := checkContainsFamilyConfigProvider(targets)
+	if err != nil {
+		return errors.Wrapf(err, "could not decide whether the provider family config")
+	}
+	if isFamilyConfig {
+		s = pg.stepConfigurationWithSubStep(stepNewFamilyProvider, true)
+	} else {
+		s = pg.stepConfigurationWithSubStep(stepNewServiceScopedProvider, true)
+	}
 	for _, t := range targets {
 		t.Object.Object = addGVK(source.Object, t.Object.Object)
 		t.Metadata.Path = fmt.Sprintf("%s/%s.yaml", s.Name, getVersionedName(t.Object))
@@ -92,7 +112,16 @@ func (pg *PlanGenerator) stepNewSSOPs(source UnstructuredWithMetadata, targets [
 
 // add steps for activating SSOPs
 func (pg *PlanGenerator) stepActivateSSOPs(targets []*UnstructuredWithMetadata) error {
-	s := pg.stepConfigurationWithSubStep(stepActivateServiceScopedProviderRevision, true)
+	var s *Step
+	isFamilyConfig, err := checkContainsFamilyConfigProvider(targets)
+	if err != nil {
+		return errors.Wrapf(err, "could not decide whether the provider family config")
+	}
+	if isFamilyConfig {
+		s = pg.stepConfigurationWithSubStep(stepActivateFamilyProviderRevision, true)
+	} else {
+		s = pg.stepConfigurationWithSubStep(stepActivateServiceScopedProviderRevision, true)
+	}
 	for _, t := range targets {
 		t.Metadata.Path = fmt.Sprintf("%s/%s.yaml", s.Name, getVersionedName(t.Object))
 		s.Patch.Files = append(s.Patch.Files, t.Metadata.Path)
@@ -110,4 +139,18 @@ func (pg *PlanGenerator) stepActivateSSOPs(targets []*UnstructuredWithMetadata) 
 		}
 	}
 	return nil
+}
+
+func checkContainsFamilyConfigProvider(targets []*UnstructuredWithMetadata) (bool, error) {
+	for _, t := range targets {
+		paved := fieldpath.Pave(t.Object.Object)
+		pkg, err := paved.GetString("spec.package")
+		if err != nil {
+			return false, errors.Wrap(err, "could not get package of provider")
+		}
+		if strings.Contains(pkg, "provider-family") {
+			return true, nil
+		}
+	}
+	return false, nil
 }

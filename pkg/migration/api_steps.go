@@ -42,11 +42,21 @@ const (
 	stepAPIEnd
 )
 
+func getAPIMigrationSteps() []step {
+	steps := make([]step, 0, stepAPIEnd)
+	for i := step(0); i < stepAPIEnd; i++ {
+		steps = append(steps, i)
+	}
+	return steps
+}
+
 func (pg *PlanGenerator) addStepsForManagedResource(u *UnstructuredWithMetadata) error {
-	if _, ok, err := toManagedResource(pg.registry.scheme, u.Object); err != nil || !ok {
-		// not a managed resource or unable to determine
-		// whether it's a managed resource
-		return nil // nolint:nilerr
+	if u.Metadata.Category != CategoryManaged {
+		if _, ok, err := toManagedResource(pg.registry.scheme, u.Object); err != nil || !ok {
+			// not a managed resource or unable to determine
+			// whether it's a managed resource
+			return nil // nolint:nilerr
+		}
 	}
 	qName := getQualifiedName(u.Object)
 	if err := pg.stepPauseManagedResource(u, qName); err != nil {
@@ -56,28 +66,48 @@ func (pg *PlanGenerator) addStepsForManagedResource(u *UnstructuredWithMetadata)
 		return err
 	}
 	pg.stepDeleteOldManagedResource(u)
-	return nil
+	orphaned, err := pg.stepOrhanMR(*u)
+	if err != nil {
+		return err
+	}
+	if !orphaned {
+		return nil
+	}
+	_, err = pg.stepRevertOrhanMR(*u)
+	return err
 }
 
 func (pg *PlanGenerator) stepStartManagedResource(u *UnstructuredWithMetadata) error {
+	if !pg.stepEnabled(stepStartManaged) {
+		return nil
+	}
 	u.Metadata.Path = fmt.Sprintf("%s/%s.yaml", pg.stepAPI(stepStartManaged).Name, getQualifiedName(u.Object))
 	pg.stepAPI(stepStartManaged).Patch.Files = append(pg.stepAPI(stepStartManaged).Patch.Files, u.Metadata.Path)
 	return pg.pause(*u, false)
 }
 
 func (pg *PlanGenerator) stepPauseManagedResource(u *UnstructuredWithMetadata, qName string) error {
+	if !pg.stepEnabled(stepPauseManaged) {
+		return nil
+	}
 	u.Metadata.Path = fmt.Sprintf("%s/%s.yaml", pg.stepAPI(stepPauseManaged).Name, qName)
 	pg.stepAPI(stepPauseManaged).Patch.Files = append(pg.stepAPI(stepPauseManaged).Patch.Files, u.Metadata.Path)
 	return pg.pause(*u, true)
 }
 
 func (pg *PlanGenerator) stepPauseComposite(u *UnstructuredWithMetadata) error {
+	if !pg.stepEnabled(stepPauseComposites) {
+		return nil
+	}
 	u.Metadata.Path = fmt.Sprintf("%s/%s.yaml", pg.stepAPI(stepPauseComposites).Name, getQualifiedName(u.Object))
 	pg.stepAPI(stepPauseComposites).Patch.Files = append(pg.stepAPI(stepPauseComposites).Patch.Files, u.Metadata.Path)
 	return pg.pause(*u, true)
 }
 
 func (pg *PlanGenerator) stepOrphanManagedResource(u *UnstructuredWithMetadata, qName string) error {
+	if !pg.stepEnabled(stepDeletionPolicyOrphan) {
+		return nil
+	}
 	u.Metadata.Path = fmt.Sprintf("%s/%s.yaml", pg.stepAPI(stepDeletionPolicyOrphan).Name, qName)
 	pg.stepAPI(stepDeletionPolicyOrphan).Patch.Files = append(pg.stepAPI(stepDeletionPolicyOrphan).Patch.Files, u.Metadata.Path)
 	return errors.Wrap(pg.target.Put(UnstructuredWithMetadata{
@@ -93,6 +123,9 @@ func (pg *PlanGenerator) stepOrphanManagedResource(u *UnstructuredWithMetadata, 
 }
 
 func (pg *PlanGenerator) stepDeleteOldManagedResource(u *UnstructuredWithMetadata) {
+	if !pg.stepEnabled(stepDeleteOldManaged) {
+		return
+	}
 	pg.stepAPI(stepDeleteOldManaged).Delete.Resources = append(pg.stepAPI(stepDeleteOldManaged).Delete.Resources,
 		Resource{
 			GroupVersionKind: FromGroupVersionKind(u.Object.GroupVersionKind()),
@@ -101,6 +134,9 @@ func (pg *PlanGenerator) stepDeleteOldManagedResource(u *UnstructuredWithMetadat
 }
 
 func (pg *PlanGenerator) stepNewManagedResource(u *UnstructuredWithMetadata) error {
+	if !pg.stepEnabled(stepCreateNewManaged) {
+		return nil
+	}
 	meta.AddAnnotations(&u.Object, map[string]string{meta.AnnotationKeyReconciliationPaused: "true"})
 	u.Metadata.Path = fmt.Sprintf("%s/%s.yaml", pg.stepAPI(stepCreateNewManaged).Name, getQualifiedName(u.Object))
 	pg.stepAPI(stepCreateNewManaged).Apply.Files = append(pg.stepAPI(stepCreateNewManaged).Apply.Files, u.Metadata.Path)
@@ -111,6 +147,9 @@ func (pg *PlanGenerator) stepNewManagedResource(u *UnstructuredWithMetadata) err
 }
 
 func (pg *PlanGenerator) stepNewComposition(u *UnstructuredWithMetadata) error {
+	if !pg.stepEnabled(stepNewCompositions) {
+		return nil
+	}
 	u.Metadata.Path = fmt.Sprintf("%s/%s.yaml", pg.stepAPI(stepNewCompositions).Name, getQualifiedName(u.Object))
 	pg.stepAPI(stepNewCompositions).Apply.Files = append(pg.stepAPI(stepNewCompositions).Apply.Files, u.Metadata.Path)
 	if err := pg.target.Put(*u); err != nil {
@@ -120,6 +159,9 @@ func (pg *PlanGenerator) stepNewComposition(u *UnstructuredWithMetadata) error {
 }
 
 func (pg *PlanGenerator) stepStartComposites(composites []UnstructuredWithMetadata) error {
+	if !pg.stepEnabled(stepStartComposites) {
+		return nil
+	}
 	for _, u := range composites {
 		u.Metadata.Path = fmt.Sprintf("%s/%s.yaml", pg.stepAPI(stepStartComposites).Name, getQualifiedName(u.Object))
 		pg.stepAPI(stepStartComposites).Patch.Files = append(pg.stepAPI(stepStartComposites).Patch.Files, u.Metadata.Path)
@@ -148,6 +190,9 @@ func (pg *PlanGenerator) pause(u UnstructuredWithMetadata, isPaused bool) error 
 }
 
 func (pg *PlanGenerator) stepEditComposites(composites []UnstructuredWithMetadata, convertedMap map[corev1.ObjectReference][]UnstructuredWithMetadata, convertedComposition map[string]string) error {
+	if !pg.stepEnabled(stepEditComposites) {
+		return nil
+	}
 	for _, u := range composites {
 		cp := composite.Unstructured{Unstructured: u.Object}
 		refs := cp.GetResourceReferences()
@@ -194,6 +239,9 @@ func (pg *PlanGenerator) stepEditComposites(composites []UnstructuredWithMetadat
 }
 
 func (pg *PlanGenerator) stepEditClaims(claims []UnstructuredWithMetadata, convertedComposition map[string]string) error {
+	if !pg.stepEnabled(stepEditClaims) {
+		return nil
+	}
 	for _, u := range claims {
 		cm := claim.Unstructured{Unstructured: u.Object}
 		if ref := cm.GetCompositionReference(); ref != nil && convertedComposition[ref.Name] != "" {

@@ -140,11 +140,11 @@ type Target interface {
 type Executor interface {
 	// Init initializes an executor using the supplied executor specific
 	// configuration data.
-	Init(config any) error
+	Init(config map[string]any) error
 	// Step asks the executor to execute the next step passing any available
 	// context from the previous step, and returns any new context to be passed
 	// to the next step if there exists one.
-	Step(s Step, ctx any) (any, error)
+	Step(s Step, ctx map[string]any) error
 	// Destroy is called when all the steps have been executed,
 	// or a step has returned an error, and we would like to stop
 	// executing the plan.
@@ -160,4 +160,13 @@ type UnstructuredPreProcessor interface {
 	// PreProcess is called for a manifest read by the Source
 	// before any converters are run.
 	PreProcess(u UnstructuredWithMetadata) error
+}
+
+// CategoricalConverter is a converter that converts resources of a given
+// Category. Because it receives an unstructured argument, it should be
+// used for implementing generic conversion functions acting on a specific
+// category, such as setting a deletion policy on all the managed resources
+// observed by the migration Source.
+type CategoricalConverter interface {
+	Convert(u *UnstructuredWithMetadata) error
 }
