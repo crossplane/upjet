@@ -13,7 +13,7 @@ Crossplane provider supports a subset of the underlying Cloud provider's
 authentication mechanisms and this subset is currently implemented in-tree,
 i.e., in the Crossplane provider's repo, there exists a CRD that's
 conventionally named as `ProviderConfig` and each managed resource of the
-provider has a [v1.Reference][v1.reference] to a `ProviderConfig` CR. This
+provider has a [v1.Reference](https://docs.crossplane.io/v1.12/concepts/managed-resources/#providerconfigref) to a `ProviderConfig` CR. This
 `ProviderConfig` holds the authentication configuration (chosen authentication method,
 any required credentials for that method, etc.) together with any other provider
 specific configuration. Different authentication methods and/or different sets
@@ -22,7 +22,7 @@ CRs and by having different managed resources refer to these `ProviderConfig`
 instances. 
 
 The Crossplane provider establishes an identity for the requests it will issue
-to the Cloud provider in the [managed.ExternalConnecter][managed.ExternalConnecter]'s `Connect`
+to the Cloud provider in the [managed.ExternalConnecter](https://pkg.go.dev/github.com/crossplane/crossplane-runtime@v0.19.2/pkg/reconciler/managed#ExternalConnecter)'s `Connect`
 implementation. This involves calling the associated authentication functions from
 the Cloud SDK libraries (such as the [AWS SDK for Go][aws-sdk] or the [Azure
 SDK for Go][azure-sdk]) with the supplied configuration and credentials from the
@@ -59,7 +59,7 @@ provider credential set) in the cluster solely using RBAC. This is because:
    tenants in the cluster via RBAC rules, it's not possible to prevent them from
    _using_ those credentials solely with RBAC.
 
-As discussed in detail in the [Crossplane Multi-tenancy Guide][xp-mt],
+As discussed in detail in the [Crossplane Multi-tenancy Guide](https://docs.crossplane.io/knowledge-base/guides/multi-tenant/),
 Crossplane is opinionated about the different personas in an organization adopting
 Crossplane. We make a distinction between the _infrastructure operators_ (or
 _platform builders_) who are expected to manage cluster-scoped resources (like
@@ -82,7 +82,7 @@ This distinction is currently possible with Crossplane because:
    credentials in the cluster and if the exposed XR API allows a `Claim` to
    reference cross-tenant `ProviderConfig`s, then a misbehaving tenant subject
    can `create` a `Claim` which references some other tenant's credential set.
-   Thus in our multi-tenancy [guide][xp-mt], we propose a security scheme where:
+   Thus in our multi-tenancy [guide](https://docs.crossplane.io/knowledge-base/guides/multi-tenant/), we propose a security scheme where:
     1. The infrastructure operator follows a specific naming convention for the
        `ProviderConfig`s she provisions: The `ProviderConfig`s for different
        tenants are named after those tenants' namespaces. 
@@ -96,7 +96,7 @@ This distinction is currently possible with Crossplane because:
        `ProviderConfig` with the same name as the tenant's namespace). 
     4. We also suggest that the naming conventions imposed by this scheme on
        `ProviderConfig`s can be relaxed to some degree by using `Composition`'s
-       [patching capabilities][ref-compositions]. For instance, a string
+       [patching capabilities](https://docs.crossplane.io/v1.12/concepts/composition/#compositions). For instance, a string
        [transform][patch-transform] of type `Format` can be used to combine the
        `Claim`'s namespace with an XR field's value to allow multiple
        `ProviderConfig`s per tenant and to allow selection of the
@@ -229,7 +229,7 @@ a single Kubernetes service account under which the provider runs.
 Apart from a vulnerability perspective, there are also some other limitations to
 this architecture, which are related to identity-based authentication.
 
-**Note**: The [multi-tenancy guide][xp-mt] also mentions multi-cluster
+**Note**: The [multi-tenancy guide](https://docs.crossplane.io/knowledge-base/guides/multi-tenant/) also mentions multi-cluster
 multi-tenancy, where tenants are run on their respective Kubernetes clusters.
 This form of multi-tenancy is out of scope in this document. 
  
@@ -533,9 +533,9 @@ semantics.
 [RBAC]: https://kubernetes.io/docs/reference/access-authn-authz/rbac/
 [k8s-sa]:
     https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/
-[xp-mt]: https://crossplane.io/docs/v1.7/guides/multi-tenant.html
+[xp-mt]: https://docs.crossplane.io/knowledge-base/guides/multi-tenant/
 [xp-2093]: https://github.com/crossplane/crossplane/pull/2093
-[ref-compositions]: https://crossplane.io/docs/v1.7/reference/composition.html
+[ref-compositions]: https://docs.crossplane.io/v1.12/concepts/composition/#compositions
 [patch-transform]:
     https://github.com/crossplane/crossplane/blob/6c1b06507db47801c7a1c7d91704783e8d13856f/apis/apiextensions/v1/composition_transforms.go#L64
 [kyverno]: https://kyverno.io/
