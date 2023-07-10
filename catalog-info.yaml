@@ -1,0 +1,12 @@
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: upjet
+  description: "A code generation framework and runtime for Crossplane providers"
+  links:
+    - url: https://github.com/upbound/upjet/blob/main/docs/README.md
+      title: Upjet Readme
+  annotations:
+    github.com/project-slug: upbound/upjet
+spec:
+  owner: team:extensions
