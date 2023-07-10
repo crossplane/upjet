@@ -1,5 +1,5 @@
 apiVersion: backstage.io/v1alpha1
-kind: System
+kind: Component
 metadata:
   name: upjet
   description: "A code generation framework and runtime for Crossplane providers"
@@ -9,4 +9,6 @@ metadata:
   annotations:
     github.com/project-slug: upbound/upjet
 spec:
+  type: library
+  lifecycle: production
   owner: team:extensions
