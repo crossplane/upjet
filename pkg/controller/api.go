@@ -104,7 +104,20 @@ func (ac *APICallbacks) callbackFn(name, op string) terraform.CallbackFn {
 
 // Create makes sure the error is saved in async operation condition.
 func (ac *APICallbacks) Create(name string) terraform.CallbackFn {
-	return ac.callbackFn(name, "create")
+	return func(err error, ctx context.Context) error {
+		cErr := ac.callbackFn(name, "create")(err, ctx)
+		switch {
+		case err != nil:
+			ac.EventHandler.requestReconcile(name)
+		default:
+			ac.EventHandler.rateLimiter.Forget(reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name: name,
+				},
+			})
+		}
+		return cErr
+	}
 }
 
 // Update makes sure the error is saved in async operation condition.
