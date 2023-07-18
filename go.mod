@@ -3,6 +3,7 @@ module github.com/upbound/upjet
 go 1.20
 
 require (
+	dario.cat/mergo v1.0.0
 	github.com/antchfx/htmlquery v1.2.4
 	github.com/crossplane/crossplane v1.10.0
 	github.com/crossplane/crossplane-runtime v0.20.0
@@ -37,7 +38,6 @@ require (
 )
 
 require (
-	dario.cat/mergo v1.0.0 // indirect
 	github.com/agext/levenshtein v1.2.3 // indirect
 	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751 // indirect
 	github.com/alecthomas/units v0.0.0-20211218093645-b94a6e3cc137 // indirect

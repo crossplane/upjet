@@ -11,6 +11,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"dario.cat/mergo"
+
+	"github.com/crossplane/crossplane-runtime/pkg/feature"
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/pkg/errors"
 	"github.com/spf13/afero"
@@ -44,6 +47,13 @@ func WithFileSystem(fs afero.Fs) FileProducerOption {
 	}
 }
 
+// WithFileProducerFeatures configures the active features for the FileProducer.
+func WithFileProducerFeatures(f *feature.Flags) FileProducerOption {
+	return func(fp *FileProducer) {
+		fp.features = f
+	}
+}
+
 // NewFileProducer returns a new FileProducer.
 func NewFileProducer(ctx context.Context, client resource.SecretClient, dir string, tr resource.Terraformed, ts Setup, cfg *config.Resource, opts ...FileProducerOption) (*FileProducer, error) {
 	fp := &FileProducer{
@@ -52,14 +62,39 @@ func NewFileProducer(ctx context.Context, client resource.SecretClient, dir stri
 		Dir:      dir,
 		Config:   cfg,
 		fs:       afero.Afero{Fs: afero.NewOsFs()},
+		features: &feature.Flags{},
 	}
 	for _, f := range opts {
 		f(fp)
 	}
+
 	params, err := tr.GetParameters()
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot get parameters")
 	}
+
+	// Note(lsviben):We need to check if the management policies feature is
+	// enabled before attempting to get the ignorable fields or merge them
+	// with the forProvider fields.
+	if fp.features.Enabled(feature.EnableAlphaManagementPolicies) {
+		initParams, err := tr.GetInitParameters()
+		if err != nil {
+			return nil, errors.Wrapf(err, "cannot get the init parameters for the resource %q", tr.GetName())
+		}
+
+		// get fields which should be in the ignore_changes lifecycle block
+		fp.ignored = resource.GetTerraformIgnoreChanges(params, initParams)
+
+		// TODO(lsviben): Currently initProvider fields override forProvider
+		// fields if set. It should be the other way around.
+		// merge the initProvider and forProvider parameters
+		// https://github.com/upbound/upjet/issues/240
+		err = mergo.Merge(&params, initParams, mergo.WithSliceDeepCopy)
+		if err != nil {
+			return nil, errors.Wrapf(err, "cannot merge the spec.initProvider and spec.forProvider parameters for the resource %q", tr.GetName())
+		}
+	}
+
 	if err = resource.GetSensitiveParameters(ctx, client, tr, params, tr.GetConnectionDetailsMapping()); err != nil {
 		return nil, errors.Wrap(err, "cannot get sensitive parameters")
 	}
@@ -88,7 +123,9 @@ type FileProducer struct {
 
 	parameters  map[string]any
 	observation map[string]any
+	ignored     []string
 	fs          afero.Afero
+	features    *feature.Flags
 }
 
 // WriteMainTF writes the content main configuration file that has the desired
@@ -96,9 +133,15 @@ type FileProducer struct {
 func (fp *FileProducer) WriteMainTF() (ProviderHandle, error) {
 	// If the resource is in a deletion process, we need to remove the deletion
 	// protection.
-	fp.parameters["lifecycle"] = map[string]bool{
+	lifecycle := map[string]any{
 		"prevent_destroy": !meta.WasDeleted(fp.Resource),
 	}
+
+	if len(fp.ignored) != 0 {
+		lifecycle["ignore_changes"] = fp.ignored
+	}
+
+	fp.parameters["lifecycle"] = lifecycle
 
 	// Add operation timeouts if any timeout configured for the resource
 	if tp := timeouts(fp.Config.OperationTimeouts).asParameter(); len(tp) != 0 {
