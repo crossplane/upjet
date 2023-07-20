@@ -36,20 +36,22 @@ const (
 	errInvalidStepFmt        = "invalid step ID: %d"
 )
 
-func setApplyStep(name string, s *Step) {
+func setApplyStep(name, description string, s *Step) {
 	s.Name = name
 	s.Type = StepTypeApply
 	s.Apply = &ApplyStep{}
+	s.Description = description
 }
 
-func setPatchStep(name string, s *Step) {
+func setPatchStep(name, description string, s *Step) {
 	s.Name = name
 	s.Type = StepTypePatch
 	s.Patch = &PatchStep{}
 	s.Patch.Type = PatchTypeMerge
+	s.Description = description
 }
 
-func setDeleteStep(name string, s *Step) {
+func setDeleteStep(name, description string, s *Step) {
 	s.Name = name
 	s.Type = StepTypeDelete
 	deletePolicy := FinalizerPolicyRemove
@@ -58,14 +60,16 @@ func setDeleteStep(name string, s *Step) {
 			FinalizerPolicy: &deletePolicy,
 		},
 	}
+	s.Description = description
 }
 
-func setExecStep(name string, s *Step) {
+func setExecStep(name, description string, s *Step) {
 	s.Name = name
 	s.Type = StepTypeExec
 	s.Exec = &ExecStep{
 		Command: "sh",
 	}
+	s.Description = description
 }
 
 func (pg *PlanGenerator) commitSteps() {

@@ -78,6 +78,8 @@ const (
 type Step struct {
 	// Name is the name of this Step
 	Name string `json:"name"`
+	// Description is description of the Step.
+	Description string
 	// Type is the type of this Step.
 	// Can be one of Apply, Delete, etc.
 	Type StepType `json:"type"`
