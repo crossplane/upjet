@@ -1,6 +1,6 @@
 module github.com/upbound/upjet
 
-go 1.19
+go 1.20
 
 require (
 	github.com/antchfx/htmlquery v1.2.4

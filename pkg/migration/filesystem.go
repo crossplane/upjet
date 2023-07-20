@@ -152,7 +152,7 @@ func (ft *FileSystemTarget) Put(o UnstructuredWithMetadata) error {
 
 		defer f.Close() //nolint:errcheck
 
-		if _, err = f.WriteString(fmt.Sprintf("\n---\n\n%s", string(b))); err != nil {
+		if _, err = fmt.Fprintf(f, "\n---\n\n%s", string(b)); err != nil {
 			return errors.Wrap(err, "cannot write file")
 		}
 	} else {
