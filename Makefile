@@ -4,8 +4,8 @@
 PROJECT_NAME := upjet
 PROJECT_REPO := github.com/upbound/$(PROJECT_NAME)
 
-GOLANGCILINT_VERSION ?= 1.50.0
-GO_REQUIRED_VERSION ?= 1.19
+GOLANGCILINT_VERSION ?= 1.53.3
+GO_REQUIRED_VERSION ?= 1.20
 
 PLATFORMS ?= linux_amd64 linux_arm64
 # -include will silently skip missing files, which allows us
