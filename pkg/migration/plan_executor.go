@@ -26,9 +26,11 @@ const (
 // PlanExecutor drives the execution of a plan's steps and
 // uses the configured `executors` to execute those steps.
 type PlanExecutor struct {
-	executors []Executor
-	plan      Plan
-	callback  ExecutorCallback
+	executors          []Executor
+	plan               Plan
+	callback           ExecutorCallback
+	LastSuccessfulStep int
+	StartIndex         int
 }
 
 // Action represents an action to be taken by the PlanExecutor.
@@ -69,6 +71,12 @@ func WithExecutorCallback(cb ExecutorCallback) PlanExecutorOption {
 	}
 }
 
+func WithStartIndex(startIndex int) PlanExecutorOption {
+	return func(pe *PlanExecutor) {
+		pe.StartIndex = startIndex
+	}
+}
+
 // ExecutorCallback is the interface for the callback implementations
 // to be notified while executing each Step of a migration Plan.
 type ExecutorCallback interface {
@@ -103,7 +111,7 @@ func NewPlanExecutor(plan Plan, executors []Executor, opts ...PlanExecutorOption
 
 func (pe *PlanExecutor) Execute() error { //nolint:gocyclo // easier to follow this way
 	ctx := make(map[string]any)
-	for i := 0; i < len(pe.plan.Spec.Steps); i++ {
+	for i := pe.StartIndex; i < len(pe.plan.Spec.Steps); i++ {
 		var r CallbackResult
 		if pe.callback != nil {
 			r = pe.callback.StepToExecute(pe.plan.Spec.Steps[i], i)
@@ -111,6 +119,7 @@ func (pe *PlanExecutor) Execute() error { //nolint:gocyclo // easier to follow t
 			case ActionCancel:
 				return nil
 			case ActionSkip:
+				pe.LastSuccessfulStep = i
 				continue
 			case ActionContinue, ActionRepeat:
 			}
@@ -124,6 +133,7 @@ func (pe *PlanExecutor) Execute() error { //nolint:gocyclo // easier to follow t
 			}
 		} else if pe.callback != nil {
 			r = pe.callback.StepSucceeded(pe.plan.Spec.Steps[i], i, diag)
+			pe.LastSuccessfulStep = i
 		}
 
 		switch r.Action {
