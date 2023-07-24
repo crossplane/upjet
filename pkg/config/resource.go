@@ -12,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/util/json"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -226,9 +227,9 @@ func NewTagger(kube client.Client, fieldName string) *Tagger {
 
 // Initialize is a custom initializer for setting external tags
 func (t *Tagger) Initialize(ctx context.Context, mg xpresource.Managed) error {
-	if mg.GetManagementPolicy() == xpv1.ManagementObserveOnly {
+	if sets.New[xpv1.ManagementAction](mg.GetManagementPolicies()...).Equal(sets.New[xpv1.ManagementAction](xpv1.ManagementActionObserve)) {
 		// We don't want to add tags to the spec.forProvider if the resource is
-		// in ObserveOnly mode.
+		// only being Observed.
 		return nil
 	}
 	paved, err := fieldpath.PaveObject(mg)

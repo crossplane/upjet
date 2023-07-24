@@ -133,7 +133,7 @@ func (g *Builder) AddToBuilder(typeNames *TypeNames, r *resource) (*types.Named,
 
 	for _, p := range r.topLevelRequiredParams {
 		g.validationRules += "\n"
-		g.validationRules += fmt.Sprintf(`// +kubebuilder:validation:XValidation:rule="self.managementPolicy == 'ObserveOnly' || has(self.forProvider.%s)",message="%s is a required parameter"`, p, p)
+		g.validationRules += fmt.Sprintf(`// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.%s)",message="%s is a required parameter"`, p, p)
 	}
 
 	return paramType, obsType

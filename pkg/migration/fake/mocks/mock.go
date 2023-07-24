@@ -220,18 +220,18 @@ func (mr *MockManagedMockRecorder) GetManagedFields() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetManagedFields", reflect.TypeOf((*MockManaged)(nil).GetManagedFields))
 }
 
-// GetManagementPolicy mocks base method.
-func (m *MockManaged) GetManagementPolicy() v1.ManagementPolicy {
+// GetManagementPolicies mocks base method.
+func (m *MockManaged) GetManagementPolicies() v1.ManagementPolicies {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetManagementPolicy")
-	ret0, _ := ret[0].(v1.ManagementPolicy)
+	ret := m.ctrl.Call(m, "GetManagementPolicies")
+	ret0, _ := ret[0].(v1.ManagementPolicies)
 	return ret0
 }
 
-// GetManagementPolicy indicates an expected call of GetManagementPolicy.
-func (mr *MockManagedMockRecorder) GetManagementPolicy() *gomock.Call {
+// GetManagementPolicies indicates an expected call of GetManagementPolicies.
+func (mr *MockManagedMockRecorder) GetManagementPolicies() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetManagementPolicy", reflect.TypeOf((*MockManaged)(nil).GetManagementPolicy))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetManagementPolicies", reflect.TypeOf((*MockManaged)(nil).GetManagementPolicies))
 }
 
 // GetName mocks base method.
@@ -524,16 +524,16 @@ func (mr *MockManagedMockRecorder) SetManagedFields(arg0 interface{}) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetManagedFields", reflect.TypeOf((*MockManaged)(nil).SetManagedFields), arg0)
 }
 
-// SetManagementPolicy mocks base method.
-func (m *MockManaged) SetManagementPolicy(arg0 v1.ManagementPolicy) {
+// SetManagementPolicies mocks base method.
+func (m *MockManaged) SetManagementPolicies(arg0 v1.ManagementPolicies) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetManagementPolicy", arg0)
+	m.ctrl.Call(m, "SetManagementPolicies", arg0)
 }
 
-// SetManagementPolicy indicates an expected call of SetManagementPolicy.
-func (mr *MockManagedMockRecorder) SetManagementPolicy(arg0 interface{}) *gomock.Call {
+// SetManagementPolicies indicates an expected call of SetManagementPolicies.
+func (mr *MockManagedMockRecorder) SetManagementPolicies(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetManagementPolicy", reflect.TypeOf((*MockManaged)(nil).SetManagementPolicy), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetManagementPolicies", reflect.TypeOf((*MockManaged)(nil).SetManagementPolicies), arg0)
 }
 
 // SetName mocks base method.
