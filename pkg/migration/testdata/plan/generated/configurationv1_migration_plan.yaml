@@ -64,6 +64,6 @@ spec:
     manualExecution:
       - sh -c "up xpkg push {{TARGET_CONFIGURATION_PACKAGE}} -f {{PKG_PATH}}"
     type: Exec
-    description: "Pushing the new Configuration package"
+    description: "Pushing the new Configuration package to {{TARGET_CONFIGURATION_PACKAGE}}"
 
 version: 0.1.0

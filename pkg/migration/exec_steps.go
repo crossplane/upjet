@@ -86,5 +86,6 @@ func (pg *PlanGenerator) stepBuildConfiguration() {
 
 func (pg *PlanGenerator) stepPushConfiguration() {
 	s := pg.stepConfiguration(stepPushConfiguration)
+	s.Description = fmt.Sprintf("%s to {{TARGET_CONFIGURATION_PACKAGE}}", s.Description)
 	s.Exec.Args = []string{"-c", "up xpkg push {{TARGET_CONFIGURATION_PACKAGE}} -f {{PKG_PATH}}"}
 }

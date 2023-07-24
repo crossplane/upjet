@@ -65,7 +65,7 @@ spec:
     manualExecution:
       - "kubectl delete Provider.pkg.crossplane.io provider-aws"
     type: Delete
-    description: "Deleting the monolithic provider package"
+    description: "Deleting the monolithic provider package: provider-aws"
 
   - patch:
       type: merge
