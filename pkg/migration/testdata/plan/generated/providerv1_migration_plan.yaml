@@ -7,7 +7,7 @@ spec:
     manualExecution:
       - "kubectl apply -f new-ssop/provider-family-aws.providers.pkg.crossplane.io_v1.yaml"
     type: Apply
-    description: "Installing the new family provider"
+    description: "Installing the new family config provider"
 
   - exec:
       command: sh
@@ -18,7 +18,7 @@ spec:
     manualExecution:
       - sh -c "kubectl wait provider.pkg provider-family-aws --for condition=Healthy"
     type: Exec
-    description: "Checking health of new family provider"
+    description: "Checking the health of new family config provider"
 
   - apply:
       files:
@@ -29,7 +29,7 @@ spec:
       - "kubectl apply -f new-ssop/provider-aws-ec2.providers.pkg.crossplane.io_v1.yaml"
       - "kubectl apply -f new-ssop/provider-aws-eks.providers.pkg.crossplane.io_v1.yaml"
     type: Apply
-    description: "Installing the new service scoped providers"
+    description: "Installing the new family resource providers"
 
   - exec:
       command: sh
@@ -40,7 +40,7 @@ spec:
     manualExecution:
       - sh -c "kubectl wait provider.pkg provider-aws-ec2 --for condition=Healthy"
     type: Exec
-    description: "Checking health of new service scoped provider"
+    description: "Checking health of new family resource provider"
 
   - exec:
       command: sh
@@ -51,7 +51,7 @@ spec:
     manualExecution:
       - sh -c "kubectl wait provider.pkg provider-aws-eks --for condition=Healthy"
     type: Exec
-    description: "Checking health of new service scoped provider"
+    description: "Checking health of new family resource provider"
 
   - delete:
       options:
@@ -65,7 +65,7 @@ spec:
     manualExecution:
       - "kubectl delete Provider.pkg.crossplane.io provider-aws"
     type: Delete
-    description: "Deleting monolithic provider"
+    description: "Deleting the monolithic provider package"
 
   - patch:
       type: merge
@@ -75,7 +75,7 @@ spec:
     manualExecution:
       - "kubectl patch --type='merge' -f activate-ssop/provider-family-aws.providers.pkg.crossplane.io_v1.yaml --patch-file activate-ssop/provider-family-aws.providers.pkg.crossplane.io_v1.yaml"
     type: Patch
-    description: "Activating the new family provider after deletion monolithic one"
+    description: "Activating the new family config provider after the deletion of the monolithic one"
 
   - exec:
       command: sh
@@ -86,7 +86,7 @@ spec:
     manualExecution:
       - sh -c "kubectl wait provider.pkg provider-family-aws --for condition=Installed"
     type: Exec
-    description: "Checking installation of new family provider"
+    description: "Checking the installation of new family config provider"
 
   - patch:
       type: merge
@@ -98,7 +98,7 @@ spec:
       - "kubectl patch --type='merge' -f activate-ssop/provider-aws-ec2.providers.pkg.crossplane.io_v1.yaml --patch-file activate-ssop/provider-aws-ec2.providers.pkg.crossplane.io_v1.yaml"
       - "kubectl patch --type='merge' -f activate-ssop/provider-aws-eks.providers.pkg.crossplane.io_v1.yaml --patch-file activate-ssop/provider-aws-eks.providers.pkg.crossplane.io_v1.yaml"
     type: Patch
-    description: "Activating the new service scoped providers"
+    description: "Activating the new family resource providers"
 
   - exec:
       command: sh

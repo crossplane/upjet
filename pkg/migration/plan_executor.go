@@ -71,6 +71,8 @@ func WithExecutorCallback(cb ExecutorCallback) PlanExecutorOption {
 	}
 }
 
+// WithStartIndex configures a StartIndex for a PlanExecutor
+// to modify the starting index of the execution
 func WithStartIndex(startIndex int) PlanExecutorOption {
 	return func(pe *PlanExecutor) {
 		pe.StartIndex = startIndex
