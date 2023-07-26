@@ -20,6 +20,8 @@ import (
 	"context"
 	"sync"
 
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/pkg/errors"
@@ -76,8 +78,9 @@ func NewAPICallbacks(m ctrl.Manager, of xpresource.ManagedKind) *APICallbacks {
 		kube:           m.GetClient(),
 		newTerraformed: nt,
 		EventHandler: &eventHandler{
-			mu:          &sync.Mutex{},
-			rateLimiter: workqueue.DefaultControllerRateLimiter(),
+			innerHandler: &handler.EnqueueRequestForObject{},
+			mu:           &sync.Mutex{},
+			rateLimiter:  workqueue.DefaultControllerRateLimiter(),
 		},
 	}
 }
@@ -149,9 +152,10 @@ func (ac *APICallbacks) Destroy(name string) terraform.CallbackFn {
 }
 
 type eventHandler struct {
-	queue       workqueue.RateLimitingInterface
-	rateLimiter workqueue.RateLimiter
-	mu          *sync.Mutex
+	innerHandler handler.EventHandler
+	queue        workqueue.RateLimitingInterface
+	rateLimiter  workqueue.RateLimiter
+	mu           *sync.Mutex
 }
 
 func (e *eventHandler) requestReconcile(name string) bool {
@@ -177,18 +181,22 @@ func (e *eventHandler) setQueue(limitingInterface workqueue.RateLimitingInterfac
 	}
 }
 
-func (e *eventHandler) Create(_ context.Context, _ event.CreateEvent, limitingInterface workqueue.RateLimitingInterface) {
+func (e *eventHandler) Create(ctx context.Context, ev event.CreateEvent, limitingInterface workqueue.RateLimitingInterface) {
 	e.setQueue(limitingInterface)
+	e.innerHandler.Create(ctx, ev, limitingInterface)
 }
 
-func (e *eventHandler) Update(_ context.Context, _ event.UpdateEvent, limitingInterface workqueue.RateLimitingInterface) {
+func (e *eventHandler) Update(ctx context.Context, ev event.UpdateEvent, limitingInterface workqueue.RateLimitingInterface) {
 	e.setQueue(limitingInterface)
+	e.innerHandler.Update(ctx, ev, limitingInterface)
 }
 
-func (e *eventHandler) Delete(_ context.Context, _ event.DeleteEvent, limitingInterface workqueue.RateLimitingInterface) {
+func (e *eventHandler) Delete(ctx context.Context, ev event.DeleteEvent, limitingInterface workqueue.RateLimitingInterface) {
 	e.setQueue(limitingInterface)
+	e.innerHandler.Delete(ctx, ev, limitingInterface)
 }
 
-func (e *eventHandler) Generic(_ context.Context, _ event.GenericEvent, limitingInterface workqueue.RateLimitingInterface) {
+func (e *eventHandler) Generic(ctx context.Context, ev event.GenericEvent, limitingInterface workqueue.RateLimitingInterface) {
 	e.setQueue(limitingInterface)
+	e.innerHandler.Generic(ctx, ev, limitingInterface)
 }
