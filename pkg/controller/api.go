@@ -37,8 +37,9 @@ import (
 )
 
 const (
-	errGetFmt          = "cannot get resource %s/%s after an async %s"
-	errUpdateStatusFmt = "cannot update status of resource %s/%s after an async %s"
+	errGetFmt              = "cannot get resource %s/%s after an async %s"
+	errUpdateStatusFmt     = "cannot update status of the resource %s/%s after an async %s"
+	errReconcileRequestFmt = "cannot request the reconciliation of the resource %s/%s after an async %s"
 )
 
 var _ CallbackProvider = &APICallbacks{}
@@ -89,7 +90,7 @@ type APICallbacks struct {
 	newTerraformed func() resource.Terraformed
 }
 
-func (ac *APICallbacks) callbackFn(name, op string) terraform.CallbackFn {
+func (ac *APICallbacks) callbackFn(name, op string, requeue bool) terraform.CallbackFn {
 	return func(err error, ctx context.Context) error {
 		nn := types.NamespacedName{Name: name}
 		tr := ac.newTerraformed()
@@ -98,49 +99,53 @@ func (ac *APICallbacks) callbackFn(name, op string) terraform.CallbackFn {
 		}
 		tr.SetConditions(resource.LastAsyncOperationCondition(err))
 		tr.SetConditions(resource.AsyncOperationFinishedCondition())
-		return errors.Wrapf(ac.kube.Status().Update(ctx, tr), errUpdateStatusFmt, tr.GetObjectKind().GroupVersionKind().String(), name, op)
+		uErr := errors.Wrapf(ac.kube.Status().Update(ctx, tr), errUpdateStatusFmt, tr.GetObjectKind().GroupVersionKind().String(), name, op)
+		if requeue {
+			switch {
+			case err != nil:
+				// TODO: use the errors.Join from
+				// github.com/crossplane/crossplane-runtime.
+				if ok := ac.EventHandler.requestReconcile(name); !ok {
+					return errors.Errorf(errReconcileRequestFmt, tr.GetObjectKind().GroupVersionKind().String(), name, op)
+				}
+			default:
+				ac.EventHandler.rateLimiter.Forget(reconcile.Request{
+					NamespacedName: types.NamespacedName{
+						Name: name,
+					},
+				})
+			}
+		}
+		return uErr
 	}
 }
 
 // Create makes sure the error is saved in async operation condition.
 func (ac *APICallbacks) Create(name string) terraform.CallbackFn {
 	return func(err error, ctx context.Context) error {
-		cErr := ac.callbackFn(name, "create")(err, ctx)
-		switch {
-		case err != nil:
-			ac.EventHandler.requestReconcile(name)
-		default:
-			ac.EventHandler.rateLimiter.Forget(reconcile.Request{
-				NamespacedName: types.NamespacedName{
-					Name: name,
-				},
-			})
-		}
-		return cErr
+		// requeue is set to true although the managed reconciler already
+		// requeues with exponential back-off during the creation phase
+		// because the upjet external client returns ResourceExists &
+		// ResourceUpToDate both set to true, if an async operation is
+		// in-progress immediately following a Create call. This will
+		// delay a reobservation of the resource (while being created)
+		// for the poll period.
+		return ac.callbackFn(name, "create", true)(err, ctx)
 	}
 }
 
 // Update makes sure the error is saved in async operation condition.
 func (ac *APICallbacks) Update(name string) terraform.CallbackFn {
 	return func(err error, ctx context.Context) error {
-		cErr := ac.callbackFn(name, "update")(err, ctx)
-		switch {
-		case err != nil:
-			ac.EventHandler.requestReconcile(name)
-		default:
-			ac.EventHandler.rateLimiter.Forget(reconcile.Request{
-				NamespacedName: types.NamespacedName{
-					Name: name,
-				},
-			})
-		}
-		return cErr
+		return ac.callbackFn(name, "update", true)(err, ctx)
 	}
 }
 
 // Destroy makes sure the error is saved in async operation condition.
 func (ac *APICallbacks) Destroy(name string) terraform.CallbackFn {
-	return ac.callbackFn(name, "destroy")
+	// requeue is set to false because the managed reconciler already requeues
+	// with exponential back-off during the deletion phase.
+	return ac.callbackFn(name, "destroy", false)
 }
 
 type eventHandler struct {
@@ -164,7 +169,7 @@ func (e *eventHandler) requestReconcile(name string) bool {
 	return true
 }
 
-func (e *eventHandler) Create(_ context.Context, _ event.CreateEvent, limitingInterface workqueue.RateLimitingInterface) {
+func (e *eventHandler) setQueue(limitingInterface workqueue.RateLimitingInterface) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.queue == nil {
@@ -172,11 +177,18 @@ func (e *eventHandler) Create(_ context.Context, _ event.CreateEvent, limitingIn
 	}
 }
 
-func (e *eventHandler) Update(_ context.Context, _ event.UpdateEvent, _ workqueue.RateLimitingInterface) {
+func (e *eventHandler) Create(_ context.Context, _ event.CreateEvent, limitingInterface workqueue.RateLimitingInterface) {
+	e.setQueue(limitingInterface)
 }
 
-func (e *eventHandler) Delete(_ context.Context, _ event.DeleteEvent, _ workqueue.RateLimitingInterface) {
+func (e *eventHandler) Update(_ context.Context, _ event.UpdateEvent, limitingInterface workqueue.RateLimitingInterface) {
+	e.setQueue(limitingInterface)
 }
 
-func (e *eventHandler) Generic(_ context.Context, _ event.GenericEvent, _ workqueue.RateLimitingInterface) {
+func (e *eventHandler) Delete(_ context.Context, _ event.DeleteEvent, limitingInterface workqueue.RateLimitingInterface) {
+	e.setQueue(limitingInterface)
+}
+
+func (e *eventHandler) Generic(_ context.Context, _ event.GenericEvent, limitingInterface workqueue.RateLimitingInterface) {
+	e.setQueue(limitingInterface)
 }
