@@ -120,6 +120,8 @@ type Setup struct {
 	// the lifecycle of Terraform provider processes will be managed by
 	// the Terraform CLI.
 	Scheduler ProviderScheduler
+
+	Meta any
 }
 
 // Map returns the Setup object in map form. The initial reason was so that

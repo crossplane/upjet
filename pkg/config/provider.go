@@ -8,10 +8,10 @@ import (
 	"fmt"
 	"regexp"
 
-	"github.com/crossplane/upjet/pkg/registry"
-	conversiontfjson "github.com/crossplane/upjet/pkg/types/conversion/tfjson"
-	tfjson "github.com/hashicorp/terraform-json"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/pkg/errors"
+
+	"github.com/crossplane/upjet/pkg/registry"
 )
 
 // ResourceConfiguratorFn is a function that implements the ResourceConfigurator
@@ -199,24 +199,8 @@ func WithMainTemplate(template string) ProviderOption {
 	}
 }
 
-// NewProvider builds and returns a new Provider from provider
-// tfjson schema, that is generated using Terraform CLI with:
-// `terraform providers schema --json`
-func NewProvider(schema []byte, prefix string, modulePath string, metadata []byte, opts ...ProviderOption) *Provider { //nolint:gocyclo
-	ps := tfjson.ProviderSchemas{}
-	if err := ps.UnmarshalJSON(schema); err != nil {
-		panic(err)
-	}
-	if len(ps.Schemas) != 1 {
-		panic(fmt.Sprintf("there should exactly be 1 provider schema but there are %d", len(ps.Schemas)))
-	}
-	var rs map[string]*tfjson.Schema
-	for _, v := range ps.Schemas {
-		rs = v.ResourceSchemas
-		break
-	}
-
-	resourceMap := conversiontfjson.GetV2ResourceMap(rs)
+// NewProvider builds and returns a new Provider from provider native schema.
+func NewProvider(resourceMap map[string]*schema.Resource, prefix string, modulePath string, metadata []byte, opts ...ProviderOption) *Provider { // nolint:gocyclo
 	providerMetadata, err := registry.NewProviderMetadataFromFile(metadata)
 	if err != nil {
 		panic(errors.Wrap(err, "cannot load provider metadata"))
