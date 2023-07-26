@@ -39,6 +39,10 @@ type Options struct {
 
 	// ESSOptions for External Secret Stores.
 	ESSOptions *ESSOptions
+
+	// EventHandler to handle the Kubernetes events and
+	// to queue reconcile requests.
+	EventHandler *EventHandler
 }
 
 // ESSOptions for External Secret Stores.

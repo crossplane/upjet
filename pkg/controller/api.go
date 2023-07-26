@@ -69,25 +69,36 @@ func (a *APISecretClient) GetSecretValue(ctx context.Context, sel xpv1.SecretKey
 	return d[sel.Key], err
 }
 
+// APICallbacksOption represents a configurable option for the APICallbacks
+type APICallbacksOption func(callbacks *APICallbacks)
+
+// WithEventHandler sets the EventHandler for the APICallbacks so that
+// the APICallbacks instance can requeue reconcile requests in the
+// context of the asynchronous operations.
+func WithEventHandler(e *EventHandler) APICallbacksOption {
+	return func(callbacks *APICallbacks) {
+		callbacks.eventHandler = e
+	}
+}
+
 // NewAPICallbacks returns a new APICallbacks.
-func NewAPICallbacks(m ctrl.Manager, of xpresource.ManagedKind) *APICallbacks {
+func NewAPICallbacks(m ctrl.Manager, of xpresource.ManagedKind, opts ...APICallbacksOption) *APICallbacks {
 	nt := func() resource.Terraformed {
 		return xpresource.MustCreateObject(schema.GroupVersionKind(of), m.GetScheme()).(resource.Terraformed)
 	}
-	return &APICallbacks{
+	cb := &APICallbacks{
 		kube:           m.GetClient(),
 		newTerraformed: nt,
-		EventHandler: &eventHandler{
-			innerHandler: &handler.EnqueueRequestForObject{},
-			mu:           &sync.Mutex{},
-			rateLimiter:  workqueue.DefaultControllerRateLimiter(),
-		},
 	}
+	for _, o := range opts {
+		o(cb)
+	}
+	return cb
 }
 
 // APICallbacks providers callbacks that work on API resources.
 type APICallbacks struct {
-	EventHandler *eventHandler
+	eventHandler *EventHandler
 
 	kube           client.Client
 	newTerraformed func() resource.Terraformed
@@ -103,16 +114,16 @@ func (ac *APICallbacks) callbackFn(name, op string, requeue bool) terraform.Call
 		tr.SetConditions(resource.LastAsyncOperationCondition(err))
 		tr.SetConditions(resource.AsyncOperationFinishedCondition())
 		uErr := errors.Wrapf(ac.kube.Status().Update(ctx, tr), errUpdateStatusFmt, tr.GetObjectKind().GroupVersionKind().String(), name, op)
-		if requeue {
+		if ac.eventHandler != nil && requeue {
 			switch {
 			case err != nil:
 				// TODO: use the errors.Join from
 				// github.com/crossplane/crossplane-runtime.
-				if ok := ac.EventHandler.requestReconcile(name); !ok {
+				if ok := ac.eventHandler.requestReconcile(name); !ok {
 					return errors.Errorf(errReconcileRequestFmt, tr.GetObjectKind().GroupVersionKind().String(), name, op)
 				}
 			default:
-				ac.EventHandler.rateLimiter.Forget(reconcile.Request{
+				ac.eventHandler.rateLimiter.Forget(reconcile.Request{
 					NamespacedName: types.NamespacedName{
 						Name: name,
 					},
@@ -151,14 +162,25 @@ func (ac *APICallbacks) Destroy(name string) terraform.CallbackFn {
 	return ac.callbackFn(name, "destroy", false)
 }
 
-type eventHandler struct {
+// EventHandler handles Kubernetes events by queueing reconcile requests for
+// objects and allows upjet components to queue reconcile requests.
+type EventHandler struct {
 	innerHandler handler.EventHandler
 	queue        workqueue.RateLimitingInterface
 	rateLimiter  workqueue.RateLimiter
 	mu           *sync.Mutex
 }
 
-func (e *eventHandler) requestReconcile(name string) bool {
+// NewEventHandler initializes a new EventHandler instance.
+func NewEventHandler() *EventHandler {
+	return &EventHandler{
+		innerHandler: &handler.EnqueueRequestForObject{},
+		mu:           &sync.Mutex{},
+		rateLimiter:  workqueue.DefaultControllerRateLimiter(),
+	}
+}
+
+func (e *EventHandler) requestReconcile(name string) bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.queue == nil {
@@ -173,7 +195,7 @@ func (e *eventHandler) requestReconcile(name string) bool {
 	return true
 }
 
-func (e *eventHandler) setQueue(limitingInterface workqueue.RateLimitingInterface) {
+func (e *EventHandler) setQueue(limitingInterface workqueue.RateLimitingInterface) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.queue == nil {
@@ -181,22 +203,22 @@ func (e *eventHandler) setQueue(limitingInterface workqueue.RateLimitingInterfac
 	}
 }
 
-func (e *eventHandler) Create(ctx context.Context, ev event.CreateEvent, limitingInterface workqueue.RateLimitingInterface) {
+func (e *EventHandler) Create(ctx context.Context, ev event.CreateEvent, limitingInterface workqueue.RateLimitingInterface) {
 	e.setQueue(limitingInterface)
 	e.innerHandler.Create(ctx, ev, limitingInterface)
 }
 
-func (e *eventHandler) Update(ctx context.Context, ev event.UpdateEvent, limitingInterface workqueue.RateLimitingInterface) {
+func (e *EventHandler) Update(ctx context.Context, ev event.UpdateEvent, limitingInterface workqueue.RateLimitingInterface) {
 	e.setQueue(limitingInterface)
 	e.innerHandler.Update(ctx, ev, limitingInterface)
 }
 
-func (e *eventHandler) Delete(ctx context.Context, ev event.DeleteEvent, limitingInterface workqueue.RateLimitingInterface) {
+func (e *EventHandler) Delete(ctx context.Context, ev event.DeleteEvent, limitingInterface workqueue.RateLimitingInterface) {
 	e.setQueue(limitingInterface)
 	e.innerHandler.Delete(ctx, ev, limitingInterface)
 }
 
-func (e *eventHandler) Generic(ctx context.Context, ev event.GenericEvent, limitingInterface workqueue.RateLimitingInterface) {
+func (e *EventHandler) Generic(ctx context.Context, ev event.GenericEvent, limitingInterface workqueue.RateLimitingInterface) {
 	e.setQueue(limitingInterface)
 	e.innerHandler.Generic(ctx, ev, limitingInterface)
 }
