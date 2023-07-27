@@ -34,7 +34,6 @@ const (
 	errStartAsyncDestroy = "cannot start async destroy"
 	errApply             = "cannot apply"
 	errDestroy           = "cannot destroy"
-	errStatusUpdate      = "cannot update status of custom resource"
 	errScheduleProvider  = "cannot schedule native Terraform provider process"
 	errUpdateAnnotations = "cannot update managed resource annotations"
 )
@@ -311,7 +310,7 @@ func (e *external) Create(ctx context.Context, mg xpresource.Managed) (managed.E
 	}
 	defer e.stopProvider()
 	if e.config.UseAsync {
-		return managed.ExternalCreation{}, errors.Wrap(e.workspace.ApplyAsync(e.callback.Apply(mg.GetName())), errStartAsyncApply)
+		return managed.ExternalCreation{}, errors.Wrap(e.workspace.ApplyAsync(e.callback.Create(mg.GetName())), errStartAsyncApply)
 	}
 	tr, ok := mg.(resource.Terraformed)
 	if !ok {
@@ -342,7 +341,7 @@ func (e *external) Update(ctx context.Context, mg xpresource.Managed) (managed.E
 	}
 	defer e.stopProvider()
 	if e.config.UseAsync {
-		return managed.ExternalUpdate{}, errors.Wrap(e.workspace.ApplyAsync(e.callback.Apply(mg.GetName())), errStartAsyncApply)
+		return managed.ExternalUpdate{}, errors.Wrap(e.workspace.ApplyAsync(e.callback.Update(mg.GetName())), errStartAsyncApply)
 	}
 	tr, ok := mg.(resource.Terraformed)
 	if !ok {

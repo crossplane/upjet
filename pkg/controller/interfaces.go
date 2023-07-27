@@ -40,6 +40,7 @@ type Store interface {
 // CallbackProvider provides functions that can be called with the result of
 // async operations.
 type CallbackProvider interface {
-	Apply(name string) terraform.CallbackFn
+	Create(name string) terraform.CallbackFn
+	Update(name string) terraform.CallbackFn
 	Destroy(name string) terraform.CallbackFn
 }

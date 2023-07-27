@@ -1,6 +1,16 @@
-/*
-Copyright 2021 Upbound Inc.
-*/
+// Copyright 2023 Upbound Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 package controller
 
@@ -97,12 +107,17 @@ func (s StoreFns) Workspace(ctx context.Context, c resource.SecretClient, tr res
 }
 
 type CallbackFns struct {
-	ApplyFn   func(string) terraform.CallbackFn
+	CreateFn  func(string) terraform.CallbackFn
+	UpdateFn  func(string) terraform.CallbackFn
 	DestroyFn func(string) terraform.CallbackFn
 }
 
-func (c CallbackFns) Apply(name string) terraform.CallbackFn {
-	return c.ApplyFn(name)
+func (c CallbackFns) Create(name string) terraform.CallbackFn {
+	return c.CreateFn(name)
+}
+
+func (c CallbackFns) Update(name string) terraform.CallbackFn {
+	return c.UpdateFn(name)
 }
 
 func (c CallbackFns) Destroy(name string) terraform.CallbackFn {
@@ -639,7 +654,7 @@ func TestCreate(t *testing.T) {
 					UseAsync: true,
 				},
 				c: CallbackFns{
-					ApplyFn: func(s string) terraform.CallbackFn {
+					CreateFn: func(s string) terraform.CallbackFn {
 						return nil
 					},
 				},
@@ -705,14 +720,14 @@ func TestUpdate(t *testing.T) {
 				err: errors.New(errUnexpectedObject),
 			},
 		},
-		"AsyncFailed": {
+		"AsyncUpdateFailed": {
 			reason: "It should return error if it cannot trigger the async apply",
 			args: args{
 				cfg: &config.Resource{
 					UseAsync: true,
 				},
 				c: CallbackFns{
-					ApplyFn: func(s string) terraform.CallbackFn {
+					UpdateFn: func(s string) terraform.CallbackFn {
 						return nil
 					},
 				},
@@ -727,7 +742,7 @@ func TestUpdate(t *testing.T) {
 				err: errors.Wrap(errBoom, errStartAsyncApply),
 			},
 		},
-		"SyncApplyFailed": {
+		"SyncUpdateFailed": {
 			reason: "It should return error if it cannot apply in sync mode",
 			args: args{
 				cfg: &config.Resource{},
