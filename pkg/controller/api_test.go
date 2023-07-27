@@ -20,8 +20,6 @@ import (
 	"context"
 	"testing"
 
-	"k8s.io/apimachinery/pkg/runtime/schema"
-
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -68,11 +66,6 @@ func TestAPICallbacksCreate(t *testing.T) {
 					Scheme: xpfake.SchemeWith(&fake.Terraformed{}),
 				},
 				err: tjerrors.NewApplyFailed(nil),
-			},
-			want: want{
-				// because the queue is not set, we expect a successful
-				// status update but a failed attempt to requeue the request.
-				err: errors.Errorf(errReconcileRequestFmt, schema.GroupVersionKind{}, "name", "create"),
 			},
 		},
 		"CreateOperationSucceeded": {
@@ -155,11 +148,6 @@ func TestAPICallbacksUpdate(t *testing.T) {
 					Scheme: xpfake.SchemeWith(&fake.Terraformed{}),
 				},
 				err: tjerrors.NewApplyFailed(nil),
-			},
-			want: want{
-				// because the queue is not set, we expect a successful
-				// status update but a failed attempt to requeue the request.
-				err: errors.Errorf(errReconcileRequestFmt, schema.GroupVersionKind{}, "name", "update"),
 			},
 		},
 		"ApplyOperationSucceeded": {
