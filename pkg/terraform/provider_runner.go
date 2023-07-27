@@ -94,46 +94,46 @@ type SharedProviderOption func(runner *SharedProvider)
 
 // WithNativeProviderArgs are the arguments to be passed to the native provider
 func WithNativeProviderArgs(args ...string) SharedProviderOption {
-	return func(sr *SharedProvider) {
-		sr.nativeProviderArgs = args
+	return func(sp *SharedProvider) {
+		sp.nativeProviderArgs = args
 	}
 }
 
 // WithNativeProviderExecutor sets the process executor to be used
 func WithNativeProviderExecutor(e exec.Interface) SharedProviderOption {
-	return func(sr *SharedProvider) {
-		sr.executor = e
+	return func(sp *SharedProvider) {
+		sp.executor = e
 	}
 }
 
 // WithProtocolVersion sets the gRPC protocol version in use between
 // the Terraform CLI and the native provider.
 func WithProtocolVersion(protocolVersion int) SharedProviderOption {
-	return func(sr *SharedProvider) {
-		sr.protocolVersion = protocolVersion
+	return func(sp *SharedProvider) {
+		sp.protocolVersion = protocolVersion
 	}
 }
 
 // WithNativeProviderPath configures the Terraform provider executable path
 // for the runner.
 func WithNativeProviderPath(p string) SharedProviderOption {
-	return func(sr *SharedProvider) {
-		sr.nativeProviderPath = p
+	return func(sp *SharedProvider) {
+		sp.nativeProviderPath = p
 	}
 }
 
 // WithNativeProviderName configures the Terraform provider name
 // for the runner.
 func WithNativeProviderName(n string) SharedProviderOption {
-	return func(sr *SharedProvider) {
-		sr.nativeProviderName = n
+	return func(sp *SharedProvider) {
+		sp.nativeProviderName = n
 	}
 }
 
 // WithNativeProviderLogger configures the logger for the runner.
 func WithNativeProviderLogger(logger logging.Logger) SharedProviderOption {
-	return func(sr *SharedProvider) {
-		sr.logger = logger
+	return func(sp *SharedProvider) {
+		sp.logger = logger
 	}
 }
 

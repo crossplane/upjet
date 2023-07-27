@@ -41,6 +41,10 @@ const (
 	errReconcileRequestFmt = "cannot request the reconciliation of the resource %s/%s after an async %s"
 )
 
+const (
+	rateLimiterCallback = "asyncCallback"
+)
+
 var _ CallbackProvider = &APICallbacks{}
 
 // APISecretClient is a client for getting k8s secrets
@@ -116,11 +120,11 @@ func (ac *APICallbacks) callbackFn(name, op string, requeue bool) terraform.Call
 			case err != nil:
 				// TODO: use the errors.Join from
 				// github.com/crossplane/crossplane-runtime.
-				if ok := ac.eventHandler.RequestReconcile(name); !ok {
+				if ok := ac.eventHandler.RequestReconcile(rateLimiterCallback, name, nil); !ok {
 					return errors.Errorf(errReconcileRequestFmt, tr.GetObjectKind().GroupVersionKind().String(), name, op)
 				}
 			default:
-				ac.eventHandler.Forget(name)
+				ac.eventHandler.Forget(rateLimiterCallback, name)
 			}
 		}
 		return uErr

@@ -28,24 +28,24 @@ import (
 // EventHandler handles Kubernetes events by queueing reconcile requests for
 // objects and allows upjet components to queue reconcile requests.
 type EventHandler struct {
-	innerHandler handler.EventHandler
-	queue        workqueue.RateLimitingInterface
-	rateLimiter  workqueue.RateLimiter
-	mu           *sync.Mutex
+	innerHandler   handler.EventHandler
+	queue          workqueue.RateLimitingInterface
+	rateLimiterMap map[string]workqueue.RateLimiter
+	mu             *sync.RWMutex
 }
 
 // NewEventHandler initializes a new EventHandler instance.
 func NewEventHandler() *EventHandler {
 	return &EventHandler{
-		innerHandler: &handler.EnqueueRequestForObject{},
-		mu:           &sync.Mutex{},
-		rateLimiter:  workqueue.DefaultControllerRateLimiter(),
+		innerHandler:   &handler.EnqueueRequestForObject{},
+		mu:             &sync.RWMutex{},
+		rateLimiterMap: make(map[string]workqueue.RateLimiter),
 	}
 }
 
 // RequestReconcile requeues a reconciliation request for the specified name.
 // Returns true if the reconcile request was successfully queued.
-func (e *EventHandler) RequestReconcile(name string) bool {
+func (e *EventHandler) RequestReconcile(rateLimiterName, name string, failureLimit *int) bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.queue == nil {
@@ -56,14 +56,28 @@ func (e *EventHandler) RequestReconcile(name string) bool {
 			Name: name,
 		},
 	}
-	e.queue.AddAfter(item, e.rateLimiter.When(item))
+	rateLimiter := e.rateLimiterMap[rateLimiterName]
+	if rateLimiter == nil {
+		rateLimiter = workqueue.DefaultControllerRateLimiter()
+		e.rateLimiterMap[rateLimiterName] = rateLimiter
+	}
+	if failureLimit != nil && rateLimiter.NumRequeues(item) > *failureLimit {
+		return false
+	}
+	e.queue.AddAfter(item, rateLimiter.When(item))
 	return true
 }
 
 // Forget indicates that the reconcile retries is finished for
 // the specified name.
-func (e *EventHandler) Forget(name string) {
-	e.rateLimiter.Forget(reconcile.Request{
+func (e *EventHandler) Forget(rateLimiterName, name string) {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	rateLimiter := e.rateLimiterMap[rateLimiterName]
+	if rateLimiter == nil {
+		return
+	}
+	rateLimiter.Forget(reconcile.Request{
 		NamespacedName: types.NamespacedName{
 			Name: name,
 		},

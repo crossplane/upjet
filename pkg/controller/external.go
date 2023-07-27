@@ -8,6 +8,8 @@ import (
 	"context"
 	"time"
 
+	tferrors "github.com/upbound/upjet/pkg/terraform/errors"
+
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
@@ -17,6 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/upbound/upjet/pkg/config"
+	"github.com/upbound/upjet/pkg/controller/handler"
 	"github.com/upbound/upjet/pkg/metrics"
 	"github.com/upbound/upjet/pkg/resource"
 	"github.com/upbound/upjet/pkg/resource/json"
@@ -34,8 +37,13 @@ const (
 	errStartAsyncDestroy = "cannot start async destroy"
 	errApply             = "cannot apply"
 	errDestroy           = "cannot destroy"
-	errScheduleProvider  = "cannot schedule native Terraform provider process"
+	errScheduleProvider  = "cannot schedule native Terraform provider process, please consider increasing its TTL with the --provider-ttl command-line option"
 	errUpdateAnnotations = "cannot update managed resource annotations"
+)
+
+const (
+	rateLimiterScheduler = "scheduler"
+	retryLimit           = 20
 )
 
 // Option allows you to configure Connector.
@@ -54,6 +62,14 @@ func WithCallbackProvider(ac CallbackProvider) Option {
 func WithLogger(l logging.Logger) Option {
 	return func(c *Connector) {
 		c.logger = l
+	}
+}
+
+// WithConnectorEventHandler configures the EventHandler so that
+// the external clients can requeue reconciliation requests.
+func WithConnectorEventHandler(e *handler.EventHandler) Option {
+	return func(c *Connector) {
+		c.eventHandler = e
 	}
 }
 
@@ -80,6 +96,7 @@ type Connector struct {
 	getTerraformSetup terraform.SetupFn
 	config            *config.Resource
 	callback          CallbackProvider
+	eventHandler      *handler.EventHandler
 	logger            logging.Logger
 }
 
@@ -106,6 +123,7 @@ func (c *Connector) Connect(ctx context.Context, mg xpresource.Managed) (managed
 		callback:          c.callback,
 		providerScheduler: ts.Scheduler,
 		providerHandle:    ws.ProviderHandle,
+		eventHandler:      c.eventHandler,
 		kube:              c.kube,
 		logger:            c.logger.WithValues("uid", mg.GetUID()),
 	}, nil
@@ -117,22 +135,31 @@ type external struct {
 	callback          CallbackProvider
 	providerScheduler terraform.ProviderScheduler
 	providerHandle    terraform.ProviderHandle
+	eventHandler      *handler.EventHandler
 	kube              client.Client
 	logger            logging.Logger
 }
 
-func (e *external) scheduleProvider() error {
+func (e *external) scheduleProvider(name string) (bool, error) {
 	if e.providerScheduler == nil || e.workspace == nil {
-		return nil
+		return false, nil
 	}
 	inuse, attachmentConfig, err := e.providerScheduler.Start(e.providerHandle)
 	if err != nil {
-		return errors.Wrap(err, errScheduleProvider)
+		retryLimit := retryLimit
+		if tferrors.IsRetryScheduleError(err) && (e.eventHandler != nil && e.eventHandler.RequestReconcile(rateLimiterScheduler, name, &retryLimit)) {
+			// the reconcile request has been requeued for a rate-limited retry
+			return true, nil
+		}
+		return false, errors.Wrap(err, errScheduleProvider)
+	}
+	if e.eventHandler != nil {
+		e.eventHandler.Forget(rateLimiterScheduler, name)
 	}
 	if ps, ok := e.workspace.(ProviderSharer); ok {
 		ps.UseProvider(inuse, attachmentConfig)
 	}
-	return nil
+	return false, nil
 }
 
 func (e *external) stopProvider() {
@@ -149,10 +176,20 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 	// and serial.
 	// TODO(muvaf): Look for ways to reduce the cyclomatic complexity without
 	// increasing the difficulty of understanding the flow.
-	if err := e.scheduleProvider(); err != nil {
+	requeued, err := e.scheduleProvider(mg.GetName())
+	if err != nil {
 		return managed.ExternalObservation{}, errors.Wrapf(err, "cannot schedule a native provider during observe: %s", mg.GetUID())
 	}
+	if requeued {
+		// return a noop for Observe after requeuing the reconcile request
+		// for a retry.
+		return managed.ExternalObservation{
+			ResourceExists:   true,
+			ResourceUpToDate: true,
+		}, nil
+	}
 	defer e.stopProvider()
+
 	tr, ok := mg.(resource.Terraformed)
 	if !ok {
 		return managed.ExternalObservation{}, errors.New(errUnexpectedObject)
@@ -305,8 +342,12 @@ func addTTR(mg xpresource.Managed) {
 }
 
 func (e *external) Create(ctx context.Context, mg xpresource.Managed) (managed.ExternalCreation, error) {
-	if err := e.scheduleProvider(); err != nil {
+	requeued, err := e.scheduleProvider(mg.GetName())
+	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrapf(err, "cannot schedule a native provider during create: %s", mg.GetUID())
+	}
+	if requeued {
+		return managed.ExternalCreation{}, nil
 	}
 	defer e.stopProvider()
 	if e.config.UseAsync {
@@ -336,8 +377,12 @@ func (e *external) Create(ctx context.Context, mg xpresource.Managed) (managed.E
 }
 
 func (e *external) Update(ctx context.Context, mg xpresource.Managed) (managed.ExternalUpdate, error) {
-	if err := e.scheduleProvider(); err != nil {
+	requeued, err := e.scheduleProvider(mg.GetName())
+	if err != nil {
 		return managed.ExternalUpdate{}, errors.Wrapf(err, "cannot schedule a native provider during update: %s", mg.GetUID())
+	}
+	if requeued {
+		return managed.ExternalUpdate{}, nil
 	}
 	defer e.stopProvider()
 	if e.config.UseAsync {
@@ -359,8 +404,12 @@ func (e *external) Update(ctx context.Context, mg xpresource.Managed) (managed.E
 }
 
 func (e *external) Delete(ctx context.Context, mg xpresource.Managed) error {
-	if err := e.scheduleProvider(); err != nil {
+	requeued, err := e.scheduleProvider(mg.GetName())
+	if err != nil {
 		return errors.Wrapf(err, "cannot schedule a native provider during delete: %s", mg.GetUID())
+	}
+	if requeued {
+		return nil
 	}
 	defer e.stopProvider()
 	if e.config.UseAsync {
