@@ -18,21 +18,18 @@ package controller
 
 import (
 	"context"
-	"sync"
 
-	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"github.com/upbound/upjet/pkg/controller/handler"
 
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
+
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/event"
 	ctrl "sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/upbound/upjet/pkg/resource"
 	"github.com/upbound/upjet/pkg/terraform"
@@ -75,7 +72,7 @@ type APICallbacksOption func(callbacks *APICallbacks)
 // WithEventHandler sets the EventHandler for the APICallbacks so that
 // the APICallbacks instance can requeue reconcile requests in the
 // context of the asynchronous operations.
-func WithEventHandler(e *EventHandler) APICallbacksOption {
+func WithEventHandler(e *handler.EventHandler) APICallbacksOption {
 	return func(callbacks *APICallbacks) {
 		callbacks.eventHandler = e
 	}
@@ -98,7 +95,7 @@ func NewAPICallbacks(m ctrl.Manager, of xpresource.ManagedKind, opts ...APICallb
 
 // APICallbacks providers callbacks that work on API resources.
 type APICallbacks struct {
-	eventHandler *EventHandler
+	eventHandler *handler.EventHandler
 
 	kube           client.Client
 	newTerraformed func() resource.Terraformed
@@ -119,15 +116,11 @@ func (ac *APICallbacks) callbackFn(name, op string, requeue bool) terraform.Call
 			case err != nil:
 				// TODO: use the errors.Join from
 				// github.com/crossplane/crossplane-runtime.
-				if ok := ac.eventHandler.requestReconcile(name); !ok {
+				if ok := ac.eventHandler.RequestReconcile(name); !ok {
 					return errors.Errorf(errReconcileRequestFmt, tr.GetObjectKind().GroupVersionKind().String(), name, op)
 				}
 			default:
-				ac.eventHandler.rateLimiter.Forget(reconcile.Request{
-					NamespacedName: types.NamespacedName{
-						Name: name,
-					},
-				})
+				ac.eventHandler.Forget(name)
 			}
 		}
 		return uErr
@@ -160,65 +153,4 @@ func (ac *APICallbacks) Destroy(name string) terraform.CallbackFn {
 	// requeue is set to false because the managed reconciler already requeues
 	// with exponential back-off during the deletion phase.
 	return ac.callbackFn(name, "destroy", false)
-}
-
-// EventHandler handles Kubernetes events by queueing reconcile requests for
-// objects and allows upjet components to queue reconcile requests.
-type EventHandler struct {
-	innerHandler handler.EventHandler
-	queue        workqueue.RateLimitingInterface
-	rateLimiter  workqueue.RateLimiter
-	mu           *sync.Mutex
-}
-
-// NewEventHandler initializes a new EventHandler instance.
-func NewEventHandler() *EventHandler {
-	return &EventHandler{
-		innerHandler: &handler.EnqueueRequestForObject{},
-		mu:           &sync.Mutex{},
-		rateLimiter:  workqueue.DefaultControllerRateLimiter(),
-	}
-}
-
-func (e *EventHandler) requestReconcile(name string) bool {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	if e.queue == nil {
-		return false
-	}
-	item := reconcile.Request{
-		NamespacedName: types.NamespacedName{
-			Name: name,
-		},
-	}
-	e.queue.AddAfter(item, e.rateLimiter.When(item))
-	return true
-}
-
-func (e *EventHandler) setQueue(limitingInterface workqueue.RateLimitingInterface) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	if e.queue == nil {
-		e.queue = limitingInterface
-	}
-}
-
-func (e *EventHandler) Create(ctx context.Context, ev event.CreateEvent, limitingInterface workqueue.RateLimitingInterface) {
-	e.setQueue(limitingInterface)
-	e.innerHandler.Create(ctx, ev, limitingInterface)
-}
-
-func (e *EventHandler) Update(ctx context.Context, ev event.UpdateEvent, limitingInterface workqueue.RateLimitingInterface) {
-	e.setQueue(limitingInterface)
-	e.innerHandler.Update(ctx, ev, limitingInterface)
-}
-
-func (e *EventHandler) Delete(ctx context.Context, ev event.DeleteEvent, limitingInterface workqueue.RateLimitingInterface) {
-	e.setQueue(limitingInterface)
-	e.innerHandler.Delete(ctx, ev, limitingInterface)
-}
-
-func (e *EventHandler) Generic(ctx context.Context, ev event.GenericEvent, limitingInterface workqueue.RateLimitingInterface) {
-	e.setQueue(limitingInterface)
-	e.innerHandler.Generic(ctx, ev, limitingInterface)
 }

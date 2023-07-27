@@ -7,11 +7,11 @@ package controller
 import (
 	"crypto/tls"
 
+	"github.com/crossplane/crossplane-runtime/pkg/controller"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	"github.com/crossplane/crossplane-runtime/pkg/controller"
-
 	"github.com/upbound/upjet/pkg/config"
+	"github.com/upbound/upjet/pkg/controller/handler"
 	"github.com/upbound/upjet/pkg/terraform"
 )
 
@@ -42,7 +42,7 @@ type Options struct {
 
 	// EventHandler to handle the Kubernetes events and
 	// to queue reconcile requests.
-	EventHandler *EventHandler
+	EventHandler *handler.EventHandler
 }
 
 // ESSOptions for External Secret Stores.
