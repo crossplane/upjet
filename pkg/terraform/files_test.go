@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/crossplane/crossplane-runtime/pkg/feature"
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	xpfake "github.com/crossplane/crossplane-runtime/pkg/resource/fake"
 	"github.com/crossplane/crossplane-runtime/pkg/test"
@@ -295,6 +296,7 @@ func TestWriteMainTF(t *testing.T) {
 		tr  resource.Terraformed
 		cfg *config.Resource
 		s   Setup
+		f   *feature.Flags
 	}
 	type want struct {
 		maintf string
@@ -406,11 +408,67 @@ func TestWriteMainTF(t *testing.T) {
 				maintf: `{"provider":{"provider-test":null},"resource":{"":{"":{"lifecycle":{"prevent_destroy":true},"name":"some-id","param":"paramval"}}},"terraform":{"required_providers":{"provider-test":{"source":"my-company/namespace/provider-test","version":"1.2.3"}}}}`,
 			},
 		},
+		"SuccessManagementPolicies": {
+			reason: "Management policies enabled with ignore changes resources and merging initProvider should be able to write everything it has into maintf file",
+			args: args{
+				tr: &fake.Terraformed{
+					Managed: xpfake.Managed{
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: map[string]string{
+								resource.AnnotationKeyPrivateRawAttribute: "privateraw",
+								meta.AnnotationKeyExternalName:            "some-id",
+							},
+						},
+					},
+					Parameterizable: fake.Parameterizable{Parameters: map[string]any{
+						"param": "paramval",
+						"array": []any{
+							map[string]any{
+								"other": "val",
+							},
+						},
+						"map": map[string]any{
+							"ignoredKey": "val",
+						},
+					},
+						InitParameters: map[string]any{
+							"ignored": "ignoredval",
+							"array": []any{
+								map[string]any{
+									"key": "val",
+								},
+							},
+							"map": map[string]any{
+								"mapKey": "val",
+							},
+						}},
+					Observable: fake.Observable{Observation: map[string]any{
+						"obs": "obsval",
+					}},
+				},
+				cfg: config.DefaultResource("upjet_resource", nil, nil),
+				s: Setup{
+					Requirement: ProviderRequirement{
+						Source:  "hashicorp/provider-test",
+						Version: "1.2.3",
+					},
+					Configuration: nil,
+				},
+				f: func() *feature.Flags {
+					f := &feature.Flags{}
+					f.Enable(feature.EnableAlphaManagementPolicies)
+					return f
+				}(),
+			},
+			want: want{
+				maintf: `{"provider":{"provider-test":null},"resource":{"":{"":{"array":[{"key":"val","other":"val"}],"ignored":"ignoredval","lifecycle":{"ignore_changes":["array[0].key","ignored","map[\"mapKey\"]"],"prevent_destroy":true},"map":{"ignoredKey":"val","mapKey":"val"},"name":"some-id","param":"paramval"}}},"terraform":{"required_providers":{"provider-test":{"source":"hashicorp/provider-test","version":"1.2.3"}}}}`,
+			},
+		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			fs := afero.NewMemMapFs()
-			fp, err := NewFileProducer(context.TODO(), nil, dir, tc.args.tr, tc.args.s, tc.args.cfg, WithFileSystem(fs))
+			fp, err := NewFileProducer(context.TODO(), nil, dir, tc.args.tr, tc.args.s, tc.args.cfg, WithFileSystem(fs), WithFileProducerFeatures(tc.args.f))
 			if err != nil {
 				t.Errorf("cannot initialize a file producer: %s", err.Error())
 			}
@@ -419,7 +477,15 @@ func TestWriteMainTF(t *testing.T) {
 				t.Errorf("\n%s\nWriteMainTF(...): -want error, +got error:\n%s", tc.reason, diff)
 			}
 			s, _ := afero.Afero{Fs: fs}.ReadFile(filepath.Join(dir, "main.tf.json"))
-			if diff := cmp.Diff(tc.want.maintf, string(s)); diff != "" {
+			var res map[string]any
+			var wantJson map[string]any
+			if err = json.JSParser.Unmarshal(s, &res); err != nil {
+				t.Errorf("cannot unmarshal main.tf.json: %v", err)
+			}
+			if err = json.JSParser.Unmarshal([]byte(tc.want.maintf), &wantJson); err != nil {
+				t.Errorf("cannot unmarshal want main.tf.json: %v", err)
+			}
+			if diff := cmp.Diff(res, wantJson, test.EquateConditions()); diff != "" {
 				t.Errorf("\n%s\nWriteMainTF(...): -want error, +got error:\n%s", tc.reason, diff)
 			}
 		})

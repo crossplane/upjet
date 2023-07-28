@@ -10,6 +10,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/pkg/errors"
+	"k8s.io/utils/pointer"
 
 	"github.com/upbound/upjet/pkg"
 	"github.com/upbound/upjet/pkg/config"
@@ -28,6 +29,7 @@ type Field struct {
 	TFTag, JSONTag, FieldNameCamel           string
 	TerraformPaths, CRDPaths, CanonicalPaths []string
 	FieldType                                types.Type
+	InitType                                 types.Type
 	AsBlocksMode                             bool
 	Reference                                *config.Reference
 	TransformedName                          string
@@ -139,11 +141,12 @@ func NewField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema,
 		}
 	}
 
-	fieldType, err := g.buildSchema(f, cfg, names, r)
+	fieldType, initType, err := g.buildSchema(f, cfg, names, r)
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot infer type from schema of field %s", f.Name.Snake)
 	}
 	f.FieldType = fieldType
+	f.InitType = initType
 
 	return f, nil
 }
@@ -188,6 +191,7 @@ func NewSensitiveField(g *Builder, cfg *config.Resource, r *resource, sch *schem
 		f.FieldType = types.NewPointer(f.FieldType)
 		f.JSONTag += ",omitempty"
 	}
+
 	return f, false, nil
 }
 
@@ -231,22 +235,52 @@ func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames) {
 			f.TFTag = strings.TrimSuffix(f.TFTag, ",omitempty")
 		}
 		r.addParameterField(f, field)
+		r.addInitField(f, field, g.Package)
 	}
 
 	if f.Reference != nil {
 		r.addReferenceFields(g, typeNames.ParameterTypeName, f)
 	}
 
+	// Note(lsviben): All fields are optional because observation fields are
+	// optional by default, and forProvider and initProvider fields should
+	// be checked through CEL rules.
+	// This doesn't count for identifiers and references, which are not
+	// mirrored in initProvider.
+	if f.isInit() {
+		f.Comment.Required = pointer.Bool(false)
+	}
 	g.comments.AddFieldComment(typeNames.ParameterTypeName, f.FieldNameCamel, f.Comment.Build())
+
+	// initProvider and observation fields are always optional.
+	f.Comment.Required = nil
+	g.comments.AddFieldComment(typeNames.InitTypeName, f.FieldNameCamel, f.Comment.Build())
+
 	// Note(turkenh): We don't want reference resolver to be generated for
 	// fields under status.atProvider. So, we don't want reference comments to
 	// be added, hence we are unsetting reference on the field comment just
 	// before adding it as an observation field.
 	f.Comment.Reference = config.Reference{}
-	// Note(turkenh): We don't need required/optional markers for observation
-	// fields.
-	f.Comment.Required = nil
 	g.comments.AddFieldComment(typeNames.ObservationTypeName, f.FieldNameCamel, f.Comment.Build())
+}
+
+// isInit returns true if the field should be added to initProvider.
+// We don't add Identifiers, references or fields which tag is set to
+// "-".
+//
+// Identifiers as they should not be ignorable or part of init due
+// the fact being created for one identifier and then updated for another
+// means a different resource could be targeted.
+//
+// Because of how upjet works, the main.tf file is created and filled
+// in the Connect step of the reconciliation. So we merge the initProvider
+// and forProvider there and write it to the main.tf file. So fields that are
+// not part of terraform are not included in this merge, plus they cant be
+// ignored through ignore_changes. References similarly get resolved in
+// an earlier step, so they cannot be included as well. Plus probably they
+// should also not change for Create and Update steps.
+func (f *Field) isInit() bool {
+	return !f.Identifier && f.Reference == nil && f.TFTag != "-"
 }
 
 func getDescription(s string) string {

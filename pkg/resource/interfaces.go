@@ -20,6 +20,7 @@ type Observable interface {
 type Parameterizable interface {
 	GetParameters() (map[string]any, error)
 	SetParameters(map[string]any) error
+	GetInitParameters() (map[string]any, error)
 }
 
 // MetadataProvider provides Terraform metadata for the Terraform managed

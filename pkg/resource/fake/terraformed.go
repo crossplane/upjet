@@ -42,7 +42,8 @@ func (o *Observable) GetAdditionalConnectionDetails(_ map[string]any) (map[strin
 
 // Parameterizable is mock Parameterizable.
 type Parameterizable struct {
-	Parameters map[string]any
+	Parameters     map[string]any
+	InitParameters map[string]any
 }
 
 // GetParameters is a mock.
@@ -54,6 +55,11 @@ func (p *Parameterizable) GetParameters() (map[string]any, error) {
 func (p *Parameterizable) SetParameters(data map[string]any) error {
 	p.Parameters = data
 	return nil
+}
+
+// GetInitParameters is a mock.
+func (p *Parameterizable) GetInitParameters() (map[string]any, error) {
+	return p.InitParameters, nil
 }
 
 // MetadataProvider is mock MetadataProvider.

@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/crossplane/crossplane-runtime/pkg/feature"
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
@@ -174,6 +175,13 @@ func WithDisableInit(disable bool) WorkspaceStoreOption {
 	}
 }
 
+// WithFeatures sets the features of the workspace store.
+func WithFeatures(f *feature.Flags) WorkspaceStoreOption {
+	return func(ws *WorkspaceStore) {
+		ws.features = f
+	}
+}
+
 // NewWorkspaceStore returns a new WorkspaceStore.
 func NewWorkspaceStore(l logging.Logger, opts ...WorkspaceStoreOption) *WorkspaceStore {
 	ws := &WorkspaceStore{
@@ -182,6 +190,7 @@ func NewWorkspaceStore(l logging.Logger, opts ...WorkspaceStoreOption) *Workspac
 		mu:       sync.Mutex{},
 		fs:       afero.Afero{Fs: afero.NewOsFs()},
 		executor: exec.New(),
+		features: &feature.Flags{},
 	}
 	for _, f := range opts {
 		f(ws)
@@ -206,6 +215,7 @@ type WorkspaceStore struct {
 	fs                    afero.Afero
 	executor              exec.Interface
 	disableInit           bool
+	features              *feature.Flags
 }
 
 // Workspace makes sure the Terraform workspace for the given resource is ready
@@ -229,7 +239,7 @@ func (ws *WorkspaceStore) Workspace(ctx context.Context, c resource.SecretClient
 	if w.LastOperation.IsRunning() {
 		return w, nil
 	}
-	fp, err := NewFileProducer(ctx, c, dir, tr, ts, cfg)
+	fp, err := NewFileProducer(ctx, c, dir, tr, ts, cfg, WithFileProducerFeatures(ws.features))
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot create a new file producer")
 	}

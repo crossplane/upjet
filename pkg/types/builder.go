@@ -14,6 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	twtypes "github.com/muvaf/typewriter/pkg/types"
 	"github.com/pkg/errors"
+	"k8s.io/utils/pointer"
 
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 
@@ -31,8 +32,9 @@ type Generated struct {
 	Types    []*types.Named
 	Comments twtypes.Comments
 
-	ForProviderType *types.Named
-	AtProviderType  *types.Named
+	ForProviderType  *types.Named
+	InitProviderType *types.Named
+	AtProviderType   *types.Named
 
 	ValidationRules string
 }
@@ -56,17 +58,18 @@ func NewBuilder(pkg *types.Package) *Builder {
 
 // Build returns parameters and observation types built out of Terraform schema.
 func (g *Builder) Build(cfg *config.Resource) (Generated, error) {
-	fp, ap, err := g.buildResource(cfg.TerraformResource, cfg, nil, nil, false, cfg.Kind)
+	fp, ap, ip, err := g.buildResource(cfg.TerraformResource, cfg, nil, nil, false, cfg.Kind)
 	return Generated{
-		Types:           g.genTypes,
-		Comments:        g.comments,
-		ForProviderType: fp,
-		AtProviderType:  ap,
-		ValidationRules: g.validationRules,
+		Types:            g.genTypes,
+		Comments:         g.comments,
+		ForProviderType:  fp,
+		InitProviderType: ip,
+		AtProviderType:   ap,
+		ValidationRules:  g.validationRules,
 	}, errors.Wrapf(err, "cannot build the Types")
 }
 
-func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPath []string, xpPath []string, asBlocksMode bool, names ...string) (*types.Named, *types.Named, error) { //nolint:gocyclo
+func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPath []string, xpPath []string, asBlocksMode bool, names ...string) (*types.Named, *types.Named, *types.Named, error) { //nolint:gocyclo
 	// NOTE(muvaf): There can be fields in the same CRD with same name but in
 	// different types. Since we generate the type using the field name, there
 	// can be collisions. In order to be able to generate unique names consistently,
@@ -75,7 +78,7 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 
 	typeNames, err := NewTypeNames(names, g.Package)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	r := &resource{}
@@ -93,7 +96,7 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 			var drop bool
 			f, drop, err = NewSensitiveField(g, cfg, r, res.Schema[snakeFieldName], snakeFieldName, tfPath, xpPath, names, asBlocksMode)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
 			if drop {
 				continue
@@ -101,23 +104,23 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 		case reference != nil:
 			f, err = NewReferenceField(g, cfg, r, res.Schema[snakeFieldName], reference, snakeFieldName, tfPath, xpPath, names, asBlocksMode)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
 		default:
 			f, err = NewField(g, cfg, r, res.Schema[snakeFieldName], snakeFieldName, tfPath, xpPath, names, asBlocksMode)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
 		}
 		f.AddToResource(g, r, typeNames)
 	}
 
-	paramType, obsType := g.AddToBuilder(typeNames, r)
-	return paramType, obsType, nil
+	paramType, obsType, initType := g.AddToBuilder(typeNames, r)
+	return paramType, obsType, initType, nil
 }
 
 // AddToBuilder adds fields to the Builder.
-func (g *Builder) AddToBuilder(typeNames *TypeNames, r *resource) (*types.Named, *types.Named) {
+func (g *Builder) AddToBuilder(typeNames *TypeNames, r *resource) (*types.Named, *types.Named, *types.Named) {
 	// NOTE(muvaf): Not every struct has both computed and configurable fields,
 	// so some types we generate here are empty and unnecessary. However,
 	// there are valid types with zero fields and we don't have the information
@@ -128,27 +131,34 @@ func (g *Builder) AddToBuilder(typeNames *TypeNames, r *resource) (*types.Named,
 	paramType := types.NewNamed(typeNames.ParameterTypeName, types.NewStruct(r.paramFields, r.paramTags), nil)
 	g.genTypes = append(g.genTypes, paramType)
 
+	initType := types.NewNamed(typeNames.InitTypeName, types.NewStruct(r.initFields, r.initTags), nil)
+	g.genTypes = append(g.genTypes, initType)
+
 	obsType := types.NewNamed(typeNames.ObservationTypeName, types.NewStruct(r.obsFields, r.obsTags), nil)
 	g.genTypes = append(g.genTypes, obsType)
 
 	for _, p := range r.topLevelRequiredParams {
 		g.validationRules += "\n"
-		g.validationRules += fmt.Sprintf(`// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.%s)",message="%s is a required parameter"`, p, p)
+		if p.includeInit {
+			g.validationRules += fmt.Sprintf(`// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.%s) || has(self.initProvider.%s)",message="%s is a required parameter"`, p.path, p.path, p.path)
+		} else {
+			g.validationRules += fmt.Sprintf(`// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.%s)",message="%s is a required parameter"`, p.path, p.path)
+		}
 	}
 
-	return paramType, obsType
+	return paramType, obsType, initType
 }
 
-func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, r *resource) (types.Type, error) { // nolint:gocyclo
+func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, r *resource) (types.Type, types.Type, error) { // nolint:gocyclo
 	switch f.Schema.Type {
 	case schema.TypeBool:
-		return types.NewPointer(types.Universe.Lookup("bool").Type()), nil
+		return types.NewPointer(types.Universe.Lookup("bool").Type()), nil, nil
 	case schema.TypeFloat:
-		return types.NewPointer(types.Universe.Lookup("float64").Type()), nil
+		return types.NewPointer(types.Universe.Lookup("float64").Type()), nil, nil
 	case schema.TypeInt:
-		return types.NewPointer(types.Universe.Lookup("int64").Type()), nil
+		return types.NewPointer(types.Universe.Lookup("int64").Type()), nil, nil
 	case schema.TypeString:
-		return types.NewPointer(types.Universe.Lookup("string").Type()), nil
+		return types.NewPointer(types.Universe.Lookup("string").Type()), nil, nil
 	case schema.TypeMap, schema.TypeList, schema.TypeSet:
 		names = append(names, f.Name.Camel)
 		if f.Schema.Type != schema.TypeMap {
@@ -159,6 +169,7 @@ func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, r 
 			f.CRDPaths = append(f.CRDPaths, wildcard)
 		}
 		var elemType types.Type
+		var initElemType types.Type
 		switch et := f.Schema.Elem.(type) {
 		case schema.ValueType:
 			switch et {
@@ -171,14 +182,16 @@ func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, r 
 			case schema.TypeString:
 				elemType = types.Universe.Lookup("string").Type()
 			case schema.TypeMap, schema.TypeList, schema.TypeSet, schema.TypeInvalid:
-				return nil, errors.Errorf("element type of %s is basic but not one of known basic types", fieldPath(names))
+				return nil, nil, errors.Errorf("element type of %s is basic but not one of known basic types", fieldPath(names))
 			}
+			initElemType = elemType
 		case *schema.Schema:
 			newf, err := NewField(g, cfg, r, et, f.Name.Snake, f.TerraformPaths, f.CRDPaths, names, false)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			elemType = newf.FieldType
+			initElemType = elemType
 		case *schema.Resource:
 			var asBlocksMode bool
 			// TODO(muvaf): We skip the other type once we choose one of param
@@ -186,15 +199,16 @@ func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, r 
 			if f.Schema.ConfigMode == schema.SchemaConfigModeAttr {
 				asBlocksMode = true
 			}
-			paramType, obsType, err := g.buildResource(et, cfg, f.TerraformPaths, f.CRDPaths, asBlocksMode, names...)
+			paramType, obsType, initType, err := g.buildResource(et, cfg, f.TerraformPaths, f.CRDPaths, asBlocksMode, names...)
 			if err != nil {
-				return nil, errors.Wrapf(err, "cannot infer type from resource schema of element type of %s", fieldPath(names))
+				return nil, nil, errors.Wrapf(err, "cannot infer type from resource schema of element type of %s", fieldPath(names))
 			}
+			initElemType = initType
 
 			switch {
 			case IsObservation(f.Schema):
 				if obsType == nil {
-					return nil, errors.Errorf("element type of %s is computed but the underlying schema does not return observation type", fieldPath(names))
+					return nil, nil, errors.Errorf("element type of %s is computed but the underlying schema does not return observation type", fieldPath(names))
 				}
 				elemType = obsType
 				// There are some types that are computed and not optional (observation field) but also has nested fields
@@ -203,10 +217,11 @@ func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, r 
 				if paramType.Underlying().String() != emptyStruct {
 					field := types.NewField(token.NoPos, g.Package, f.Name.Camel, types.NewSlice(paramType), false)
 					r.addParameterField(f, field)
+					r.addInitField(f, field, g.Package)
 				}
 			default:
 				if paramType == nil {
-					return nil, errors.Errorf("element type of %s is configurable but the underlying schema does not return a parameter type", fieldPath(names))
+					return nil, nil, errors.Errorf("element type of %s is configurable but the underlying schema does not return a parameter type", fieldPath(names))
 				}
 				elemType = paramType
 				// There are some types that are parameter field but also has nested fields that can go under status.
@@ -221,26 +236,28 @@ func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, r 
 		// see: https://github.com/upbound/upjet/issues/177
 		case nil:
 			elemType = types.Universe.Lookup("string").Type()
+			initElemType = elemType
 		default:
-			return nil, errors.Errorf("element type of %s should be either schema.Resource or schema.Schema", fieldPath(names))
+			return nil, nil, errors.Errorf("element type of %s should be either schema.Resource or schema.Schema", fieldPath(names))
 		}
 
 		// NOTE(muvaf): Maps and slices are already pointers, so we don't need to
 		// wrap them even if they are optional.
 		if f.Schema.Type == schema.TypeMap {
-			return types.NewMap(types.Universe.Lookup("string").Type(), elemType), nil
+			return types.NewMap(types.Universe.Lookup("string").Type(), elemType), types.NewMap(types.Universe.Lookup("string").Type(), initElemType), nil
 		}
-		return types.NewSlice(elemType), nil
+		return types.NewSlice(elemType), types.NewSlice(initElemType), nil
 	case schema.TypeInvalid:
-		return nil, errors.Errorf("invalid schema type %s", f.Schema.Type.String())
+		return nil, nil, errors.Errorf("invalid schema type %s", f.Schema.Type.String())
 	default:
-		return nil, errors.Errorf("unexpected schema type %s", f.Schema.Type.String())
+		return nil, nil, errors.Errorf("unexpected schema type %s", f.Schema.Type.String())
 	}
 }
 
 // TypeNames represents the parameter and observation name of the resource.
 type TypeNames struct {
 	ParameterTypeName   *types.TypeName
+	InitTypeName        *types.TypeName
 	ObservationTypeName *types.TypeName
 }
 
@@ -252,6 +269,12 @@ func NewTypeNames(fieldPaths []string, pkg *types.Package) (*TypeNames, error) {
 	}
 	paramName := types.NewTypeName(token.NoPos, pkg, paramTypeName, nil)
 
+	initTypeName, err := generateTypeName("InitParameters", pkg, fieldPaths...)
+	if err != nil {
+		return nil, errors.Wrapf(err, "cannot generate init parameters type name of %s", fieldPath(fieldPaths))
+	}
+	initName := types.NewTypeName(token.NoPos, pkg, initTypeName, nil)
+
 	obsTypeName, err := generateTypeName("Observation", pkg, fieldPaths...)
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot generate observation type name of %s", fieldPath(fieldPaths))
@@ -261,15 +284,25 @@ func NewTypeNames(fieldPaths []string, pkg *types.Package) (*TypeNames, error) {
 	// We insert them to the package scope so that the type name calculations in
 	// recursive calls are checked against their upper level type's name as well.
 	pkg.Scope().Insert(paramName)
+	pkg.Scope().Insert(initName)
 	pkg.Scope().Insert(obsName)
 
-	return &TypeNames{ParameterTypeName: paramName, ObservationTypeName: obsName}, nil
+	return &TypeNames{ParameterTypeName: paramName, InitTypeName: initName, ObservationTypeName: obsName}, nil
 }
 
 type resource struct {
-	paramFields, obsFields []*types.Var
-	paramTags, obsTags     []string
-	topLevelRequiredParams []string
+	paramFields, initFields, obsFields []*types.Var
+	paramTags, initTags, obsTags       []string
+	topLevelRequiredParams             []*topLevelRequiredParam
+}
+
+type topLevelRequiredParam struct {
+	path        string
+	includeInit bool
+}
+
+func newTopLevelRequiredParam(path string, includeInit bool) *topLevelRequiredParam {
+	return &topLevelRequiredParam{path: path, includeInit: includeInit}
 }
 
 func (r *resource) addParameterField(f *Field, field *types.Var) {
@@ -282,21 +315,47 @@ func (r *resource) addParameterField(f *Field, field *types.Var) {
 	// - req => required
 	// - !f.Identifier => not identifiers - i.e. region, zone, etc.
 	// - len(f.CanonicalPaths) == 1 => top level, i.e. not a nested field
+	// TODO (lsviben): We should add CEL rules for all required fields,
+	// not just the top level ones, due to having all forProvider
+	// fields now optional. CEL rules should check if a field is
+	// present either in forProvider or initProvider.
+	// https://github.com/upbound/upjet/issues/239
 	if req && !f.Identifier && len(f.CanonicalPaths) == 1 {
 		req = false
-		r.topLevelRequiredParams = append(r.topLevelRequiredParams, f.TransformedName)
+		// If the field is not a terraform field, we should not require it in init,
+		// as it is not an initProvider field.
+		r.topLevelRequiredParams = append(r.topLevelRequiredParams, newTopLevelRequiredParam(f.TransformedName, f.TFTag != "-"))
 	}
 
-	f.Comment.Required = &req
-	if !req {
-		r.paramTags = append(r.paramTags, fmt.Sprintf(`json:"%s" tf:"%s"`, f.JSONTag, f.TFTag))
-	} else {
+	// Note(lsviben): Only fields which are not also initProvider fields should be required.
+	paramRequired := req && !f.isInit()
+	f.Comment.Required = pointer.Bool(paramRequired)
+	if paramRequired {
 		// Required fields should not have omitempty tag in json tag.
 		// TODO(muvaf): This overrides user intent if they provided custom
 		// JSON tag.
 		r.paramTags = append(r.paramTags, fmt.Sprintf(`json:"%s" tf:"%s"`, strings.TrimSuffix(f.JSONTag, ",omitempty"), f.TFTag))
+	} else {
+		r.paramTags = append(r.paramTags, fmt.Sprintf(`json:"%s" tf:"%s"`, f.JSONTag, f.TFTag))
 	}
+
 	r.paramFields = append(r.paramFields, field)
+}
+
+func (r *resource) addInitField(f *Field, field *types.Var, pkg *types.Package) {
+	// If the field is not an init field, we don't add it.
+	if !f.isInit() {
+		return
+	}
+
+	r.initTags = append(r.initTags, fmt.Sprintf(`json:"%s" tf:"%s"`, f.JSONTag, f.TFTag))
+
+	// If the field is a nested type, we need to add it as the init type.
+	if f.InitType != nil {
+		field = types.NewField(token.NoPos, pkg, f.Name.Camel, f.InitType, false)
+	}
+
+	r.initFields = append(r.initFields, field)
 }
 
 func (r *resource) addObservationField(f *Field, field *types.Var) {

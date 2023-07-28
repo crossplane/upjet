@@ -85,13 +85,14 @@ func (cg *CRDGenerator) Generate(cfg *config.Resource) (string, error) {
 	vars := map[string]any{
 		"Types": typesStr,
 		"CRD": map[string]string{
-			"APIVersion":      cfg.Version,
-			"Group":           cg.Group,
-			"Kind":            cfg.Kind,
-			"ForProviderType": gen.ForProviderType.Obj().Name(),
-			"AtProviderType":  gen.AtProviderType.Obj().Name(),
-			"ValidationRules": gen.ValidationRules,
-			"Path":            cfg.Path,
+			"APIVersion":       cfg.Version,
+			"Group":            cg.Group,
+			"Kind":             cfg.Kind,
+			"ForProviderType":  gen.ForProviderType.Obj().Name(),
+			"InitProviderType": gen.InitProviderType.Obj().Name(),
+			"AtProviderType":   gen.AtProviderType.Obj().Name(),
+			"ValidationRules":  gen.ValidationRules,
+			"Path":             cfg.Path,
 		},
 		"Provider": map[string]string{
 			"ShortName": cg.ProviderShortName,
