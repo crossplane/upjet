@@ -326,10 +326,10 @@ Now let's test our generated resources.
 
    ```bash
    NAME                                                   READY   SYNCED   EXTERNAL-NAME                     AGE
-   branch.branch.github.jet.crossplane.io/hello-upjet   True    True     hello-crossplane:hello-upjet   89s
+   branch.branch.github.upbound.io/hello-upjet   True    True     hello-crossplane:hello-upjet   89s
 
    NAME                                                             READY   SYNCED   EXTERNAL-NAME      AGE
-   repository.repository.github.jet.crossplane.io/hello-crossplane   True    True     hello-crossplane   89s
+   repository.repository.github.upbound.io/hello-crossplane   True    True     hello-crossplane   89s
    ```
 
    Verify that repo `hello-crossplane` and branch `hello-upjet` created under

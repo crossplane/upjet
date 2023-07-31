@@ -188,12 +188,12 @@
       "updated": 1640767155602,
       "fontSize": 16,
       "fontFamily": 3,
-      "text": "apiVersion: sql.azure.jet.crossplane.io/v1alpha1\nkind: Server\nmetadata:\n  name: myserver\n  annotations:\n    crossplane.io/external-name: myserver\nspec:\n  forProvider:\n    ...\n    resourceGroupNameRef:\n      name: myresourcegroup\n  providerConfigRef:\n    name: example",
+      "text": "apiVersion: sql.azure.upbound.io/v1alpha1\nkind: Server\nmetadata:\n  name: myserver\n  annotations:\n    crossplane.io/external-name: myserver\nspec:\n  forProvider:\n    ...\n    resourceGroupNameRef:\n      name: myresourcegroup\n  providerConfigRef:\n    name: example",
       "baseline": 243,
       "textAlign": "left",
       "verticalAlign": "top",
       "containerId": null,
-      "originalText": "apiVersion: sql.azure.jet.crossplane.io/v1alpha1\nkind: Server\nmetadata:\n  name: myserver\n  annotations:\n    crossplane.io/external-name: myserver\nspec:\n  forProvider:\n    ...\n    resourceGroupNameRef:\n      name: myresourcegroup\n  providerConfigRef:\n    name: example"
+      "originalText": "apiVersion: sql.azure.upbound.io/v1alpha1\nkind: Server\nmetadata:\n  name: myserver\n  annotations:\n    crossplane.io/external-name: myserver\nspec:\n  forProvider:\n    ...\n    resourceGroupNameRef:\n      name: myresourcegroup\n  providerConfigRef:\n    name: example"
     },
     {
       "id": "5TV10V0jD_m7Ba68DZ2fG",

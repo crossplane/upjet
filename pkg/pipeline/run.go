@@ -30,7 +30,7 @@ func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
 
 	// Group resources based on their Group and API Versions.
 	// An example entry in the tree would be:
-	// ec2.awsjet.crossplane.io -> v1alpha1 -> aws_vpc
+	// ec2.aws.upbound.io -> v1beta1 -> aws_vpc
 	resourcesGroups := map[string]map[string]map[string]*config.Resource{}
 	for name, resource := range pc.Resources {
 		group := pc.RootGroup
