@@ -61,8 +61,8 @@ type Provider struct {
 	TerraformResourcePrefix string
 
 	// RootGroup is the root group that all CRDs groups in the provider are based
-	// on, e.g. "aws.jet.crossplane.io".
-	// Defaults to "<TerraformResourcePrefix>.jet.crossplane.io".
+	// on, e.g. "aws.upbound.io".
+	// Defaults to "<TerraformResourcePrefix>.upbound.io".
 	RootGroup string
 
 	// ShortName is the short name of the provider. Typically, added as a CRD
