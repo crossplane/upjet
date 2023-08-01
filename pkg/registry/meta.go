@@ -173,7 +173,7 @@ func convertManifest2JSON(file *hcl.File, b *hclsyntax.Block) (string, error) {
 	return out.String(), nil
 }
 
-func (r *Resource) findExampleBlock(file *hcl.File, blocks hclsyntax.Blocks, resourceName *string, exactMatch bool) error {
+func (r *Resource) findExampleBlock(file *hcl.File, blocks hclsyntax.Blocks, resourceName *string, exactMatch bool) error { //nolint:gocyclo
 	dependencies := make(map[string]string)
 	for _, b := range blocks {
 		depKey := fmt.Sprintf("%s.%s", b.Labels[0], b.Labels[1])
