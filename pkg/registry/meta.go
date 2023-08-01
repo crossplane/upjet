@@ -187,7 +187,7 @@ func (r *Resource) findExampleBlock(file *hcl.File, blocks hclsyntax.Blocks, res
 				continue
 			}
 
-			if suffixMatch(b.Labels[0], *resourceName, 1) {
+			if suffixMatch(b.Labels[0], *resourceName, 1) || (strings.Contains(*resourceName, b.Labels[0]) && strings.Count(*resourceName, "_") == strings.Count(b.Labels[0], "_")) {
 				*resourceName = b.Labels[0]
 				exactMatch = true
 			} else {
