@@ -187,11 +187,10 @@ func (r *Resource) findExampleBlock(file *hcl.File, blocks hclsyntax.Blocks, res
 				continue
 			}
 
-			switch {
-			case suffixMatch(b.Labels[0], *resourceName, 1) || strings.Contains(*resourceName, b.Labels[0]):
+			if suffixMatch(b.Labels[0], *resourceName, 1) {
 				*resourceName = b.Labels[0]
 				exactMatch = true
-			default:
+			} else {
 				dependencies[depKey] = m
 				continue
 			}
