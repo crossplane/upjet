@@ -161,3 +161,26 @@ func IsPlanFailed(err error) bool {
 	r := &planFailed{}
 	return errors.As(err, &r)
 }
+
+type retrySchedule struct {
+	invocationCount int
+	ttl             int
+}
+
+func NewRetryScheduleError(invocationCount, ttl int) error {
+	return &retrySchedule{
+		invocationCount: invocationCount,
+		ttl:             ttl,
+	}
+}
+
+func (r *retrySchedule) Error() string {
+	return fmt.Sprintf("native provider reuse budget has been exceeded: invocationCount: %d, ttl: %d", r.invocationCount, r.ttl)
+}
+
+// IsRetryScheduleError returns whether the error is a retry error
+// for the scheduler.
+func IsRetryScheduleError(err error) bool {
+	r := &retrySchedule{}
+	return errors.As(err, &r)
+}

@@ -19,6 +19,8 @@ import (
 
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	"github.com/pkg/errors"
+
+	tferrors "github.com/upbound/upjet/pkg/terraform/errors"
 )
 
 // ProviderHandle represents native plugin (Terraform provider) process
@@ -122,16 +124,31 @@ type SharedProviderScheduler struct {
 	logger     logging.Logger
 }
 
+// SharedProviderSchedulerOption represents an option to configure the
+// SharedProviderScheduler.
+type SharedProviderSchedulerOption func(scheduler *SharedProviderScheduler)
+
+// WithSharedProviderOptions configures the SharedProviderOptions to be
+// passed down to the managed SharedProviders.
+func WithSharedProviderOptions(opts ...SharedProviderOption) SharedProviderSchedulerOption {
+	return func(scheduler *SharedProviderScheduler) {
+		scheduler.runnerOpts = opts
+	}
+}
+
 // NewSharedProviderScheduler initializes a new SharedProviderScheduler
 // with the specified logger and options.
-func NewSharedProviderScheduler(l logging.Logger, ttl int, opts ...SharedProviderOption) *SharedProviderScheduler {
-	return &SharedProviderScheduler{
-		runnerOpts: opts,
-		mu:         &sync.Mutex{},
-		runners:    make(map[ProviderHandle]*schedulerEntry),
-		logger:     l,
-		ttl:        ttl,
+func NewSharedProviderScheduler(l logging.Logger, ttl int, opts ...SharedProviderSchedulerOption) *SharedProviderScheduler {
+	scheduler := &SharedProviderScheduler{
+		mu:      &sync.Mutex{},
+		runners: make(map[ProviderHandle]*schedulerEntry),
+		logger:  l,
+		ttl:     ttl,
 	}
+	for _, o := range opts {
+		o(scheduler)
+	}
+	return scheduler
 }
 
 func (s *SharedProviderScheduler) Start(h ProviderHandle) (InUse, string, error) {
@@ -144,7 +161,7 @@ func (s *SharedProviderScheduler) Start(h ProviderHandle) (InUse, string, error)
 	case r != nil && (r.invocationCount < s.ttl || r.inUse > 0):
 		if r.invocationCount > int(float64(s.ttl)*(1+ttlMargin)) {
 			logger.Debug("Reuse budget has been exceeded. Caller will need to retry.")
-			return nil, "", errors.Errorf("native provider reuse budget has been exceeded: invocationCount: %d, ttl: %d", r.invocationCount, s.ttl)
+			return nil, "", tferrors.NewRetryScheduleError(r.invocationCount, s.ttl)
 		}
 
 		logger.Debug("Reusing the provider runner", "invocationCount", r.invocationCount)
