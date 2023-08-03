@@ -1,4 +1,4 @@
-# Adding Support for Management Policies (a.k.a Observe Only) in an Upjet Based Provider
+# Adding Support for Management Policies and initProvider in an Upjet Based Provider
 
 ## (Re)generating a provider with Management Policies
 
@@ -11,7 +11,7 @@ directory on your local machine.
     # Consume the latest crossplane-tools:
     go get github.com/crossplane/crossplane-tools@master
     go mod tidy
-    # Generate getters/setters for management policy
+    # Generate getters/setters for management policies
     make generate
     
     # Consume the latest crossplane-runtime:
@@ -40,7 +40,8 @@ directory on your local machine.
      )
     ```
 
-   Add the actual flag in `cmd/provider/main.go` file.
+   Add the actual flag in `cmd/provider/main.go` file and pass the flag to the 
+   workspace store:
 
     ```diff
     diff --git a/cmd/provider/main.go b/cmd/provider/main.go
@@ -58,16 +59,38 @@ directory on your local machine.
     @@ -122,6 +123,11 @@ func main() {
                     })), "cannot create default store config")
             }
+                        terraform.WithSharedProviderOptions(terraform.WithNativeProviderPath(*setupConfig.NativeProviderPath), terraform.WithNativeProviderName("registry.terraform.io/"+*setupConfig.NativeProviderSource)))
+        }
 
-    +       if *enableManagementPolicies {
-    +               o.Features.Enable(features.EnableAlphaManagementPolicies)
-    +               log.Info("Alpha feature enabled", "flag", features.EnableAlphaManagementPolicies)
-    +       }
-    +
-            kingpin.FatalIfError(controller.Setup(mgr, o), "Cannot setup AWS controllers")
-            kingpin.FatalIfError(mgr.Start(ctrl.SetupSignalHandler()), "Cannot start controller manager")
-     }
-    ```
+   +       featureFlags := &feature.Flags{}
+           o := tjcontroller.Options{
+                   Options: xpcontroller.Options{
+                           Logger:                  log,
+                           GlobalRateLimiter:       ratelimiter.NewGlobal(*maxReconcileRate),
+                           PollInterval:            *pollInterval,
+                           MaxConcurrentReconciles: *maxReconcileRate,
+   -                       Features:                &feature.Flags{},
+   +                       Features:                featureFlags,
+                   },
+
+                   Provider:       config.GetProvider(),
+       -           WorkspaceStore: terraform.NewWorkspaceStore(log, terraform.WithDisableInit(len(*setupConfig.NativeProviderPath) != 0), terraform.WithProcessReportInterval(*pollInterval)),
+       +           WorkspaceStore: terraform.NewWorkspaceStore(log, terraform.WithDisableInit(len(*setupConfig.NativeProviderPath) != 0), terraform.WithProcessReportInterval(*pollInterval), terraform.WithFeatures(featureFlags)),
+                   SetupFn:        clients.SelectTerraformSetup(log, setupConfig),
+                   EventHandler:   eventHandler,
+           }
+
+       +      if *enableManagementPolicies {
+       +              o.Features.Enable(features.EnableAlphaManagementPolicies)
+       +              log.Info("Alpha feature enabled", "flag", features.EnableAlphaManagementPolicies)
+       +      }
+       +
+               kingpin.FatalIfError(controller.Setup(mgr, o), "Cannot setup AWS controllers")
+               kingpin.FatalIfError(mgr.Start(ctrl.SetupSignalHandler()), "Cannot start controller manager")
+        }
+       ```
+   
+> Note: If the provider was already updated to support observe-only resources, just add the feature flag to the workspaceStore.
 
 3. Generate with the latest upjet and management policies:
 
@@ -131,7 +154,7 @@ directory on your local machine.
     ```
 
 4. Create some resources in the provider's management console and try observing
-them by creating a managed resource with `managementPolicy: ObserveOnly`.
+them by creating a managed resource with `managementPolicies: ["Observe"]`.
 
     For example:
 
@@ -141,7 +164,7 @@ them by creating a managed resource with `managementPolicy: ObserveOnly`.
     metadata:
       name: an-existing-dbinstance
     spec:
-      managementPolicy: ObserveOnly
+      managementPolicies: ["Observe"]
       forProvider:
         region: us-west-1
     ```
@@ -160,3 +183,64 @@ them by creating a managed resource with `managementPolicy: ObserveOnly`.
     ```
 
 > Please note: You would need the `terraform` executable installed on your local machine.
+
+5. Create a managed resource without `LateInitialize` like
+`managementPolicies: ["Observe", "Create", "Update", "Delete"]` with 
+`spec.initProvider` fields to see the provider create the resource with
+combining `spec.initProvider` and `spec.forProvider` fields:
+
+   For example:
+   ```yaml
+   apiVersion: dynamodb.aws.upbound.io/v1beta1
+   kind: Table
+   metadata:
+     name: example
+   annotations:
+     meta.upbound.io/example-id: dynamodb/v1beta1/table
+   spec:
+    managementPolicies: ["Observe", "Create", "Update", "Delete"]
+    initProvider:
+      writeCapacity: 20
+      readCapacity: 19
+    forProvider:
+      region: us-west-1
+      attribute:
+      - name: UserId
+        type: S
+      - name: GameTitle
+        type: S
+      - name: TopScore
+        type: "N"
+      billingMode: PROVISIONED
+      globalSecondaryIndex:
+        - hashKey: GameTitle
+          name: GameTitleIndex
+          nonKeyAttributes:
+            - UserId
+          projectionType: INCLUDE
+          rangeKey: TopScore
+          readCapacity: 10
+          writeCapacity: 10
+          hashKey: UserId
+          rangeKey: GameTitle
+   ```
+
+   You should see the managed resource is ready & synced:
+
+    ```bash
+    NAME                              READY   SYNCED   EXTERNAL-NAME                     AGE
+    example                           True    True     example                           3m
+    ```
+
+   and the `status.atProvider` is updated with the actual state of the resource,
+   including the `initProvider` fields:
+
+    ```bash
+    kubectl get tables.dynamodb.aws.upbound.io example  -o yaml
+    ```
+   
+   As the late initialization is skipped, the `spec.forProvider` should be the
+   same when we created the resource.
+   
+   In the provider console, you should see that the resource was created with
+   the values in the `initProvider` field.
