@@ -8,6 +8,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	"github.com/upbound/upjet/pkg/controller"
+	"github.com/upbound/upjet/pkg/controller/handler"
 
 	{{ .Imports }}
 )
@@ -15,6 +16,11 @@ import (
 // Setup{{ .Group }} creates all controllers with the supplied logger and adds them to
 // the supplied manager.
 func Setup{{ .Group }}(mgr ctrl.Manager, o controller.Options) error {
+	// set the default event handler if the provider's main module did not
+	// set one.
+	if o.EventHandler == nil {
+		o.EventHandler = handler.NewEventHandler()
+	}
 	for _, setup := range []func(ctrl.Manager, controller.Options) error{
 		{{- range $alias := .Aliases }}
 		{{ $alias }}Setup,
