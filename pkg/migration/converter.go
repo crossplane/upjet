@@ -15,6 +15,9 @@
 package migration
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	xpv1 "github.com/crossplane/crossplane/apis/apiextensions/v1"
@@ -258,4 +261,70 @@ func toPackageLock(u unstructured.Unstructured) (*xppkgv1beta1.Lock, error) {
 		return nil, errors.Wrap(err, errFromUnstructuredLock)
 	}
 	return lock, nil
+}
+
+func ConvertComposedTemplateTags(sourceTemplate xpv1.ComposedTemplate, value string, key string) ([]xpv1.Patch, error) {
+	var patchesToAdd []xpv1.Patch
+	for _, p := range sourceTemplate.Patches {
+		if p.ToFieldPath != nil {
+			if strings.HasPrefix(*p.ToFieldPath, "spec.forProvider.tags") {
+				u, err := FromRawExtension(sourceTemplate.Base)
+				if err != nil {
+					return nil, errors.Wrap(err, "failed to convert ComposedTemplate")
+				}
+				paved := fieldpath.Pave(u.Object)
+				key, err := paved.GetString(strings.ReplaceAll(*p.ToFieldPath, value, key))
+				if err != nil {
+					return nil, errors.Wrap(err, "failed to get value from paved")
+				}
+				s := fmt.Sprintf(`spec.forProvider.tags["%s"]`, key)
+				patchesToAdd = append(patchesToAdd, xpv1.Patch{
+					FromFieldPath: p.FromFieldPath,
+					ToFieldPath:   &s,
+					Transforms:    p.Transforms,
+					Policy:        p.Policy,
+				})
+			}
+		}
+	}
+	return patchesToAdd, nil
+}
+
+func ConvertComposedTemplatePatchesMap(sourceTemplate xpv1.ComposedTemplate, conversionMap map[string]string) []xpv1.Patch {
+	var patchesToAdd []xpv1.Patch
+	for _, p := range sourceTemplate.Patches {
+		switch p.Type { // nolint:exhaustive
+		case xpv1.PatchTypeFromCompositeFieldPath, xpv1.PatchTypeCombineFromComposite, "":
+			{
+				if p.ToFieldPath != nil {
+					if to, ok := conversionMap[*p.ToFieldPath]; ok {
+						patchesToAdd = append(patchesToAdd, xpv1.Patch{
+							Type:          p.Type,
+							FromFieldPath: p.FromFieldPath,
+							ToFieldPath:   &to,
+							Transforms:    p.Transforms,
+							Policy:        p.Policy,
+							Combine:       p.Combine,
+						})
+					}
+				}
+			}
+		case xpv1.PatchTypeToCompositeFieldPath, xpv1.PatchTypeCombineToComposite:
+			{
+				if p.FromFieldPath != nil {
+					if to, ok := conversionMap[*p.FromFieldPath]; ok {
+						patchesToAdd = append(patchesToAdd, xpv1.Patch{
+							Type:          p.Type,
+							FromFieldPath: &to,
+							ToFieldPath:   p.ToFieldPath,
+							Transforms:    p.Transforms,
+							Policy:        p.Policy,
+							Combine:       p.Combine,
+						})
+					}
+				}
+			}
+		}
+	}
+	return patchesToAdd
 }
