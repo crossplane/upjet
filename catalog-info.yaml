@@ -9,6 +9,6 @@ metadata:
   annotations:
     github.com/project-slug: upbound/upjet
 spec:
-  type: library
+  type: service
   lifecycle: production
-  owner: team:extensions
+  owner: team-extensions
