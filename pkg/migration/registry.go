@@ -15,9 +15,7 @@
 package migration
 
 import (
-	"fmt"
 	"regexp"
-	"strings"
 
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	xpv1 "github.com/crossplane/crossplane/apis/apiextensions/v1"
@@ -454,35 +452,6 @@ func (d *delegatingConverter) PatchSets(psMap map[string]*xpv1.PatchSet) error {
 	return d.psFn(psMap)
 }
 
-func DefaultPatchSetsConverter(sourcePatchSets map[string]*xpv1.PatchSet) error {
-	tagsPatchSetName := ""
-	for _, patchSet := range sourcePatchSets {
-		for _, patch := range patchSet.Patches {
-			if patch.ToFieldPath != nil {
-				if strings.HasPrefix(*patch.ToFieldPath, "spec.forProvider.tags") {
-					tagsPatchSetName = patchSet.Name
-					break
-				}
-			}
-		}
-		if tagsPatchSetName != "" {
-			break
-		}
-	}
-
-	tPs := sourcePatchSets[tagsPatchSetName]
-	if tPs == nil {
-		return nil
-	}
-	for i, p := range tPs.Patches {
-		r := strings.NewReplacer("metadata.labels[", "", "]", "")
-		key := r.Replace(*p.FromFieldPath)
-		*tPs.Patches[i].ToFieldPath = fmt.Sprintf(`spec.forProvider.tags[%s]`, key)
-	}
-	// convert patch sets in the source
-	return nil
-}
-
 // Resource takes a managed resource and returns zero or more managed
 // resources to be created by calling the configured ResourceConversionFn.
 func (d *delegatingConverter) Resource(mg resource.Managed) ([]resource.Managed, error) {
@@ -502,15 +471,19 @@ func (d *delegatingConverter) ComposedTemplate(sourceTemplate xpv1.ComposedTempl
 	return d.cmpFn(sourceTemplate, convertedTemplates...)
 }
 
-func DefaultCompositionConverter(convertTags bool, conversionMap map[string]string) ComposedTemplateConversionFn {
+// DefaultCompositionConverter is a generic composition converter
+// conversionMap: is fieldpath map for conversion
+// Example: "spec.forProvider.assumeRolePolicyDocument": "spec.forProvider.assumeRolePolicy",
+// fns are functions that manipulate the patchsets
+func DefaultCompositionConverter(conversionMap map[string]string, fns ...func(sourceTemplate xpv1.ComposedTemplate) ([]xpv1.Patch, error)) ComposedTemplateConversionFn {
 	return func(sourceTemplate xpv1.ComposedTemplate, convertedTemplates ...*xpv1.ComposedTemplate) error {
 		var patchesToAdd []xpv1.Patch
-		var err error
-		if convertTags {
-			patchesToAdd, err = ConvertComposedTemplateTags(sourceTemplate, ".value", ".key")
+		for _, fn := range fns {
+			patches, err := fn(sourceTemplate)
 			if err != nil {
-				return errors.Wrap(err, "failed to convert tags")
+				return errors.Wrap(err, "cannot run the patch sets converter function")
 			}
+			patchesToAdd = append(patchesToAdd, patches...)
 		}
 		patchesToAdd = append(patchesToAdd, ConvertComposedTemplatePatchesMap(sourceTemplate, conversionMap)...)
 		for i := range convertedTemplates {
