@@ -25,6 +25,16 @@ const (
 	wildcard = "*"
 
 	emptyStruct = "struct{}"
+
+	// ref: https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#validation-rules
+	celEscapeSequence = "__%s__"
+)
+
+var (
+	// ref: https://github.com/google/cel-spec/blob/v0.6.0/doc/langdef.md#syntax
+	celReservedKeywords = []string{"true", "false", "null", "in", "as", "break", "const", "continue",
+		"else", "for", "function", "if", "import", "let", "loop", "package", "namespace", "return", "var",
+		"void", "while"}
 )
 
 // Generated is a struct that holds generated types
@@ -139,10 +149,11 @@ func (g *Builder) AddToBuilder(typeNames *TypeNames, r *resource) (*types.Named,
 
 	for _, p := range r.topLevelRequiredParams {
 		g.validationRules += "\n"
+		sp := sanitizePath(p.path)
 		if p.includeInit {
-			g.validationRules += fmt.Sprintf(`// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.%s) || has(self.initProvider.%s)",message="%s is a required parameter"`, p.path, p.path, p.path)
+			g.validationRules += fmt.Sprintf(`// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.%s) || has(self.initProvider.%s)",message="%s is a required parameter"`, sp, sp, p.path)
 		} else {
-			g.validationRules += fmt.Sprintf(`// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.%s)",message="%s is a required parameter"`, p.path, p.path)
+			g.validationRules += fmt.Sprintf(`// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.%s)",message="%s is a required parameter"`, sp, p.path)
 		}
 	}
 
@@ -443,4 +454,13 @@ func fieldPathWithWildcard(parts []string) string {
 		seg[i] = fieldpath.Field(p)
 	}
 	return seg.String()
+}
+
+func sanitizePath(p string) string {
+	for _, reserved := range celReservedKeywords {
+		if p == reserved {
+			return fmt.Sprintf(celEscapeSequence, p)
+		}
+	}
+	return p
 }
