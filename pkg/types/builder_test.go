@@ -387,7 +387,7 @@ func TestBuild(t *testing.T) {
 				err: errors.Wrapf(errors.Wrapf(errors.Errorf("invalid schema type %s", "TypeInvalid"), "cannot infer type from schema of field %s", "name"), "cannot build the Types"),
 			},
 		},
-		"ValidationRules": {
+		"Validation_Rules_With_Keywords": {
 			args: args{
 				cfg: &config.Resource{
 					TerraformResource: &schema.Resource{
