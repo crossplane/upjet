@@ -473,6 +473,8 @@ func (d *delegatingConverter) ComposedTemplate(sourceTemplate xpv1.ComposedTempl
 
 // DefaultCompositionConverter is a generic composition converter
 // conversionMap: is fieldpath map for conversion
+// Key of the conversionMap points to the source field
+// Value of the conversionMap points to the target field
 // Example: "spec.forProvider.assumeRolePolicyDocument": "spec.forProvider.assumeRolePolicy",
 // fns are functions that manipulate the patchsets
 func DefaultCompositionConverter(conversionMap map[string]string, fns ...func(sourceTemplate xpv1.ComposedTemplate) ([]xpv1.Patch, error)) ComposedTemplateConversionFn {

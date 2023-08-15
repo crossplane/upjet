@@ -260,7 +260,9 @@ func toPackageLock(u unstructured.Unstructured) (*xppkgv1beta1.Lock, error) {
 	return lock, nil
 }
 
-// ConvertComposedTemplatePatchesMap converts the composed templates with given conversion map
+// ConvertComposedTemplatePatchesMap converts the composed templates with given conversionMap
+// Key of the conversionMap points to the source field
+// Value of the conversionMap points to the target field
 func ConvertComposedTemplatePatchesMap(sourceTemplate xpv1.ComposedTemplate, conversionMap map[string]string) []xpv1.Patch {
 	var patchesToAdd []xpv1.Patch
 	for _, p := range sourceTemplate.Patches {
