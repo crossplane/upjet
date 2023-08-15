@@ -259,3 +259,45 @@ func toPackageLock(u unstructured.Unstructured) (*xppkgv1beta1.Lock, error) {
 	}
 	return lock, nil
 }
+
+// ConvertComposedTemplatePatchesMap converts the composed templates with given conversionMap
+// Key of the conversionMap points to the source field
+// Value of the conversionMap points to the target field
+func ConvertComposedTemplatePatchesMap(sourceTemplate xpv1.ComposedTemplate, conversionMap map[string]string) []xpv1.Patch {
+	var patchesToAdd []xpv1.Patch
+	for _, p := range sourceTemplate.Patches {
+		switch p.Type { // nolint:exhaustive
+		case xpv1.PatchTypeFromCompositeFieldPath, xpv1.PatchTypeCombineFromComposite, "":
+			{
+				if p.ToFieldPath != nil {
+					if to, ok := conversionMap[*p.ToFieldPath]; ok {
+						patchesToAdd = append(patchesToAdd, xpv1.Patch{
+							Type:          p.Type,
+							FromFieldPath: p.FromFieldPath,
+							ToFieldPath:   &to,
+							Transforms:    p.Transforms,
+							Policy:        p.Policy,
+							Combine:       p.Combine,
+						})
+					}
+				}
+			}
+		case xpv1.PatchTypeToCompositeFieldPath, xpv1.PatchTypeCombineToComposite:
+			{
+				if p.FromFieldPath != nil {
+					if to, ok := conversionMap[*p.FromFieldPath]; ok {
+						patchesToAdd = append(patchesToAdd, xpv1.Patch{
+							Type:          p.Type,
+							FromFieldPath: &to,
+							ToFieldPath:   p.ToFieldPath,
+							Transforms:    p.Transforms,
+							Policy:        p.Policy,
+							Combine:       p.Combine,
+						})
+					}
+				}
+			}
+		}
+	}
+	return patchesToAdd
+}

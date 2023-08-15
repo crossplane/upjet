@@ -471,6 +471,30 @@ func (d *delegatingConverter) ComposedTemplate(sourceTemplate xpv1.ComposedTempl
 	return d.cmpFn(sourceTemplate, convertedTemplates...)
 }
 
+// DefaultCompositionConverter is a generic composition converter
+// conversionMap: is fieldpath map for conversion
+// Key of the conversionMap points to the source field
+// Value of the conversionMap points to the target field
+// Example: "spec.forProvider.assumeRolePolicyDocument": "spec.forProvider.assumeRolePolicy",
+// fns are functions that manipulate the patchsets
+func DefaultCompositionConverter(conversionMap map[string]string, fns ...func(sourceTemplate xpv1.ComposedTemplate) ([]xpv1.Patch, error)) ComposedTemplateConversionFn {
+	return func(sourceTemplate xpv1.ComposedTemplate, convertedTemplates ...*xpv1.ComposedTemplate) error {
+		var patchesToAdd []xpv1.Patch
+		for _, fn := range fns {
+			patches, err := fn(sourceTemplate)
+			if err != nil {
+				return errors.Wrap(err, "cannot run the patch sets converter function")
+			}
+			patchesToAdd = append(patchesToAdd, patches...)
+		}
+		patchesToAdd = append(patchesToAdd, ConvertComposedTemplatePatchesMap(sourceTemplate, conversionMap)...)
+		for i := range convertedTemplates {
+			convertedTemplates[i].Patches = append(convertedTemplates[i].Patches, patchesToAdd...)
+		}
+		return nil
+	}
+}
+
 // RegisterAPIConversionFunctions registers the supplied ResourceConversionFn and
 // ComposedTemplateConversionFn for the specified GVK, and the supplied
 // PatchSetsConversionFn for all the discovered Compositions.
