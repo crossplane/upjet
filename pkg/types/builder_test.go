@@ -424,16 +424,16 @@ func TestBuild(t *testing.T) {
 				t.Fatalf("Build(...): -want error, +got error: %s", diff)
 			}
 			if g.ForProviderType != nil {
-				if diff := cmp.Diff(tc.want.forProvider, g.ForProviderType.Obj().String(), test.EquateErrors()); diff != "" {
+				if diff := cmp.Diff(tc.want.forProvider, g.ForProviderType.Obj().String()); diff != "" {
 					t.Fatalf("Build(...): -want forProvider, +got forProvider: %s", diff)
 				}
 			}
 			if g.AtProviderType != nil {
-				if diff := cmp.Diff(tc.want.atProvider, g.AtProviderType.Obj().String(), test.EquateErrors()); diff != "" {
+				if diff := cmp.Diff(tc.want.atProvider, g.AtProviderType.Obj().String()); diff != "" {
 					t.Fatalf("Build(...): -want atProvider, +got atProvider: %s", diff)
 				}
 			}
-			if diff := cmp.Diff(tc.want.validationRules, g.ValidationRules, test.EquateErrors()); diff != "" {
+			if diff := cmp.Diff(tc.want.validationRules, g.ValidationRules); diff != "" {
 				t.Fatalf("Build(...): -want validationRules, +got validationRules: %s", diff)
 			}
 		})
