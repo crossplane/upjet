@@ -125,7 +125,7 @@ func (c *Connector) Connect(ctx context.Context, mg xpresource.Managed) (managed
 		providerHandle:    ws.ProviderHandle,
 		eventHandler:      c.eventHandler,
 		kube:              c.kube,
-		logger:            c.logger.WithValues("uid", mg.GetUID()),
+		logger:            c.logger.WithValues("uid", mg.GetUID(), "name", mg.GetName(), "gvk", mg.GetObjectKind().GroupVersionKind().String()),
 	}, nil
 }
 
