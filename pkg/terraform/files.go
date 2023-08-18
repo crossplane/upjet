@@ -85,11 +85,14 @@ func NewFileProducer(ctx context.Context, client resource.SecretClient, dir stri
 		// get fields which should be in the ignore_changes lifecycle block
 		fp.ignored = resource.GetTerraformIgnoreChanges(params, initParams)
 
-		// TODO(lsviben): Currently initProvider fields override forProvider
-		// fields if set. It should be the other way around.
-		// merge the initProvider and forProvider parameters
-		// https://github.com/upbound/upjet/issues/240
-		err = mergo.Merge(&params, initParams, mergo.WithSliceDeepCopy)
+		// Note(lsviben): mergo.WithSliceDeepCopy is needed to merge the
+		// slices from the initProvider to forProvider. As it also sets
+		// overwrite to true, we need to set it back to false, we don't
+		// want to overwrite the forProvider fields with the initProvider
+		// fields.
+		err = mergo.Merge(&params, initParams, mergo.WithSliceDeepCopy, func(c *mergo.Config) {
+			c.Overwrite = false
+		})
 		if err != nil {
 			return nil, errors.Wrapf(err, "cannot merge the spec.initProvider and spec.forProvider parameters for the resource %q", tr.GetName())
 		}

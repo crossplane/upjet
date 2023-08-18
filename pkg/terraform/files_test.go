@@ -424,22 +424,25 @@ func TestWriteMainTF(t *testing.T) {
 						"param": "paramval",
 						"array": []any{
 							map[string]any{
-								"other": "val",
+								"other": "val1",
 							},
 						},
 						"map": map[string]any{
-							"ignoredKey": "val",
+							"mapKey": "val2",
 						},
 					},
 						InitParameters: map[string]any{
+							"param":   "should-not-overwrite",
 							"ignored": "ignoredval",
 							"array": []any{
 								map[string]any{
-									"key": "val",
+									"key":   "val3",
+									"other": "should-not-overwrite",
 								},
 							},
 							"map": map[string]any{
-								"mapKey": "val",
+								"mapKey":     "should-not-overwrite",
+								"ignoredKey": "should-be-ignored",
 							},
 						}},
 					Observable: fake.Observable{Observation: map[string]any{
@@ -461,7 +464,7 @@ func TestWriteMainTF(t *testing.T) {
 				}(),
 			},
 			want: want{
-				maintf: `{"provider":{"provider-test":null},"resource":{"":{"":{"array":[{"key":"val","other":"val"}],"ignored":"ignoredval","lifecycle":{"ignore_changes":["array[0].key","ignored","map[\"mapKey\"]"],"prevent_destroy":true},"map":{"ignoredKey":"val","mapKey":"val"},"name":"some-id","param":"paramval"}}},"terraform":{"required_providers":{"provider-test":{"source":"hashicorp/provider-test","version":"1.2.3"}}}}`,
+				maintf: `{"provider":{"provider-test":null},"resource":{"":{"":{"array":[{"key":"val3","other":"val1"}],"ignored":"ignoredval","lifecycle":{"ignore_changes":["array[0].key","ignored","map[\"ignoredKey\"]"],"prevent_destroy":true},"map":{"ignoredKey":"should-be-ignored","mapKey":"val2"},"name":"some-id","param":"paramval"}}},"terraform":{"required_providers":{"provider-test":{"source":"hashicorp/provider-test","version":"1.2.3"}}}}`,
 			},
 		},
 	}
