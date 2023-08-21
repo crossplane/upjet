@@ -208,9 +208,10 @@ func TestBuild(t *testing.T) {
 		cfg *config.Resource
 	}
 	type want struct {
-		forProvider string
-		atProvider  string
-		err         error
+		forProvider     string
+		atProvider      string
+		validationRules string
+		err             error
 	}
 	cases := map[string]struct {
 		args
@@ -251,6 +252,9 @@ func TestBuild(t *testing.T) {
 			want: want{
 				forProvider: `type example.Parameters struct{Enable *bool "json:\"enable,omitempty\" tf:\"enable,omitempty\""; ID *int64 "json:\"id,omitempty\" tf:\"id,omitempty\""; Name *string "json:\"name,omitempty\" tf:\"name,omitempty\""}`,
 				atProvider:  `type example.Observation struct{Config *string "json:\"config,omitempty\" tf:\"config,omitempty\""; Enable *bool "json:\"enable,omitempty\" tf:\"enable,omitempty\""; ID *int64 "json:\"id,omitempty\" tf:\"id,omitempty\""; Name *string "json:\"name,omitempty\" tf:\"name,omitempty\""; Value *float64 "json:\"value,omitempty\" tf:\"value,omitempty\""}`,
+				validationRules: `
+// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.id) || has(self.initProvider.id)",message="id is a required parameter"
+// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.name) || has(self.initProvider.name)",message="name is a required parameter"`,
 			},
 		},
 		"Resource_Types": {
@@ -284,6 +288,9 @@ func TestBuild(t *testing.T) {
 			want: want{
 				forProvider: `type example.Parameters struct{List []*string "json:\"list,omitempty\" tf:\"list,omitempty\""; ResourceIn map[string]example.ResourceInParameters "json:\"resourceIn,omitempty\" tf:\"resource_in,omitempty\""}`,
 				atProvider:  `type example.Observation struct{List []*string "json:\"list,omitempty\" tf:\"list,omitempty\""; ResourceIn map[string]example.ResourceInParameters "json:\"resourceIn,omitempty\" tf:\"resource_in,omitempty\""; ResourceOut map[string]example.ResourceOutObservation "json:\"resourceOut,omitempty\" tf:\"resource_out,omitempty\""}`,
+				validationRules: `
+// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.list) || has(self.initProvider.list)",message="list is a required parameter"
+// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.resourceIn) || has(self.initProvider.resourceIn)",message="resourceIn is a required parameter"`,
 			},
 		},
 		"Sensitive_Fields": {
@@ -311,6 +318,9 @@ func TestBuild(t *testing.T) {
 			want: want{
 				forProvider: `type example.Parameters struct{Key1SecretRef *github.com/crossplane/crossplane-runtime/apis/common/v1.SecretKeySelector "json:\"key1SecretRef,omitempty\" tf:\"-\""; Key2SecretRef github.com/crossplane/crossplane-runtime/apis/common/v1.SecretKeySelector "json:\"key2SecretRef\" tf:\"-\""; Key3SecretRef []github.com/crossplane/crossplane-runtime/apis/common/v1.SecretKeySelector "json:\"key3SecretRef\" tf:\"-\""}`,
 				atProvider:  `type example.Observation struct{}`,
+				validationRules: `
+// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.key2SecretRef)",message="key2SecretRef is a required parameter"
+// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.key3SecretRef)",message="key3SecretRef is a required parameter"`,
 			},
 		},
 		"Invalid_Sensitive_Fields": {
@@ -356,6 +366,8 @@ func TestBuild(t *testing.T) {
 			want: want{
 				forProvider: `type example.Parameters struct{Name *string "json:\"name,omitempty\" tf:\"name,omitempty\""; ReferenceID *string "json:\"referenceId,omitempty\" tf:\"reference_id,omitempty\""; ExternalResourceID *github.com/crossplane/crossplane-runtime/apis/common/v1.Reference "json:\"externalResourceId,omitempty\" tf:\"-\""; ReferenceIDSelector *github.com/crossplane/crossplane-runtime/apis/common/v1.Selector "json:\"referenceIdSelector,omitempty\" tf:\"-\""}`,
 				atProvider:  `type example.Observation struct{Name *string "json:\"name,omitempty\" tf:\"name,omitempty\""; ReferenceID *string "json:\"referenceId,omitempty\" tf:\"reference_id,omitempty\""}`,
+				validationRules: `
+// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.name) || has(self.initProvider.name)",message="name is a required parameter"`,
 			},
 		},
 		"Invalid_Schema_Type": {
@@ -375,6 +387,33 @@ func TestBuild(t *testing.T) {
 				err: errors.Wrapf(errors.Wrapf(errors.Errorf("invalid schema type %s", "TypeInvalid"), "cannot infer type from schema of field %s", "name"), "cannot build the Types"),
 			},
 		},
+		"Validation_Rules_With_Keywords": {
+			args: args{
+				cfg: &config.Resource{
+					TerraformResource: &schema.Resource{
+						Schema: map[string]*schema.Schema{
+							"name": {
+								Type:     schema.TypeString,
+								Required: true,
+							},
+							// "namespace" is a cel reserved value and should be wrapped when used in
+							// validation rules (i.e., __namespace__)
+							"namespace": {
+								Type:     schema.TypeString,
+								Required: true,
+							},
+						},
+					},
+				},
+			},
+			want: want{
+				forProvider: `type example.Parameters struct{Name *string "json:\"name,omitempty\" tf:\"name,omitempty\""; Namespace *string "json:\"namespace,omitempty\" tf:\"namespace,omitempty\""}`,
+				atProvider:  `type example.Observation struct{Name *string "json:\"name,omitempty\" tf:\"name,omitempty\""; Namespace *string "json:\"namespace,omitempty\" tf:\"namespace,omitempty\""}`,
+				validationRules: `
+// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.name) || has(self.initProvider.name)",message="name is a required parameter"
+// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.__namespace__) || has(self.initProvider.__namespace__)",message="namespace is a required parameter"`,
+			},
+		},
 	}
 	for n, tc := range cases {
 		t.Run(n, func(t *testing.T) {
@@ -385,14 +424,17 @@ func TestBuild(t *testing.T) {
 				t.Fatalf("Build(...): -want error, +got error: %s", diff)
 			}
 			if g.ForProviderType != nil {
-				if diff := cmp.Diff(tc.want.forProvider, g.ForProviderType.Obj().String(), test.EquateErrors()); diff != "" {
+				if diff := cmp.Diff(tc.want.forProvider, g.ForProviderType.Obj().String()); diff != "" {
 					t.Fatalf("Build(...): -want forProvider, +got forProvider: %s", diff)
 				}
 			}
 			if g.AtProviderType != nil {
-				if diff := cmp.Diff(tc.want.atProvider, g.AtProviderType.Obj().String(), test.EquateErrors()); diff != "" {
+				if diff := cmp.Diff(tc.want.atProvider, g.AtProviderType.Obj().String()); diff != "" {
 					t.Fatalf("Build(...): -want atProvider, +got atProvider: %s", diff)
 				}
+			}
+			if diff := cmp.Diff(tc.want.validationRules, g.ValidationRules); diff != "" {
+				t.Fatalf("Build(...): -want validationRules, +got validationRules: %s", diff)
 			}
 		})
 	}
