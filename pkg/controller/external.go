@@ -43,6 +43,7 @@ const (
 
 const (
 	rateLimiterScheduler = "scheduler"
+	rateLimiterStatus    = "status"
 	retryLimit           = 20
 )
 
@@ -295,6 +296,7 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 	switch {
 	// we prioritize critical annotation updates over status updates
 	case annotationsUpdated:
+		e.logger.Debug("Critical annotations have been updated.")
 		return managed.ExternalObservation{
 			ResourceExists:          true,
 			ResourceUpToDate:        true,
@@ -305,6 +307,10 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 	case !markedAvailable:
 		addTTR(tr)
 		tr.SetConditions(xpv1.Available())
+		e.logger.Debug("Resource is marked as available.")
+		if e.eventHandler != nil {
+			e.eventHandler.RequestReconcile(rateLimiterStatus, mg.GetName(), nil)
+		}
 		return managed.ExternalObservation{
 			ResourceExists:    true,
 			ResourceUpToDate:  true,
@@ -313,6 +319,7 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 	// with the least priority wrt critical annotation updates and status updates
 	// we allow a late-initialization before the Workspace.Plan call
 	case lateInitedParams:
+		e.logger.Debug("Resource is late-initialized.")
 		return managed.ExternalObservation{
 			ResourceExists:          true,
 			ResourceUpToDate:        true,
@@ -321,12 +328,16 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 		}, nil
 	// now we do a Workspace.Refresh
 	default:
+		if e.eventHandler != nil {
+			e.eventHandler.Forget(rateLimiterStatus, mg.GetName())
+		}
 		plan, err := e.workspace.Plan(ctx)
 		if err != nil {
 			return managed.ExternalObservation{}, errors.Wrap(err, errPlan)
 		}
 
 		resource.SetUpToDateCondition(mg, plan.UpToDate)
+		e.logger.Debug("Called plan on the resource.", "upToDate", plan.UpToDate)
 
 		return managed.ExternalObservation{
 			ResourceExists:    true,
