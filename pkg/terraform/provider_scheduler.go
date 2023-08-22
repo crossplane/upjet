@@ -164,14 +164,14 @@ func (s *SharedProviderScheduler) Start(h ProviderHandle) (InUse, string, error)
 			return nil, "", tferrors.NewRetryScheduleError(r.invocationCount, s.ttl)
 		}
 
-		logger.Debug("Reusing the provider runner", "invocationCount", r.invocationCount)
+		logger.Debug("Reusing the provider runner", "invocationCount", r.invocationCount, "inUse", r.inUse)
 		rc, err := r.Start()
 		return &providerInUse{
 			scheduler: s,
 			handle:    h,
 		}, rc, errors.Wrapf(err, "cannot use already started provider with handle: %s", h)
 	case r != nil:
-		logger.Debug("The provider runner has expired. Attempting to stop...", "invocationCount", r.invocationCount)
+		logger.Debug("The provider runner has expired. Attempting to stop...", "invocationCount", r.invocationCount, "inUse", r.inUse)
 		if err := r.Stop(); err != nil {
 			return nil, "", errors.Wrapf(err, "cannot schedule a new shared provider for handle: %s", h)
 		}
