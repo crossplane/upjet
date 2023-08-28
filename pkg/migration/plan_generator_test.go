@@ -145,6 +145,69 @@ func TestGeneratePlan(t *testing.T) {
 				},
 			},
 		},
+		"PlanWithManagedResourceAndClaimForFileSystemMode": {
+			fields: fields{
+				source: newTestSource(map[string]Metadata{
+					"testdata/plan/sourcevpc.yaml":   {Category: CategoryManaged},
+					"testdata/plan/claim.yaml":       {Category: CategoryClaim},
+					"testdata/plan/composition.yaml": {},
+					"testdata/plan/xrd.yaml":         {},
+					"testdata/plan/xr.yaml":          {Category: CategoryComposite}}),
+				target: newTestTarget(),
+				registry: getRegistry(
+					withPreProcessor(CategoryManaged, &preProcessor{}),
+					withDelegatingConverter(fake.MigrationSourceGVK, delegatingConverter{
+						rFn: func(mg xpresource.Managed) ([]xpresource.Managed, error) {
+							s := mg.(*fake.MigrationSourceObject)
+							t := &fake.MigrationTargetObject{}
+							if _, err := CopyInto(s, t, fake.MigrationTargetGVK, "spec.forProvider.tags", "mockManaged"); err != nil {
+								return nil, err
+							}
+							t.Spec.ForProvider.Tags = make(map[string]string, len(s.Spec.ForProvider.Tags))
+							for _, tag := range s.Spec.ForProvider.Tags {
+								v := tag.Value
+								t.Spec.ForProvider.Tags[tag.Key] = v
+							}
+							return []xpresource.Managed{
+								t,
+							}, nil
+						},
+						cmpFn: func(_ v1.ComposedTemplate, convertedTemplates ...*v1.ComposedTemplate) error {
+							// convert patches in the migration target composed templates
+							for i := range convertedTemplates {
+								convertedTemplates[i].Patches = append([]v1.Patch{
+									{FromFieldPath: ptrFromString("spec.parameters.tagValue"),
+										ToFieldPath: ptrFromString(`spec.forProvider.tags["key1"]`),
+									}, {
+										FromFieldPath: ptrFromString("spec.parameters.tagValue"),
+										ToFieldPath:   ptrFromString(`spec.forProvider.tags["key2"]`),
+									},
+								}, convertedTemplates[i].Patches...)
+							}
+							return nil
+						},
+					}),
+					withPatchSetConverter(patchSetConverter{
+						re:        AllCompositions,
+						converter: &testConverter{},
+					})),
+				opts: []PlanGeneratorOption{WithEnableOnlyFileSystemAPISteps()},
+			},
+			want: want{
+				migrationPlanPath: "testdata/plan/generated/migration_plan_filesystem.yaml",
+				migratedResourceNames: []string{
+					"edit-claims/my-resource.myresources.test.com.yaml",
+					"start-managed/sample-vpc.vpcs.faketargetapi.yaml",
+					"edit-composites/my-resource-dwjgh.xmyresources.test.com.yaml",
+					"new-compositions/example-migrated.compositions.apiextensions.crossplane.io.yaml",
+					"start-composites/my-resource-dwjgh.xmyresources.test.com.yaml",
+					"create-new-managed/sample-vpc.vpcs.faketargetapi.yaml",
+				},
+				preProcessResults: map[Category][]string{
+					CategoryManaged: {"sample-vpc.vpcs.fakesourceapi_v1alpha1"},
+				},
+			},
+		},
 		"PlanWithConfigurationMetaV1": {
 			fields: fields{
 				source: newTestSource(map[string]Metadata{
