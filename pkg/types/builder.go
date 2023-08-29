@@ -318,14 +318,14 @@ func newTopLevelRequiredParam(path string, includeInit bool) *topLevelRequiredPa
 }
 
 func (r *resource) addParameterField(f *Field, field *types.Var) {
-	requiredBySchema := !f.Schema.Optional
+	req := !f.Schema.Optional
 
 	// Note(turkenh): We are collecting the top level required parameters that
 	// are not identifier fields. This is for generating CEL validation rules for
 	// those parameters and not to require them if the management policy is set
 	// Observe Only. In other words, if we are not creating or managing the
 	// resource, we don't need to provide those parameters which are:
-	// - requiredBySchema => required
+	// - req => required
 	// - !f.Identifier => not identifiers - i.e. region, zone, etc.
 	// - len(f.CanonicalPaths) == 1 => top level, i.e. not a nested field
 	// TODO (lsviben): We should add CEL rules for all required fields,
@@ -333,18 +333,18 @@ func (r *resource) addParameterField(f *Field, field *types.Var) {
 	// fields now optional. CEL rules should check if a field is
 	// present either in forProvider or initProvider.
 	// https://github.com/upbound/upjet/issues/239
-	if requiredBySchema && !f.Identifier && len(f.CanonicalPaths) == 1 {
-		requiredBySchema = false
+	if req && !f.Identifier && len(f.CanonicalPaths) == 1 {
+		req = false
 		// If the field is not a terraform field, we should not require it in init,
 		// as it is not an initProvider field.
 		r.topLevelRequiredParams = append(r.topLevelRequiredParams, newTopLevelRequiredParam(f.TransformedName, f.isInit()))
 	}
 
 	// Note(lsviben): Only fields which are not also initProvider fields should have a required kubebuilder comment.
-	f.Comment.Required = pointer.Bool(requiredBySchema && !f.isInit())
+	f.Comment.Required = pointer.Bool(req && !f.isInit())
 
 	// For removing omitempty tag from json tag, we are just checking if the field is required by the schema.
-	if requiredBySchema {
+	if !f.Schema.Optional {
 		// Required fields should not have omitempty tag in json tag.
 		// TODO(muvaf): This overrides user intent if they provided custom
 		// JSON tag.
