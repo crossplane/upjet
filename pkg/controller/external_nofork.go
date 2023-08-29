@@ -104,7 +104,7 @@ func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (m
 		return nil, errors.Wrap(err, "cannot get parameters")
 	}
 	if err = resource.GetSensitiveParameters(ctx, &APISecretClient{kube: c.kube}, tr, params, tr.GetConnectionDetailsMapping()); err != nil {
-		return nil, errors.Wrap(err, "cannot get sensitive parameters")
+		return nil, errors.Wrap(err, "cannot store sensitive parameters into params")
 	}
 	c.config.ExternalName.SetIdentifierArgumentFn(params, meta.GetExternalName(tr))
 
@@ -112,18 +112,22 @@ func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (m
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot get ID")
 	}
+	params["id"] = tfID
 
 	tfState, err := tr.GetObservation()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get the observation")
 	}
+	if err = resource.GetSensitiveParameters(ctx, &APISecretClient{kube: c.kube}, tr, tfState, tr.GetConnectionDetailsMapping()); err != nil {
+		return nil, errors.Wrap(err, "cannot store sensitive parameters into tfState")
+	}
+	//c.config.ExternalName.SetIdentifierArgumentFn(tfState, meta.GetExternalName(tr))
 	tfState["id"] = tfID
 	s, err := c.config.TerraformResource.ShimInstanceStateFromValue(convertMapToCty(tfState))
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to convert cty.Value to terraform.InstanceState")
 	}
 
-	params["id"] = tfID
 	instanceDiff, err := schema.InternalMap(c.config.TerraformResource.Schema).Diff(ctx, s, &tf.ResourceConfig{
 		Raw:    params,
 		Config: params,
@@ -164,7 +168,10 @@ func (n *noForkExternal) Observe(ctx context.Context, mg xpresource.Managed) (ma
 	if diag != nil && diag.HasError() {
 		return managed.ExternalObservation{}, errors.Errorf("failed to observe the resource: %v", diag)
 	}
-	resourceExists := n.resourceData.Id() != ""
+	resourceExists := s != nil && s.ID != ""
+	if !resourceExists {
+		n.instanceState = s
+	}
 	if resourceExists {
 		mg.SetConditions(xpv1.Available())
 		if s != nil {
@@ -172,10 +179,10 @@ func (n *noForkExternal) Observe(ctx context.Context, mg xpresource.Managed) (ma
 			tr.SetObservation(fromFlatmap(s.Attributes))
 		}
 	}
-	noDiff := n.instanceDiff.Empty()
+	//noDiff := n.instanceDiff.Empty()
 	return managed.ExternalObservation{
 		ResourceExists:   resourceExists,
-		ResourceUpToDate: noDiff,
+		ResourceUpToDate: true,
 	}, nil
 }
 
@@ -213,8 +220,11 @@ func (n *noForkExternal) Update(ctx context.Context, _ xpresource.Managed) (mana
 }
 
 func (n *noForkExternal) Delete(ctx context.Context, _ xpresource.Managed) error {
-	diag := n.resourceSchema.DeleteWithoutTimeout(ctx, n.resourceData, n.ts.Meta)
+	n.instanceDiff.Destroy = true
+	_, diag := n.resourceSchema.Apply(ctx, n.instanceState, n.instanceDiff, n.ts.Meta)
 	fmt.Println(diag)
-
+	if diag != nil && diag.HasError() {
+		return errors.Errorf("failed to delete the resource: %v", diag)
+	}
 	return nil
 }
