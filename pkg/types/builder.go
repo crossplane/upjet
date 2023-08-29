@@ -19,6 +19,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 
 	"github.com/upbound/upjet/pkg/config"
+	"github.com/upbound/upjet/pkg/types/name"
 )
 
 const (
@@ -318,6 +319,7 @@ func newTopLevelRequiredParam(path string, includeInit bool) *topLevelRequiredPa
 
 func (r *resource) addParameterField(f *Field, field *types.Var) {
 	requiredBySchema := !f.Schema.Optional
+
 	// Note(turkenh): We are collecting the top level required parameters that
 	// are not identifier fields. This is for generating CEL validation rules for
 	// those parameters and not to require them if the management policy is set
@@ -335,7 +337,7 @@ func (r *resource) addParameterField(f *Field, field *types.Var) {
 		requiredBySchema = false
 		// If the field is not a terraform field, we should not require it in init,
 		// as it is not an initProvider field.
-		r.topLevelRequiredParams = append(r.topLevelRequiredParams, newTopLevelRequiredParam(f.TransformedName, f.TFTag != "-"))
+		r.topLevelRequiredParams = append(r.topLevelRequiredParams, newTopLevelRequiredParam(f.TransformedName, f.isInit()))
 	}
 
 	// Note(lsviben): Only fields which are not also initProvider fields should have a required kubebuilder comment.
@@ -464,4 +466,12 @@ func sanitizePath(p string) string {
 		}
 	}
 	return p
+}
+
+func constructCELPath(canonicalPath []string) string {
+	var celPath []string
+	for _, p := range canonicalPath {
+		celPath = append(celPath, sanitizePath(name.NewFromCamel(p).LowerCamelComputed))
+	}
+	return strings.Join(celPath, ".")
 }
