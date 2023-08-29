@@ -86,12 +86,18 @@ func NewNoForkConnector(kube client.Client, sf terraform.SetupFn, cfg *config.Re
 	}
 }
 
+func copy(tfState, params map[string]any) map[string]any {
+	targetState := make(map[string]any, len(params))
+	for k, v := range params {
+		targetState[k] = v
+	}
+	for k, v := range tfState {
+		targetState[k] = v
+	}
+	return targetState
+}
+
 func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (managed.ExternalClient, error) {
-	/*	tr, ok := mg.(resource.Terraformed)
-		if !ok {
-			return nil, errors.New(errUnexpectedObject)
-		}
-	*/
 	ts, err := c.getTerraformSetup(ctx, c.kube, mg)
 	if err != nil {
 		return nil, errors.Wrap(err, errGetTerraformSetup)
@@ -113,32 +119,27 @@ func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (m
 		return nil, errors.Wrap(err, "cannot get ID")
 	}
 	params["id"] = tfID
+	// we need to parameterize the following for a provider
+	// not all providers may have this attribute
+	params["tags_all"] = params["tags"]
 
 	tfState, err := tr.GetObservation()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get the observation")
 	}
+	copyParams := len(tfState) == 0
 	if err = resource.GetSensitiveParameters(ctx, &APISecretClient{kube: c.kube}, tr, tfState, tr.GetConnectionDetailsMapping()); err != nil {
 		return nil, errors.Wrap(err, "cannot store sensitive parameters into tfState")
 	}
-	//c.config.ExternalName.SetIdentifierArgumentFn(tfState, meta.GetExternalName(tr))
+	c.config.ExternalName.SetIdentifierArgumentFn(tfState, meta.GetExternalName(tr))
 	tfState["id"] = tfID
+	if copyParams {
+		tfState = copy(tfState, params)
+	}
+
 	s, err := c.config.TerraformResource.ShimInstanceStateFromValue(convertMapToCty(tfState))
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to convert cty.Value to terraform.InstanceState")
-	}
-
-	instanceDiff, err := schema.InternalMap(c.config.TerraformResource.Schema).Diff(ctx, s, &tf.ResourceConfig{
-		Raw:    params,
-		Config: params,
-	}, nil, ts.Meta, false)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to get *terraform.InstanceDiff")
-	}
-
-	resourceData, err := schema.InternalMap(c.config.TerraformResource.Schema).Data(s, instanceDiff)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to get *schema.ResourceData")
 	}
 
 	return &noForkExternal{
@@ -146,9 +147,8 @@ func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (m
 		resourceSchema: c.config.TerraformResource,
 		config:         c.config,
 		kube:           c.kube,
-		resourceData:   resourceData,
 		instanceState:  s,
-		instanceDiff:   instanceDiff,
+		params:         params,
 	}, nil
 }
 
@@ -157,37 +157,54 @@ type noForkExternal struct {
 	resourceSchema *schema.Resource
 	config         *config.Resource
 	kube           client.Client
-	resourceData   *schema.ResourceData
 	instanceState  *tf.InstanceState
-	instanceDiff   *tf.InstanceDiff
+	params         map[string]any
+}
+
+func (n *noForkExternal) getResourceDataDiff(ctx context.Context, s *tf.InstanceState) (*tf.InstanceDiff, error) {
+	instanceDiff, err := schema.InternalMap(n.resourceSchema.Schema).Diff(ctx, s, &tf.ResourceConfig{
+		Raw:    n.params,
+		Config: n.params,
+	}, nil, n.ts.Meta, false)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get *terraform.InstanceDiff")
+	}
+
+	return instanceDiff, nil
 }
 
 func (n *noForkExternal) Observe(ctx context.Context, mg xpresource.Managed) (managed.ExternalObservation, error) {
-	s, diag := n.resourceSchema.RefreshWithoutUpgrade(ctx, n.instanceState, n.ts.Meta)
+	newState, diag := n.resourceSchema.RefreshWithoutUpgrade(ctx, n.instanceState, n.ts.Meta)
 	fmt.Println(diag)
 	if diag != nil && diag.HasError() {
 		return managed.ExternalObservation{}, errors.Errorf("failed to observe the resource: %v", diag)
 	}
-	resourceExists := s != nil && s.ID != ""
-	if !resourceExists {
-		n.instanceState = s
-	}
+	n.instanceState = newState
+	noDiff := false
+	resourceExists := newState != nil && newState.ID != ""
 	if resourceExists {
 		mg.SetConditions(xpv1.Available())
-		if s != nil {
-			tr := mg.(resource.Terraformed)
-			tr.SetObservation(fromFlatmap(s.Attributes))
+		mg.(resource.Terraformed).SetObservation(fromFlatmap(newState.Attributes))
+
+		instanceDiff, err := n.getResourceDataDiff(ctx, n.instanceState)
+		if err != nil {
+			return managed.ExternalObservation{}, err
 		}
+		noDiff = instanceDiff.Empty()
 	}
-	//noDiff := n.instanceDiff.Empty()
+
 	return managed.ExternalObservation{
 		ResourceExists:   resourceExists,
-		ResourceUpToDate: true,
+		ResourceUpToDate: noDiff,
 	}, nil
 }
 
 func (n *noForkExternal) Create(ctx context.Context, mg xpresource.Managed) (managed.ExternalCreation, error) {
-	newState, diag := n.resourceSchema.Apply(ctx, n.instanceState, n.instanceDiff, n.ts.Meta)
+	instanceDiff, err := n.getResourceDataDiff(ctx, n.instanceState)
+	if err != nil {
+		return managed.ExternalCreation{}, err
+	}
+	newState, diag := n.resourceSchema.Apply(ctx, n.instanceState, instanceDiff, n.ts.Meta)
 	// diag := n.resourceSchema.CreateWithoutTimeout(ctx, n.resourceData, n.ts.Meta)
 	fmt.Println(diag)
 	if diag != nil && diag.HasError() {
@@ -206,22 +223,36 @@ func (n *noForkExternal) Create(ctx context.Context, mg xpresource.Managed) (man
 	}
 	// we have to make sure the newly set externa-name is recorded
 	meta.SetExternalName(mg, en)
+	mg.(resource.Terraformed).SetObservation(fromFlatmap(newState.Attributes))
 
 	return managed.ExternalCreation{}, nil
 }
 
-func (n *noForkExternal) Update(ctx context.Context, _ xpresource.Managed) (managed.ExternalUpdate, error) {
-	_, diag := n.resourceSchema.Apply(ctx, n.instanceState, n.instanceDiff, n.ts.Meta)
+func (n *noForkExternal) Update(ctx context.Context, mg xpresource.Managed) (managed.ExternalUpdate, error) {
+	instanceDiff, err := n.getResourceDataDiff(ctx, n.instanceState)
+	if err != nil {
+		return managed.ExternalUpdate{}, err
+	}
+	newState, diag := n.resourceSchema.Apply(ctx, n.instanceState, instanceDiff, n.ts.Meta)
 	fmt.Println(diag)
 	if diag != nil && diag.HasError() {
 		return managed.ExternalUpdate{}, errors.Errorf("failed to update the resource: %v", diag)
 	}
+	mg.(resource.Terraformed).SetObservation(fromFlatmap(newState.Attributes))
 	return managed.ExternalUpdate{}, nil
 }
 
 func (n *noForkExternal) Delete(ctx context.Context, _ xpresource.Managed) error {
-	n.instanceDiff.Destroy = true
-	_, diag := n.resourceSchema.Apply(ctx, n.instanceState, n.instanceDiff, n.ts.Meta)
+	instanceDiff, err := n.getResourceDataDiff(ctx, n.instanceState)
+	if err != nil {
+		return err
+	}
+	if instanceDiff == nil {
+		instanceDiff = tf.NewInstanceDiff()
+	}
+
+	instanceDiff.Destroy = true
+	_, diag := n.resourceSchema.Apply(ctx, n.instanceState, instanceDiff, n.ts.Meta)
 	fmt.Println(diag)
 	if diag != nil && diag.HasError() {
 		return errors.Errorf("failed to delete the resource: %v", diag)
