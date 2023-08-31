@@ -78,9 +78,29 @@ func (pg *PlanGenerator) commitSteps() {
 		keys = append(keys, s)
 	}
 	sort.Strings(keys)
-	for _, s := range keys {
-		AddManualExecution(pg.Plan.Spec.stepMap[s])
-		pg.Plan.Spec.Steps = append(pg.Plan.Spec.Steps, *pg.Plan.Spec.stepMap[s])
+
+	addManualExecution := true
+	switch t := pg.source.(type) {
+	case *sources:
+		for _, source := range t.backends {
+			if _, ok := source.(*FileSystemSource); ok {
+				addManualExecution = false
+				break
+			}
+		}
+	case *FileSystemSource:
+		addManualExecution = false
+	}
+
+	if addManualExecution {
+		for _, s := range keys {
+			AddManualExecution(pg.Plan.Spec.stepMap[s])
+			pg.Plan.Spec.Steps = append(pg.Plan.Spec.Steps, *pg.Plan.Spec.stepMap[s])
+		}
+	} else {
+		for _, s := range keys {
+			pg.Plan.Spec.Steps = append(pg.Plan.Spec.Steps, *pg.Plan.Spec.stepMap[s])
+		}
 	}
 }
 

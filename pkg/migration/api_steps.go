@@ -50,6 +50,19 @@ func getAPIMigrationSteps() []step {
 	return steps
 }
 
+func getAPIMigrationStepsFileSystemMode() []step {
+	return []step{
+		stepCreateNewManaged,
+		stepNewCompositions,
+		stepEditComposites,
+		stepEditClaims,
+		stepStartManaged,
+		stepStartComposites,
+		// this must be the last step
+		stepAPIEnd,
+	}
+}
+
 func (pg *PlanGenerator) addStepsForManagedResource(u *UnstructuredWithMetadata) error {
 	if u.Metadata.Category != CategoryManaged {
 		if _, ok, err := toManagedResource(pg.registry.scheme, u.Object); err != nil || !ok {

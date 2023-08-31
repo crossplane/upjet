@@ -15,7 +15,10 @@
 package migration
 
 import (
+	"fmt"
+
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
+	xpmeta "github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	xpv1 "github.com/crossplane/crossplane/apis/apiextensions/v1"
 	xpmetav1 "github.com/crossplane/crossplane/apis/pkg/meta/v1"
@@ -23,6 +26,7 @@ import (
 	xppkgv1 "github.com/crossplane/crossplane/apis/pkg/v1"
 	xppkgv1beta1 "github.com/crossplane/crossplane/apis/pkg/v1beta1"
 	"github.com/pkg/errors"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -41,6 +45,8 @@ const (
 	errRawExtensionUnmarshal       = "failed to unmarshal runtime.RawExtension"
 
 	errFmtPavedDelete = "failed to delete fieldpath %q from paved"
+
+	metadataAnnotationPaveKey = "metadata.annotations['%s']"
 )
 
 // CopyInto copies values of fields from the migration `source` object
@@ -56,7 +62,12 @@ const (
 func CopyInto(source any, target any, targetGVK schema.GroupVersionKind, skipFieldPaths ...string) (any, error) {
 	u := ToSanitizedUnstructured(source)
 	paved := fieldpath.Pave(u.Object)
-	skipFieldPaths = append(skipFieldPaths, "apiVersion", "kind")
+	skipFieldPaths = append(skipFieldPaths, "apiVersion", "kind",
+		fmt.Sprintf(metadataAnnotationPaveKey, xpmeta.AnnotationKeyExternalCreatePending),
+		fmt.Sprintf(metadataAnnotationPaveKey, xpmeta.AnnotationKeyExternalCreateSucceeded),
+		fmt.Sprintf(metadataAnnotationPaveKey, xpmeta.AnnotationKeyExternalCreateFailed),
+		fmt.Sprintf(metadataAnnotationPaveKey, corev1.LastAppliedConfigAnnotation),
+	)
 	for _, p := range skipFieldPaths {
 		if err := paved.DeleteField(p); err != nil {
 			return nil, errors.Wrapf(err, errFmtPavedDelete, p)

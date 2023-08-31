@@ -109,6 +109,12 @@ func WithEnableConfigurationMigrationSteps() PlanGeneratorOption {
 	}
 }
 
+func WithEnableOnlyFileSystemAPISteps() PlanGeneratorOption {
+	return func(pg *PlanGenerator) {
+		pg.enabledSteps = getAPIMigrationStepsFileSystemMode()
+	}
+}
+
 type sources struct {
 	backends []Source
 	i        int
