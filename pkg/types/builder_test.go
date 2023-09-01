@@ -250,7 +250,7 @@ func TestBuild(t *testing.T) {
 				},
 			},
 			want: want{
-				forProvider: `type example.Parameters struct{Enable *bool "json:\"enable,omitempty\" tf:\"enable,omitempty\""; ID *int64 "json:\"id,omitempty\" tf:\"id,omitempty\""; Name *string "json:\"name,omitempty\" tf:\"name,omitempty\""}`,
+				forProvider: `type example.Parameters struct{Enable *bool "json:\"enable,omitempty\" tf:\"enable,omitempty\""; ID *int64 "json:\"id\" tf:\"id,omitempty\""; Name *string "json:\"name\" tf:\"name,omitempty\""}`,
 				atProvider:  `type example.Observation struct{Config *string "json:\"config,omitempty\" tf:\"config,omitempty\""; Enable *bool "json:\"enable,omitempty\" tf:\"enable,omitempty\""; ID *int64 "json:\"id,omitempty\" tf:\"id,omitempty\""; Name *string "json:\"name,omitempty\" tf:\"name,omitempty\""; Value *float64 "json:\"value,omitempty\" tf:\"value,omitempty\""}`,
 				validationRules: `
 // +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.id) || has(self.initProvider.id)",message="id is a required parameter"
@@ -286,7 +286,7 @@ func TestBuild(t *testing.T) {
 				},
 			},
 			want: want{
-				forProvider: `type example.Parameters struct{List []*string "json:\"list,omitempty\" tf:\"list,omitempty\""; ResourceIn map[string]example.ResourceInParameters "json:\"resourceIn,omitempty\" tf:\"resource_in,omitempty\""}`,
+				forProvider: `type example.Parameters struct{List []*string "json:\"list\" tf:\"list,omitempty\""; ResourceIn map[string]example.ResourceInParameters "json:\"resourceIn\" tf:\"resource_in,omitempty\""}`,
 				atProvider:  `type example.Observation struct{List []*string "json:\"list,omitempty\" tf:\"list,omitempty\""; ResourceIn map[string]example.ResourceInParameters "json:\"resourceIn,omitempty\" tf:\"resource_in,omitempty\""; ResourceOut map[string]example.ResourceOutObservation "json:\"resourceOut,omitempty\" tf:\"resource_out,omitempty\""}`,
 				validationRules: `
 // +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.list) || has(self.initProvider.list)",message="list is a required parameter"
@@ -364,7 +364,7 @@ func TestBuild(t *testing.T) {
 				},
 			},
 			want: want{
-				forProvider: `type example.Parameters struct{Name *string "json:\"name,omitempty\" tf:\"name,omitempty\""; ReferenceID *string "json:\"referenceId,omitempty\" tf:\"reference_id,omitempty\""; ExternalResourceID *github.com/crossplane/crossplane-runtime/apis/common/v1.Reference "json:\"externalResourceId,omitempty\" tf:\"-\""; ReferenceIDSelector *github.com/crossplane/crossplane-runtime/apis/common/v1.Selector "json:\"referenceIdSelector,omitempty\" tf:\"-\""}`,
+				forProvider: `type example.Parameters struct{Name *string "json:\"name\" tf:\"name,omitempty\""; ReferenceID *string "json:\"referenceId,omitempty\" tf:\"reference_id,omitempty\""; ExternalResourceID *github.com/crossplane/crossplane-runtime/apis/common/v1.Reference "json:\"externalResourceId,omitempty\" tf:\"-\""; ReferenceIDSelector *github.com/crossplane/crossplane-runtime/apis/common/v1.Selector "json:\"referenceIdSelector,omitempty\" tf:\"-\""}`,
 				atProvider:  `type example.Observation struct{Name *string "json:\"name,omitempty\" tf:\"name,omitempty\""; ReferenceID *string "json:\"referenceId,omitempty\" tf:\"reference_id,omitempty\""}`,
 				validationRules: `
 // +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.name) || has(self.initProvider.name)",message="name is a required parameter"`,
@@ -407,11 +407,44 @@ func TestBuild(t *testing.T) {
 				},
 			},
 			want: want{
-				forProvider: `type example.Parameters struct{Name *string "json:\"name,omitempty\" tf:\"name,omitempty\""; Namespace *string "json:\"namespace,omitempty\" tf:\"namespace,omitempty\""}`,
+				forProvider: `type example.Parameters struct{Name *string "json:\"name\" tf:\"name,omitempty\""; Namespace *string "json:\"namespace\" tf:\"namespace,omitempty\""}`,
 				atProvider:  `type example.Observation struct{Name *string "json:\"name,omitempty\" tf:\"name,omitempty\""; Namespace *string "json:\"namespace,omitempty\" tf:\"namespace,omitempty\""}`,
 				validationRules: `
 // +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.name) || has(self.initProvider.name)",message="name is a required parameter"
-// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.__namespace__) || has(self.initProvider.__namespace__)",message="namespace is a required parameter"`,
+// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.__namespace__) || has(self.initProvider.__namespace__)",message="__namespace__ is a required parameter"`,
+			},
+		},
+		"Nested_Required_Fields": {
+			args: args{
+				cfg: &config.Resource{
+					TerraformResource: &schema.Resource{
+						Schema: map[string]*schema.Schema{
+							"nested": {
+								Type:     schema.TypeList,
+								Required: true,
+								Elem: &schema.Resource{
+									Schema: map[string]*schema.Schema{
+										"nested_required": {
+											Type:     schema.TypeString,
+											Required: true,
+										},
+										"nested_optional": {
+											Type:     schema.TypeString,
+											Optional: true,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			want: want{
+				forProvider: `type example.Parameters struct{Nested []example.NestedParameters "json:\"nested\" tf:\"nested,omitempty\""}`,
+				atProvider:  `type example.Observation struct{Nested []example.NestedObservation "json:\"nested,omitempty\" tf:\"nested,omitempty\""}`,
+				validationRules: `
+// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || !has(self.forProvider.nested) || has(self.forProvider.nested[0].nestedRequired) || has(self.initProvider.nested[0].nestedRequired)",message="nested[0].nestedRequired is a required parameter"
+// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.nested) || has(self.initProvider.nested)",message="nested is a required parameter"`,
 			},
 		},
 	}
@@ -435,6 +468,129 @@ func TestBuild(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.want.validationRules, g.ValidationRules); diff != "" {
 				t.Fatalf("Build(...): -want validationRules, +got validationRules: %s", diff)
+			}
+		})
+	}
+}
+
+func TestConstructCELRule(t *testing.T) {
+	type args struct {
+		celPath []string
+		isInit  bool
+	}
+	type want struct {
+		celRule *celRule
+	}
+	cases := map[string]struct {
+		args
+		want
+	}{
+		"EmptyCELPath": {
+			args: args{
+				celPath: []string{},
+				isInit:  true,
+			},
+			want: want{
+				celRule: &celRule{},
+			},
+		},
+		"SimpleCELPath": {
+			args: args{
+				celPath: []string{"required"},
+				isInit:  true,
+			},
+			want: want{
+				celRule: newCelRule(
+					"has(self.forProvider.required)",
+					"has(self.initProvider.required)",
+					"required"),
+			},
+		},
+		"SimpleNoInitCELPath": {
+			args: args{
+				celPath: []string{"required"},
+				isInit:  false,
+			},
+			want: want{
+				celRule: newCelRule(
+					"has(self.forProvider.required)",
+					"",
+					"required"),
+			},
+		},
+		"NestedCELPathMap": {
+			args: args{
+				celPath: []string{"required", "nested"},
+				isInit:  true,
+			},
+			want: want{
+				celRule: newCelRule(
+					"has(self.forProvider.required.nested)",
+					"has(self.initProvider.required.nested)",
+					"required.nested"),
+			},
+		},
+		"NestedCELPathList": {
+			args: args{
+				celPath: []string{"required", "*", "nested"},
+				isInit:  true,
+			},
+			want: want{
+				celRule: newCelRule(
+					"!has(self.forProvider.required) || has(self.forProvider.required[0].nested)",
+					"has(self.initProvider.required[0].nested)",
+					"required[0].nested"),
+			},
+		},
+		"DeepNestedCELPathList": {
+			args: args{
+				celPath: []string{"required", "*", "nested", "*", "deepNested", "*", "evenDeeperNested"},
+				isInit:  true,
+			},
+			want: want{
+				celRule: newCelRule(
+					"!has(self.forProvider.required) || !has(self.forProvider.required[0].nested) || !has(self.forProvider.required[0].nested[0].deepNested) || has(self.forProvider.required[0].nested[0].deepNested[0].evenDeeperNested)",
+					"has(self.initProvider.required[0].nested[0].deepNested[0].evenDeeperNested)",
+					"required[0].nested[0].deepNested[0].evenDeeperNested"),
+			},
+		},
+		"NestedCELPathListEndInWildcard": {
+			args: args{
+				celPath: []string{"required", "*", "nested", "*"},
+				isInit:  true,
+			},
+			want: want{
+				celRule: newCelRule(
+					"!has(self.forProvider.required) || has(self.forProvider.required[0].nested)",
+					"has(self.initProvider.required[0].nested)",
+					"required[0].nested"),
+			},
+		},
+		"NestedCELPathListReservedKeyword": {
+			args: args{
+				celPath: []string{"namespace", "*", "nested"},
+				isInit:  true,
+			},
+			want: want{
+				celRule: newCelRule(
+					"!has(self.forProvider.__namespace__) || has(self.forProvider.__namespace__[0].nested)",
+					"has(self.initProvider.__namespace__[0].nested)",
+					"__namespace__[0].nested"),
+			},
+		},
+	}
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			res := constructCELRules(tc.args.celPath, tc.isInit)
+
+			if diff := cmp.Diff(tc.want.celRule.rule, res.rule); diff != "" {
+				t.Fatalf("Build(...): -want rule, +got rule: %s", diff)
+			}
+			if diff := cmp.Diff(tc.want.celRule.path, res.path); diff != "" {
+				t.Fatalf("Build(...): -want path, +got path: %s", diff)
+			}
+			if diff := cmp.Diff(tc.want.celRule.initProviderRule, res.initProviderRule); diff != "" {
+				t.Fatalf("Build(...): -want initProviderRule, +got initProviderRule: %s", diff)
 			}
 		})
 	}

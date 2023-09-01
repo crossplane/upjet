@@ -19,22 +19,23 @@ import (
 )
 
 var parentheses = regexp.MustCompile(`\(([^)]+)\)`)
+var sfx = "SecretRef"
 
 // Field represents a field that is built from the Terraform schema.
 // It contains the go field related information such as tags, field type, comment.
 type Field struct {
-	Schema                                   *schema.Schema
-	Name                                     name.Name
-	Comment                                  *comments.Comment
-	TFTag, JSONTag, FieldNameCamel           string
-	TerraformPaths, CRDPaths, CanonicalPaths []string
-	FieldType                                types.Type
-	InitType                                 types.Type
-	AsBlocksMode                             bool
-	Reference                                *config.Reference
-	TransformedName                          string
-	SelectorName                             string
-	Identifier                               bool
+	Schema                                             *schema.Schema
+	Name                                               name.Name
+	Comment                                            *comments.Comment
+	TFTag, JSONTag, FieldNameCamel                     string
+	TerraformPaths, CRDPaths, CanonicalPaths, CELPaths []string
+	FieldType                                          types.Type
+	InitType                                           types.Type
+	AsBlocksMode                                       bool
+	Reference                                          *config.Reference
+	TransformedName                                    string
+	SelectorName                                       string
+	Identifier                                         bool
 }
 
 // getDocString tries to extract the documentation string for the specified
@@ -89,7 +90,7 @@ func getDocString(cfg *config.Resource, f *Field, tfPath []string) string { //no
 }
 
 // NewField returns a constructed Field object.
-func NewField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema, snakeFieldName string, tfPath, xpPath, names []string, asBlocksMode bool) (*Field, error) {
+func NewField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema, snakeFieldName string, tfPath, xpPath, celPath []string, asBlocksMode bool, names []string) (*Field, error) {
 	f := &Field{
 		Schema:         sch,
 		Name:           name.NewFromSnake(snakeFieldName),
@@ -129,6 +130,12 @@ func NewField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema,
 	f.CRDPaths = append(xpPath, f.Name.LowerCamelComputed) // nolint:gocritic
 	// Canonical paths, e.g. {"LifecycleRule", "Transition", "Days"}
 	f.CanonicalPaths = append(names[1:], f.Name.Camel) // nolint:gocritic
+	// CEL paths, e.g. {"lifecycleRule", "*", "transition", "*", "days"}
+	if f.Schema.Sensitive {
+		f.CELPaths = append(celPath, f.Name.LowerCamelComputed+sfx)
+	} else {
+		f.CELPaths = append(celPath, f.Name.LowerCamelComputed)
+	}
 
 	for _, ignoreField := range cfg.LateInitializer.IgnoredFields {
 		// Convert configuration input from Terraform path to canonical path
@@ -152,8 +159,8 @@ func NewField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema,
 }
 
 // NewSensitiveField returns a constructed sensitive Field object.
-func NewSensitiveField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema, snakeFieldName string, tfPath, xpPath, names []string, asBlocksMode bool) (*Field, bool, error) { //nolint:gocyclo
-	f, err := NewField(g, cfg, r, sch, snakeFieldName, tfPath, xpPath, names, asBlocksMode)
+func NewSensitiveField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema, snakeFieldName string, tfPath, xpPath, celPath, names []string, asBlocksMode bool) (*Field, bool, error) { //nolint:gocyclo
+	f, err := NewField(g, cfg, r, sch, snakeFieldName, tfPath, xpPath, celPath, asBlocksMode, names)
 	if err != nil {
 		return nil, false, err
 	}
@@ -164,7 +171,6 @@ func NewSensitiveField(g *Builder, cfg *config.Resource, r *resource, sch *schem
 		// Data will be stored in connection details secret
 		return nil, true, nil
 	}
-	sfx := "SecretRef"
 	cfg.Sensitive.AddFieldPath(fieldPathWithWildcard(f.TerraformPaths), "spec.forProvider."+fieldPathWithWildcard(f.CRDPaths)+sfx)
 	// todo(turkenh): do we need to support other field types as sensitive?
 	if f.FieldType.String() != "string" && f.FieldType.String() != "*string" && f.FieldType.String() != "[]string" &&
@@ -196,8 +202,8 @@ func NewSensitiveField(g *Builder, cfg *config.Resource, r *resource, sch *schem
 }
 
 // NewReferenceField returns a constructed reference Field object.
-func NewReferenceField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema, ref *config.Reference, snakeFieldName string, tfPath, xpPath, names []string, asBlocksMode bool) (*Field, error) {
-	f, err := NewField(g, cfg, r, sch, snakeFieldName, tfPath, xpPath, names, asBlocksMode)
+func NewReferenceField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema, ref *config.Reference, snakeFieldName string, tfPath, xpPath, celPath, names []string, asBlocksMode bool) (*Field, error) {
+	f, err := NewField(g, cfg, r, sch, snakeFieldName, tfPath, xpPath, celPath, asBlocksMode, names)
 	if err != nil {
 		return nil, err
 	}

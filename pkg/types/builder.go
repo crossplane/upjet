@@ -19,7 +19,6 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 
 	"github.com/upbound/upjet/pkg/config"
-	"github.com/upbound/upjet/pkg/types/name"
 )
 
 const (
@@ -69,7 +68,7 @@ func NewBuilder(pkg *types.Package) *Builder {
 
 // Build returns parameters and observation types built out of Terraform schema.
 func (g *Builder) Build(cfg *config.Resource) (Generated, error) {
-	fp, ap, ip, err := g.buildResource(cfg.TerraformResource, cfg, nil, nil, false, cfg.Kind)
+	fp, ap, ip, err := g.buildResource(cfg.TerraformResource, cfg, nil, nil, nil, false, cfg.Kind)
 	return Generated{
 		Types:            g.genTypes,
 		Comments:         g.comments,
@@ -80,7 +79,7 @@ func (g *Builder) Build(cfg *config.Resource) (Generated, error) {
 	}, errors.Wrapf(err, "cannot build the Types")
 }
 
-func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPath []string, xpPath []string, asBlocksMode bool, names ...string) (*types.Named, *types.Named, *types.Named, error) { //nolint:gocyclo
+func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPath, xpPath, celPath []string, asBlocksMode bool, names ...string) (*types.Named, *types.Named, *types.Named, error) { //nolint:gocyclo
 	// NOTE(muvaf): There can be fields in the same CRD with same name but in
 	// different types. Since we generate the type using the field name, there
 	// can be collisions. In order to be able to generate unique names consistently,
@@ -105,7 +104,7 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 		switch {
 		case res.Schema[snakeFieldName].Sensitive:
 			var drop bool
-			f, drop, err = NewSensitiveField(g, cfg, r, res.Schema[snakeFieldName], snakeFieldName, tfPath, xpPath, names, asBlocksMode)
+			f, drop, err = NewSensitiveField(g, cfg, r, res.Schema[snakeFieldName], snakeFieldName, tfPath, xpPath, celPath, names, asBlocksMode)
 			if err != nil {
 				return nil, nil, nil, err
 			}
@@ -113,12 +112,12 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 				continue
 			}
 		case reference != nil:
-			f, err = NewReferenceField(g, cfg, r, res.Schema[snakeFieldName], reference, snakeFieldName, tfPath, xpPath, names, asBlocksMode)
+			f, err = NewReferenceField(g, cfg, r, res.Schema[snakeFieldName], reference, snakeFieldName, tfPath, xpPath, celPath, names, asBlocksMode)
 			if err != nil {
 				return nil, nil, nil, err
 			}
 		default:
-			f, err = NewField(g, cfg, r, res.Schema[snakeFieldName], snakeFieldName, tfPath, xpPath, names, asBlocksMode)
+			f, err = NewField(g, cfg, r, res.Schema[snakeFieldName], snakeFieldName, tfPath, xpPath, celPath, asBlocksMode, names)
 			if err != nil {
 				return nil, nil, nil, err
 			}
@@ -148,13 +147,12 @@ func (g *Builder) AddToBuilder(typeNames *TypeNames, r *resource) (*types.Named,
 	obsType := types.NewNamed(typeNames.ObservationTypeName, types.NewStruct(r.obsFields, r.obsTags), nil)
 	g.genTypes = append(g.genTypes, obsType)
 
-	for _, p := range r.topLevelRequiredParams {
+	for _, p := range r.celRules {
 		g.validationRules += "\n"
-		sp := sanitizePath(p.path)
-		if p.includeInit {
-			g.validationRules += fmt.Sprintf(`// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.%s) || has(self.initProvider.%s)",message="%s is a required parameter"`, sp, sp, p.path)
+		if p.initProviderRule != "" {
+			g.validationRules += fmt.Sprintf(`// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || %s || %s",message="%s is a required parameter"`, p.rule, p.initProviderRule, p.path)
 		} else {
-			g.validationRules += fmt.Sprintf(`// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.%s)",message="%s is a required parameter"`, sp, p.path)
+			g.validationRules += fmt.Sprintf(`// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || %s",message="%s is a required parameter"`, p.rule, p.path)
 		}
 	}
 
@@ -179,6 +177,7 @@ func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, r 
 			// runtime in the controller.
 			f.TerraformPaths = append(f.TerraformPaths, wildcard)
 			f.CRDPaths = append(f.CRDPaths, wildcard)
+			f.CELPaths = append(f.CELPaths, wildcard)
 		}
 		var elemType types.Type
 		var initElemType types.Type
@@ -198,7 +197,7 @@ func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, r 
 			}
 			initElemType = elemType
 		case *schema.Schema:
-			newf, err := NewField(g, cfg, r, et, f.Name.Snake, f.TerraformPaths, f.CRDPaths, names, false)
+			newf, err := NewField(g, cfg, r, et, f.Name.Snake, f.TerraformPaths, f.CRDPaths, f.CELPaths, false, names)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -211,7 +210,7 @@ func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, r 
 			if f.Schema.ConfigMode == schema.SchemaConfigModeAttr {
 				asBlocksMode = true
 			}
-			paramType, obsType, initType, err := g.buildResource(et, cfg, f.TerraformPaths, f.CRDPaths, asBlocksMode, names...)
+			paramType, obsType, initType, err := g.buildResource(et, cfg, f.TerraformPaths, f.CRDPaths, f.CELPaths, asBlocksMode, names...)
 			if err != nil {
 				return nil, nil, errors.Wrapf(err, "cannot infer type from resource schema of element type of %s", fieldPath(names))
 			}
@@ -305,39 +304,36 @@ func NewTypeNames(fieldPaths []string, pkg *types.Package) (*TypeNames, error) {
 type resource struct {
 	paramFields, initFields, obsFields []*types.Var
 	paramTags, initTags, obsTags       []string
-	topLevelRequiredParams             []*topLevelRequiredParam
+	celRules                           []*celRule
 }
 
-type topLevelRequiredParam struct {
-	path        string
-	includeInit bool
+type celRule struct {
+	rule             string
+	initProviderRule string
+	path             string
 }
 
-func newTopLevelRequiredParam(path string, includeInit bool) *topLevelRequiredParam {
-	return &topLevelRequiredParam{path: path, includeInit: includeInit}
+func newCelRule(rule, initProviderRule, path string) *celRule {
+	return &celRule{
+		rule:             rule,
+		initProviderRule: initProviderRule,
+		path:             path,
+	}
 }
 
 func (r *resource) addParameterField(f *Field, field *types.Var) {
 	req := !f.Schema.Optional
 
-	// Note(turkenh): We are collecting the top level required parameters that
-	// are not identifier fields. This is for generating CEL validation rules for
-	// those parameters and not to require them if the management policy is set
-	// Observe Only. In other words, if we are not creating or managing the
+	// Note(lsviben): We are constructing the CEL rules for required fields that
+	// are not identifier fields. If we are not creating or managing the
 	// resource, we don't need to provide those parameters which are:
 	// - req => required
 	// - !f.Identifier => not identifiers - i.e. region, zone, etc.
-	// - len(f.CanonicalPaths) == 1 => top level, i.e. not a nested field
-	// TODO (lsviben): We should add CEL rules for all required fields,
-	// not just the top level ones, due to having all forProvider
-	// fields now optional. CEL rules should check if a field is
-	// present either in forProvider or initProvider.
-	// https://github.com/upbound/upjet/issues/239
-	if req && !f.Identifier && len(f.CanonicalPaths) == 1 {
+	// If they are initProvider fields, we also add a check so that the field can
+	// be set either in spec.forProvider or spec.initProvider.
+	if req && !f.Identifier {
 		req = false
-		// If the field is not a terraform field, we should not require it in init,
-		// as it is not an initProvider field.
-		r.topLevelRequiredParams = append(r.topLevelRequiredParams, newTopLevelRequiredParam(f.TransformedName, f.isInit()))
+		r.celRules = append(r.celRules, constructCELRules(f.CELPaths, f.isInit()))
 	}
 
 	// Note(lsviben): Only fields which are not also initProvider fields should have a required kubebuilder comment.
@@ -468,10 +464,63 @@ func sanitizePath(p string) string {
 	return p
 }
 
-func constructCELPath(canonicalPath []string) string {
-	var celPath []string
-	for _, p := range canonicalPath {
-		celPath = append(celPath, sanitizePath(name.NewFromCamel(p).LowerCamelComputed))
+func constructCELPath(celPath []string) string {
+	var currentPath []string
+	// Go through the list of fields, and if a wildcard is encountered,
+	// it means that the previous field is a list, so we add "[0]" to the path.
+	// This is not ideal, but as there is no "list[*]" in CEL, we are at
+	// least checking the first element of the list.
+	// In most cases, due to the way we generate the types, the lists are
+	// artificial and have only one element, so this should not be a problem.
+	// In other cases, it just means that we miss validation for the other
+	// elements of the list.
+	for i, p := range celPath {
+		if p == wildcard {
+			// if a wildcard is at the end, we don't need to add "[0]" to the path
+			if i == len(celPath)-1 {
+				continue
+			}
+			currentPath[len(currentPath)-1] = fmt.Sprintf("%s[0]", currentPath[len(currentPath)-1])
+			continue
+		}
+		currentPath = append(currentPath, sanitizePath(p))
 	}
-	return strings.Join(celPath, ".")
+	return strings.Join(currentPath, ".")
+}
+
+func constructCELRules(celPath []string, isInit bool) *celRule {
+	if len(celPath) == 0 {
+		return &celRule{}
+	}
+	var rule []string
+	var currentPath []string
+
+	// construct forProvider rule.
+	// If the field is a wildcard, it means that the previous field is a list,
+	// so we need to make a check if the list is not empty. This is needed
+	// as we should not require a required field of a listed resource if the
+	// list is empty and not required. If the list is required, then it would
+	// be covered by another rule.
+	for i, p := range celPath {
+		currentPath = append(currentPath, p)
+		if p == wildcard {
+			// if a wildcard is at the end, we don't need to create the rule
+			if i != len(celPath)-1 {
+				rule = append(rule, fmt.Sprintf(`!has(self.forProvider.%s)`, constructCELPath(currentPath)))
+			}
+			continue
+		}
+	}
+
+	path := constructCELPath(celPath)
+	rule = append(rule, fmt.Sprintf(`has(self.forProvider.%s)`, path))
+	forProviderRule := strings.Join(rule, " || ")
+
+	// construct initProvider rule if the field is an init field
+	var initRule string
+	if isInit {
+		initRule = fmt.Sprintf(`has(self.initProvider.%s)`, path)
+	}
+
+	return newCelRule(forProviderRule, initRule, path)
 }
