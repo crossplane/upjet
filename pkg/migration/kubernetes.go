@@ -232,7 +232,11 @@ func (ks *KubernetesSource) getCategoryResources(c Category) error {
 }
 
 func (ks *KubernetesSource) getGVKResources(gvks []schema.GroupVersionKind, category Category) error {
+	processed := map[schema.GroupVersionKind]struct{}{}
 	for _, gvk := range gvks {
+		if _, ok := processed[gvk]; ok {
+			continue
+		}
 		m, err := ks.restMapper.RESTMapping(gvk.GroupKind(), gvk.Version)
 		if err != nil {
 			return errors.Wrapf(err, "cannot get REST mappings for GVK: %s", gvk.String())
@@ -240,6 +244,7 @@ func (ks *KubernetesSource) getGVKResources(gvks []schema.GroupVersionKind, cate
 		if err := ks.getResourcesFor(m.Resource, category); err != nil {
 			return errors.Wrapf(err, "cannot get resources for GVK: %s", gvk.String())
 		}
+		processed[gvk] = struct{}{}
 	}
 	return nil
 }
