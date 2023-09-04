@@ -132,8 +132,10 @@ func NewField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema,
 	f.CanonicalPaths = append(names[1:], f.Name.Camel) // nolint:gocritic
 	// CEL paths, e.g. {"lifecycleRule", "*", "transition", "*", "days"}
 	if f.Schema.Sensitive {
+		// nolint:gocritic
 		f.CELPaths = append(celPath, f.Name.LowerCamelComputed+sfx)
 	} else {
+		// nolint:gocritic
 		f.CELPaths = append(celPath, f.Name.LowerCamelComputed)
 	}
 

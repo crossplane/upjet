@@ -465,7 +465,7 @@ func sanitizePath(p string) string {
 }
 
 func constructCELPath(celPath []string) string {
-	var currentPath []string
+	currentPath := make([]string, 0, len(celPath))
 	// Go through the list of fields, and if a wildcard is encountered,
 	// it means that the previous field is a list, so we add "[0]" to the path.
 	// This is not ideal, but as there is no "list[*]" in CEL, we are at
@@ -493,7 +493,7 @@ func constructCELRules(celPath []string, isInit bool) *celRule {
 		return &celRule{}
 	}
 	var rule []string
-	var currentPath []string
+	currentPath := make([]string, 0, len(celPath))
 
 	// construct forProvider rule.
 	// If the field is a wildcard, it means that the previous field is a list,
