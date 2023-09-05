@@ -97,6 +97,7 @@ type packageLockConverter struct {
 // runtime.Scheme with which the corresponding types are registered.
 type Registry struct {
 	unstructuredPreProcessors      map[Category][]UnstructuredPreProcessor
+	resourcePreProcessors          []ManagedPreProcessor
 	resourceConverters             map[schema.GroupVersionKind]ResourceConverter
 	templateConverters             map[schema.GroupVersionKind]ComposedTemplateConverter
 	patchSetConverters             []patchSetConverter
@@ -535,4 +536,17 @@ func (pp PreProcessor) PreProcess(u UnstructuredWithMetadata) error {
 		return nil
 	}
 	return pp(u)
+}
+
+func (r *Registry) RegisterResourcePreProcessor(pp ManagedPreProcessor) {
+	r.resourcePreProcessors = append(r.resourcePreProcessors, pp)
+}
+
+type ResourcePreProcessor func(mg resource.Managed) error
+
+func (pp ResourcePreProcessor) ResourcePreProcessor(mg resource.Managed) error {
+	if pp == nil {
+		return nil
+	}
+	return pp(mg)
 }

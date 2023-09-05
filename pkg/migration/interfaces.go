@@ -162,6 +162,16 @@ type UnstructuredPreProcessor interface {
 	PreProcess(u UnstructuredWithMetadata) error
 }
 
+// ManagedPreProcessor allows manifests read by the Source
+// to be pre-processed before the converters are run.
+// These pre-processors will work for GVKs that have ResourceConverter
+// registered.
+type ManagedPreProcessor interface {
+	// ResourcePreProcessor is called for a manifest read by the Source
+	// before any converters are run.
+	ResourcePreProcessor(mg resource.Managed) error
+}
+
 // CategoricalConverter is a converter that converts resources of a given
 // Category. Because it receives an unstructured argument, it should be
 // used for implementing generic conversion functions acting on a specific

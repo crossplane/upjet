@@ -407,6 +407,13 @@ func (pg *PlanGenerator) convertResource(o UnstructuredWithMetadata, composition
 	if err != nil {
 		return nil, false, errors.Wrap(err, errResourceMigrate)
 	}
+	if pg.registry.resourcePreProcessors != nil {
+		for _, pp := range pg.registry.resourcePreProcessors {
+			if err = pp.ResourcePreProcessor(mg); err != nil {
+				return nil, false, errors.Wrap(err, errResourceMigrate)
+			}
+		}
+	}
 	resources, err := conv.Resource(mg)
 	if err != nil {
 		return nil, false, errors.Wrap(err, errResourceMigrate)
