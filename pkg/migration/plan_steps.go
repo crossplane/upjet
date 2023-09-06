@@ -69,7 +69,7 @@ func setExecStep(name string, s *Step) {
 	}
 }
 
-func (pg *PlanGenerator) commitSteps() {
+func (pg *PlanGenerator) commitSteps() { //nolint: gocyclo
 	if len(pg.Plan.Spec.stepMap) == 0 {
 		return
 	}
