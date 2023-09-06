@@ -35,6 +35,7 @@ const (
 	stepEditComposites
 	stepEditClaims
 	stepDeletionPolicyOrphan
+	stepRemoveFinalizers
 	stepDeleteOldManaged
 	stepStartManaged
 	stepStartComposites
@@ -76,6 +77,9 @@ func (pg *PlanGenerator) addStepsForManagedResource(u *UnstructuredWithMetadata)
 		return err
 	}
 	if err := pg.stepOrphanManagedResource(u, qName); err != nil {
+		return err
+	}
+	if err := pg.stepRemoveFinalizersManagedResource(u, qName); err != nil {
 		return err
 	}
 	pg.stepDeleteOldManagedResource(u)
@@ -133,6 +137,15 @@ func (pg *PlanGenerator) stepOrphanManagedResource(u *UnstructuredWithMetadata, 
 		},
 		Metadata: u.Metadata,
 	}), errResourceOrphan)
+}
+
+func (pg *PlanGenerator) stepRemoveFinalizersManagedResource(u *UnstructuredWithMetadata, qName string) error {
+	if !pg.stepEnabled(stepRemoveFinalizers) {
+		return nil
+	}
+	u.Metadata.Path = fmt.Sprintf("%s/%s.yaml", pg.stepAPI(stepRemoveFinalizers).Name, qName)
+	pg.stepAPI(stepRemoveFinalizers).Patch.Files = append(pg.stepAPI(stepRemoveFinalizers).Patch.Files, u.Metadata.Path)
+	return pg.removeFinalizers(*u)
 }
 
 func (pg *PlanGenerator) stepDeleteOldManagedResource(u *UnstructuredWithMetadata) {
@@ -200,6 +213,21 @@ func (pg *PlanGenerator) pause(u UnstructuredWithMetadata, isPaused bool) error 
 			Path: u.Metadata.Path,
 		},
 	}), errPause)
+}
+
+func (pg *PlanGenerator) removeFinalizers(u UnstructuredWithMetadata) error {
+	return errors.Wrap(pg.target.Put(UnstructuredWithMetadata{
+		Object: unstructured.Unstructured{
+			Object: addNameGVK(u.Object, map[string]any{
+				"metadata": map[string]any{
+					"finalizers": []any{},
+				},
+			}),
+		},
+		Metadata: Metadata{
+			Path: u.Metadata.Path,
+		},
+	}), errResourceRemoveFinalizer)
 }
 
 func (pg *PlanGenerator) stepEditComposites(composites []UnstructuredWithMetadata, convertedMap map[corev1.ObjectReference][]UnstructuredWithMetadata, convertedComposition map[string]string) error {
@@ -310,6 +338,9 @@ func (pg *PlanGenerator) stepAPI(s step) *Step { // nolint:gocyclo // all steps 
 
 	case stepDeletionPolicyOrphan:
 		setPatchStep("deletion-policy-orphan", pg.Plan.Spec.stepMap[stepKey])
+
+	case stepRemoveFinalizers:
+		setPatchStep("remove-finalizers", pg.Plan.Spec.stepMap[stepKey])
 
 	case stepDeleteOldManaged:
 		setDeleteStep("delete-old-managed", pg.Plan.Spec.stepMap[stepKey])

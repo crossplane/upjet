@@ -54,6 +54,7 @@ const (
 	errComposedTemplateMigrate         = "failed to migrate the composed templates of the composition"
 	errResourceOutput                  = "failed to output migrated resource"
 	errResourceOrphan                  = "failed to orphan managed resource"
+	errResourceRemoveFinalizer         = "failed to remove finalizers of managed resource"
 	errCompositionOutput               = "failed to output migrated composition"
 	errCompositeOutput                 = "failed to output migrated composite"
 	errClaimOutput                     = "failed to output migrated claim"

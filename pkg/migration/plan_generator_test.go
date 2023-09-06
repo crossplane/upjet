@@ -136,6 +136,7 @@ func TestGeneratePlan(t *testing.T) {
 					"pause-composites/my-resource-dwjgh.xmyresources.test.com.yaml",
 					"edit-composites/my-resource-dwjgh.xmyresources.test.com.yaml",
 					"deletion-policy-orphan/sample-vpc.vpcs.fakesourceapi.yaml",
+					"remove-finalizers/sample-vpc.vpcs.fakesourceapi.yaml",
 					"new-compositions/example-migrated.compositions.apiextensions.crossplane.io.yaml",
 					"start-composites/my-resource-dwjgh.xmyresources.test.com.yaml",
 					"create-new-managed/sample-vpc.vpcs.faketargetapi.yaml",
