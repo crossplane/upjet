@@ -84,7 +84,7 @@ func (pg *PlanGenerator) commitSteps() { //nolint: gocyclo
 	// therefore needs to be sorted according to their numeric values.
 	// otherwise, sorting the strings directly causes faulty behavior e.g "1" < "10" < "2"
 	// sorting will panic if a non-numeric step key is found in keys
-	sort.Slice(keys, func(i, j int) bool {
+	sort.SliceStable(keys, func(i, j int) bool {
 		fi, err := strconv.ParseFloat(keys[i], 64)
 		if err != nil {
 			panic(err)
