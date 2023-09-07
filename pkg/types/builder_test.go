@@ -253,8 +253,8 @@ func TestBuild(t *testing.T) {
 				forProvider: `type example.Parameters struct{Enable *bool "json:\"enable,omitempty\" tf:\"enable,omitempty\""; ID *int64 "json:\"id,omitempty\" tf:\"id,omitempty\""; Name *string "json:\"name,omitempty\" tf:\"name,omitempty\""}`,
 				atProvider:  `type example.Observation struct{Config *string "json:\"config,omitempty\" tf:\"config,omitempty\""; Enable *bool "json:\"enable,omitempty\" tf:\"enable,omitempty\""; ID *int64 "json:\"id,omitempty\" tf:\"id,omitempty\""; Name *string "json:\"name,omitempty\" tf:\"name,omitempty\""; Value *float64 "json:\"value,omitempty\" tf:\"value,omitempty\""}`,
 				validationRules: `
-// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.id) || has(self.initProvider.id)",message="id is a required parameter"
-// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.name) || has(self.initProvider.name)",message="name is a required parameter"`,
+// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.id) || (has(self.initProvider) && has(self.initProvider.id))",message="spec.forProvider.id is a required parameter"
+// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.name) || (has(self.initProvider) && has(self.initProvider.name))",message="spec.forProvider.name is a required parameter"`,
 			},
 		},
 		"Resource_Types": {
@@ -289,8 +289,8 @@ func TestBuild(t *testing.T) {
 				forProvider: `type example.Parameters struct{List []*string "json:\"list,omitempty\" tf:\"list,omitempty\""; ResourceIn map[string]example.ResourceInParameters "json:\"resourceIn,omitempty\" tf:\"resource_in,omitempty\""}`,
 				atProvider:  `type example.Observation struct{List []*string "json:\"list,omitempty\" tf:\"list,omitempty\""; ResourceIn map[string]example.ResourceInParameters "json:\"resourceIn,omitempty\" tf:\"resource_in,omitempty\""; ResourceOut map[string]example.ResourceOutObservation "json:\"resourceOut,omitempty\" tf:\"resource_out,omitempty\""}`,
 				validationRules: `
-// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.list) || has(self.initProvider.list)",message="list is a required parameter"
-// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.resourceIn) || has(self.initProvider.resourceIn)",message="resourceIn is a required parameter"`,
+// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.list) || (has(self.initProvider) && has(self.initProvider.list))",message="spec.forProvider.list is a required parameter"
+// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.resourceIn) || (has(self.initProvider) && has(self.initProvider.resourceIn))",message="spec.forProvider.resourceIn is a required parameter"`,
 			},
 		},
 		"Sensitive_Fields": {
@@ -319,8 +319,8 @@ func TestBuild(t *testing.T) {
 				forProvider: `type example.Parameters struct{Key1SecretRef *github.com/crossplane/crossplane-runtime/apis/common/v1.SecretKeySelector "json:\"key1SecretRef,omitempty\" tf:\"-\""; Key2SecretRef github.com/crossplane/crossplane-runtime/apis/common/v1.SecretKeySelector "json:\"key2SecretRef\" tf:\"-\""; Key3SecretRef []github.com/crossplane/crossplane-runtime/apis/common/v1.SecretKeySelector "json:\"key3SecretRef\" tf:\"-\""}`,
 				atProvider:  `type example.Observation struct{}`,
 				validationRules: `
-// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.key2SecretRef)",message="key2SecretRef is a required parameter"
-// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.key3SecretRef)",message="key3SecretRef is a required parameter"`,
+// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.key2SecretRef)",message="spec.forProvider.key2SecretRef is a required parameter"
+// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.key3SecretRef)",message="spec.forProvider.key3SecretRef is a required parameter"`,
 			},
 		},
 		"Invalid_Sensitive_Fields": {
@@ -367,7 +367,7 @@ func TestBuild(t *testing.T) {
 				forProvider: `type example.Parameters struct{Name *string "json:\"name,omitempty\" tf:\"name,omitempty\""; ReferenceID *string "json:\"referenceId,omitempty\" tf:\"reference_id,omitempty\""; ExternalResourceID *github.com/crossplane/crossplane-runtime/apis/common/v1.Reference "json:\"externalResourceId,omitempty\" tf:\"-\""; ReferenceIDSelector *github.com/crossplane/crossplane-runtime/apis/common/v1.Selector "json:\"referenceIdSelector,omitempty\" tf:\"-\""}`,
 				atProvider:  `type example.Observation struct{Name *string "json:\"name,omitempty\" tf:\"name,omitempty\""; ReferenceID *string "json:\"referenceId,omitempty\" tf:\"reference_id,omitempty\""}`,
 				validationRules: `
-// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.name) || has(self.initProvider.name)",message="name is a required parameter"`,
+// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.name) || (has(self.initProvider) && has(self.initProvider.name))",message="spec.forProvider.name is a required parameter"`,
 			},
 		},
 		"Invalid_Schema_Type": {
@@ -410,8 +410,8 @@ func TestBuild(t *testing.T) {
 				forProvider: `type example.Parameters struct{Name *string "json:\"name,omitempty\" tf:\"name,omitempty\""; Namespace *string "json:\"namespace,omitempty\" tf:\"namespace,omitempty\""}`,
 				atProvider:  `type example.Observation struct{Name *string "json:\"name,omitempty\" tf:\"name,omitempty\""; Namespace *string "json:\"namespace,omitempty\" tf:\"namespace,omitempty\""}`,
 				validationRules: `
-// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.name) || has(self.initProvider.name)",message="name is a required parameter"
-// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.__namespace__) || has(self.initProvider.__namespace__)",message="namespace is a required parameter"`,
+// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.name) || (has(self.initProvider) && has(self.initProvider.name))",message="spec.forProvider.name is a required parameter"
+// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.__namespace__) || (has(self.initProvider) && has(self.initProvider.__namespace__))",message="spec.forProvider.namespace is a required parameter"`,
 			},
 		},
 	}
