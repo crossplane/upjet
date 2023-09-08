@@ -17,6 +17,7 @@ package migration
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -68,7 +69,7 @@ func setExecStep(name string, s *Step) {
 	}
 }
 
-func (pg *PlanGenerator) commitSteps() {
+func (pg *PlanGenerator) commitSteps() { //nolint: gocyclo
 	if len(pg.Plan.Spec.stepMap) == 0 {
 		return
 	}
@@ -77,8 +78,23 @@ func (pg *PlanGenerator) commitSteps() {
 	for s := range pg.Plan.Spec.stepMap {
 		keys = append(keys, s)
 	}
-	sort.Strings(keys)
-
+	// keys slice consist of the step keys of enabled migration steps.
+	// step keys are the string representation of integer or float64 numbers,
+	// which correspond to the step execution order (greater number executes later)
+	// therefore needs to be sorted according to their numeric values.
+	// otherwise, sorting the strings directly causes faulty behavior e.g "1" < "10" < "2"
+	// sorting will panic if a non-numeric step key is found in keys
+	sort.SliceStable(keys, func(i, j int) bool {
+		fi, err := strconv.ParseFloat(keys[i], 64)
+		if err != nil {
+			panic(err)
+		}
+		fj, err := strconv.ParseFloat(keys[j], 64)
+		if err != nil {
+			panic(err)
+		}
+		return fi < fj
+	})
 	addManualExecution := true
 	switch t := pg.source.(type) {
 	case *sources:

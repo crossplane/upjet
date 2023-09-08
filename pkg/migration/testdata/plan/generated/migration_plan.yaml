@@ -61,6 +61,15 @@ spec:
       - "kubectl patch --type='merge' -f deletion-policy-orphan/sample-vpc.vpcs.fakesourceapi.yaml --patch-file deletion-policy-orphan/sample-vpc.vpcs.fakesourceapi.yaml"
     type: Patch
 
+  - patch:
+      type: merge
+      files:
+        - remove-finalizers/sample-vpc.vpcs.fakesourceapi.yaml
+    name: remove-finalizers
+    manualExecution:
+      - "kubectl patch --type='merge' -f remove-finalizers/sample-vpc.vpcs.fakesourceapi.yaml --patch-file remove-finalizers/sample-vpc.vpcs.fakesourceapi.yaml"
+    type: Patch
+
   - delete:
       options:
         finalizerPolicy: Remove
