@@ -151,9 +151,9 @@ func (g *Builder) AddToBuilder(typeNames *TypeNames, r *resource) (*types.Named,
 		g.validationRules += "\n"
 		sp := sanitizePath(p.path)
 		if p.includeInit {
-			g.validationRules += fmt.Sprintf(`// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.%s) || has(self.initProvider.%s)",message="%s is a required parameter"`, sp, sp, p.path)
+			g.validationRules += fmt.Sprintf(`// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.%s) || (has(self.initProvider) && has(self.initProvider.%s))",message="spec.forProvider.%s is a required parameter"`, sp, sp, p.path)
 		} else {
-			g.validationRules += fmt.Sprintf(`// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.%s)",message="%s is a required parameter"`, sp, p.path)
+			g.validationRules += fmt.Sprintf(`// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.%s)",message="spec.forProvider.%s is a required parameter"`, sp, p.path)
 		}
 	}
 
