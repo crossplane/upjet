@@ -17,15 +17,13 @@ package controller
 import (
 	"context"
 	"fmt"
-	"strings"
-
 	tf "github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
-	"github.com/hashicorp/go-cty/cty"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/pkg/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -35,55 +33,33 @@ import (
 	"github.com/upbound/upjet/pkg/terraform"
 )
 
-func convertMapToCty(data map[string]any) cty.Value {
-	transformedData := make(map[string]cty.Value)
-
-	for key, value := range data {
-		switch v := value.(type) {
-		case int:
-			transformedData[key] = cty.NumberIntVal(int64(v))
-		case string:
-			transformedData[key] = cty.StringVal(v)
-		case bool:
-			transformedData[key] = cty.BoolVal(v)
-		case float64:
-			transformedData[key] = cty.NumberFloatVal(v)
-		case map[string]any:
-			transformedData[key] = convertMapToCty(v)
-		// more cases...
-		default:
-			// handle unknown types, for now we will ignore them
-			continue
-		}
-	}
-
-	return cty.ObjectVal(transformedData)
-}
-
-func fromFlatmap(m map[string]string) map[string]any {
-	result := make(map[string]any, len(m))
-	for k, v := range m {
-		// we need to handle name hierarchies
-		if strings.Contains(k, ".") {
-			continue
-		}
-		result[k] = v
-	}
-	return result
-}
-
 type NoForkConnector struct {
 	getTerraformSetup terraform.SetupFn
 	kube              client.Client
 	config            *config.Resource
+	logger            logging.Logger
 }
 
-func NewNoForkConnector(kube client.Client, sf terraform.SetupFn, cfg *config.Resource) *NoForkConnector {
-	return &NoForkConnector{
+// NoForkOption allows you to configure NoForkConnector.
+type NoForkOption func(connector *NoForkConnector)
+
+// WithNoForkLogger configures a logger for the NoForkConnector.
+func WithNoForkLogger(l logging.Logger) NoForkOption {
+	return func(c *NoForkConnector) {
+		c.logger = l
+	}
+}
+
+func NewNoForkConnector(kube client.Client, sf terraform.SetupFn, cfg *config.Resource, opts ...NoForkOption) *NoForkConnector {
+	nfc := &NoForkConnector{
 		kube:              kube,
 		getTerraformSetup: sf,
 		config:            cfg,
 	}
+	for _, f := range opts {
+		f(nfc)
+	}
+	return nfc
 }
 
 func copy(tfState, params map[string]any) map[string]any {
@@ -121,7 +97,11 @@ func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (m
 	params["id"] = tfID
 	// we need to parameterize the following for a provider
 	// not all providers may have this attribute
-	params["tags_all"] = params["tags"]
+	// TODO: tags_all handling
+	// attrs := c.config.TerraformResource.CoreConfigSchema().Attributes
+	// if _, ok := attrs["tags_all"]; ok {
+	//	 params["tags_all"] = params["tags"]
+	// }
 
 	tfState, err := tr.GetObservation()
 	if err != nil {
@@ -137,7 +117,12 @@ func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (m
 		tfState = copy(tfState, params)
 	}
 
-	s, err := c.config.TerraformResource.ShimInstanceStateFromValue(convertMapToCty(tfState))
+	tfStateCtyValue, err := schema.JSONMapToStateValue(tfState, c.config.TerraformResource.CoreConfigSchema())
+	if err != nil {
+		return nil, err
+	}
+	s, err := c.config.TerraformResource.ShimInstanceStateFromValue(tfStateCtyValue)
+
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to convert cty.Value to terraform.InstanceState")
 	}
@@ -149,6 +134,7 @@ func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (m
 		kube:           c.kube,
 		instanceState:  s,
 		params:         params,
+		logger:         c.logger.WithValues("uid", mg.GetUID(), "name", mg.GetName(), "gvk", mg.GetObjectKind().GroupVersionKind().String()),
 	}, nil
 }
 
@@ -159,6 +145,7 @@ type noForkExternal struct {
 	kube           client.Client
 	instanceState  *tf.InstanceState
 	params         map[string]any
+	logger         logging.Logger
 }
 
 func (n *noForkExternal) getResourceDataDiff(ctx context.Context, s *tf.InstanceState) (*tf.InstanceDiff, error) {
@@ -184,8 +171,11 @@ func (n *noForkExternal) Observe(ctx context.Context, mg xpresource.Managed) (ma
 	resourceExists := newState != nil && newState.ID != ""
 	if resourceExists {
 		mg.SetConditions(xpv1.Available())
-		mg.(resource.Terraformed).SetObservation(fromFlatmap(newState.Attributes))
-
+		stateValueMap, err := n.fromInstanceStateToJSONMap(newState)
+		if err != nil {
+			return managed.ExternalObservation{}, err
+		}
+		mg.(resource.Terraformed).SetObservation(stateValueMap)
 		instanceDiff, err := n.getResourceDataDiff(ctx, n.instanceState)
 		if err != nil {
 			return managed.ExternalObservation{}, err
@@ -223,7 +213,11 @@ func (n *noForkExternal) Create(ctx context.Context, mg xpresource.Managed) (man
 	}
 	// we have to make sure the newly set externa-name is recorded
 	meta.SetExternalName(mg, en)
-	mg.(resource.Terraformed).SetObservation(fromFlatmap(newState.Attributes))
+	stateValueMap, err := n.fromInstanceStateToJSONMap(newState)
+	if err != nil {
+		return managed.ExternalCreation{}, err
+	}
+	mg.(resource.Terraformed).SetObservation(stateValueMap)
 
 	return managed.ExternalCreation{}, nil
 }
@@ -238,7 +232,12 @@ func (n *noForkExternal) Update(ctx context.Context, mg xpresource.Managed) (man
 	if diag != nil && diag.HasError() {
 		return managed.ExternalUpdate{}, errors.Errorf("failed to update the resource: %v", diag)
 	}
-	mg.(resource.Terraformed).SetObservation(fromFlatmap(newState.Attributes))
+
+	stateValueMap, err := n.fromInstanceStateToJSONMap(newState)
+	if err != nil {
+		return managed.ExternalUpdate{}, err
+	}
+	mg.(resource.Terraformed).SetObservation(stateValueMap)
 	return managed.ExternalUpdate{}, nil
 }
 
@@ -258,4 +257,17 @@ func (n *noForkExternal) Delete(ctx context.Context, _ xpresource.Managed) error
 		return errors.Errorf("failed to delete the resource: %v", diag)
 	}
 	return nil
+}
+
+func (n *noForkExternal) fromInstanceStateToJSONMap(newState *tf.InstanceState) (map[string]interface{}, error) {
+	impliedType := n.resourceSchema.CoreConfigSchema().ImpliedType()
+	attrsAsCtyValue, err := newState.AttrsAsObjectValue(impliedType)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not convert attrs to cty value")
+	}
+	stateValueMap, err := schema.StateValueToJSONMap(attrsAsCtyValue, impliedType)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not convert instance state value to JSON")
+	}
+	return stateValueMap, nil
 }
