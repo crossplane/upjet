@@ -49,6 +49,7 @@ func (cg *ControllerGenerator) Generate(cfg *config.Resource, typesPkgPath strin
 		"DisableNameInitializer": cfg.ExternalName.DisableNameInitializer,
 		"TypePackageAlias":       ctrlFile.Imports.UsePackage(typesPkgPath),
 		"UseAsync":               cfg.UseAsync,
+		"UseNoForkClient":        cfg.UseNoForkClient,
 		"ResourceType":           cfg.Name,
 		"Initializers":           cfg.InitializerFns,
 	}

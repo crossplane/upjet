@@ -293,6 +293,10 @@ type Resource struct {
 	// databases.
 	UseAsync bool
 
+	// UseNoForkClient indicates that a no-fork external client should
+	// be generated instead of the Terraform CLI-forking client.
+	UseNoForkClient bool
+
 	InitializerFns []NewInitializerFn
 
 	// OperationTimeouts allows configuring resource operation timeouts.
