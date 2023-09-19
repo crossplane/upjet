@@ -62,7 +62,7 @@ func NewNoForkConnector(kube client.Client, sf terraform.SetupFn, cfg *config.Re
 	return nfc
 }
 
-func copy(tfState, params map[string]any) map[string]any {
+func copyParameters(tfState, params map[string]any) map[string]any {
 	targetState := make(map[string]any, len(params))
 	for k, v := range params {
 		targetState[k] = v
@@ -114,7 +114,7 @@ func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (m
 	c.config.ExternalName.SetIdentifierArgumentFn(tfState, meta.GetExternalName(tr))
 	tfState["id"] = tfID
 	if copyParams {
-		tfState = copy(tfState, params)
+		tfState = copyParameters(tfState, params)
 	}
 
 	tfStateCtyValue, err := schema.JSONMapToStateValue(tfState, c.config.TerraformResource.CoreConfigSchema())
@@ -175,7 +175,10 @@ func (n *noForkExternal) Observe(ctx context.Context, mg xpresource.Managed) (ma
 		if err != nil {
 			return managed.ExternalObservation{}, err
 		}
-		mg.(resource.Terraformed).SetObservation(stateValueMap)
+		err = mg.(resource.Terraformed).SetObservation(stateValueMap)
+		if err != nil {
+			return managed.ExternalObservation{}, errors.Errorf("could not set observation: %v", err)
+		}
 		instanceDiff, err := n.getResourceDataDiff(ctx, n.instanceState)
 		if err != nil {
 			return managed.ExternalObservation{}, err
@@ -217,7 +220,10 @@ func (n *noForkExternal) Create(ctx context.Context, mg xpresource.Managed) (man
 	if err != nil {
 		return managed.ExternalCreation{}, err
 	}
-	mg.(resource.Terraformed).SetObservation(stateValueMap)
+	err = mg.(resource.Terraformed).SetObservation(stateValueMap)
+	if err != nil {
+		return managed.ExternalCreation{}, errors.Errorf("could not set observation: %v", err)
+	}
 
 	return managed.ExternalCreation{}, nil
 }
@@ -237,7 +243,11 @@ func (n *noForkExternal) Update(ctx context.Context, mg xpresource.Managed) (man
 	if err != nil {
 		return managed.ExternalUpdate{}, err
 	}
-	mg.(resource.Terraformed).SetObservation(stateValueMap)
+
+	err = mg.(resource.Terraformed).SetObservation(stateValueMap)
+	if err != nil {
+		return managed.ExternalUpdate{}, errors.Errorf("failed to set observation: %v", err)
+	}
 	return managed.ExternalUpdate{}, nil
 }
 
