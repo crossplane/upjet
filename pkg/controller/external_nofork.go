@@ -16,7 +16,8 @@ package controller
 
 import (
 	"context"
-	"fmt"
+	"time"
+
 	tf "github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
@@ -29,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/upbound/upjet/pkg/config"
+	"github.com/upbound/upjet/pkg/metrics"
 	"github.com/upbound/upjet/pkg/resource"
 	"github.com/upbound/upjet/pkg/terraform"
 )
@@ -74,7 +76,9 @@ func copyParameters(tfState, params map[string]any) map[string]any {
 }
 
 func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (managed.ExternalClient, error) {
+	start := time.Now()
 	ts, err := c.getTerraformSetup(ctx, c.kube, mg)
+	metrics.ExternalAPITime.WithLabelValues("connect").Observe(time.Since(start).Seconds())
 	if err != nil {
 		return nil, errors.Wrap(err, errGetTerraformSetup)
 	}
@@ -161,8 +165,9 @@ func (n *noForkExternal) getResourceDataDiff(ctx context.Context, s *tf.Instance
 }
 
 func (n *noForkExternal) Observe(ctx context.Context, mg xpresource.Managed) (managed.ExternalObservation, error) {
+	start := time.Now()
 	newState, diag := n.resourceSchema.RefreshWithoutUpgrade(ctx, n.instanceState, n.ts.Meta)
-	fmt.Println(diag)
+	metrics.ExternalAPITime.WithLabelValues("read").Observe(time.Since(start).Seconds())
 	if diag != nil && diag.HasError() {
 		return managed.ExternalObservation{}, errors.Errorf("failed to observe the resource: %v", diag)
 	}
@@ -197,9 +202,10 @@ func (n *noForkExternal) Create(ctx context.Context, mg xpresource.Managed) (man
 	if err != nil {
 		return managed.ExternalCreation{}, err
 	}
+	start := time.Now()
 	newState, diag := n.resourceSchema.Apply(ctx, n.instanceState, instanceDiff, n.ts.Meta)
+	metrics.ExternalAPITime.WithLabelValues("create").Observe(time.Since(start).Seconds())
 	// diag := n.resourceSchema.CreateWithoutTimeout(ctx, n.resourceData, n.ts.Meta)
-	fmt.Println(diag)
 	if diag != nil && diag.HasError() {
 		return managed.ExternalCreation{}, errors.Errorf("failed to create the resource: %v", diag)
 	}
@@ -233,8 +239,9 @@ func (n *noForkExternal) Update(ctx context.Context, mg xpresource.Managed) (man
 	if err != nil {
 		return managed.ExternalUpdate{}, err
 	}
+	start := time.Now()
 	newState, diag := n.resourceSchema.Apply(ctx, n.instanceState, instanceDiff, n.ts.Meta)
-	fmt.Println(diag)
+	metrics.ExternalAPITime.WithLabelValues("update").Observe(time.Since(start).Seconds())
 	if diag != nil && diag.HasError() {
 		return managed.ExternalUpdate{}, errors.Errorf("failed to update the resource: %v", diag)
 	}
@@ -261,8 +268,9 @@ func (n *noForkExternal) Delete(ctx context.Context, _ xpresource.Managed) error
 	}
 
 	instanceDiff.Destroy = true
+	start := time.Now()
 	_, diag := n.resourceSchema.Apply(ctx, n.instanceState, instanceDiff, n.ts.Meta)
-	fmt.Println(diag)
+	metrics.ExternalAPITime.WithLabelValues("delete").Observe(time.Since(start).Seconds())
 	if diag != nil && diag.HasError() {
 		return errors.Errorf("failed to delete the resource: %v", diag)
 	}
