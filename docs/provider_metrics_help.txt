@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+
+# SPDX-License-Identifier: CC-BY-4.0
+
 # HELP upjet_terraform_cli_duration Measures in seconds how long it takes a Terraform CLI invocation to complete
 # TYPE upjet_terraform_cli_duration histogram
 

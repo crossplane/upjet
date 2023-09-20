@@ -1,16 +1,6 @@
-// Copyright 2023 Upbound Inc.
+// SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package migration
 
@@ -18,9 +8,10 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/pkg/errors"
+
 	xpmetav1 "github.com/crossplane/crossplane/apis/pkg/meta/v1"
 	xpmetav1alpha1 "github.com/crossplane/crossplane/apis/pkg/meta/v1alpha1"
-	"github.com/pkg/errors"
 )
 
 const (
@@ -113,7 +104,7 @@ func (pg *PlanGenerator) configurationSubStep(s step) string {
 	return pg.subSteps[s]
 }
 
-func (pg *PlanGenerator) stepConfigurationWithSubStep(s step, newSubStep bool) *Step { // nolint:gocyclo // easy to follow all steps here
+func (pg *PlanGenerator) stepConfigurationWithSubStep(s step, newSubStep bool) *Step { //nolint:gocyclo // easy to follow all steps here
 	stepKey := strconv.Itoa(int(s))
 	if newSubStep {
 		stepKey = fmt.Sprintf("%s.%s", stepKey, pg.configurationSubStep(s))
@@ -123,7 +114,7 @@ func (pg *PlanGenerator) stepConfigurationWithSubStep(s step, newSubStep bool) *
 	}
 
 	pg.Plan.Spec.stepMap[stepKey] = &Step{}
-	switch s { // nolint:gocritic,exhaustive
+	switch s { //nolint:exhaustive
 	case stepOrphanMRs:
 		setPatchStep("deletion-policy-orphan", pg.Plan.Spec.stepMap[stepKey])
 	case stepRevertOrphanMRs:

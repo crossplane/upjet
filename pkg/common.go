@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package pkg
 
 import "strings"
@@ -18,7 +22,7 @@ func FilterDescription(description, keyword string) string {
 		}
 	}
 	if len(result) == 0 {
-		return strings.ReplaceAll(strings.ToLower(description), keyword, "Upbound official provider")
+		return strings.ReplaceAll(strings.ToLower(description), keyword, "provider")
 	}
 	return strings.Join(result, descriptionSeparator)
 }

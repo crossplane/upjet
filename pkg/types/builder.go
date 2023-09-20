@@ -1,6 +1,6 @@
-/*
-Copyright 2021 Upbound Inc.
-*/
+// SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+//
+// SPDX-License-Identifier: Apache-2.0
 
 package types
 
@@ -11,14 +11,13 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/crossplane/upjet/pkg/config"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	twtypes "github.com/muvaf/typewriter/pkg/types"
 	"github.com/pkg/errors"
 	"k8s.io/utils/pointer"
 
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
-
-	"github.com/upbound/upjet/pkg/config"
 )
 
 const (
@@ -160,7 +159,7 @@ func (g *Builder) AddToBuilder(typeNames *TypeNames, r *resource) (*types.Named,
 	return paramType, obsType, initType
 }
 
-func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, r *resource) (types.Type, types.Type, error) { // nolint:gocyclo
+func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, r *resource) (types.Type, types.Type, error) { //nolint:gocyclo
 	switch f.Schema.Type {
 	case schema.TypeBool:
 		return types.NewPointer(types.Universe.Lookup("bool").Type()), nil, nil
@@ -244,7 +243,7 @@ func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, r 
 				}
 			}
 		// if unset
-		// see: https://github.com/upbound/upjet/issues/177
+		// see: https://github.com/crossplane/upjet/issues/177
 		case nil:
 			elemType = types.Universe.Lookup("string").Type()
 			initElemType = elemType
@@ -330,7 +329,7 @@ func (r *resource) addParameterField(f *Field, field *types.Var) {
 	// not just the top level ones, due to having all forProvider
 	// fields now optional. CEL rules should check if a field is
 	// present either in forProvider or initProvider.
-	// https://github.com/upbound/upjet/issues/239
+	// https://github.com/crossplane/upjet/issues/239
 	if requiredBySchema && !f.Identifier && len(f.CanonicalPaths) == 1 {
 		requiredBySchema = false
 		// If the field is not a terraform field, we should not require it in init,
@@ -375,7 +374,7 @@ func (r *resource) addObservationField(f *Field, field *types.Var) {
 		if obsF.Name() == field.Name() {
 			// If the field is already added, we don't add it again.
 			// Some nested types could have been previously added as an
-			// observation type while building their schema: https://github.com/upbound/upjet/blob/b89baca4ae24c8fbd8eb403c353ca18916093e5e/pkg/types/builder.go#L206
+			// observation type while building their schema: https://github.com/crossplane/upjet/blob/b89baca4ae24c8fbd8eb403c353ca18916093e5e/pkg/types/builder.go#L206
 			return
 		}
 	}

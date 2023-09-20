@@ -1,15 +1,15 @@
-/*
-Copyright 2022 Upbound Inc.
-*/
+// SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+//
+// SPDX-License-Identifier: Apache-2.0
 
 package registry
 
 import (
-	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
+	"github.com/crossplane/upjet/pkg/resource/json"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 
-	"github.com/upbound/upjet/pkg/resource/json"
+	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 )
 
 const (

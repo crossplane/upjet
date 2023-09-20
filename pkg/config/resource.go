@@ -1,6 +1,6 @@
-/*
-Copyright 2021 Upbound Inc.
-*/
+// SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+//
+// SPDX-License-Identifier: Apache-2.0
 
 package config
 
@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/crossplane/upjet/pkg/registry"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/util/json"
@@ -20,8 +21,6 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
-
-	"github.com/upbound/upjet/pkg/registry"
 )
 
 // SetIdentifierArgumentsFn sets the name of the resource in Terraform attributes map,

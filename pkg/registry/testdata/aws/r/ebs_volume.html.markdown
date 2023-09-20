@@ -1,4 +1,11 @@
+<!--
+SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 ---
+
 subcategory: "EBS (EC2)"
 layout: "aws"
 page_title: "AWS: aws_ebs_volume"
@@ -55,14 +62,14 @@ In addition to all arguments above, the following attributes are exported:
 
 `aws_ebs_volume` provides the following [Timeouts](https://www.terraform.io/docs/configuration/blocks/resources/syntax.html#operation-timeouts) configuration options:
 
-- `create` - (Default `5 minutes`) Used for creating volumes. This includes the time required for the volume to become available
-- `update` - (Default `5 minutes`) Used for `size`, `type`, or `iops` volume changes
-- `delete` - (Default `5 minutes`) Used for destroying volumes
+* `create` - (Default `5 minutes`) Used for creating volumes. This includes the time required for the volume to become available
+* `update` - (Default `5 minutes`) Used for `size`, `type`, or `iops` volume changes
+* `delete` - (Default `5 minutes`) Used for destroying volumes
 
 ## Import
 
 EBS Volumes can be imported using the `id`, e.g.,
 
 ```
-$ terraform import aws_ebs_volume.id vol-049df61146c4d7901
+terraform import aws_ebs_volume.id vol-049df61146c4d7901
 ```

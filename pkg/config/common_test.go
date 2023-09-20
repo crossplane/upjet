@@ -1,17 +1,16 @@
-/*
-Copyright 2022 Upbound Inc.
-*/
+// SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+//
+// SPDX-License-Identifier: Apache-2.0
 
 package config
 
 import (
 	"testing"
 
+	"github.com/crossplane/upjet/pkg/registry"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-
-	"github.com/upbound/upjet/pkg/registry"
 )
 
 func TestDefaultResource(t *testing.T) {

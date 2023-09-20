@@ -1,4 +1,11 @@
+<!--
+SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 ---
+
 subcategory: "IAM Access Analyzer"
 layout: "aws"
 page_title: "AWS: aws_accessanalyzer_analyzer"
@@ -59,5 +66,5 @@ In addition to all arguments above, the following attributes are exported:
 Access Analyzer Analyzers can be imported using the `analyzer_name`, e.g.,
 
 ```
-$ terraform import aws_accessanalyzer_analyzer.example example
+terraform import aws_accessanalyzer_analyzer.example example
 ```

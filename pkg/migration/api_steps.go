@@ -1,16 +1,6 @@
-// Copyright 2023 Upbound Inc.
+// SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package migration
 
@@ -18,13 +8,14 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/pkg/errors"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+
 	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/resource/unstructured/claim"
 	"github.com/crossplane/crossplane-runtime/pkg/resource/unstructured/composite"
-	"github.com/pkg/errors"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 const (
@@ -69,7 +60,7 @@ func (pg *PlanGenerator) addStepsForManagedResource(u *UnstructuredWithMetadata)
 		if _, ok, err := toManagedResource(pg.registry.scheme, u.Object); err != nil || !ok {
 			// not a managed resource or unable to determine
 			// whether it's a managed resource
-			return nil // nolint:nilerr
+			return nil //nolint:nilerr
 		}
 	}
 	qName := getQualifiedName(u.Object)
@@ -310,14 +301,14 @@ func (pg *PlanGenerator) stepEditClaims(claims []UnstructuredWithMetadata, conve
 // NOTE: to cover different migration scenarios, we may use
 // "migration templates" instead of a static plan. But a static plan should be
 // fine as a start.
-func (pg *PlanGenerator) stepAPI(s step) *Step { // nolint:gocyclo // all steps under a single clause for readability
+func (pg *PlanGenerator) stepAPI(s step) *Step { //nolint:gocyclo // all steps under a single clause for readability
 	stepKey := strconv.Itoa(int(s))
 	if pg.Plan.Spec.stepMap[stepKey] != nil {
 		return pg.Plan.Spec.stepMap[stepKey]
 	}
 
 	pg.Plan.Spec.stepMap[stepKey] = &Step{}
-	switch s { // nolint:exhaustive
+	switch s { //nolint:exhaustive
 	case stepPauseManaged:
 		setPatchStep("pause-managed", pg.Plan.Spec.stepMap[stepKey])
 

@@ -1,6 +1,6 @@
-/*
-Copyright 2021 Upbound Inc.
-*/
+// SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+//
+// SPDX-License-Identifier: Apache-2.0
 
 package terraform
 
@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/crossplane/upjet/pkg/resource/json"
+	tferrors "github.com/crossplane/upjet/pkg/terraform/errors"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"github.com/spf13/afero"
@@ -16,9 +18,6 @@ import (
 	testingexec "k8s.io/utils/exec/testing"
 
 	"github.com/crossplane/crossplane-runtime/pkg/test"
-
-	"github.com/upbound/upjet/pkg/resource/json"
-	tferrors "github.com/upbound/upjet/pkg/terraform/errors"
 )
 
 var (

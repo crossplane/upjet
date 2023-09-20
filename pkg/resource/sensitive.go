@@ -1,18 +1,6 @@
-/*
-Copyright 2021 Upbound Inc.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License mapping
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
+// SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+//
+// SPDX-License-Identifier: Apache-2.0
 
 package resource
 
@@ -22,15 +10,15 @@ import (
 	"regexp"
 	"strings"
 
-	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
-	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
-	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
-	"github.com/crossplane/crossplane-runtime/pkg/resource"
+	"github.com/crossplane/upjet/pkg/config"
 	"github.com/pkg/errors"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 
-	"github.com/upbound/upjet/pkg/config"
+	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
+	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
+	"github.com/crossplane/crossplane-runtime/pkg/resource"
 )
 
 const (
@@ -68,7 +56,7 @@ func init() {
 
 // SecretClient is the client to get sensitive data from kubernetes secrets
 //
-//go:generate go run github.com/golang/mock/mockgen -copyright_file ../../hack/boilerplate.txt -destination ./fake/mocks/mock.go -package mocks github.com/upbound/upjet/pkg/resource SecretClient
+//go:generate go run github.com/golang/mock/mockgen -copyright_file ../../hack/boilerplate.txt -destination ./fake/mocks/mock.go -package mocks github.com/crossplane/upjet/pkg/resource SecretClient
 type SecretClient interface {
 	GetSecretData(ctx context.Context, ref *v1.SecretReference) (map[string][]byte, error)
 	GetSecretValue(ctx context.Context, sel v1.SecretKeySelector) ([]byte, error)
@@ -136,7 +124,7 @@ func GetSensitiveAttributes(from map[string]any, mapping map[string]string) (map
 			// Note(turkenh): k8s secrets uses a strict regex to validate secret
 			// keys which does not allow having brackets inside. So, we need to
 			// do a conversion to be able to store as connection secret keys.
-			// See https://github.com/upbound/upjet/pull/94 for
+			// See https://github.com/crossplane/upjet/pull/94 for
 			// more details.
 			k, err := fieldPathToSecretKey(fp)
 			if err != nil {

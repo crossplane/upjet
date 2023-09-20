@@ -1,10 +1,10 @@
-/*
-Copyright 2021 Upbound Inc.
-*/
+// SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+//
+// SPDX-License-Identifier: Apache-2.0
 
 package templates
 
-import _ "embed" // nolint:golint
+import _ "embed" //nolint:golint
 
 // CRDTypesTemplate is populated with CRD and type information.
 //

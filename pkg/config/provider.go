@@ -1,6 +1,6 @@
-/*
-Copyright 2022 Upbound Inc.
-*/
+// SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+//
+// SPDX-License-Identifier: Apache-2.0
 
 package config
 
@@ -8,11 +8,10 @@ import (
 	"fmt"
 	"regexp"
 
+	"github.com/crossplane/upjet/pkg/registry"
+	conversiontfjson "github.com/crossplane/upjet/pkg/types/conversion/tfjson"
 	tfjson "github.com/hashicorp/terraform-json"
 	"github.com/pkg/errors"
-
-	"github.com/upbound/upjet/pkg/registry"
-	conversiontfjson "github.com/upbound/upjet/pkg/types/conversion/tfjson"
 )
 
 // ResourceConfiguratorFn is a function that implements the ResourceConfigurator
@@ -203,7 +202,7 @@ func WithMainTemplate(template string) ProviderOption {
 // NewProvider builds and returns a new Provider from provider
 // tfjson schema, that is generated using Terraform CLI with:
 // `terraform providers schema --json`
-func NewProvider(schema []byte, prefix string, modulePath string, metadata []byte, opts ...ProviderOption) *Provider { // nolint:gocyclo
+func NewProvider(schema []byte, prefix string, modulePath string, metadata []byte, opts ...ProviderOption) *Provider { //nolint:gocyclo
 	ps := tfjson.ProviderSchemas{}
 	if err := ps.UnmarshalJSON(schema); err != nil {
 		panic(err)

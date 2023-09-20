@@ -1,6 +1,6 @@
-/*
-Copyright 2022 Upbound Inc.
-*/
+// SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+//
+// SPDX-License-Identifier: Apache-2.0
 
 package registry
 
@@ -71,7 +71,7 @@ func getResourceNameFromPath(path, resourcePrefix string) string {
 	return fmt.Sprintf("%s%s", prefix, tokens[0])
 }
 
-func (r *Resource) scrapeExamples(doc *html.Node, codeElXPath string, path string, resourcePrefix string, debug bool) error { // nolint: gocyclo
+func (r *Resource) scrapeExamples(doc *html.Node, codeElXPath string, path string, resourcePrefix string, debug bool) error { //nolint: gocyclo
 	resourceName := r.Title
 	nodes := htmlquery.Find(doc, codeElXPath)
 	for _, n := range nodes {
@@ -110,7 +110,7 @@ func (r *Resource) scrapeExamples(doc *html.Node, codeElXPath string, path strin
 	return nil
 }
 
-func (r *Resource) findReferences(parentPath string, file *hcl.File, b *hclsyntax.Block) (map[string]string, error) { // nolint: gocyclo
+func (r *Resource) findReferences(parentPath string, file *hcl.File, b *hclsyntax.Block) (map[string]string, error) { //nolint: gocyclo
 	refs := make(map[string]string)
 	if parentPath == "" && b.Labels[0] != r.Name {
 		return refs, nil
@@ -362,7 +362,7 @@ func getPrevLiWithCodeText(codeText string, pNode *html.Node) *html.Node {
 // extractText extracts text from the children of an element node,
 // removing any HTML tags and leaving only text data.
 func extractText(n *html.Node) string {
-	switch n.Type { // nolint:exhaustive
+	switch n.Type { //nolint:exhaustive
 	case html.TextNode:
 		return n.Data
 	case html.ElementNode:
@@ -410,7 +410,7 @@ func (r *Resource) scrapeDocString(n *html.Node, attrName *string, processed map
 		}
 		processed[s] = struct{}{}
 
-		switch s.Type { // nolint:exhaustive
+		switch s.Type { //nolint:exhaustive
 		case html.TextNode:
 			sb.WriteString(s.Data)
 		case html.ElementNode:

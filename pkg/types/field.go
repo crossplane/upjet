@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package types
 
 import (
@@ -8,14 +12,13 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/crossplane/upjet/pkg"
+	"github.com/crossplane/upjet/pkg/config"
+	"github.com/crossplane/upjet/pkg/types/comments"
+	"github.com/crossplane/upjet/pkg/types/name"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/pkg/errors"
 	"k8s.io/utils/pointer"
-
-	"github.com/upbound/upjet/pkg"
-	"github.com/upbound/upjet/pkg/config"
-	"github.com/upbound/upjet/pkg/types/comments"
-	"github.com/upbound/upjet/pkg/types/name"
 )
 
 var parentheses = regexp.MustCompile(`\(([^)]+)\)`)
@@ -124,11 +127,11 @@ func NewField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema,
 	f.TransformedName = f.Name.LowerCamelComputed
 
 	// Terraform paths, e.g. { "lifecycle_rule", "*", "transition", "*", "days" } for https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket#lifecycle_rule
-	f.TerraformPaths = append(tfPath, f.Name.Snake) // nolint:gocritic
+	f.TerraformPaths = append(tfPath, f.Name.Snake) //nolint:gocritic
 	// Crossplane paths, e.g. {"lifecycleRule", "*", "transition", "*", "days"}
-	f.CRDPaths = append(xpPath, f.Name.LowerCamelComputed) // nolint:gocritic
+	f.CRDPaths = append(xpPath, f.Name.LowerCamelComputed) //nolint:gocritic
 	// Canonical paths, e.g. {"LifecycleRule", "Transition", "Days"}
-	f.CanonicalPaths = append(names[1:], f.Name.Camel) // nolint:gocritic
+	f.CanonicalPaths = append(names[1:], f.Name.Camel) //nolint:gocritic
 
 	for _, ignoreField := range cfg.LateInitializer.IgnoredFields {
 		// Convert configuration input from Terraform path to canonical path

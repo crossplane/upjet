@@ -1,4 +1,11 @@
+<!--
+SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 ---
+
 subcategory: "Container"
 layout: "azurerm"
 page_title: "Azure Resource Manager: azurerm_kubernetes_cluster"
@@ -438,7 +445,7 @@ The `kubelet_identity` block supports the following:
 
 * `object_id` - (Required) The Object ID of the user-defined Managed Identity assigned to the Kubelets.If not specified a Managed Identity is created automatically.
 
-* `user_assigned_identity_id` - (Required) The ID of the User Assigned Identity assigned to the Kubelets. If not specified a Managed Identity is created automatically. 
+* `user_assigned_identity_id` - (Required) The ID of the User Assigned Identity assigned to the Kubelets. If not specified a Managed Identity is created automatically.
 
 ---
 
@@ -791,7 +798,7 @@ The `ingress_application_gateway_identity` block exports the following:
 
 ---
 
-The `oms_agent` block exports the following: 
+The `oms_agent` block exports the following:
 
 * `oms_agent_identity` - An `oms_agent_identity` block is exported. The exported attributes are defined below.  
 
@@ -822,7 +829,6 @@ The `secret_identity` block exports the following:
 * `user_assigned_identity_id` - The ID of the User Assigned Identity used by the Secret Provider.
 
 ---
-
 
 ## Timeouts
 

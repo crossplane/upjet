@@ -1,6 +1,6 @@
-/*
-Copyright 2022 Upbound Inc.
-*/
+// SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+//
+// SPDX-License-Identifier: Apache-2.0
 
 package pipeline
 
@@ -11,10 +11,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/crossplane/crossplane-runtime/pkg/errors"
+	"github.com/crossplane/upjet/pkg/config"
+	"github.com/crossplane/upjet/pkg/examples"
 
-	"github.com/upbound/upjet/pkg/config"
-	"github.com/upbound/upjet/pkg/examples"
+	"github.com/crossplane/crossplane-runtime/pkg/errors"
 )
 
 type terraformedInput struct {
@@ -23,7 +23,7 @@ type terraformedInput struct {
 }
 
 // Run runs the Upjet code generation pipelines.
-func Run(pc *config.Provider, rootDir string) { // nolint:gocyclo
+func Run(pc *config.Provider, rootDir string) { //nolint:gocyclo
 	// Note(turkenh): nolint reasoning - this is the main function of the code
 	// generation pipeline. We didn't want to split it into multiple functions
 	// for better readability considering the straightforward logic here.

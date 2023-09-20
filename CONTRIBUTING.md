@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+
+SPDX-License-Identifier: CC-BY-4.0
+-->
+
 # Contributing to Upjet
 
 Welcome, and thank you for considering contributing to Upjet. We encourage
@@ -85,7 +91,7 @@ change in Upjet, the best way to test it is to use a `replace` statement in the
 `go.mod` file of the provider to use your local version as shown below.
 
 ```
-replace github.com/upbound/upjet => ../upjet
+replace github.com/crossplane/upjet => ../upjet
 ```
 
 Once you complete your change, make sure to run `make reviewable` before opening
@@ -98,7 +104,7 @@ in your provider to point to a certain commit in your branch of the provider tha
 you opened a PR for.
 
 ```
-replace github.com/upbound/upjet => github.com/<your user name>/upjet <hash of the last commit from your branch>
+replace github.com/crossplane/upjet => github.com/<your user name>/upjet <hash of the last commit from your branch>
 ```
 
 [Slack]: https://crossplane.slack.com/archives/C01TRKD4623

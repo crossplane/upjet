@@ -1,6 +1,6 @@
-/*
-Copyright 2021 Upbound Inc.
-*/
+// SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+//
+// SPDX-License-Identifier: Apache-2.0
 
 package config
 
@@ -8,10 +8,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/crossplane/crossplane-runtime/pkg/test"
+	"github.com/google/go-cmp/cmp"
 
 	"github.com/crossplane/crossplane-runtime/pkg/errors"
-	"github.com/google/go-cmp/cmp"
+	"github.com/crossplane/crossplane-runtime/pkg/test"
 )
 
 func TestGetExternalNameFromTemplated(t *testing.T) {

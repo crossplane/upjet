@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+#
+# SPDX-License-Identifier: CC0-1.0
+
 name: Comment Commands
 
 on: issue_comment
@@ -8,59 +12,59 @@ jobs:
     if: startsWith(github.event.comment.body, '/points')
 
     steps:
-    - name: Extract Command
-      id: command
-      uses: xt0rted/slash-command-action@v1
-      with:
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
-        command: points
-        reaction: "true"
-        reaction-type: "eyes"
-        allow-edits: "false"
-        permission-level: write
-    - name: Handle Command
-      uses: actions/github-script@v4
-      env:
-        POINTS: ${{ steps.command.outputs.command-arguments }}
-      with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        script: |
-          const points = process.env.POINTS
+      - name: Extract Command
+        id: command
+        uses: xt0rted/slash-command-action@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          command: points
+          reaction: "true"
+          reaction-type: "eyes"
+          allow-edits: "false"
+          permission-level: write
+      - name: Handle Command
+        uses: actions/github-script@v4
+        env:
+          POINTS: ${{ steps.command.outputs.command-arguments }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const points = process.env.POINTS
 
-          if (isNaN(parseInt(points))) {
-            console.log("Malformed command - expected '/points <int>'")
-            github.reactions.createForIssueComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              comment_id: context.payload.comment.id,
-              content: "confused"
-            })
-            return
-          }
-          const label = "points/" + points
+            if (isNaN(parseInt(points))) {
+              console.log("Malformed command - expected '/points <int>'")
+              github.reactions.createForIssueComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: context.payload.comment.id,
+                content: "confused"
+              })
+              return
+            }
+            const label = "points/" + points
 
-          // Delete our needs-points-label label.
-          try {
-            await github.issues.deleteLabel({
+            // Delete our needs-points-label label.
+            try {
+              await github.issues.deleteLabel({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: ['needs-points-label']
+              })
+              console.log("Deleted 'needs-points-label' label.")
+            }
+            catch(e) {
+              console.log("Label 'needs-points-label' probably didn't exist.")
+            }
+
+            // Add our points label.
+            github.issues.addLabels({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              name: ['needs-points-label']
+              labels: [label]
             })
-            console.log("Deleted 'needs-points-label' label.")
-          }
-          catch(e) {
-            console.log("Label 'needs-points-label' probably didn't exist.")
-          }
-
-          // Add our points label.
-          github.issues.addLabels({
-            issue_number: context.issue.number,
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            labels: [label]
-          })
-          console.log("Added '" + label + "' label.")
+            console.log("Added '" + label + "' label.")
 
   # NOTE(negz): See also backport.yml, which is the variant that triggers on PR
   # merge rather than on comment.
@@ -68,25 +72,25 @@ jobs:
     runs-on: ubuntu-20.04
     if: github.event.issue.pull_request && startsWith(github.event.comment.body, '/backport')
     steps:
-    - name: Extract Command
-      id: command
-      uses: xt0rted/slash-command-action@v1
-      with:
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
-        command: backport
-        reaction: "true"
-        reaction-type: "eyes"
-        allow-edits: "false"
-        permission-level: write
+      - name: Extract Command
+        id: command
+        uses: xt0rted/slash-command-action@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          command: backport
+          reaction: "true"
+          reaction-type: "eyes"
+          allow-edits: "false"
+          permission-level: write
 
-    - name: Checkout
-      uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 #v3
-      with:
-        fetch-depth: 0
+      - name: Checkout
+        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 #v3
+        with:
+          fetch-depth: 0
 
-    - name: Open Backport PR
-      uses: zeebe-io/backport-action@v0.0.4
-      with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        github_workspace: ${{ github.workspace }}
-        version: v0.0.4
+      - name: Open Backport PR
+        uses: zeebe-io/backport-action@v0.0.4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_workspace: ${{ github.workspace }}
+          version: v0.0.4

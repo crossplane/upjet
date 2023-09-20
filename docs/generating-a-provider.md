@@ -1,210 +1,229 @@
-# Generating a Crossplane Provider
+<!--
+SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
 
-In this guide, we will generate a Crossplane provider based on an existing
-Terraform provider using Upjet.
+SPDX-License-Identifier: CC-BY-4.0
+-->
+# Generating a Crossplane provider
 
-We have chosen [Terraform GitHub provider] as an example, but the process will
-be quite similar for any other Terraform provider. We will use `myorg` as the
-example organization name to be used.
+This guide shows you how to generate a Crossplane provider based on an existing
+Terraform provider using Upjet. The guide uses the [Terraform GitHub provider]
+as the example, but the process is similar for any other Terraform provider.
 
-## Generate
+## Prepare your new provider repository
 
-1. Generate a GitHub repository for the Crossplane provider by hitting the
-   "**Use this template**" button in [upjet-provider-template] repository. The preferred repository name is `provider-<name>` (e.g. `provider-github`), which is assumed by the `./hack/prepare.sh` script in step 3.
-2. Clone the repository to your local and `cd` into the repository directory.
-   Fetch the [upbound/build] submodule by running the following:
+1. Create a new GitHub repository for the Crossplane provider by clicking the
+"**Use this template**" button in the [upjet-provider-template] repository. The
+expected repository name is in the format `provider-<name>`. For example,
+`provider-github`. The script in step 3 expects this format and fails if you
+follow a different naming convention.
+1. Clone the repository to your local environment and `cd` into the repository
+directory.
+1. Fetch the [upbound/build] submodule by running the following
+command:
 
     ```bash
     make submodules
     ```
 
-3. Replace `template` with your provider name.
+1. To setup your provider name and group run the `./hack/prepare.sh`
+script from the repository root to prepare the code.
 
-    1. Run the `./hack/prepare.sh` script from repo root to prepare the repo, e.g., to
-       replace all occurrences of `template` with your provider name and `upbound`
-       with your organization name:
-
-        ```bash
-       ./hack/prepare.sh
-        ```
-
-4. To configure the Terraform provider to generate from, update the following
-   variables in `Makefile`:
-
-    ```makefile
-    export TERRAFORM_PROVIDER_SOURCE := integrations/github
-    export TERRAFORM_PROVIDER_REPO := https://github.com/integrations/terraform-provider-github
-    export TERRAFORM_PROVIDER_VERSION := 5.5.0
-    export TERRAFORM_PROVIDER_DOWNLOAD_NAME := terraform-provider-github
-    export TERRAFORM_NATIVE_PROVIDER_BINARY := terraform-provider-github_v5.5.0_x5
-    export TERRAFORM_DOCS_PATH := website/docs/r
+    ```bash
+    ./hack/prepare.sh
     ```
 
-   - TERRAFORM_PROVIDER_SOURCE: You can find this variable in [Terraform GitHub provider] documentation by hitting the "**USE PROVIDER**" button. 
-   - TERRAFORM_PROVIDER_REPO: You can find this variable in [Terraform GitHub provider] documentation by clicking the "**Report an issue**" link. 
-   - TERRAFORM_PROVIDER_VERSION: You can find this variable in [Terraform GitHub provider] documentation by hitting the "**USE PROVIDER**" button.
-   - TERRAFORM_PROVIDER_DOWNLOAD_NAME: terraform-provider-<Lower case provider name (ex. github)>.
-   - TERRAFORM_NATIVE_PROVIDER_BINARY: terraform-provider-github_v<TERRAFORM_PROVIDER_VERSION>_x5
-   - TERRAFORM_DOCS_PATH: You can find this by going to the terraform provider repository => click `website` => click `docs` => click `resources`(where resource documentation is stored).
+1. Ensure your organization name is correct in the `Makefile` for the
+  `PROJECT_REPO` variable.
+1. To configure which Terraform provider to generate from, update the following
+variables in the `Makefile`:
 
-   Check [this line in controller Dockerfile] to see how `TERRAFORM_PROVIDER_SOURCE` and `TERRAFORM_PROVIDER_VERSION` are used to build the provider plugin binary.
+  | Variable | Description |
+  | -------- | ----------- |
+  | `TERRAFORM_PROVIDER_SOURCE` | Find this variable on the Terraform registry for the provider. You can see the source value when clicking on the "`USE PROVIDER`" dropdown button in the navigation. |
+  |`TERRAFORM_PROVIDER_REPO` | The URL to the repository that hosts the provider's code. |
+  | `TERRAFORM_PROVIDER_VERSION` | Find this variable on the Terraform registry for the provider. You can see the source value when clicking on the "`USE PROVIDER`" dropdown button in the navigation. |
+  |`TERRAFORM_PROVIDER_DOWNLOAD_NAME` | The name of the provider in the [Terraform registry](https://releases.hashicorp.com/) |
+  |`TERRAFORM_NATIVE_PROVIDER_BINARY` | The name of the binary in the Terraform provider. This follows the pattern `terraform-provider-{provider name}_v{provider version}`. |
+  |`TERRAFORM_DOCS_PATH` | The relative path, from the root of the repository, where the provider resource documentation exist. |
+  
+  For example, for the [Terraform GitHub provider], the variables are:
 
-   Please make sure your organization name in `PROJECT_REPO` is correct.
+  ```makefile
+  export TERRAFORM_PROVIDER_SOURCE := integrations/github
+  export TERRAFORM_PROVIDER_REPO := https://github.com/integrations/terraform-provider-github
+  export TERRAFORM_PROVIDER_VERSION := 5.32.0
+  export TERRAFORM_PROVIDER_DOWNLOAD_NAME := terraform-provider-github
+  export TERRAFORM_NATIVE_PROVIDER_BINARY := terraform-provider-github_v5.32.0
+  export TERRAFORM_DOCS_PATH := website/docs/r
+  ```
 
-5. Implement `ProviderConfig` logic. In `upjet-provider-template`, there is already
-   a boilerplate code in file `internal/clients/github.go` which
-   takes care of properly fetching secret data referenced from `ProviderConfig`
-   resource.
+  Refer to [the Dockerfile](https://github.com/crossplane/upjet-provider-template/blob/main/cluster/images/upjet-provider-template/Dockerfile) to see the variables called when building the provider.
 
-   For our GitHub provider, we need to check [Terraform documentation for provider
-   configuration] and provide the keys there:
+## Configure the provider resources
 
-   ```go
-   const (
-     ...
-     keyBaseURL = "base_url"
-     keyOwner = "owner"
-     keyToken = "token"
-   )
-   ```
-   ```go
-   func TerraformSetupBuilder(version, providerSource, providerVersion string) terraform.SetupFn {
-     ...
-     // set provider configuration
-     ps.Configuration = map[string]any{}
-     if v, ok := creds[keyBaseURL]; ok {
-       ps.Configuration[keyBaseURL] = v
-     }
-     if v, ok := creds[keyOwner]; ok {
-       ps.Configuration[keyOwner] = v
-     }
-     if v, ok := creds[keyToken]; ok {
-       ps.Configuration[keyToken] = v
-     }
-     return ps, nil
-   }
-   ```
+1. First you need to add the `ProviderConfig` logic.
+    - In `upjet-provider-template`, there is
+    already boilerplate code in the file `internal/clients/github.go` which takes
+    care of fetching secret data referenced from the `ProviderConfig` resource.
+    - Reference the [Terraform Github provider] documentation for information on
+    authentication and provide the necessary keys.:
 
-6. Before generating all resources that the provider has, let's go step by step
-   and only start with generating CRDs for [github_repository] and
-   [github_branch] Terraform resources.
-
-   Only the resources with external name configuration should be generated.
-   Let's add external name configurations for these two resources in 
-   `config/external_name.go` as an entry to the map called `ExternalNameConfigs`:
-
-   ```go
-   // ExternalNameConfigs contains all external name configurations for this
-   // provider.
-   var ExternalNameConfigs = map[string]config.ExternalName{
-     ...
-     // Name is a parameter and it is also used to import the resource.
-     "github_repository": config.NameAsIdentifier,
-     // The import ID consists of several parameters. We'll use branch name as
-     // the external name.
-     "github_branch": config.TemplatedStringAsIdentifier("branch", "{{ .parameters.repository }}:{{ .external_name }}:{{ .parameters.source_branch }}"),
-   }
-   ```
-
-   Please take a look at the Configuring a Resource documentation for more information about [external name configuration].
-
-7. Finally, we would need to add some custom configurations for these two
-   resources as follows:
-
-   ```bash
-   # Create custom configuration directory for whole repository group
-   mkdir config/repository
-   # Create custom configuration directory for whole branch group
-   mkdir config/branch
-   ```
-
-   ```bash
-   cat <<EOF > config/repository/config.go
-   package repository
-
-   import "github.com/upbound/upjet/pkg/config"
-
-   // Configure configures individual resources by adding custom ResourceConfigurators.
-   func Configure(p *config.Provider) {
-       p.AddResourceConfigurator("github_repository", func(r *config.Resource) {
-           // We need to override the default group that upjet generated for
-           // this resource, which would be "github"
-           r.ShortGroup = "repository"
-       })
-   }
-   EOF
-   ```
-
-   ```bash
-   # Note that you need to change `myorg/provider-github`.
-   cat <<EOF > config/branch/config.go
-   package branch
-
-   import "github.com/upbound/upjet/pkg/config"
-
-   func Configure(p *config.Provider) {
-       p.AddResourceConfigurator("github_branch", func(r *config.Resource) {
-           // We need to override the default group that upjet generated for
-           // this resource, which would be "github"
-           r.ShortGroup = "branch"
-
-           // This resource need the repository in which branch would be created
-           // as an input. And by defining it as a reference to Repository
-           // object, we can build cross resource referencing. See
-           // repositoryRef in the example in the Testing section below.
-           r.References["repository"] = config.Reference{
-               Type: "github.com/myorg/provider-github/apis/repository/v1alpha1.Repository",
-           }
-       })
-   }
-   EOF
-   ```
-
-   And register custom configurations in `config/provider.go`:
-
-   ```diff
-   import (
-       ...
-
-       ujconfig "github.com/upbound/upjet/pkg/config"
-
-   -   "github.com/myorg/provider-github/config/null"
-   +   "github.com/myorg/provider-github/config/branch"
-   +   "github.com/myorg/provider-github/config/repository"
+    ```go
+    const (
+      ...
+      keyBaseURL = "base_url"
+      keyOwner = "owner"
+      keyToken = "token"
     )
+    ```
 
-    func GetProvider() *tjconfig.Provider {
-       ...
-       for _, configure := range []func(provider *tjconfig.Provider){
-               // add custom config functions
-   -           null.Configure,
-   +           repository.Configure,
-   +           branch.Configure,
-       } {
-               configure(pc)
-       }
-   ```
+    ```go
+    func TerraformSetupBuilder(version, providerSource, providerVersion string) terraform.SetupFn {
+      ...
+      // set provider configuration
+      ps.Configuration = map[string]any{}
+      if v, ok := creds[keyBaseURL]; ok {
+        ps.Configuration[keyBaseURL] = v
+      }
+      if v, ok := creds[keyOwner]; ok {
+        ps.Configuration[keyOwner] = v
+      }
+      if v, ok := creds[keyToken]; ok {
+        ps.Configuration[keyToken] = v
+      }
+      return ps, nil
+    }
+    ```
 
-   **_To learn more about custom resource configurations (in step 7), please see
-   the [Configuring a Resource](/docs/add-new-resource-long.md) document._**
+1. Next add external name configurations for the [github_repository] and
+    [github_branch] Terraform resources.
 
+    > [!NOTE]
+    > Only generate resources with an external name configuration defined.
 
-8. Now we can generate our Upjet Provider:
+    - Add external name configurations for these two resources in
+    `config/external_name.go` as an entry to the map called
+    `ExternalNameConfigs`
 
-   Before we run make generate ensure to install `goimports`
-   ```
-   go install golang.org/x/tools/cmd/goimports@latest
-   ```
+    ```go
+    // ExternalNameConfigs contains all external name configurations for this
+    // provider.
+    var ExternalNameConfigs = map[string]config.ExternalName{
+      ...
+      // Name is a parameter and it is also used to import the resource.
+      "github_repository": config.NameAsIdentifier,
+      // The import ID consists of several parameters. We'll use branch name as
+      // the external name.
+      "github_branch": config.TemplatedStringAsIdentifier("branch", "{{ .parameters.repository }}:{{ .external_name }}:{{ .parameters.source_branch }}"),
+    }
+    ```
 
-   ```bash
-   make generate
-   ```
+    - Take a look at the documentation for configuring a resource for more
+    information about [external name configuration](configuring-a-resource.md#external-name).
 
-### Adding More Resources
+1. Next add custom configurations for these two resources as follows:
 
-See the guide [here][new-resource-short] to add more resources.
+    - Create custom configuration directory for whole repository group
 
-## Test
+    ```bash
+    mkdir config/repository    
+    ```
+
+    - Create custom configuration directory for whole branch group
+
+    ```bash
+    mkdir config/branch
+    ```
+
+    - Create the repository group configuration file
+
+    ```bash
+    cat <<EOF > config/repository/config.go
+    package repository
+
+    import "github.com/crossplane/upjet/pkg/config"
+
+    // Configure configures individual resources by adding custom ResourceConfigurators.
+    func Configure(p *config.Provider) {
+        p.AddResourceConfigurator("github_repository", func(r *config.Resource) {
+            // We need to override the default group that upjet generated for
+            // this resource, which would be "github"
+            r.ShortGroup = "repository"
+        })
+    }
+    EOF
+    ```
+
+    - Create the branch group configuration file
+
+    > [!NOTE]
+    > Note that you need to change `myorg/provider-github` to your organization.
+
+    ```bash
+    cat <<EOF > config/branch/config.go
+    package branch
+
+    import "github.com/crossplane/upjet/pkg/config"
+
+    func Configure(p *config.Provider) {
+        p.AddResourceConfigurator("github_branch", func(r *config.Resource) {
+            // We need to override the default group that upjet generated for
+            // this resource, which would be "github"
+            r.ShortGroup = "branch"
+
+            // This resource need the repository in which branch would be created
+            // as an input. And by defining it as a reference to Repository
+            // object, we can build cross resource referencing. See
+            // repositoryRef in the example in the Testing section below.
+            r.References["repository"] = config.Reference{
+                Type: "github.com/myorg/provider-github/apis/repository/v1alpha1.Repository",
+            }
+        })
+    }
+    EOF
+    ```
+
+    And register custom configurations in `config/provider.go`:
+
+    ```diff
+    import (
+        ...
+
+        ujconfig "github.com/upbound/crossplane/pkg/config"
+
+    -   "github.com/myorg/provider-github/config/null"
+    +   "github.com/myorg/provider-github/config/branch"
+    +   "github.com/myorg/provider-github/config/repository"
+     )
+
+     func GetProvider() *tjconfig.Provider {
+        ...
+        for _, configure := range []func(provider *tjconfig.Provider){
+                // add custom config functions
+    -           null.Configure,
+    +           repository.Configure,
+    +           branch.Configure,
+        } {
+                configure(pc)
+        }
+    ```
+
+    _To learn more about custom resource configurations (in step 7), please
+    see the [Configuring a Resource](configuring-a-resource.md) document._
+
+1. Now we can generate our Upjet Provider:
+
+    Before we run `make generate` ensure to install `goimports`
+
+    ```bash
+    go install golang.org/x/tools/cmd/goimports@latest
+    ```
+
+    ```bash
+    make generate
+    ```
+
+## Testing the generated resources
 
 Now let's test our generated resources.
 
@@ -239,8 +258,7 @@ Now let's test our generated resources.
    ```
 
    Create example for `repository` resource, which will use
-   `upjet-provider-template` repo as template for the repository
-   to be created:
+   `upjet-provider-template` repo as template for the repository to be created:
 
    ```bash
    cat <<EOF > examples/repository/repository.yaml
@@ -260,8 +278,8 @@ Now let's test our generated resources.
    EOF
    ```
 
-   Create `branch` resource which refers to the above repository
-   managed resource:
+   Create `branch` resource which refers to the above repository managed
+   resource:
 
    ```bash
    cat <<EOF > examples/branch/branch.yaml
@@ -278,8 +296,9 @@ Now let's test our generated resources.
    EOF
    ```
 
-   In order to change the `apiVersion`, you can use `WithRootGroup` and `WithShortName`
-   options in `config/provider.go` as arguments to `ujconfig.NewProvider`.
+   In order to change the `apiVersion`, you can use `WithRootGroup` and
+   `WithShortName` options in `config/provider.go` as arguments to
+   `ujconfig.NewProvider`.
 
 2. Generate a [Personal Access Token](https://github.com/settings/tokens) for
    your Github account with `repo/public_repo` and `delete_repo` scopes.
@@ -300,14 +319,16 @@ Now let's test our generated resources.
 
 5. Run the provider:
 
-   Please make sure Terraform is installed before running the "make run" command, you can check [this guide](https://developer.hashicorp.com/terraform/downloads).
-   
+   Please make sure Terraform is installed before running the "make run"
+   command, you can check
+   [this guide](https://developer.hashicorp.com/terraform/downloads).
+
    ```bash
    make run
    ```
 
-6. Apply ProviderConfig and example manifests (_In another terminal since
-   the previous command is blocking_):
+6. Apply ProviderConfig and example manifests (_In another terminal since the
+   previous command is blocking_):
 
    ```bash
    # Create "crossplane-system" namespace if not exists
@@ -326,10 +347,10 @@ Now let's test our generated resources.
 
    ```bash
    NAME                                                   READY   SYNCED   EXTERNAL-NAME                     AGE
-   branch.branch.github.upbound.io/hello-upjet   True    True     hello-crossplane:hello-upjet   89s
+   branch.branch.github.jet.crossplane.io/hello-upjet   True    True     hello-crossplane:hello-upjet   89s
 
    NAME                                                             READY   SYNCED   EXTERNAL-NAME      AGE
-   repository.repository.github.upbound.io/hello-crossplane   True    True     hello-crossplane   89s
+   repository.repository.github.jet.crossplane.io/hello-crossplane   True    True     hello-crossplane   89s
    ```
 
    Verify that repo `hello-crossplane` and branch `hello-upjet` created under
@@ -348,14 +369,15 @@ Now let's test our generated resources.
    Verify that the repo got deleted once deletion is completed on the control
    plane.
 
+## Next steps
+
+Now that you've seen the basics of generating `CustomResourceDefinitions` for
+your provider, you can learn more about
+[configuring resources](configuring-a-resource.md) or
+[testing your resources](testing-with-uptest.md) with Uptest.
 
 [Terraform GitHub provider]: https://registry.terraform.io/providers/integrations/github/latest/docs
-[upjet-provider-template]: https://github.com/upbound/upjet-provider-template
+[upjet-provider-template]: https://github.com/crossplane/upjet-provider-template
 [upbound/build]: https://github.com/upbound/build
-[Terraform documentation for provider configuration]: https://registry.terraform.io/providers/integrations/github/latest/docs#argument-reference
 [github_repository]: https://registry.terraform.io/providers/integrations/github/latest/docs/resources/repository
 [github_branch]: https://registry.terraform.io/providers/integrations/github/latest/docs/resources/branch
-[this line in controller Dockerfile]: https://github.com/upbound/upjet-provider-template/blob/main/cluster/images/upjet-provider-template/Dockerfile#L20-L28
-[terraform-plugin-sdk]: https://github.com/hashicorp/terraform-plugin-sdk
-[new-resource-short]: add-new-resource-short.md
-[external name configuration]: https://github.com/upbound/upjet/blob/main/docs/add-new-resource-long.md#external-name

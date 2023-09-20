@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package types
 
 import (
@@ -7,11 +11,10 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/crossplane/upjet/pkg/types/comments"
+	"github.com/crossplane/upjet/pkg/types/markers"
+	"github.com/crossplane/upjet/pkg/types/name"
 	"k8s.io/utils/pointer"
-
-	"github.com/upbound/upjet/pkg/types/comments"
-	"github.com/upbound/upjet/pkg/types/markers"
-	"github.com/upbound/upjet/pkg/types/name"
 )
 
 const (

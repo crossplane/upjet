@@ -1,6 +1,6 @@
-/*
-Copyright 2021 Upbound Inc.
-*/
+// SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+//
+// SPDX-License-Identifier: Apache-2.0
 
 package pipeline
 
@@ -9,11 +9,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/crossplane/upjet/pkg/config"
+	"github.com/crossplane/upjet/pkg/pipeline/templates"
 	"github.com/muvaf/typewriter/pkg/wrapper"
 	"github.com/pkg/errors"
-
-	"github.com/upbound/upjet/pkg/config"
-	"github.com/upbound/upjet/pkg/pipeline/templates"
 )
 
 // NewControllerGenerator returns a new ControllerGenerator.

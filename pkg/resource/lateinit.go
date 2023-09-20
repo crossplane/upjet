@@ -1,6 +1,6 @@
-/*
-Copyright 2021 Upbound Inc.
-*/
+// SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+//
+// SPDX-License-Identifier: Apache-2.0
 
 package resource
 
@@ -10,12 +10,12 @@ import (
 	"runtime/debug"
 	"strings"
 
-	xpmeta "github.com/crossplane/crossplane-runtime/pkg/meta"
-	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
+	"github.com/crossplane/upjet/pkg/config"
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/upbound/upjet/pkg/config"
+	xpmeta "github.com/crossplane/crossplane-runtime/pkg/meta"
+	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 )
 
 const (
@@ -111,7 +111,8 @@ func WithZeroValueJSONOmitEmptyFilter(cName string) GenericLateInitializerOption
 
 // zeroValueJSONOmitEmptyFilter is a late-initialization ValueFilter that
 // skips initialization of a zero-valued field that has omitempty JSON tag
-// nolint:gocyclo
+//
+//nolint:gocyclo
 func zeroValueJSONOmitEmptyFilter(cName string) ValueFilter {
 	return func(cn string, f reflect.StructField, v reflect.Value) bool {
 		if cName != CNameWildcard && cName != cn {
@@ -178,7 +179,8 @@ func isZeroValueOmitted(tag string) bool {
 // Both crObject and responseObject must be pointers to structs.
 // Otherwise, an error will be returned. Returns `true` if at least one field has been stored
 // from source `responseObject` into a corresponding field of target `crObject`.
-// nolint:gocyclo
+//
+//nolint:gocyclo
 func (li *GenericLateInitializer) LateInitialize(desiredObject, observedObject any) (changed bool, err error) {
 	if desiredObject == nil || reflect.ValueOf(desiredObject).IsNil() ||
 		observedObject == nil || reflect.ValueOf(observedObject).IsNil() {
@@ -204,7 +206,7 @@ func (li *GenericLateInitializer) LateInitialize(desiredObject, observedObject a
 	return
 }
 
-// nolint:gocyclo
+//nolint:gocyclo
 func (li *GenericLateInitializer) handleStruct(parentName string, desiredObject any, observedObject any) (bool, error) {
 	typeOfDesiredObject, typeOfObservedObject := reflect.TypeOf(desiredObject), reflect.TypeOf(observedObject)
 	valueOfDesiredObject, valueOfObservedObject := reflect.ValueOf(desiredObject), reflect.ValueOf(observedObject).Elem()
@@ -248,7 +250,7 @@ func (li *GenericLateInitializer) handleStruct(parentName string, desiredObject 
 			continue
 		}
 
-		switch desiredStructField.Type.Kind() { // nolint:exhaustive
+		switch desiredStructField.Type.Kind() { //nolint:exhaustive
 		// handle pointer struct field
 		case reflect.Ptr:
 			desiredKeepField, err = li.handlePtr(cName, desiredFieldValue, observedFieldValue)
@@ -318,7 +320,7 @@ func (li *GenericLateInitializer) handleSlice(cName string, desiredFieldValue, o
 		// error from processing the next element of the slice
 		var err error
 		// check slice item's kind (not slice type)
-		switch item.Elem().Kind() { // nolint:exhaustive
+		switch item.Elem().Kind() { //nolint:exhaustive
 		// if dealing with a slice of pointers
 		case reflect.Ptr:
 			_, err = li.handlePtr(cName, item.Elem(), observedFieldValue.Index(i))
@@ -361,7 +363,7 @@ func (li *GenericLateInitializer) handleMap(cName string, desiredFieldValue, obs
 		// error from processing the next element of the map
 		var err error
 		// check map item's kind (not map type)
-		switch item.Elem().Kind() { // nolint:exhaustive
+		switch item.Elem().Kind() { //nolint:exhaustive
 		// if dealing with a slice of pointers
 		case reflect.Ptr:
 			_, err = li.handlePtr(cName, item.Elem(), observedFieldValue.MapIndex(k))

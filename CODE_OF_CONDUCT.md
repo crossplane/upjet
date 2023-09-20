@@ -1,3 +1,9 @@
-## Code of Conduct
+<!--
+SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
 
-Upjet is under [the Apache 2.0 license](LICENSE) with [notice](NOTICE).
+SPDX-License-Identifier: CC0-1.0
+-->
+
+# Community Code of Conduct
+
+This project follows the [CNCF Code of Conduct](https://github.com/cncf/foundation/blob/master/code-of-conduct.md).

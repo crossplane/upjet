@@ -1,6 +1,6 @@
-/*
-Copyright 2021 Upbound Inc.
-*/
+// SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+//
+// SPDX-License-Identifier: Apache-2.0
 
 package pipeline
 
@@ -16,10 +16,10 @@ import (
 	"github.com/muvaf/typewriter/pkg/wrapper"
 	"github.com/pkg/errors"
 
-	tjpkg "github.com/upbound/upjet/pkg"
-	"github.com/upbound/upjet/pkg/config"
-	"github.com/upbound/upjet/pkg/pipeline/templates"
-	tjtypes "github.com/upbound/upjet/pkg/types"
+	tjpkg "github.com/crossplane/upjet/pkg"
+	"github.com/crossplane/upjet/pkg/config"
+	"github.com/crossplane/upjet/pkg/pipeline/templates"
+	tjtypes "github.com/crossplane/upjet/pkg/types"
 )
 
 const (
