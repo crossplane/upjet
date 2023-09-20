@@ -19,6 +19,7 @@ import (
 	"time"
 
 	tf "github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+	corev1 "k8s.io/api/core/v1"
 
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
@@ -175,6 +176,9 @@ func (n *noForkExternal) Observe(ctx context.Context, mg xpresource.Managed) (ma
 	noDiff := false
 	resourceExists := newState != nil && newState.ID != ""
 	if resourceExists {
+		if mg.GetCondition(xpv1.TypeReady).Status == corev1.ConditionUnknown {
+			addTTR(mg)
+		}
 		mg.SetConditions(xpv1.Available())
 		stateValueMap, err := n.fromInstanceStateToJSONMap(newState)
 		if err != nil {
