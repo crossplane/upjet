@@ -47,7 +47,8 @@ func Setup(mgr ctrl.Manager, o tjcontroller.Options) error {
 	opts := []managed.ReconcilerOption{
 		managed.WithExternalConnecter(
 			{{- if .UseNoForkClient -}}
-			tjcontroller.NewNoForkConnector(mgr.GetClient(), o.SetupFn, o.Provider.Resources["{{ .ResourceType }}"], tjcontroller.WithNoForkLogger(o.Logger))
+			tjcontroller.NewNoForkConnector(mgr.GetClient(), o.SetupFn, o.Provider.Resources["{{ .ResourceType }}"], tjcontroller.WithNoForkLogger(o.Logger),
+				tjcontroller.WithNoForkMetricRecorder(metrics.NewMetricRecorder({{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind, mgr, o.PollInterval)))
 			{{- else -}}
 			tjcontroller.NewConnector(mgr.GetClient(), o.WorkspaceStore, o.SetupFn, o.Provider.Resources["{{ .ResourceType }}"], tjcontroller.WithLogger(o.Logger), tjcontroller.WithConnectorEventHandler(eventHandler),
 				{{- if .UseAsync }}

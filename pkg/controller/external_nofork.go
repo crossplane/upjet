@@ -41,6 +41,7 @@ type NoForkConnector struct {
 	kube              client.Client
 	config            *config.Resource
 	logger            logging.Logger
+	metricRecorder    *metrics.MetricRecorder
 }
 
 // NoForkOption allows you to configure NoForkConnector.
@@ -50,6 +51,14 @@ type NoForkOption func(connector *NoForkConnector)
 func WithNoForkLogger(l logging.Logger) NoForkOption {
 	return func(c *NoForkConnector) {
 		c.logger = l
+	}
+}
+
+// WithNoForkMetricRecorder configures a metrics.MetricRecorder for the
+// NoForkConnector.
+func WithNoForkMetricRecorder(r *metrics.MetricRecorder) NoForkOption {
+	return func(c *NoForkConnector) {
+		c.metricRecorder = r
 	}
 }
 
@@ -77,6 +86,7 @@ func copyParameters(tfState, params map[string]any) map[string]any {
 }
 
 func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (managed.ExternalClient, error) {
+	c.metricRecorder.ObserveReconcileDelay(mg.GetObjectKind().GroupVersionKind(), mg.GetName())
 	start := time.Now()
 	ts, err := c.getTerraformSetup(ctx, c.kube, mg)
 	metrics.ExternalAPITime.WithLabelValues("connect").Observe(time.Since(start).Seconds())
@@ -103,10 +113,10 @@ func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (m
 	// we need to parameterize the following for a provider
 	// not all providers may have this attribute
 	// TODO: tags_all handling
-	// attrs := c.config.TerraformResource.CoreConfigSchema().Attributes
-	// if _, ok := attrs["tags_all"]; ok {
-	//	 params["tags_all"] = params["tags"]
-	// }
+	attrs := c.config.TerraformResource.CoreConfigSchema().Attributes
+	if _, ok := attrs["tags_all"]; ok {
+		params["tags_all"] = params["tags"]
+	}
 
 	tfState, err := tr.GetObservation()
 	if err != nil {
@@ -140,6 +150,7 @@ func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (m
 		instanceState:  s,
 		params:         params,
 		logger:         c.logger.WithValues("uid", mg.GetUID(), "name", mg.GetName(), "gvk", mg.GetObjectKind().GroupVersionKind().String()),
+		metricRecorder: c.metricRecorder,
 	}, nil
 }
 
@@ -151,6 +162,7 @@ type noForkExternal struct {
 	instanceState  *tf.InstanceState
 	params         map[string]any
 	logger         logging.Logger
+	metricRecorder *metrics.MetricRecorder
 }
 
 func (n *noForkExternal) getResourceDataDiff(ctx context.Context, s *tf.InstanceState) (*tf.InstanceDiff, error) {
@@ -175,8 +187,13 @@ func (n *noForkExternal) Observe(ctx context.Context, mg xpresource.Managed) (ma
 	n.instanceState = newState
 	noDiff := false
 	resourceExists := newState != nil && newState.ID != ""
+	if !resourceExists && mg.GetDeletionTimestamp() != nil {
+		gvk := mg.GetObjectKind().GroupVersionKind()
+		metrics.DeletionTime.WithLabelValues(gvk.Group, gvk.Version, gvk.Kind).Observe(time.Since(mg.GetDeletionTimestamp().Time).Seconds())
+	}
 	if resourceExists {
-		if mg.GetCondition(xpv1.TypeReady).Status == corev1.ConditionUnknown {
+		if mg.GetCondition(xpv1.TypeReady).Status == corev1.ConditionUnknown ||
+			mg.GetCondition(xpv1.TypeReady).Status == corev1.ConditionFalse {
 			addTTR(mg)
 		}
 		mg.SetConditions(xpv1.Available())
@@ -193,6 +210,10 @@ func (n *noForkExternal) Observe(ctx context.Context, mg xpresource.Managed) (ma
 			return managed.ExternalObservation{}, err
 		}
 		noDiff = instanceDiff.Empty()
+
+		if noDiff {
+			n.metricRecorder.SetReconcileTime(mg.GetName())
+		}
 	}
 
 	return managed.ExternalObservation{
