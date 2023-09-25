@@ -186,6 +186,7 @@ func (n *noForkExternal) Observe(ctx context.Context, mg xpresource.Managed) (ma
 	}
 	n.instanceState = newState
 	noDiff := false
+	var connDetails managed.ConnectionDetails
 	resourceExists := newState != nil && newState.ID != ""
 	if !resourceExists && mg.GetDeletionTimestamp() != nil {
 		gvk := mg.GetObjectKind().GroupVersionKind()
@@ -205,6 +206,10 @@ func (n *noForkExternal) Observe(ctx context.Context, mg xpresource.Managed) (ma
 		if err != nil {
 			return managed.ExternalObservation{}, errors.Errorf("could not set observation: %v", err)
 		}
+		connDetails, err = resource.GetConnectionDetails(stateValueMap, mg.(resource.Terraformed), n.config)
+		if err != nil {
+			return managed.ExternalObservation{}, errors.Wrap(err, "cannot get connection details")
+		}
 		instanceDiff, err := n.getResourceDataDiff(ctx, n.instanceState)
 		if err != nil {
 			return managed.ExternalObservation{}, err
@@ -217,8 +222,9 @@ func (n *noForkExternal) Observe(ctx context.Context, mg xpresource.Managed) (ma
 	}
 
 	return managed.ExternalObservation{
-		ResourceExists:   resourceExists,
-		ResourceUpToDate: noDiff,
+		ResourceExists:    resourceExists,
+		ResourceUpToDate:  noDiff,
+		ConnectionDetails: connDetails,
 	}, nil
 }
 
@@ -255,8 +261,12 @@ func (n *noForkExternal) Create(ctx context.Context, mg xpresource.Managed) (man
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Errorf("could not set observation: %v", err)
 	}
+	conn, err := resource.GetConnectionDetails(stateValueMap, mg.(resource.Terraformed), n.config)
+	if err != nil {
+		return managed.ExternalCreation{}, errors.Wrap(err, "cannot get connection details")
+	}
 
-	return managed.ExternalCreation{}, nil
+	return managed.ExternalCreation{ConnectionDetails: conn}, nil
 }
 
 func (n *noForkExternal) Update(ctx context.Context, mg xpresource.Managed) (managed.ExternalUpdate, error) {
