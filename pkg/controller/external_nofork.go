@@ -16,6 +16,7 @@ package controller
 
 import (
 	"context"
+	"github.com/upbound/upjet/pkg/controller/handler"
 	"time"
 
 	tf "github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
@@ -41,6 +42,7 @@ type NoForkConnector struct {
 	kube              client.Client
 	config            *config.Resource
 	logger            logging.Logger
+	eventHandler      *handler.EventHandler
 	metricRecorder    *metrics.MetricRecorder
 }
 
@@ -59,6 +61,14 @@ func WithNoForkLogger(l logging.Logger) NoForkOption {
 func WithNoForkMetricRecorder(r *metrics.MetricRecorder) NoForkOption {
 	return func(c *NoForkConnector) {
 		c.metricRecorder = r
+	}
+}
+
+// WithNoForkConnectorEventHandler configures the EventHandler so that
+// the no-fork external clients can requeue reconciliation requests.
+func WithNoForkConnectorEventHandler(e *handler.EventHandler) NoForkOption {
+	return func(c *NoForkConnector) {
+		c.eventHandler = e
 	}
 }
 
