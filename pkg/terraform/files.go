@@ -12,11 +12,12 @@ import (
 	"strings"
 
 	"dario.cat/mergo"
+	"github.com/pkg/errors"
+	"github.com/spf13/afero"
+
 	"github.com/crossplane/upjet/pkg/config"
 	"github.com/crossplane/upjet/pkg/resource"
 	"github.com/crossplane/upjet/pkg/resource/json"
-	"github.com/pkg/errors"
-	"github.com/spf13/afero"
 
 	"github.com/crossplane/crossplane-runtime/pkg/feature"
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
@@ -184,7 +185,7 @@ func (fp *FileProducer) WriteMainTF() (ProviderHandle, error) {
 
 // EnsureTFState writes the Terraform state that should exist in the filesystem
 // to start any Terraform operation.
-func (fp *FileProducer) EnsureTFState(ctx context.Context, tfID string) error {
+func (fp *FileProducer) EnsureTFState(_ context.Context, tfID string) error {
 	// TODO(muvaf): Reduce the cyclomatic complexity by separating the attributes
 	// generation into its own function/interface.
 	empty, err := fp.isStateEmpty()
