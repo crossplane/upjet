@@ -16,8 +16,9 @@ package controller
 
 import (
 	"context"
-	"github.com/upbound/upjet/pkg/controller/handler"
 	"time"
+
+	"github.com/upbound/upjet/pkg/controller/handler"
 
 	tf "github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 	corev1 "k8s.io/api/core/v1"

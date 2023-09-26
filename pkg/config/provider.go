@@ -116,6 +116,9 @@ type Provider struct {
 	// resource name.
 	Resources map[string]*Resource
 
+	// TerraformProvider is the Terraform schema of the provider.
+	TerraformProvider *schema.Provider
+
 	// refInjectors is an ordered list of `ReferenceInjector`s for
 	// injecting references across this Provider's resources.
 	refInjectors []ReferenceInjector
