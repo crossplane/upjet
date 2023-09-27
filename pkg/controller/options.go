@@ -40,7 +40,8 @@ type Options struct {
 	// ESSOptions for External Secret Stores.
 	ESSOptions *ESSOptions
 
-	// Adds jitter to reconcile latency for managed.Reconciler.
+	// PollJitter adds the specified jitter to the configured reconcile period
+	// of the up-to-date resources in managed.Reconciler.
 	PollJitter time.Duration
 }
 
