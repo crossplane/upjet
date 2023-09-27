@@ -18,21 +18,20 @@ import (
 	"context"
 	"time"
 
-	"github.com/upbound/upjet/pkg/controller/handler"
-
-	tf "github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
-	corev1 "k8s.io/api/core/v1"
-
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
+	"github.com/hashicorp/go-cty/cty"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	tf "github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 	"github.com/pkg/errors"
+	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/upbound/upjet/pkg/config"
+	"github.com/upbound/upjet/pkg/controller/handler"
 	"github.com/upbound/upjet/pkg/metrics"
 	"github.com/upbound/upjet/pkg/resource"
 	"github.com/upbound/upjet/pkg/terraform"
@@ -148,10 +147,10 @@ func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (m
 		return nil, err
 	}
 	s, err := c.config.TerraformResource.ShimInstanceStateFromValue(tfStateCtyValue)
-
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to convert cty.Value to terraform.InstanceState")
 	}
+	s.RawPlan = tfStateCtyValue
 
 	return &noForkExternal{
 		ts:             ts,
@@ -184,7 +183,14 @@ func (n *noForkExternal) getResourceDataDiff(ctx context.Context, s *tf.Instance
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get *terraform.InstanceDiff")
 	}
-
+	if instanceDiff != nil {
+		v := cty.EmptyObjectVal
+		v, err = instanceDiff.ApplyToValue(v, n.resourceSchema.CoreConfigSchema())
+		if err != nil {
+			return nil, errors.Wrap(err, "cannot apply Terraform instance diff to an empty value")
+		}
+		instanceDiff.RawPlan = v
+	}
 	return instanceDiff, nil
 }
 
