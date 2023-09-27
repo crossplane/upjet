@@ -6,6 +6,7 @@ package controller
 
 import (
 	"crypto/tls"
+	"time"
 
 	"github.com/crossplane/crossplane-runtime/pkg/controller"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -38,6 +39,10 @@ type Options struct {
 
 	// ESSOptions for External Secret Stores.
 	ESSOptions *ESSOptions
+
+	// PollJitter adds the specified jitter to the configured reconcile period
+	// of the up-to-date resources in managed.Reconciler.
+	PollJitter time.Duration
 }
 
 // ESSOptions for External Secret Stores.
