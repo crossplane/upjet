@@ -76,7 +76,7 @@ func NewFileProducer(ctx context.Context, client resource.SecretClient, dir stri
 	// Note(lsviben):We need to check if the management policies feature is
 	// enabled before attempting to get the ignorable fields or merge them
 	// with the forProvider fields.
-	if fp.features.Enabled(feature.EnableAlphaManagementPolicies) {
+	if fp.features.Enabled(feature.EnableBetaManagementPolicies) {
 		initParams, err := tr.GetInitParameters()
 		if err != nil {
 			return nil, errors.Wrapf(err, "cannot get the init parameters for the resource %q", tr.GetName())

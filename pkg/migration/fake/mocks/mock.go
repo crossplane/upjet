@@ -304,20 +304,6 @@ func (mr *MockManagedMockRecorder) GetProviderConfigReference() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProviderConfigReference", reflect.TypeOf((*MockManaged)(nil).GetProviderConfigReference))
 }
 
-// GetProviderReference mocks base method.
-func (m *MockManaged) GetProviderReference() *v1.Reference {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetProviderReference")
-	ret0, _ := ret[0].(*v1.Reference)
-	return ret0
-}
-
-// GetProviderReference indicates an expected call of GetProviderReference.
-func (mr *MockManagedMockRecorder) GetProviderReference() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProviderReference", reflect.TypeOf((*MockManaged)(nil).GetProviderReference))
-}
-
 // GetPublishConnectionDetailsTo mocks base method.
 func (m *MockManaged) GetPublishConnectionDetailsTo() *v1.PublishConnectionDetailsTo {
 	m.ctrl.T.Helper()
@@ -582,18 +568,6 @@ func (m *MockManaged) SetProviderConfigReference(arg0 *v1.Reference) {
 func (mr *MockManagedMockRecorder) SetProviderConfigReference(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetProviderConfigReference", reflect.TypeOf((*MockManaged)(nil).SetProviderConfigReference), arg0)
-}
-
-// SetProviderReference mocks base method.
-func (m *MockManaged) SetProviderReference(arg0 *v1.Reference) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetProviderReference", arg0)
-}
-
-// SetProviderReference indicates an expected call of SetProviderReference.
-func (mr *MockManagedMockRecorder) SetProviderReference(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetProviderReference", reflect.TypeOf((*MockManaged)(nil).SetProviderReference), arg0)
 }
 
 // SetPublishConnectionDetailsTo mocks base method.
