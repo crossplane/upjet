@@ -459,7 +459,7 @@ func TestWriteMainTF(t *testing.T) {
 				},
 				f: func() *feature.Flags {
 					f := &feature.Flags{}
-					f.Enable(feature.EnableAlphaManagementPolicies)
+					f.Enable(feature.EnableBetaManagementPolicies)
 					return f
 				}(),
 			},

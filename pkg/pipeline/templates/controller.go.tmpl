@@ -62,7 +62,7 @@ func Setup(mgr ctrl.Manager, o tjcontroller.Options) error {
 	    opts = append(opts, managed.WithPollJitterHook(o.PollJitter))
 	}
 	{{- if .FeaturesPackageAlias }}
-	if o.Features.Enabled({{ .FeaturesPackageAlias }}EnableAlphaManagementPolicies) {
+	if o.Features.Enabled({{ .FeaturesPackageAlias }}EnableBetaManagementPolicies) {
 		opts = append(opts, managed.WithManagementPolicies())
 	}
 	{{- end}}
