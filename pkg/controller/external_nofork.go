@@ -34,6 +34,7 @@ import (
 	"github.com/upbound/upjet/pkg/controller/handler"
 	"github.com/upbound/upjet/pkg/metrics"
 	"github.com/upbound/upjet/pkg/resource"
+	"github.com/upbound/upjet/pkg/resource/json"
 	"github.com/upbound/upjet/pkg/terraform"
 )
 
@@ -144,7 +145,7 @@ func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (m
 
 	tfStateCtyValue, err := schema.JSONMapToStateValue(tfState, c.config.TerraformResource.CoreConfigSchema())
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "cannot convert JSON map to state cty.Value")
 	}
 	s, err := c.config.TerraformResource.ShimInstanceStateFromValue(tfStateCtyValue)
 	if err != nil {
@@ -209,6 +210,7 @@ func (n *noForkExternal) Observe(ctx context.Context, mg xpresource.Managed) (ma
 		gvk := mg.GetObjectKind().GroupVersionKind()
 		metrics.DeletionTime.WithLabelValues(gvk.Group, gvk.Version, gvk.Kind).Observe(time.Since(mg.GetDeletionTimestamp().Time).Seconds())
 	}
+	lateInitialized := false
 	if resourceExists {
 		if mg.GetCondition(xpv1.TypeReady).Status == corev1.ConditionUnknown ||
 			mg.GetCondition(xpv1.TypeReady).Status == corev1.ConditionFalse {
@@ -217,8 +219,18 @@ func (n *noForkExternal) Observe(ctx context.Context, mg xpresource.Managed) (ma
 		mg.SetConditions(xpv1.Available())
 		stateValueMap, err := n.fromInstanceStateToJSONMap(newState)
 		if err != nil {
-			return managed.ExternalObservation{}, err
+			return managed.ExternalObservation{}, errors.Wrap(err, "cannot convert instance state to JSON map")
 		}
+
+		buff, err := json.TFParser.Marshal(stateValueMap)
+		if err != nil {
+			return managed.ExternalObservation{}, errors.Wrap(err, "cannot marshal the attributes of the new state for late-initialization")
+		}
+		lateInitialized, err = mg.(resource.Terraformed).LateInitialize(buff)
+		if err != nil {
+			return managed.ExternalObservation{}, errors.Wrap(err, "cannot late-initialize the managed resource")
+		}
+
 		err = mg.(resource.Terraformed).SetObservation(stateValueMap)
 		if err != nil {
 			return managed.ExternalObservation{}, errors.Errorf("could not set observation: %v", err)
@@ -236,12 +248,16 @@ func (n *noForkExternal) Observe(ctx context.Context, mg xpresource.Managed) (ma
 		if noDiff {
 			n.metricRecorder.SetReconcileTime(mg.GetName())
 		}
+		if !lateInitialized {
+			resource.SetUpToDateCondition(mg, noDiff)
+		}
 	}
 
 	return managed.ExternalObservation{
-		ResourceExists:    resourceExists,
-		ResourceUpToDate:  noDiff,
-		ConnectionDetails: connDetails,
+		ResourceExists:          resourceExists,
+		ResourceUpToDate:        noDiff,
+		ConnectionDetails:       connDetails,
+		ResourceLateInitialized: lateInitialized,
 	}, nil
 }
 
