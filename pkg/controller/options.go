@@ -28,6 +28,8 @@ type Options struct {
 	// instance should use.
 	WorkspaceStore *terraform.WorkspaceStore
 
+	OperationTrackerStore *OperationTrackerStore
+
 	// SetupFn contains the provider-specific initialization logic, such as
 	// preparing the auth token for Terraform CLI.
 	SetupFn terraform.SetupFn

@@ -32,7 +32,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/upbound/upjet/pkg/config"
-	"github.com/upbound/upjet/pkg/controller/handler"
 	"github.com/upbound/upjet/pkg/metrics"
 	"github.com/upbound/upjet/pkg/resource"
 	"github.com/upbound/upjet/pkg/resource/json"
@@ -44,7 +43,6 @@ type NoForkConnector struct {
 	kube              client.Client
 	config            *config.Resource
 	logger            logging.Logger
-	eventHandler      *handler.EventHandler
 	metricRecorder    *metrics.MetricRecorder
 }
 
@@ -63,14 +61,6 @@ func WithNoForkLogger(l logging.Logger) NoForkOption {
 func WithNoForkMetricRecorder(r *metrics.MetricRecorder) NoForkOption {
 	return func(c *NoForkConnector) {
 		c.metricRecorder = r
-	}
-}
-
-// WithNoForkConnectorEventHandler configures the EventHandler so that
-// the no-fork external clients can requeue reconciliation requests.
-func WithNoForkConnectorEventHandler(e *handler.EventHandler) NoForkOption {
-	return func(c *NoForkConnector) {
-		c.eventHandler = e
 	}
 }
 

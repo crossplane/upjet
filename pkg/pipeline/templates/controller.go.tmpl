@@ -41,15 +41,22 @@ func Setup(mgr ctrl.Manager, o tjcontroller.Options) error {
 		cps = append(cps, connection.NewDetailsManager(mgr.GetClient(), *o.SecretStoreConfigGVK, connection.WithTLSConfig(o.ESSOptions.TLSConfig)))
 	}
 	eventHandler := handler.NewEventHandler(handler.WithLogger(o.Logger.WithValues("gvk", {{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind)))
-	{{- if and .UseAsync (not .UseNoForkClient) }}
+	{{- if .UseAsync }}
 	ac := tjcontroller.NewAPICallbacks(mgr, xpresource.ManagedKind({{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind), tjcontroller.WithEventHandler(eventHandler))
 	{{- end}}
 	opts := []managed.ReconcilerOption{
 		managed.WithExternalConnecter(
 			{{- if .UseNoForkClient -}}
-			tjcontroller.NewNoForkConnector(mgr.GetClient(), o.SetupFn, o.Provider.Resources["{{ .ResourceType }}"], tjcontroller.WithNoForkLogger(o.Logger),
-			    tjcontroller.WithNoForkConnectorEventHandler(eventHandler),
+              {{- if .UseAsync }}
+              tjcontroller.NewNoForkAsyncConnector(mgr.GetClient(), o.OperationTrackerStore, o.SetupFn, o.Provider.Resources["{{ .ResourceType }}"],
+                tjcontroller.WithNoForkAsyncLogger(o.Logger),
+                tjcontroller.WithNoForkAsyncConnectorEventHandler(eventHandler),
+                tjcontroller.WithNoForkAsyncCallbackProvider(ac),
+                tjcontroller.WithNoForkAsyncMetricRecorder(metrics.NewMetricRecorder({{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind, mgr, o.PollInterval)))
+              {{- else -}}
+			  tjcontroller.NewNoForkConnector(mgr.GetClient(), o.SetupFn, o.Provider.Resources["{{ .ResourceType }}"], tjcontroller.WithNoForkLogger(o.Logger),
 				tjcontroller.WithNoForkMetricRecorder(metrics.NewMetricRecorder({{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind, mgr, o.PollInterval)))
+			  {{- end -}}
 			{{- else -}}
 			tjcontroller.NewConnector(mgr.GetClient(), o.WorkspaceStore, o.SetupFn, o.Provider.Resources["{{ .ResourceType }}"], tjcontroller.WithLogger(o.Logger), tjcontroller.WithConnectorEventHandler(eventHandler),
 				{{- if .UseAsync }}
@@ -60,7 +67,14 @@ func Setup(mgr ctrl.Manager, o tjcontroller.Options) error {
 		),
 		managed.WithLogger(o.Logger.WithValues("controller", name)),
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
-		managed.WithFinalizer(terraform.NewWorkspaceFinalizer(o.WorkspaceStore, xpresource.NewAPIFinalizer(mgr.GetClient(), managed.FinalizerName))),
+		{{- if .UseNoForkClient }}
+		{{- if .UseAsync }}
+		managed.WithFinalizer(tjcontroller.NewNoForkFinalizer(o.OperationTrackerStore, xpresource.NewAPIFinalizer(mgr.GetClient(), managed.FinalizerName))),
+		{{- end }}
+        {{- else }}
+        managed.WithFinalizer(terraform.NewWorkspaceFinalizer(o.WorkspaceStore, xpresource.NewAPIFinalizer(mgr.GetClient(), managed.FinalizerName))),
+        {{- end }}
+
 		managed.WithTimeout(3*time.Minute),
 		managed.WithInitializers(initializers),
 		managed.WithConnectionPublishers(cps...),
