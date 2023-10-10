@@ -319,37 +319,47 @@ func (pg *PlanGenerator) stepAPI(s step) *Step { // nolint:gocyclo // all steps 
 	pg.Plan.Spec.stepMap[stepKey] = &Step{}
 	switch s { // nolint:exhaustive
 	case stepPauseManaged:
-		setPatchStep("pause-managed", pg.Plan.Spec.stepMap[stepKey])
+		setPatchStep("pause-managed", "Adding pause annotation to the Managed Resource so that the Managed Resource is not reconciled during migration",
+			pg.Plan.Spec.stepMap[stepKey])
 
 	case stepPauseComposites:
-		setPatchStep("pause-composites", pg.Plan.Spec.stepMap[stepKey])
+		setPatchStep("pause-composites", "Adding pause annotation to the Composite Resource so that the Composite Resource is not reconciled during migration",
+			pg.Plan.Spec.stepMap[stepKey])
 
 	case stepCreateNewManaged:
-		setApplyStep("create-new-managed", pg.Plan.Spec.stepMap[stepKey])
+		setApplyStep("create-new-managed", "Creating the Managed Resource that has the new API",
+			pg.Plan.Spec.stepMap[stepKey])
 
 	case stepNewCompositions:
-		setApplyStep("new-compositions", pg.Plan.Spec.stepMap[stepKey])
+		setApplyStep("new-compositions", "Creating the Compositions that have the new API",
+			pg.Plan.Spec.stepMap[stepKey])
 
 	case stepEditComposites:
-		setPatchStep("edit-composites", pg.Plan.Spec.stepMap[stepKey])
+		setPatchStep("edit-composites", "Editing the Composite Resources with the correct references",
+			pg.Plan.Spec.stepMap[stepKey])
 
 	case stepEditClaims:
-		setPatchStep("edit-claims", pg.Plan.Spec.stepMap[stepKey])
+		setPatchStep("edit-claims", "Editing the Claims with the correct references",
+			pg.Plan.Spec.stepMap[stepKey])
 
 	case stepDeletionPolicyOrphan:
-		setPatchStep("deletion-policy-orphan", pg.Plan.Spec.stepMap[stepKey])
+		setPatchStep("deletion-policy-orphan", "Setting Deletion Policy to Orphan before deleting old Managed Resource so that physical resource is not deleted",
+			pg.Plan.Spec.stepMap[stepKey])
 
 	case stepRemoveFinalizers:
 		setPatchStep("remove-finalizers", pg.Plan.Spec.stepMap[stepKey])
 
 	case stepDeleteOldManaged:
-		setDeleteStep("delete-old-managed", pg.Plan.Spec.stepMap[stepKey])
+		setDeleteStep("delete-old-managed", "Deleting the old Managed Resource",
+			pg.Plan.Spec.stepMap[stepKey])
 
 	case stepStartManaged:
-		setPatchStep("start-managed", pg.Plan.Spec.stepMap[stepKey])
+		setPatchStep("start-managed", "Removing the pause annotation to start the reconciliation of the newly created Managed Resource",
+			pg.Plan.Spec.stepMap[stepKey])
 
 	case stepStartComposites:
-		setPatchStep("start-composites", pg.Plan.Spec.stepMap[stepKey])
+		setPatchStep("start-composites", "Removing the pause annotation to start the reconciliation of the newly created Composite Resource",
+			pg.Plan.Spec.stepMap[stepKey])
 	default:
 		panic(fmt.Sprintf(errInvalidStepFmt, s))
 	}

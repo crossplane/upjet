@@ -78,6 +78,7 @@ func (pg *PlanGenerator) stepDeleteMonolith(source UnstructuredWithMetadata) err
 	// delete the monolithic provider package
 	s := pg.stepConfigurationWithSubStep(stepDeleteMonolithicProvider, true)
 	source.Metadata.Path = fmt.Sprintf("%s/%s.yaml", s.Name, getVersionedName(source.Object))
+	s.Description = fmt.Sprintf("%s: %s", s.Description, source.Object.GetName())
 	s.Delete.Resources = []Resource{
 		{
 			GroupVersionKind: FromGroupVersionKind(source.Object.GroupVersionKind()),

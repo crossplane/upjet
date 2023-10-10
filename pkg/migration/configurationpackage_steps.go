@@ -30,50 +30,57 @@ const (
 	errEditConfigurationPackageFmt = `failed to put the edited Configuration package: %s`
 )
 
-func (pg *PlanGenerator) convertConfigurationPackage(o UnstructuredWithMetadata) error {
+func (pg *PlanGenerator) convertConfigurationPackage(o UnstructuredWithMetadata) error { //nolint:gocyclo
 	pkg, err := toConfigurationPackageV1(o.Object)
 	if err != nil {
 		return err
 	}
 
-	// add step for disabling the dependency resolution
-	// for the configuration package
-	s := pg.stepConfiguration(stepConfigurationPackageDisableDepResolution)
-	p := fmt.Sprintf("%s/%s.yaml", s.Name, getVersionedName(o.Object))
-	s.Patch.Files = append(s.Patch.Files, p)
-	if err := pg.target.Put(UnstructuredWithMetadata{
-		Object: unstructured.Unstructured{
-			Object: addNameGVK(o.Object, map[string]any{
-				"spec": map[string]any{
-					"skipDependencyResolution": true,
-				},
-			}),
-		},
-		Metadata: Metadata{
-			Path: p,
-		},
-	}); err != nil {
-		return err
+	pv := fieldpath.Pave(o.Object.Object)
+	p, err := pv.GetBool("spec.skipDependencyResolution")
+	if err != nil && !fieldpath.IsNotFound(err) {
+		return errors.Wrapf(err, "failed to get the current skipping dependency resolution behavior from Configuration Package: %s", o.Object.GetName())
 	}
+	if !p {
+		// add step for disabling the dependency resolution
+		// for the configuration package
+		s := pg.stepConfiguration(stepConfigurationPackageDisableDepResolution)
+		p := fmt.Sprintf("%s/%s.yaml", s.Name, getVersionedName(o.Object))
+		s.Patch.Files = append(s.Patch.Files, p)
+		if err := pg.target.Put(UnstructuredWithMetadata{
+			Object: unstructured.Unstructured{
+				Object: addNameGVK(o.Object, map[string]any{
+					"spec": map[string]any{
+						"skipDependencyResolution": true,
+					},
+				}),
+			},
+			Metadata: Metadata{
+				Path: p,
+			},
+		}); err != nil {
+			return err
+		}
 
-	// add step for enabling the dependency resolution
-	// for the configuration package
-	s = pg.stepConfiguration(stepConfigurationPackageEnableDepResolution)
-	p = fmt.Sprintf("%s/%s.yaml", s.Name, getVersionedName(o.Object))
-	s.Patch.Files = append(s.Patch.Files, p)
-	if err := pg.target.Put(UnstructuredWithMetadata{
-		Object: unstructured.Unstructured{
-			Object: addNameGVK(o.Object, map[string]any{
-				"spec": map[string]any{
-					"skipDependencyResolution": false,
-				},
-			}),
-		},
-		Metadata: Metadata{
-			Path: p,
-		},
-	}); err != nil {
-		return err
+		// add step for enabling the dependency resolution
+		// for the configuration package
+		s = pg.stepConfiguration(stepConfigurationPackageEnableDepResolution)
+		p = fmt.Sprintf("%s/%s.yaml", s.Name, getVersionedName(o.Object))
+		s.Patch.Files = append(s.Patch.Files, p)
+		if err := pg.target.Put(UnstructuredWithMetadata{
+			Object: unstructured.Unstructured{
+				Object: addNameGVK(o.Object, map[string]any{
+					"spec": map[string]any{
+						"skipDependencyResolution": false,
+					},
+				}),
+			},
+			Metadata: Metadata{
+				Path: p,
+			},
+		}); err != nil {
+			return err
+		}
 	}
 
 	// add the step for editing the configuration package

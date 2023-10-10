@@ -9,6 +9,7 @@ spec:
       manualExecution:
         - sh -c "kubectl get managed -o yaml > backup/managed-resources.yaml"
       type: Exec
+      description: "Backing up Managed Resources"
 
     - exec:
         command: sh
@@ -19,6 +20,7 @@ spec:
       manualExecution:
         - sh -c "kubectl get composite -o yaml > backup/composite-resources.yaml"
       type: Exec
+      description: "Backing up Composite Resources"
 
     - exec:
         command: sh
@@ -29,6 +31,7 @@ spec:
       manualExecution:
         - sh -c "kubectl get claim --all-namespaces -o yaml > backup/claim-resources.yaml"
       type: Exec
+      description: "Backing up Claims from all namespaces"
 
     - patch:
         type: merge
@@ -38,6 +41,7 @@ spec:
       manualExecution:
         - "kubectl patch --type='merge' -f deletion-policy-orphan/sample-vpc.vpcs.fakesourceapi_v1alpha1.yaml --patch-file deletion-policy-orphan/sample-vpc.vpcs.fakesourceapi_v1alpha1.yaml"
       type: Patch
+      description: "Setting the deletion policies of Managed Resources to Orphan as a precaution against any unexpected problems that may occur during migration"
 
     - apply:
         files:
@@ -46,6 +50,7 @@ spec:
       manualExecution:
         - "kubectl apply -f new-ssop/provider-family-aws.providers.pkg.crossplane.io_v1.yaml"
       type: Apply
+      description: "Installing the new family config provider"
 
     - exec:
         command: sh
@@ -56,6 +61,7 @@ spec:
       manualExecution:
         - sh -c "kubectl wait provider.pkg provider-family-aws --for condition=Healthy"
       type: Exec
+      description: "Checking the health of new family config provider"
 
     - apply:
         files:
@@ -66,6 +72,7 @@ spec:
         - "kubectl apply -f new-ssop/provider-aws-ec2.providers.pkg.crossplane.io_v1.yaml"
         - "kubectl apply -f new-ssop/provider-aws-eks.providers.pkg.crossplane.io_v1.yaml"
       type: Apply
+      description: "Installing the new family resource providers"
 
     - exec:
         command: sh
@@ -76,6 +83,7 @@ spec:
       manualExecution:
         - sh -c "kubectl wait provider.pkg provider-aws-ec2 --for condition=Healthy"
       type: Exec
+      description: "Checking health of new family resource provider"
 
     - exec:
         command: sh
@@ -86,6 +94,7 @@ spec:
       manualExecution:
         - sh -c "kubectl wait provider.pkg provider-aws-eks --for condition=Healthy"
       type: Exec
+      description: "Checking health of new family resource provider"
 
     - patch:
         type: merge
@@ -95,6 +104,7 @@ spec:
       manualExecution:
         - "kubectl patch --type='merge' -f disable-dependency-resolution/platform-ref-aws.configurations.pkg.crossplane.io_v1.yaml --patch-file disable-dependency-resolution/platform-ref-aws.configurations.pkg.crossplane.io_v1.yaml"
       type: Patch
+      description: "Setting the value of spec.skipDependencyResolution field to true so that dependencies of the Crossplane Configuration package are not resolved automatically, in preparation of deleting the monolithic provider packages"
 
     - patch:
         type: merge
@@ -104,6 +114,7 @@ spec:
       manualExecution:
         - "kubectl patch --type='merge' -f edit-package-lock/lock.locks.pkg.crossplane.io_v1beta1.yaml --patch-file edit-package-lock/lock.locks.pkg.crossplane.io_v1beta1.yaml"
       type: Patch
+      description: "Deleting the Configuration package dependency from the Lock resource in preparation of deleting the monolithic provider packages"
 
     - delete:
         options:
@@ -117,6 +128,7 @@ spec:
       manualExecution:
         - "kubectl delete Provider.pkg.crossplane.io provider-aws"
       type: Delete
+      description: "Deleting the monolithic provider package: provider-aws"
 
     - patch:
         type: merge
@@ -126,6 +138,7 @@ spec:
       manualExecution:
         - "kubectl patch --type='merge' -f activate-ssop/provider-family-aws.providers.pkg.crossplane.io_v1.yaml --patch-file activate-ssop/provider-family-aws.providers.pkg.crossplane.io_v1.yaml"
       type: Patch
+      description: "Activating the new family config provider after the deletion of the monolithic one"
 
     - exec:
         command: sh
@@ -136,6 +149,7 @@ spec:
       manualExecution:
         - sh -c "kubectl wait provider.pkg provider-family-aws --for condition=Installed"
       type: Exec
+      description: "Checking the installation of new family config provider"
 
     - patch:
         type: merge
@@ -147,6 +161,7 @@ spec:
         - "kubectl patch --type='merge' -f activate-ssop/provider-aws-ec2.providers.pkg.crossplane.io_v1.yaml --patch-file activate-ssop/provider-aws-ec2.providers.pkg.crossplane.io_v1.yaml"
         - "kubectl patch --type='merge' -f activate-ssop/provider-aws-eks.providers.pkg.crossplane.io_v1.yaml --patch-file activate-ssop/provider-aws-eks.providers.pkg.crossplane.io_v1.yaml"
       type: Patch
+      description: "Activating the new family resource providers"
 
     - exec:
         command: sh
@@ -157,6 +172,7 @@ spec:
       manualExecution:
         - sh -c "kubectl wait provider.pkg provider-aws-ec2 --for condition=Installed"
       type: Exec
+      description: "Checking installation of new service scoped provider"
 
     - exec:
         command: sh
@@ -167,6 +183,7 @@ spec:
       manualExecution:
         - sh -c "kubectl wait provider.pkg provider-aws-eks --for condition=Installed"
       type: Exec
+      description: "Checking installation of new service scoped provider"
 
     - exec:
         command: sh
@@ -177,6 +194,7 @@ spec:
       manualExecution:
         - sh -c "cp edit-configuration-metadata/platform-ref-aws.configurations.meta.pkg.crossplane.io_v1.yaml testdata/plan/configurationv1.yaml"
       type: Exec
+      description: "Replacing the monolithic provider dependencies in the Configuration metadata with references to the new family providers"
 
     - exec:
         command: sh
@@ -187,6 +205,7 @@ spec:
       manualExecution:
         - sh -c "up xpkg build --package-root={{PKG_ROOT}} --examples-root={{EXAMPLES_ROOT}} -o {{PKG_PATH}}"
       type: Exec
+      description: "Building the new Configuration package using up"
 
     - exec:
         command: sh
@@ -197,6 +216,7 @@ spec:
       manualExecution:
         - sh -c "up xpkg push {{TARGET_CONFIGURATION_PACKAGE}} -f {{PKG_PATH}}"
       type: Exec
+      description: "Pushing the new Configuration package to {{TARGET_CONFIGURATION_PACKAGE}}"
 
     - patch:
         type: merge
@@ -206,6 +226,7 @@ spec:
       manualExecution:
         - "kubectl patch --type='merge' -f edit-configuration-package/platform-ref-aws.configurations.pkg.crossplane.io_v1.yaml --patch-file edit-configuration-package/platform-ref-aws.configurations.pkg.crossplane.io_v1.yaml"
       type: Patch
+      description: "Setting the Configuration package reference (spec.package) to the new one"
 
     - patch:
         type: merge
@@ -215,6 +236,7 @@ spec:
       manualExecution:
         - "kubectl patch --type='merge' -f enable-dependency-resolution/platform-ref-aws.configurations.pkg.crossplane.io_v1.yaml --patch-file enable-dependency-resolution/platform-ref-aws.configurations.pkg.crossplane.io_v1.yaml"
       type: Patch
+      description: "Setting the value of spec.skipDependencyResolution field in the Configuration package back to false"
 
     - patch:
         type: merge
@@ -224,5 +246,6 @@ spec:
       manualExecution:
         - "kubectl patch --type='merge' -f deletion-policy-delete/sample-vpc.vpcs.fakesourceapi_v1alpha1.yaml --patch-file deletion-policy-delete/sample-vpc.vpcs.fakesourceapi_v1alpha1.yaml"
       type: Patch
+      description: "Setting the deletion policies of Managed Resources whose deletion policy had been set to Orphan at the beginning of the migration process, back to Delete"
 
 version: 0.1.0

@@ -9,6 +9,7 @@ spec:
     manualExecution:
       - sh -c "kubectl get managed -o yaml > backup/managed-resources.yaml"
     type: Exec
+    description: "Backing up Managed Resources"
 
   - exec:
       command: sh
@@ -19,6 +20,7 @@ spec:
     manualExecution:
       - sh -c "kubectl get composite -o yaml > backup/composite-resources.yaml"
     type: Exec
+    description: "Backing up Composite Resources"
 
   - exec:
       command: sh
@@ -29,6 +31,7 @@ spec:
     manualExecution:
       - sh -c "kubectl get claim --all-namespaces -o yaml > backup/claim-resources.yaml"
     type: Exec
+    description: "Backing up Claims from all namespaces"
 
   - exec:
       command: sh
@@ -39,6 +42,7 @@ spec:
     manualExecution:
       - sh -c "cp edit-configuration-metadata/platform-ref-aws.configurations.meta.pkg.crossplane.io_v1alpha1.yaml testdata/plan/configurationv1alpha1.yaml"
     type: Exec
+    description: "Replacing the monolithic provider dependencies in the Configuration metadata with references to the new family providers"
 
   - exec:
       command: sh
@@ -49,6 +53,7 @@ spec:
     manualExecution:
       - sh -c "up xpkg build --package-root={{PKG_ROOT}} --examples-root={{EXAMPLES_ROOT}} -o {{PKG_PATH}}"
     type: Exec
+    description: "Building the new Configuration package using up"
 
   - exec:
       command: sh
@@ -59,5 +64,6 @@ spec:
     manualExecution:
       - sh -c "up xpkg push {{TARGET_CONFIGURATION_PACKAGE}} -f {{PKG_PATH}}"
     type: Exec
+    description: "Pushing the new Configuration package to {{TARGET_CONFIGURATION_PACKAGE}}"
 
 version: 0.1.0

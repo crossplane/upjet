@@ -357,7 +357,7 @@ func TestGeneratePlan(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to load plan file from path %s: %v", tt.want.migrationPlanPath, err)
 			}
-			if diff := cmp.Diff(p, &pg.Plan, cmpopts.IgnoreUnexported(Spec{})); diff != "" {
+			if diff := cmp.Diff(p, &pg.Plan, cmpopts.IgnoreUnexported(Plan{}, Spec{})); diff != "" {
 				t.Errorf("GeneratePlan(): -wantPlan, +gotPlan: %s", diff)
 			}
 			// compare generated migration files with the expected ones

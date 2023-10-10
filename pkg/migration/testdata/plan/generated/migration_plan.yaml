@@ -8,6 +8,7 @@ spec:
     manualExecution:
       - "kubectl patch --type='merge' -f pause-managed/sample-vpc.vpcs.fakesourceapi.yaml --patch-file pause-managed/sample-vpc.vpcs.fakesourceapi.yaml"
     type: Patch
+    description: "Adding pause annotation to the Managed Resource so that the Managed Resource is not reconciled during migration"
 
   - patch:
       type: merge
@@ -17,6 +18,7 @@ spec:
     manualExecution:
       - "kubectl patch --type='merge' -f pause-composites/my-resource-dwjgh.xmyresources.test.com.yaml --patch-file pause-composites/my-resource-dwjgh.xmyresources.test.com.yaml"
     type: Patch
+    description: "Adding pause annotation to the Composite Resource so that the Composite Resource is not reconciled during migration"
 
   - apply:
       files:
@@ -25,6 +27,7 @@ spec:
     manualExecution:
       - "kubectl apply -f create-new-managed/sample-vpc.vpcs.faketargetapi.yaml"
     type: Apply
+    description: "Creating the Managed Resource that has the new API"
 
   - apply:
       files:
@@ -33,6 +36,7 @@ spec:
     manualExecution:
       - "kubectl apply -f new-compositions/example-migrated.compositions.apiextensions.crossplane.io.yaml"
     type: Apply
+    description: "Creating the Compositions that have the new API"
 
   - patch:
       type: merge
@@ -42,6 +46,7 @@ spec:
     manualExecution:
       - "kubectl patch --type='merge' -f edit-composites/my-resource-dwjgh.xmyresources.test.com.yaml --patch-file edit-composites/my-resource-dwjgh.xmyresources.test.com.yaml"
     type: Patch
+    description: "Editing the Composite Resources with the correct references"
 
   - patch:
       type: merge
@@ -51,6 +56,7 @@ spec:
     manualExecution:
       - "kubectl patch --type='merge' -f edit-claims/my-resource.myresources.test.com.yaml --patch-file edit-claims/my-resource.myresources.test.com.yaml"
     type: Patch
+    description: "Editing the Claims with the correct references"
 
   - patch:
       type: merge
@@ -60,6 +66,7 @@ spec:
     manualExecution:
       - "kubectl patch --type='merge' -f deletion-policy-orphan/sample-vpc.vpcs.fakesourceapi.yaml --patch-file deletion-policy-orphan/sample-vpc.vpcs.fakesourceapi.yaml"
     type: Patch
+    description: "Setting Deletion Policy to Orphan before deleting old Managed Resource so that physical resource is not deleted"
 
   - patch:
       type: merge
@@ -82,6 +89,7 @@ spec:
     manualExecution:
       - "kubectl delete VPC.fakesourceapi sample-vpc"
     type: Delete
+    description:  "Deleting the old Managed Resource"
 
   - patch:
       type: merge
@@ -91,6 +99,7 @@ spec:
     manualExecution:
       - "kubectl patch --type='merge' -f start-managed/sample-vpc.vpcs.faketargetapi.yaml --patch-file start-managed/sample-vpc.vpcs.faketargetapi.yaml"
     type: Patch
+    description: "Removing the pause annotation to start the reconciliation of the newly created Managed Resource"
 
   - patch:
       type: merge
@@ -100,5 +109,6 @@ spec:
     manualExecution:
       - "kubectl patch --type='merge' -f start-composites/my-resource-dwjgh.xmyresources.test.com.yaml --patch-file start-composites/my-resource-dwjgh.xmyresources.test.com.yaml"
     type: Patch
+    description: "Removing the pause annotation to start the reconciliation of the newly created Composite Resource"
 
 version: 0.1.0

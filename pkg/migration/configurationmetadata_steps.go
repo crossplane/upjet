@@ -125,47 +125,68 @@ func (pg *PlanGenerator) stepConfigurationWithSubStep(s step, newSubStep bool) *
 	pg.Plan.Spec.stepMap[stepKey] = &Step{}
 	switch s { // nolint:gocritic,exhaustive
 	case stepOrphanMRs:
-		setPatchStep("deletion-policy-orphan", pg.Plan.Spec.stepMap[stepKey])
+		setPatchStep("deletion-policy-orphan", "Setting the deletion policies of Managed Resources to Orphan as a precaution against any unexpected problems that may occur during migration",
+			pg.Plan.Spec.stepMap[stepKey])
 	case stepRevertOrphanMRs:
-		setPatchStep("deletion-policy-delete", pg.Plan.Spec.stepMap[stepKey])
+		setPatchStep("deletion-policy-delete", "Setting the deletion policies of Managed Resources whose deletion policy had been set to Orphan at the beginning of the migration process, back to Delete",
+			pg.Plan.Spec.stepMap[stepKey])
 	case stepNewFamilyProvider:
-		setApplyStep("new-ssop", pg.Plan.Spec.stepMap[stepKey])
+		setApplyStep("new-ssop", "Installing the new family config provider",
+			pg.Plan.Spec.stepMap[stepKey])
 	case stepNewServiceScopedProvider:
-		setApplyStep("new-ssop", pg.Plan.Spec.stepMap[stepKey])
+		setApplyStep("new-ssop", "Installing the new family resource providers",
+			pg.Plan.Spec.stepMap[stepKey])
 	case stepConfigurationPackageDisableDepResolution:
-		setPatchStep("disable-dependency-resolution", pg.Plan.Spec.stepMap[stepKey])
+		setPatchStep("disable-dependency-resolution", "Setting the value of spec.skipDependencyResolution field to true so that dependencies of the Crossplane Configuration package are not resolved automatically, in preparation of deleting the monolithic provider packages",
+			pg.Plan.Spec.stepMap[stepKey])
 	case stepConfigurationPackageEnableDepResolution:
-		setPatchStep("enable-dependency-resolution", pg.Plan.Spec.stepMap[stepKey])
+		setPatchStep("enable-dependency-resolution", "Setting the value of spec.skipDependencyResolution field in the Configuration package back to false",
+			pg.Plan.Spec.stepMap[stepKey])
 	case stepEditConfigurationPackage:
-		setPatchStep("edit-configuration-package", pg.Plan.Spec.stepMap[stepKey])
+		setPatchStep("edit-configuration-package", "Setting the Configuration package reference (spec.package) to the new one",
+			pg.Plan.Spec.stepMap[stepKey])
 	case stepEditPackageLock:
-		setPatchStep("edit-package-lock", pg.Plan.Spec.stepMap[stepKey])
+		setPatchStep("edit-package-lock", "Deleting the Configuration package dependency from the Lock resource in preparation of deleting the monolithic provider packages",
+			pg.Plan.Spec.stepMap[stepKey])
 	case stepDeleteMonolithicProvider:
-		setDeleteStep("delete-monolithic-provider", pg.Plan.Spec.stepMap[stepKey])
+		setDeleteStep("delete-monolithic-provider", "Deleting the monolithic provider package",
+			pg.Plan.Spec.stepMap[stepKey])
 	case stepActivateFamilyProviderRevision:
-		setPatchStep("activate-ssop", pg.Plan.Spec.stepMap[stepKey])
+		setPatchStep("activate-ssop", "Activating the new family config provider after the deletion of the monolithic one",
+			pg.Plan.Spec.stepMap[stepKey])
 	case stepActivateServiceScopedProviderRevision:
-		setPatchStep("activate-ssop", pg.Plan.Spec.stepMap[stepKey])
+		setPatchStep("activate-ssop", "Activating the new family resource providers",
+			pg.Plan.Spec.stepMap[stepKey])
 	case stepEditConfigurationMetadata:
-		setExecStep("edit-configuration-metadata", pg.Plan.Spec.stepMap[stepKey])
+		setExecStep("edit-configuration-metadata", "Replacing the monolithic provider dependencies in the Configuration metadata with references to the new family providers",
+			pg.Plan.Spec.stepMap[stepKey])
 	case stepBackupMRs:
-		setExecStep("backup-managed-resources", pg.Plan.Spec.stepMap[stepKey])
+		setExecStep("backup-managed-resources", "Backing up Managed Resources",
+			pg.Plan.Spec.stepMap[stepKey])
 	case stepBackupComposites:
-		setExecStep("backup-composite-resources", pg.Plan.Spec.stepMap[stepKey])
+		setExecStep("backup-composite-resources", "Backing up Composite Resources",
+			pg.Plan.Spec.stepMap[stepKey])
 	case stepBackupClaims:
-		setExecStep("backup-claim-resources", pg.Plan.Spec.stepMap[stepKey])
+		setExecStep("backup-claim-resources", "Backing up Claims from all namespaces",
+			pg.Plan.Spec.stepMap[stepKey])
 	case stepCheckHealthFamilyProvider:
-		setExecStep("wait-for-healthy", pg.Plan.Spec.stepMap[stepKey])
+		setExecStep("wait-for-healthy", "Checking the health of new family config provider",
+			pg.Plan.Spec.stepMap[stepKey])
 	case stepCheckHealthNewServiceScopedProvider:
-		setExecStep("wait-for-healthy", pg.Plan.Spec.stepMap[stepKey])
+		setExecStep("wait-for-healthy", "Checking health of new family resource provider",
+			pg.Plan.Spec.stepMap[stepKey])
 	case stepCheckInstallationFamilyProviderRevision:
-		setExecStep("wait-for-installed", pg.Plan.Spec.stepMap[stepKey])
+		setExecStep("wait-for-installed", "Checking the installation of new family config provider",
+			pg.Plan.Spec.stepMap[stepKey])
 	case stepCheckInstallationServiceScopedProviderRevision:
-		setExecStep("wait-for-installed", pg.Plan.Spec.stepMap[stepKey])
+		setExecStep("wait-for-installed", "Checking installation of new service scoped provider",
+			pg.Plan.Spec.stepMap[stepKey])
 	case stepBuildConfiguration:
-		setExecStep("build-configuration", pg.Plan.Spec.stepMap[stepKey])
+		setExecStep("build-configuration", "Building the new Configuration package using up",
+			pg.Plan.Spec.stepMap[stepKey])
 	case stepPushConfiguration:
-		setExecStep("push-configuration", pg.Plan.Spec.stepMap[stepKey])
+		setExecStep("push-configuration", "Pushing the new Configuration package",
+			pg.Plan.Spec.stepMap[stepKey])
 	default:
 		panic(fmt.Sprintf(errInvalidStepFmt, s))
 	}
