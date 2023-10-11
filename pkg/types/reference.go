@@ -14,7 +14,7 @@ import (
 	"github.com/crossplane/upjet/pkg/types/comments"
 	"github.com/crossplane/upjet/pkg/types/markers"
 	"github.com/crossplane/upjet/pkg/types/name"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 )
 
 const (
@@ -48,7 +48,7 @@ var (
 	commentOptional = &comments.Comment{
 		Options: markers.Options{
 			KubebuilderOptions: markers.KubebuilderOptions{
-				Required: pointer.Bool(false),
+				Required: ptr.To(false),
 			},
 		},
 	}
