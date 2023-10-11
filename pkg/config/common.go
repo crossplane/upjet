@@ -76,16 +76,17 @@ func DefaultResource(name string, terraformSchema *schema.Resource, terraformReg
 	}
 
 	r := &Resource{
-		Name:              name,
-		TerraformResource: terraformSchema,
-		MetaResource:      terraformRegistry,
-		ShortGroup:        group,
-		Kind:              kind,
-		Version:           "v1alpha1",
-		ExternalName:      NameAsIdentifier,
-		References:        map[string]Reference{},
-		Sensitive:         NopSensitive,
-		UseAsync:          true,
+		Name:                 name,
+		TerraformResource:    terraformSchema,
+		MetaResource:         terraformRegistry,
+		ShortGroup:           group,
+		Kind:                 kind,
+		Version:              "v1alpha1",
+		ExternalName:         NameAsIdentifier,
+		References:           map[string]Reference{},
+		Sensitive:            NopSensitive,
+		UseAsync:             true,
+		SchemaElementOptions: make(map[string]*SchemaElementOption),
 	}
 	for _, f := range opts {
 		f(r)

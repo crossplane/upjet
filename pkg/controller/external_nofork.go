@@ -177,10 +177,7 @@ type noForkExternal struct {
 }
 
 func (n *noForkExternal) getResourceDataDiff(ctx context.Context, s *tf.InstanceState) (*tf.InstanceDiff, error) {
-	instanceDiff, err := schema.InternalMap(n.resourceSchema.Schema).Diff(ctx, s, &tf.ResourceConfig{
-		Raw:    n.params,
-		Config: n.params,
-	}, nil, n.ts.Meta, false)
+	instanceDiff, err := schema.InternalMap(n.resourceSchema.Schema).Diff(ctx, s, tf.NewResourceConfigRaw(n.params), nil, n.ts.Meta, false)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get *terraform.InstanceDiff")
 	}

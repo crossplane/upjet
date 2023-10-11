@@ -322,4 +322,34 @@ type Resource struct {
 	// the plural name of the generated CRD. Overriding this sets both the
 	// path and the plural name for the generated CRD.
 	Path string
+
+	// SchemaElementOptions is a map from the schema element paths to
+	// SchemaElementOption for configuring options for schema elements.
+	SchemaElementOptions SchemaElementOptions
+}
+
+// SchemaElementOptions represents schema element options for the
+// schema elements of a Resource.
+type SchemaElementOptions map[string]*SchemaElementOption
+
+// SetAddToObservation sets the AddToObservation for the specified key.
+func (m SchemaElementOptions) SetAddToObservation(el string) {
+	if m[el] == nil {
+		m[el] = &SchemaElementOption{}
+	}
+	m[el].AddToObservation = true
+}
+
+// AddToObservation returns true if the schema element at the specified path
+// should be added to the CRD type's Observation type.
+func (m SchemaElementOptions) AddToObservation(el string) bool {
+	return m[el] != nil && m[el].AddToObservation
+}
+
+// SchemaElementOption represents configuration options on a schema element.
+type SchemaElementOption struct {
+	// AddToObservation is set to true if the field represented by
+	// a schema element is to be added to the generated CRD type's
+	// Observation type.
+	AddToObservation bool
 }
