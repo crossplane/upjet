@@ -1,6 +1,6 @@
-/*
-Copyright 2022 Upbound Inc.
-*/
+// SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+//
+// SPDX-License-Identifier: Apache-2.0
 
 package registry
 
@@ -8,11 +8,11 @@ import (
 	"os"
 	"testing"
 
-	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"gopkg.in/yaml.v3"
 
+	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 	xptest "github.com/crossplane/crossplane-runtime/pkg/test"
 )
 

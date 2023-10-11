@@ -1,6 +1,6 @@
-/*
-Copyright 2021 Upbound Inc.
-*/
+// SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+//
+// SPDX-License-Identifier: Apache-2.0
 
 package controller
 
@@ -8,22 +8,21 @@ import (
 	"context"
 	"time"
 
-	tferrors "github.com/upbound/upjet/pkg/terraform/errors"
+	"github.com/crossplane/upjet/pkg/config"
+	"github.com/crossplane/upjet/pkg/controller/handler"
+	"github.com/crossplane/upjet/pkg/metrics"
+	"github.com/crossplane/upjet/pkg/resource"
+	"github.com/crossplane/upjet/pkg/resource/json"
+	"github.com/crossplane/upjet/pkg/terraform"
+	tferrors "github.com/crossplane/upjet/pkg/terraform/errors"
+	"github.com/pkg/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
-	"github.com/pkg/errors"
-	"k8s.io/apimachinery/pkg/util/sets"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	"github.com/upbound/upjet/pkg/config"
-	"github.com/upbound/upjet/pkg/controller/handler"
-	"github.com/upbound/upjet/pkg/metrics"
-	"github.com/upbound/upjet/pkg/resource"
-	"github.com/upbound/upjet/pkg/resource/json"
-	"github.com/upbound/upjet/pkg/terraform"
 )
 
 const (

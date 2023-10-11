@@ -1,6 +1,6 @@
-/*
-Copyright 2022 Upbound Inc.
-*/
+// SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+//
+// SPDX-License-Identifier: Apache-2.0
 
 package reference
 
@@ -8,15 +8,14 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/crossplane/upjet/pkg/config"
+	"github.com/crossplane/upjet/pkg/registry"
+	"github.com/crossplane/upjet/pkg/types"
 	"github.com/pkg/errors"
-
-	"github.com/upbound/upjet/pkg/config"
-	"github.com/upbound/upjet/pkg/registry"
-	"github.com/upbound/upjet/pkg/types"
 )
 
 const (
-	extractorPackagePath      = "github.com/upbound/upjet/pkg/resource"
+	extractorPackagePath      = "github.com/crossplane/upjet/pkg/resource"
 	extractResourceIDFuncPath = extractorPackagePath + ".ExtractResourceID()"
 	fmtExtractParamFuncPath   = extractorPackagePath + `.ExtractParamPath("%s",%t)`
 )
@@ -56,7 +55,7 @@ func getExtractorFuncPath(r *config.Resource, sourceAttr string) string {
 
 // InjectReferences injects cross-resource references using the
 // provider metadata scraped from the Terraform registry.
-func (rr *Injector) InjectReferences(configResources map[string]*config.Resource) error { // nolint:gocyclo
+func (rr *Injector) InjectReferences(configResources map[string]*config.Resource) error { //nolint:gocyclo
 	for n, r := range configResources {
 		m := configResources[n].MetaResource
 		if m == nil {

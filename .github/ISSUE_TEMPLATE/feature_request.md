@@ -1,7 +1,7 @@
 ---
 name: Feature Request
 about: Help us make Upjet more useful
-labels: enhancement,needs:triage
+labels: enhancement
 ---
 <!--
 Thank you for helping to improve Upjet!

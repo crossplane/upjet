@@ -1,4 +1,11 @@
+<!--
+SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 ---
+
 subcategory: "Attestation"
 layout: "azurerm"
 page_title: "Azure Resource Manager: azurerm_attestation"
@@ -47,7 +54,7 @@ The following arguments are supported:
 
 ## Attributes Reference
 
-The following Attributes are exported: 
+The following Attributes are exported:
 
 * `id` - The ID of the Attestation Provider.
 

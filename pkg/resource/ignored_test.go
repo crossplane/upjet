@@ -1,14 +1,15 @@
-/*
-Copyright 2023 Upbound Inc.
-*/
+// SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+//
+// SPDX-License-Identifier: Apache-2.0
 
 package resource
 
 import (
-	_ "embed"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+
+	_ "embed"
 )
 
 func TestGetIgnoredFields(t *testing.T) {

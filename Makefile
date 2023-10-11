@@ -1,8 +1,13 @@
+
+# SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # ====================================================================================
 # Setup Project
 
 PROJECT_NAME := upjet
-PROJECT_REPO := github.com/upbound/$(PROJECT_NAME)
+PROJECT_REPO := github.com/crossplane/$(PROJECT_NAME)
 
 # GOLANGCILINT_VERSION is inherited from build submodule by default.
 # Uncomment below if you need to override the version.
@@ -55,12 +60,6 @@ fallthrough: submodules
 	@echo Initial setup complete. Running make again . . .
 	@make
 
-# Generate a coverage report for cobertura applying exclusions on
-# - generated file
-cobertura:
-	@cat $(GO_TEST_OUTPUT)/coverage.txt | \
-		$(GOCOVER_COBERTURA) > $(GO_TEST_OUTPUT)/cobertura-coverage.xml
-
 # Update the submodules, such as the common build scripts.
 submodules:
 	@git submodule sync
@@ -78,4 +77,4 @@ go.cachedir:
 go.mod.cachedir:
 	@go env GOMODCACHE
 
-.PHONY: cobertura reviewable submodules fallthrough go.mod.cachedir go.cachedir
+.PHONY: reviewable submodules fallthrough go.mod.cachedir go.cachedir

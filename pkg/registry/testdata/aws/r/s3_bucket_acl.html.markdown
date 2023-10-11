@@ -1,4 +1,11 @@
+<!--
+SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 ---
+
 subcategory: "S3 (Simple Storage)"
 layout: "aws"
 page_title: "AWS: aws_s3_bucket_acl"
@@ -111,33 +118,32 @@ In addition to all arguments above, the following attributes are exported:
 
 S3 bucket ACL can be imported in one of four ways.
 
-
 If the owner (account ID) of the source bucket is the _same_ account used to configure the Terraform AWS Provider, and the source bucket is **not configured** with a
 [canned ACL][1] (i.e. predefined grant), the S3 bucket ACL resource should be imported using the `bucket` e.g.,
 
 ```
-$ terraform import aws_s3_bucket_acl.example bucket-name
+terraform import aws_s3_bucket_acl.example bucket-name
 ```
 
 If the owner (account ID) of the source bucket is the _same_ account used to configure the Terraform AWS Provider, and the source bucket is **configured** with a
 [canned ACL][1] (i.e. predefined grant), the S3 bucket ACL resource should be imported using the `bucket` and `acl` separated by a comma (`,`), e.g.
 
 ```
-$ terraform import aws_s3_bucket_acl.example bucket-name,private
+terraform import aws_s3_bucket_acl.example bucket-name,private
 ```
 
 If the owner (account ID) of the source bucket _differs_ from the account used to configure the Terraform AWS Provider, and the source bucket is **not configured** with a
 [canned ACL][1] (i.e. predefined grant), the S3 bucket ACL resource should be imported using the `bucket` and `expected_bucket_owner` separated by a comma (`,`) e.g.,
 
 ```
-$ terraform import aws_s3_bucket_acl.example bucket-name,123456789012
+terraform import aws_s3_bucket_acl.example bucket-name,123456789012
 ```
 
 If the owner (account ID) of the source bucket _differs_ from the account used to configure the Terraform AWS Provider, and the source bucket is **configured** with a
 [canned ACL][1] (i.e. predefined grant), the S3 bucket ACL resource should be imported using the `bucket`, `expected_bucket_owner`, and `acl` separated by commas (`,`), e.g.,
 
 ```
-$ terraform import aws_s3_bucket_acl.example bucket-name,123456789012,private
+terraform import aws_s3_bucket_acl.example bucket-name,123456789012,private
 ```
 
 [1]: https://docs.aws.amazon.com/AmazonS3/latest/userguide/acl-overview.html#canned-acl

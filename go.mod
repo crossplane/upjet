@@ -1,12 +1,16 @@
-module github.com/upbound/upjet
+// SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+//
+// SPDX-License-Identifier: CC0-1.0
+
+module github.com/crossplane/upjet
 
 go 1.20
 
 require (
 	dario.cat/mergo v1.0.0
 	github.com/antchfx/htmlquery v1.2.4
-	github.com/crossplane/crossplane v1.10.0
-	github.com/crossplane/crossplane-runtime v0.20.0
+	github.com/crossplane/crossplane v1.13.2
+	github.com/crossplane/crossplane-runtime v1.13.0
 	github.com/fatih/camelcase v1.0.0
 	github.com/golang/mock v1.6.0
 	github.com/google/go-cmp v0.5.9

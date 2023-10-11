@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Expected Parameters:
 #   Monolith provider name
 #   Configuration name
@@ -156,4 +160,3 @@ spec:
       type: Patch
 
 version: 0.1.0
-

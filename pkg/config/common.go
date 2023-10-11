@@ -1,16 +1,15 @@
-/*
-Copyright 2021 Upbound Inc.
-*/
+// SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+//
+// SPDX-License-Identifier: Apache-2.0
 
 package config
 
 import (
 	"strings"
 
+	"github.com/crossplane/upjet/pkg/registry"
+	tjname "github.com/crossplane/upjet/pkg/types/name"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-
-	"github.com/upbound/upjet/pkg/registry"
-	tjname "github.com/upbound/upjet/pkg/types/name"
 )
 
 const (
@@ -34,7 +33,7 @@ var (
 			"apis/v1alpha1",
 			"apis/v1beta1",
 		},
-		//nolint:staticcheck
+
 		Controller: []string{
 			// Default package for ProviderConfig controllers
 			"internal/controller/providerconfig",

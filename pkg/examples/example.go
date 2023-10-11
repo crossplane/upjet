@@ -1,6 +1,6 @@
-/*
-Copyright 2022 Upbound Inc.
-*/
+// SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+//
+// SPDX-License-Identifier: Apache-2.0
 
 package examples
 
@@ -20,11 +20,11 @@ import (
 	"github.com/pkg/errors"
 	"sigs.k8s.io/yaml"
 
-	"github.com/upbound/upjet/pkg/config"
-	"github.com/upbound/upjet/pkg/registry/reference"
-	"github.com/upbound/upjet/pkg/resource/json"
-	tjtypes "github.com/upbound/upjet/pkg/types"
-	"github.com/upbound/upjet/pkg/types/name"
+	"github.com/crossplane/upjet/pkg/config"
+	"github.com/crossplane/upjet/pkg/registry/reference"
+	"github.com/crossplane/upjet/pkg/resource/json"
+	tjtypes "github.com/crossplane/upjet/pkg/types"
+	"github.com/crossplane/upjet/pkg/types/name"
 )
 
 var (

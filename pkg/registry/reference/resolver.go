@@ -1,6 +1,6 @@
-/*
-Copyright 2022 Upbound Inc.
-*/
+// SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+//
+// SPDX-License-Identifier: Apache-2.0
 
 package reference
 
@@ -10,12 +10,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
+	"github.com/crossplane/upjet/pkg/config"
+	"github.com/crossplane/upjet/pkg/registry"
+	"github.com/crossplane/upjet/pkg/resource/json"
 	"github.com/pkg/errors"
 
-	"github.com/upbound/upjet/pkg/config"
-	"github.com/upbound/upjet/pkg/registry"
-	"github.com/upbound/upjet/pkg/resource/json"
+	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 )
 
 const (
@@ -128,7 +128,7 @@ func (rr *Injector) ResolveReferencesOfPaved(pm *PavedWithManifest, resolutionCo
 	return errors.Wrap(rr.resolveReferences(pm.Paved.UnstructuredContent(), resolutionContext), "failed to resolve references of paved")
 }
 
-func (rr *Injector) resolveReferences(params map[string]any, resolutionContext *ResolutionContext) error { // nolint:gocyclo
+func (rr *Injector) resolveReferences(params map[string]any, resolutionContext *ResolutionContext) error { //nolint:gocyclo
 	for paramName, paramValue := range params {
 		switch t := paramValue.(type) {
 		case map[string]any:

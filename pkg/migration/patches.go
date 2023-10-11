@@ -1,16 +1,6 @@
-// Copyright 2023 Upbound Inc.
+// SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// SPDX-License-Identifier: Apache-2.0
 
 package migration
 
@@ -21,10 +11,11 @@ import (
 	"regexp"
 	"strings"
 
-	xpv1 "github.com/crossplane/crossplane/apis/apiextensions/v1"
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	xpv1 "github.com/crossplane/crossplane/apis/apiextensions/v1"
 )
 
 var (
@@ -67,7 +58,7 @@ func (pg *PlanGenerator) removeInvalidPatches(gvkSource, gvkTarget schema.GroupV
 	var patches []xpv1.Patch
 	for _, p := range targetTemplate.Patches {
 		s := source
-		switch p.Type { // nolint:exhaustive
+		switch p.Type { //nolint:exhaustive
 		case xpv1.PatchTypePatchSet:
 			ps := getNamedPatchSet(p.PatchSetName, patchSets)
 			if ps == nil {
@@ -122,7 +113,7 @@ func assertPatchSchemaConformance(p xpv1.Patch, source, target any) (bool, error
 	// because this is defaulting logic and what we default can be overridden
 	// later in the convert, the type switch is not exhaustive
 	// TODO: consider processing other patch types
-	switch p.Type { // nolint:exhaustive
+	switch p.Type { //nolint:exhaustive
 	case xpv1.PatchTypeFromCompositeFieldPath, "": // the default type
 		targetPath = p.ToFieldPath
 	case xpv1.PatchTypeToCompositeFieldPath:
@@ -167,7 +158,7 @@ func isRawExtension(source, target reflect.Type) bool {
 // assertNameAndTypeAtPath asserts that the migration source and target
 // templates both have the same kind for the type at the specified path.
 // Also validates the specific path is valid for the source.
-func assertNameAndTypeAtPath(source, target reflect.Type, pathComponents []string) (bool, error) { // nolint:gocyclo
+func assertNameAndTypeAtPath(source, target reflect.Type, pathComponents []string) (bool, error) { //nolint:gocyclo
 	if len(pathComponents) < 1 {
 		return compareKinds(source, target), nil
 	}
@@ -231,7 +222,7 @@ func compareKinds(s, t reflect.Type) bool {
 // with the specified serialized (JSON) name. Returns a nil (and a nil error)
 // if a field with the specified serialized name is not found
 // in the specified type.
-func getFieldWithSerializedName(t reflect.Type, name string) (*reflect.StructField, error) { // nolint:gocyclo
+func getFieldWithSerializedName(t reflect.Type, name string) (*reflect.StructField, error) { //nolint:gocyclo
 	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}

@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package types
 
 import (
@@ -5,15 +9,14 @@ import (
 	"go/types"
 	"testing"
 
+	"github.com/crossplane/upjet/pkg/config"
+	"github.com/crossplane/upjet/pkg/types/name"
 	"github.com/google/go-cmp/cmp"
 	twtypes "github.com/muvaf/typewriter/pkg/types"
-
-	"github.com/upbound/upjet/pkg/config"
-	"github.com/upbound/upjet/pkg/types/name"
 )
 
 func TestBuilder_generateReferenceFields(t *testing.T) {
-	tp := types.NewPackage("github.com/upbound/upjet/pkg/types", "tjtypes")
+	tp := types.NewPackage("github.com/crossplane/upjet/pkg/types", "tjtypes")
 
 	type args struct {
 		t *types.TypeName
@@ -48,8 +51,8 @@ func TestBuilder_generateReferenceFields(t *testing.T) {
 					`json:"testFieldSelector,omitempty" tf:"-"`,
 				},
 				outComments: twtypes.Comments{
-					"github.com/upbound/upjet/pkg/types.Params:TestFieldRef":      "// Reference to a testObject to populate testField.\n// +kubebuilder:validation:Optional\n",
-					"github.com/upbound/upjet/pkg/types.Params:TestFieldSelector": "// Selector for a testObject to populate testField.\n// +kubebuilder:validation:Optional\n",
+					"github.com/crossplane/upjet/pkg/types.Params:TestFieldRef":      "// Reference to a testObject to populate testField.\n// +kubebuilder:validation:Optional\n",
+					"github.com/crossplane/upjet/pkg/types.Params:TestFieldSelector": "// Selector for a testObject to populate testField.\n// +kubebuilder:validation:Optional\n",
 				},
 			},
 		},
@@ -73,8 +76,8 @@ func TestBuilder_generateReferenceFields(t *testing.T) {
 					`json:"testFieldSelector,omitempty" tf:"-"`,
 				},
 				outComments: twtypes.Comments{
-					"github.com/upbound/upjet/pkg/types.Params:TestFieldRefs":     "// References to testObject to populate testField.\n// +kubebuilder:validation:Optional\n",
-					"github.com/upbound/upjet/pkg/types.Params:TestFieldSelector": "// Selector for a list of testObject to populate testField.\n// +kubebuilder:validation:Optional\n",
+					"github.com/crossplane/upjet/pkg/types.Params:TestFieldRefs":     "// References to testObject to populate testField.\n// +kubebuilder:validation:Optional\n",
+					"github.com/crossplane/upjet/pkg/types.Params:TestFieldSelector": "// Selector for a list of testObject to populate testField.\n// +kubebuilder:validation:Optional\n",
 				},
 			},
 		},
@@ -99,8 +102,8 @@ func TestBuilder_generateReferenceFields(t *testing.T) {
 					`json:"testFieldSelector,omitempty" tf:"-"`,
 				},
 				outComments: twtypes.Comments{
-					"github.com/upbound/upjet/pkg/types.Params:CustomRef":         "// Reference to a TestObject to populate testField.\n// +kubebuilder:validation:Optional\n",
-					"github.com/upbound/upjet/pkg/types.Params:TestFieldSelector": "// Selector for a TestObject to populate testField.\n// +kubebuilder:validation:Optional\n",
+					"github.com/crossplane/upjet/pkg/types.Params:CustomRef":         "// Reference to a TestObject to populate testField.\n// +kubebuilder:validation:Optional\n",
+					"github.com/crossplane/upjet/pkg/types.Params:TestFieldSelector": "// Selector for a TestObject to populate testField.\n// +kubebuilder:validation:Optional\n",
 				},
 			},
 		},
@@ -125,8 +128,8 @@ func TestBuilder_generateReferenceFields(t *testing.T) {
 					`json:"customSelector,omitempty" tf:"-"`,
 				},
 				outComments: twtypes.Comments{
-					"github.com/upbound/upjet/pkg/types.Params:TestFieldRef":   "// Reference to a TestObject to populate testField.\n// +kubebuilder:validation:Optional\n",
-					"github.com/upbound/upjet/pkg/types.Params:CustomSelector": "// Selector for a TestObject to populate testField.\n// +kubebuilder:validation:Optional\n",
+					"github.com/crossplane/upjet/pkg/types.Params:TestFieldRef":   "// Reference to a TestObject to populate testField.\n// +kubebuilder:validation:Optional\n",
+					"github.com/crossplane/upjet/pkg/types.Params:CustomSelector": "// Selector for a TestObject to populate testField.\n// +kubebuilder:validation:Optional\n",
 				},
 			},
 		},
@@ -150,8 +153,8 @@ func TestBuilder_generateReferenceFields(t *testing.T) {
 					`json:"testFieldSelector,omitempty" tf:"-"`,
 				},
 				outComments: twtypes.Comments{
-					"github.com/upbound/upjet/pkg/types.Params:TestFieldRef":      "// Reference to a TestObject in somepackage to populate testField.\n// +kubebuilder:validation:Optional\n",
-					"github.com/upbound/upjet/pkg/types.Params:TestFieldSelector": "// Selector for a TestObject in somepackage to populate testField.\n// +kubebuilder:validation:Optional\n",
+					"github.com/crossplane/upjet/pkg/types.Params:TestFieldRef":      "// Reference to a TestObject in somepackage to populate testField.\n// +kubebuilder:validation:Optional\n",
+					"github.com/crossplane/upjet/pkg/types.Params:TestFieldSelector": "// Selector for a TestObject in somepackage to populate testField.\n// +kubebuilder:validation:Optional\n",
 				},
 			},
 		},

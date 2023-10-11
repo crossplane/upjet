@@ -1,35 +1,43 @@
-# Using Upjet
+<!--
+SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
 
-Upjet consists of three main pieces:
-* Framework to build a code generator pipeline.
-* Generic reconciler implementation used by all generated `CustomResourceDefinition`s.
-* A scraper to extract documentation for all generated `CustomResourceDefinition`s.
+SPDX-License-Identifier: CC-BY-4.0
+-->
 
-The usual flow of development of a new provider is as following:
-1. Create a provider by following the guide [here][generate-a-provider].
-2. Follow the guide [here][new-v1beta1] to add a `CustomResourceDefinition` for
-   every resource in the given Terraform provider.
+# What is Upjet?
 
-In most cases, the two guides above would be enough for you to get up and running
-with a provider.
+Upjet consists of four main components:
 
-The guides below are longer forms for when you get stuck and want a deeper
-understanding:
-* Description of all configuration knobs can be found [here][full-guide].
-* Detailed explanation of how to use Uptest to test your resources can be found
-  [here][uptest-guide].
-  * You can find a troubleshooting guide [here][testing-instructions] that can
-    be useful to debug a failed test.
-* References are inferred from the generated examples with a best effort manner.
-  Details about the process can be found [here][reference-generation].
+![Upjet components](images/upjet-components.png)
 
-Feel free to ask your questions by opening an issue, starting a discussion or
-shooting a message on [Slack]!
+1. Framework to build a code generator pipeline for Crossplane providers.
+1. Generic reconciler implementation (also known as the Upjet runtime) used by
+   all generated `CustomResourceDefinitions`.
+1. A scraper to extract documentation for all generated
+   `CustomResourceDefinitions`.
+1. Migration framework to support migrating from community providers to Official
+   Providers.
 
-[generate-a-provider]: generating-a-provider.md
-[new-v1beta1]: add-new-resource-short.md
-[full-guide]: add-new-resource-long.md
-[uptest-guide]: testing-resources-by-using-uptest.md
-[testing-instructions]: testing-instructions.md
-[reference-generation]: reference-generation.md
-[Slack]: https://crossplane.slack.com/archives/C01TRKD4623
+## Generating a Crossplane provider using Upjet
+
+Follow the guide to start [generating a Crossplane
+provider](generating-a-provider.md).
+
+Further information on developing a provider:
+
+- Guide for how to [configure a resource](configuring-a-resource.md) in your
+provider.
+- Guide on how to use Uptest to [test your resources](testing-with-uptest.md)
+end to end.
+- Guide on how to add support for
+[management policies](adding-support-for-management-policies.md) to an existing
+provider.
+
+## Additional documentation
+
+- [Provider identity based authentication](design-doc-provider-identity-based-auth.md)
+- [Monitoring](monitoring.md) the Upjet runtime using Prometheus.
+
+Feel free to ask your questions by opening an issue or starting a discussion in
+the [#upjet](https://crossplane.slack.com/archives/C05T19TB729) channel in
+[Crossplane Slack](https://slack.crossplane.io).

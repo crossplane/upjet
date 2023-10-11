@@ -1,6 +1,12 @@
-# Adding Support for Management Policies and initProvider in an Upjet Based Provider
+<!--
+SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
 
-## (Re)generating a provider with Management Policies
+SPDX-License-Identifier: CC-BY-4.0
+-->
+
+# Adding Support for Management Policies and initProvider
+
+## Regenerating a provider with Management Policies
 
 Check out the provider repo, e.g., upbound/provider-aws, and go to the project
 directory on your local machine.
@@ -19,9 +25,10 @@ directory on your local machine.
     go mod tidy
     ```
 
-2. Introduce a feature flag for `Management Policies`.
+1. Introduce a feature flag for `Management Policies`.
 
-    Add the feature flag definition into the `internal/features/features.go` file.
+    Add the feature flag definition into the `internal/features/features.go`
+    file.
 
     ```diff
     diff --git a/internal/features/features.go b/internal/features/features.go
@@ -40,7 +47,7 @@ directory on your local machine.
      )
     ```
 
-   Add the actual flag in `cmd/provider/main.go` file and pass the flag to the 
+   Add the actual flag in `cmd/provider/main.go` file and pass the flag to the
    workspace store:
 
     ```diff
@@ -89,18 +96,21 @@ directory on your local machine.
                kingpin.FatalIfError(mgr.Start(ctrl.SetupSignalHandler()), "Cannot start controller manager")
         }
        ```
-   
-> Note: If the provider was already updated to support observe-only resources, just add the feature flag to the workspaceStore.
 
-3. Generate with the latest upjet and management policies:
+> [!NOTE]
+> If the provider was already updated to support observe-only resources, just
+  add the feature flag to the `workspaceStore`.
+
+1. Generate with the latest upjet and management policies:
 
     ```bash
     # Bump to the latest upjet
-    go get github.com/upbound/upjet@main
+    go get github.com/crossplane/upjet@main
     go mod tidy
     ```
 
-   Enable management policies in the generator by adding `config.WithFeaturesPackage` option:
+   Enable management policies in the generator by adding
+   `config.WithFeaturesPackage` option:
 
     ```diff
     diff --git a/config/provider.go b/config/provider.go
@@ -126,8 +136,8 @@ directory on your local machine.
 ## Testing: Locally Running the Provider with Management Policies Enabled
 
 1. Create a fresh Kubernetes cluster.
-2. Apply all of the provider's CRDs with `kubectl apply -f package/crds`.
-3. Run the provider with `--enable-management-policies`.
+1. Apply all of the provider's CRDs with `kubectl apply -f package/crds`.
+1. Run the provider with `--enable-management-policies`.
 
    You can update the `run` target in the Makefile as below
 
@@ -142,18 +152,15 @@ directory on your local machine.
             @# To see other arguments that can be provided, run the command with --help instead
     -       UPBOUND_CONTEXT="local" $(GO_OUT_DIR)/provider --debug
     +       UPBOUND_CONTEXT="local" $(GO_OUT_DIR)/provider --debug --enable-management-policies
-    
-     # NOTE(hasheddan): we ensure up is installed prior to running platform-specific
-     # build steps in parallel to avoid encountering an installation race condition.
     ```
-   
-    and run with: 
+
+    and run with:
 
     ```shell
     make run
     ```
 
-4. Create some resources in the provider's management console and try observing
+1. Create some resources in the provider's management console and try observing
 them by creating a managed resource with `managementPolicies: ["Observe"]`.
 
     For example:
@@ -168,7 +175,7 @@ them by creating a managed resource with `managementPolicies: ["Observe"]`.
       forProvider:
         region: us-west-1
     ```
-   
+
     You should see the managed resource is ready & synced:
 
     ```bash
@@ -182,14 +189,16 @@ them by creating a managed resource with `managementPolicies: ["Observe"]`.
     kubectl get instance.rds.aws.upbound.io an-existing-dbinstance -o yaml
     ```
 
-> Please note: You would need the `terraform` executable installed on your local machine.
+> [!NOTE]
+> You need the `terraform` executable installed on your local machine.
 
-5. Create a managed resource without `LateInitialize` like
-`managementPolicies: ["Observe", "Create", "Update", "Delete"]` with 
+1. Create a managed resource without `LateInitialize` like
+`managementPolicies: ["Observe", "Create", "Update", "Delete"]` with
 `spec.initProvider` fields to see the provider create the resource with
 combining `spec.initProvider` and `spec.forProvider` fields:
 
    For example:
+
    ```yaml
    apiVersion: dynamodb.aws.upbound.io/v1beta1
    kind: Table
@@ -238,9 +247,9 @@ combining `spec.initProvider` and `spec.forProvider` fields:
     ```bash
     kubectl get tables.dynamodb.aws.upbound.io example  -o yaml
     ```
-   
+
    As the late initialization is skipped, the `spec.forProvider` should be the
    same when we created the resource.
-   
+
    In the provider console, you should see that the resource was created with
    the values in the `initProvider` field.

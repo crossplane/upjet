@@ -1,6 +1,6 @@
-/*
-Copyright 2022 Upbound Inc.
-*/
+// SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+//
+// SPDX-License-Identifier: Apache-2.0
 
 package controller
 
@@ -8,11 +8,11 @@ import (
 	"crypto/tls"
 	"time"
 
-	"github.com/crossplane/crossplane-runtime/pkg/controller"
+	"github.com/crossplane/upjet/pkg/config"
+	"github.com/crossplane/upjet/pkg/terraform"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	"github.com/upbound/upjet/pkg/config"
-	"github.com/upbound/upjet/pkg/terraform"
+	"github.com/crossplane/crossplane-runtime/pkg/controller"
 )
 
 // Options contains incriminating options for a given Upjet controller instance.
