@@ -115,6 +115,9 @@ func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (m
 		return nil, errors.Wrap(err, "cannot store sensitive parameters into params")
 	}
 	c.config.ExternalName.SetIdentifierArgumentFn(params, meta.GetExternalName(tr))
+	if c.config.TerraformConfigurationInjector != nil {
+		c.config.TerraformConfigurationInjector(mg, params)
+	}
 
 	tfID, err := c.config.ExternalName.GetIDFn(ctx, meta.GetExternalName(mg), params, ts.Map())
 	if err != nil {

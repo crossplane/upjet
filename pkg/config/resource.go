@@ -326,7 +326,20 @@ type Resource struct {
 	// SchemaElementOptions is a map from the schema element paths to
 	// SchemaElementOption for configuring options for schema elements.
 	SchemaElementOptions SchemaElementOptions
+
+	// TerraformConfigurationInjector allows a managed resource to inject
+	// configuration values in the Terraform configuration map obtained by
+	// deserializing its `spec.forProvider` value. Managed resources can
+	// use this resource configuration option to inject Terraform
+	// configuration parameters into their deserialized configuration maps,
+	// if the deserialization skips certain fields.
+	TerraformConfigurationInjector ConfigurationInjector
 }
+
+// ConfigurationInjector is a function that injects Terraform configuration
+// values from the specified managed resource into the specified configuration
+// map.
+type ConfigurationInjector func(xpresource.Managed, map[string]any)
 
 // SchemaElementOptions represents schema element options for the
 // schema elements of a Resource.
