@@ -93,7 +93,7 @@ import (
         if err := json.TFParser.Unmarshal(attrs, params); err != nil {
             return false, errors.Wrap(err, "failed to unmarshal Terraform state parameters for late-initialization")
         }
-        var opts []resource.GenericLateInitializerOption
+        opts := []resource.GenericLateInitializerOption{resource.WithZeroValueJSONOmitEmptyFilter(resource.CNameWildcard)}
         {{ range .LateInitializer.IgnoredFields -}}
             opts = append(opts, resource.WithNameFilter("{{ . }}"))
         {{ end }}
