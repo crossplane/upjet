@@ -15,7 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	twtypes "github.com/muvaf/typewriter/pkg/types"
 	"github.com/pkg/errors"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 )
@@ -338,7 +338,7 @@ func (r *resource) addParameterField(f *Field, field *types.Var) {
 	}
 
 	// Note(lsviben): Only fields which are not also initProvider fields should have a required kubebuilder comment.
-	f.Comment.Required = pointer.Bool(requiredBySchema && !f.isInit())
+	f.Comment.Required = ptr.To(requiredBySchema && !f.isInit())
 
 	// For removing omitempty tag from json tag, we are just checking if the field is required by the schema.
 	if requiredBySchema {

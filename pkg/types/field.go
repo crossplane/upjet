@@ -18,7 +18,7 @@ import (
 	"github.com/crossplane/upjet/pkg/types/name"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/pkg/errors"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 )
 
 var parentheses = regexp.MustCompile(`\(([^)]+)\)`)
@@ -251,7 +251,7 @@ func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames) {
 	// This doesn't count for identifiers and references, which are not
 	// mirrored in initProvider.
 	if f.isInit() {
-		f.Comment.Required = pointer.Bool(false)
+		f.Comment.Required = ptr.To(false)
 	}
 	g.comments.AddFieldComment(typeNames.ParameterTypeName, f.FieldNameCamel, f.Comment.Build())
 

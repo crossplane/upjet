@@ -14,7 +14,7 @@ import (
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
@@ -250,9 +250,9 @@ func (t *Tagger) Initialize(ctx context.Context, mg xpresource.Managed) error {
 
 func setExternalTagsWithPaved(externalTags map[string]string, paved *fieldpath.Paved, fieldName string) ([]byte, error) {
 	tags := map[string]*string{
-		xpresource.ExternalResourceTagKeyKind:     pointer.String(externalTags[xpresource.ExternalResourceTagKeyKind]),
-		xpresource.ExternalResourceTagKeyName:     pointer.String(externalTags[xpresource.ExternalResourceTagKeyName]),
-		xpresource.ExternalResourceTagKeyProvider: pointer.String(externalTags[xpresource.ExternalResourceTagKeyProvider]),
+		xpresource.ExternalResourceTagKeyKind:     ptr.To(externalTags[xpresource.ExternalResourceTagKeyKind]),
+		xpresource.ExternalResourceTagKeyName:     ptr.To(externalTags[xpresource.ExternalResourceTagKeyName]),
+		xpresource.ExternalResourceTagKeyProvider: ptr.To(externalTags[xpresource.ExternalResourceTagKeyProvider]),
 	}
 
 	if err := paved.SetValue(fmt.Sprintf("spec.forProvider.%s", fieldName), tags); err != nil {
