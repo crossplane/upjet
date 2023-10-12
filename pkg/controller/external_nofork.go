@@ -174,6 +174,7 @@ type noForkExternal struct {
 	config         *config.Resource
 	kube           client.Client
 	instanceState  *tf.InstanceState
+	instanceDiff   *tf.InstanceDiff
 	params         map[string]any
 	logger         logging.Logger
 	metricRecorder *metrics.MetricRecorder
@@ -192,6 +193,9 @@ func (n *noForkExternal) getResourceDataDiff(ctx context.Context, s *tf.Instance
 		}
 		instanceDiff.RawPlan = v
 	}
+	if instanceDiff != nil {
+		n.logger.Debug("Diff detected", "instanceDiff", instanceDiff.GoString())
+	}
 	return instanceDiff, nil
 }
 
@@ -203,7 +207,14 @@ func (n *noForkExternal) Observe(ctx context.Context, mg xpresource.Managed) (ma
 		return managed.ExternalObservation{}, errors.Errorf("failed to observe the resource: %v", diag)
 	}
 	n.instanceState = newState
-	noDiff := false
+	// compute the instance diff
+	instanceDiff, err := n.getResourceDataDiff(ctx, n.instanceState)
+	if err != nil {
+		return managed.ExternalObservation{}, errors.Wrap(err, "cannot compute the instance diff")
+	}
+	n.instanceDiff = instanceDiff
+	noDiff := instanceDiff.Empty()
+
 	var connDetails managed.ConnectionDetails
 	resourceExists := newState != nil && newState.ID != ""
 	if !resourceExists && mg.GetDeletionTimestamp() != nil {
@@ -239,11 +250,6 @@ func (n *noForkExternal) Observe(ctx context.Context, mg xpresource.Managed) (ma
 		if err != nil {
 			return managed.ExternalObservation{}, errors.Wrap(err, "cannot get connection details")
 		}
-		instanceDiff, err := n.getResourceDataDiff(ctx, n.instanceState)
-		if err != nil {
-			return managed.ExternalObservation{}, err
-		}
-		noDiff = instanceDiff.Empty()
 
 		if noDiff {
 			n.metricRecorder.SetReconcileTime(mg.GetName())
@@ -262,12 +268,8 @@ func (n *noForkExternal) Observe(ctx context.Context, mg xpresource.Managed) (ma
 }
 
 func (n *noForkExternal) Create(ctx context.Context, mg xpresource.Managed) (managed.ExternalCreation, error) {
-	instanceDiff, err := n.getResourceDataDiff(ctx, n.instanceState)
-	if err != nil {
-		return managed.ExternalCreation{}, err
-	}
 	start := time.Now()
-	newState, diag := n.resourceSchema.Apply(ctx, n.instanceState, instanceDiff, n.ts.Meta)
+	newState, diag := n.resourceSchema.Apply(ctx, n.instanceState, n.instanceDiff, n.ts.Meta)
 	metrics.ExternalAPITime.WithLabelValues("create").Observe(time.Since(start).Seconds())
 	// diag := n.resourceSchema.CreateWithoutTimeout(ctx, n.resourceData, n.ts.Meta)
 	if diag != nil && diag.HasError() {
@@ -303,12 +305,8 @@ func (n *noForkExternal) Create(ctx context.Context, mg xpresource.Managed) (man
 }
 
 func (n *noForkExternal) Update(ctx context.Context, mg xpresource.Managed) (managed.ExternalUpdate, error) {
-	instanceDiff, err := n.getResourceDataDiff(ctx, n.instanceState)
-	if err != nil {
-		return managed.ExternalUpdate{}, err
-	}
 	start := time.Now()
-	newState, diag := n.resourceSchema.Apply(ctx, n.instanceState, instanceDiff, n.ts.Meta)
+	newState, diag := n.resourceSchema.Apply(ctx, n.instanceState, n.instanceDiff, n.ts.Meta)
 	metrics.ExternalAPITime.WithLabelValues("update").Observe(time.Since(start).Seconds())
 	if diag != nil && diag.HasError() {
 		return managed.ExternalUpdate{}, errors.Errorf("failed to update the resource: %v", diag)
@@ -327,17 +325,13 @@ func (n *noForkExternal) Update(ctx context.Context, mg xpresource.Managed) (man
 }
 
 func (n *noForkExternal) Delete(ctx context.Context, _ xpresource.Managed) error {
-	instanceDiff, err := n.getResourceDataDiff(ctx, n.instanceState)
-	if err != nil {
-		return err
-	}
-	if instanceDiff == nil {
-		instanceDiff = tf.NewInstanceDiff()
+	if n.instanceDiff == nil {
+		n.instanceDiff = tf.NewInstanceDiff()
 	}
 
-	instanceDiff.Destroy = true
+	n.instanceDiff.Destroy = true
 	start := time.Now()
-	_, diag := n.resourceSchema.Apply(ctx, n.instanceState, instanceDiff, n.ts.Meta)
+	_, diag := n.resourceSchema.Apply(ctx, n.instanceState, n.instanceDiff, n.ts.Meta)
 	metrics.ExternalAPITime.WithLabelValues("delete").Observe(time.Since(start).Seconds())
 	if diag != nil && diag.HasError() {
 		return errors.Errorf("failed to delete the resource: %v", diag)
