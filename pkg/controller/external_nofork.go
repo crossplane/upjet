@@ -19,6 +19,7 @@ import (
 	"time"
 
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
@@ -96,6 +97,18 @@ func copyParameters(tfState, params map[string]any) map[string]any {
 	return targetState
 }
 
+func getJSONMap(mg xpresource.Managed) (map[string]any, error) {
+	pv, err := fieldpath.PaveObject(mg)
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot pave the managed resource")
+	}
+	v, err := pv.GetValue("spec.forProvider")
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot get spec.forProvider value from paved object")
+	}
+	return v.(map[string]any), nil
+}
+
 func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (managed.ExternalClient, error) {
 	c.metricRecorder.ObserveReconcileDelay(mg.GetObjectKind().GroupVersionKind(), mg.GetName())
 	start := time.Now()
@@ -116,7 +129,11 @@ func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (m
 	}
 	c.config.ExternalName.SetIdentifierArgumentFn(params, meta.GetExternalName(tr))
 	if c.config.TerraformConfigurationInjector != nil {
-		c.config.TerraformConfigurationInjector(mg, params)
+		m, err := getJSONMap(mg)
+		if err != nil {
+			return nil, errors.Wrap(err, "cannot get JSON map for the managed resource's spec.forProvider value")
+		}
+		c.config.TerraformConfigurationInjector(m, params)
 	}
 
 	tfID, err := c.config.ExternalName.GetIDFn(ctx, meta.GetExternalName(mg), params, ts.Map())

@@ -338,8 +338,9 @@ type Resource struct {
 
 // ConfigurationInjector is a function that injects Terraform configuration
 // values from the specified managed resource into the specified configuration
-// map.
-type ConfigurationInjector func(xpresource.Managed, map[string]any)
+// map. jsonMap is the map obtained by converting the `spec.forProvider` using
+// the JSON tags and tfMap is obtained by using the TF tags.
+type ConfigurationInjector func(jsonMap map[string]any, tfMap map[string]any)
 
 // SchemaElementOptions represents schema element options for the
 // schema elements of a Resource.
