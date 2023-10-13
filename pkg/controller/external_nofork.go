@@ -109,6 +109,19 @@ func getJSONMap(mg xpresource.Managed) (map[string]any, error) {
 	return v.(map[string]any), nil
 }
 
+type noForkExternal struct {
+	ts             terraform.Setup
+	resourceSchema *schema.Resource
+	config         *config.Resource
+	kube           client.Client
+	instanceState  *tf.InstanceState
+	instanceDiff   *tf.InstanceDiff
+	params         map[string]any
+	rawConfig      cty.Value
+	logger         logging.Logger
+	metricRecorder *metrics.MetricRecorder
+}
+
 func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (managed.ExternalClient, error) {
 	c.metricRecorder.ObserveReconcileDelay(mg.GetObjectKind().GroupVersionKind(), mg.GetName())
 	start := time.Now()
@@ -144,7 +157,8 @@ func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (m
 	// we need to parameterize the following for a provider
 	// not all providers may have this attribute
 	// TODO: tags_all handling
-	attrs := c.config.TerraformResource.CoreConfigSchema().Attributes
+	schemaBlock := c.config.TerraformResource.CoreConfigSchema()
+	attrs := schemaBlock.Attributes
 	if _, ok := attrs["tags_all"]; ok {
 		params["tags_all"] = params["tags"]
 	}
@@ -163,7 +177,7 @@ func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (m
 		tfState = copyParameters(tfState, params)
 	}
 
-	tfStateCtyValue, err := schema.JSONMapToStateValue(tfState, c.config.TerraformResource.CoreConfigSchema())
+	tfStateCtyValue, err := schema.JSONMapToStateValue(tfState, schemaBlock)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot convert JSON map to state cty.Value")
 	}
@@ -172,6 +186,11 @@ func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (m
 		return nil, errors.Wrap(err, "failed to convert cty.Value to terraform.InstanceState")
 	}
 	s.RawPlan = tfStateCtyValue
+	rawConfig, err := schema.JSONMapToStateValue(params, schemaBlock)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to convert params JSON map to cty.Value")
+	}
+	s.RawConfig = rawConfig
 
 	return &noForkExternal{
 		ts:             ts,
@@ -180,21 +199,10 @@ func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (m
 		kube:           c.kube,
 		instanceState:  s,
 		params:         params,
+		rawConfig:      rawConfig,
 		logger:         c.logger.WithValues("uid", mg.GetUID(), "name", mg.GetName(), "gvk", mg.GetObjectKind().GroupVersionKind().String()),
 		metricRecorder: c.metricRecorder,
 	}, nil
-}
-
-type noForkExternal struct {
-	ts             terraform.Setup
-	resourceSchema *schema.Resource
-	config         *config.Resource
-	kube           client.Client
-	instanceState  *tf.InstanceState
-	instanceDiff   *tf.InstanceDiff
-	params         map[string]any
-	logger         logging.Logger
-	metricRecorder *metrics.MetricRecorder
 }
 
 func (n *noForkExternal) getResourceDataDiff(ctx context.Context, s *tf.InstanceState) (*tf.InstanceDiff, error) {
@@ -212,6 +220,7 @@ func (n *noForkExternal) getResourceDataDiff(ctx context.Context, s *tf.Instance
 	}
 	if instanceDiff != nil {
 		n.logger.Debug("Diff detected", "instanceDiff", instanceDiff.GoString())
+		instanceDiff.RawConfig = n.rawConfig
 	}
 	return instanceDiff, nil
 }
