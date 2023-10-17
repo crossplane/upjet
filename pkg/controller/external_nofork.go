@@ -210,6 +210,12 @@ func (n *noForkExternal) getResourceDataDiff(ctx context.Context, s *tf.Instance
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get *terraform.InstanceDiff")
 	}
+	if n.config.TerraformCustomDiff != nil {
+		instanceDiff, err = n.config.TerraformCustomDiff(instanceDiff)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to compute the customized terraform.InstanceDiff")
+		}
+	}
 	if instanceDiff != nil {
 		v := cty.EmptyObjectVal
 		v, err = instanceDiff.ApplyToValue(v, n.resourceSchema.CoreConfigSchema())
@@ -218,7 +224,7 @@ func (n *noForkExternal) getResourceDataDiff(ctx context.Context, s *tf.Instance
 		}
 		instanceDiff.RawPlan = v
 	}
-	if instanceDiff != nil {
+	if instanceDiff != nil && len(instanceDiff.Attributes) > 0 {
 		n.logger.Debug("Diff detected", "instanceDiff", instanceDiff.GoString())
 		instanceDiff.RawConfig = n.rawConfig
 	}
