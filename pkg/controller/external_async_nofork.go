@@ -296,7 +296,7 @@ func (n *noForkAsyncExternal) Create(ctx context.Context, mg xpresource.Managed)
 			n.opTracker.LastOperation.SetError(tfErr)
 		}
 		n.opTracker.SetTfState(newState)
-		n.opTracker.logger.Debug("create async ended", "resource", n.opTracker.GetTfID())
+		n.opTracker.logger.Debug("create async ended", "tfID", n.opTracker.GetTfID())
 
 		defer func() {
 			if cErr := n.callback.Create(mg.GetName())(tfErr, ctx); cErr != nil {
@@ -328,7 +328,7 @@ func (n *noForkAsyncExternal) Update(ctx context.Context, mg xpresource.Managed)
 			n.opTracker.LastOperation.SetError(tfErr)
 		}
 		n.opTracker.SetTfState(newState)
-		n.opTracker.logger.Debug("update async ended", "resource", n.opTracker.GetTfID())
+		n.opTracker.logger.Debug("update async ended", "tfID", n.opTracker.GetTfID())
 
 		defer func() {
 			if cErr := n.callback.Update(mg.GetName())(tfErr, ctx); cErr != nil {
@@ -358,6 +358,7 @@ func (n *noForkAsyncExternal) Delete(ctx context.Context, mg xpresource.Managed)
 		defer cancel()
 		defer n.opTracker.LastOperation.MarkEnd()
 		start := time.Now()
+		tfID := n.opTracker.GetTfID()
 		newState, diag := n.resourceSchema.Apply(ctx, n.opTracker.GetTfState(), instanceDiff, n.ts.Meta)
 		metrics.ExternalAPITime.WithLabelValues("destroy_async").Observe(time.Since(start).Seconds())
 		var tfErr error
@@ -366,7 +367,7 @@ func (n *noForkAsyncExternal) Delete(ctx context.Context, mg xpresource.Managed)
 			n.opTracker.LastOperation.SetError(tfErr)
 		}
 		n.opTracker.SetTfState(newState)
-		n.opTracker.logger.Debug("destroy async ended", "resource", n.opTracker.GetTfID())
+		n.opTracker.logger.Debug("destroy async ended", "tfID", tfID)
 		defer func() {
 			if cErr := n.callback.Destroy(mg.GetName())(tfErr, ctx); cErr != nil {
 				n.opTracker.logger.Info("destroy callback failed", "error", cErr.Error())
