@@ -88,6 +88,13 @@ func (c *NoForkAsyncConnector) Connect(ctx context.Context, mg xpresource.Manage
 	}
 
 	c.config.ExternalName.SetIdentifierArgumentFn(params, externalName)
+	if c.config.TerraformConfigurationInjector != nil {
+		m, err := getJSONMap(mg)
+		if err != nil {
+			return nil, errors.Wrap(err, "cannot get JSON map for the managed resource's spec.forProvider value")
+		}
+		c.config.TerraformConfigurationInjector(m, params)
+	}
 
 	tfID, err := c.config.ExternalName.GetIDFn(ctx, externalName, params, ts.Map())
 	if err != nil {
@@ -97,7 +104,8 @@ func (c *NoForkAsyncConnector) Connect(ctx context.Context, mg xpresource.Manage
 	// we need to parameterize the following for a provider
 	// not all providers may have this attribute
 	// TODO: tags_all handling
-	attrs := c.config.TerraformResource.CoreConfigSchema().Attributes
+	schemaBlock := c.config.TerraformResource.CoreConfigSchema()
+	attrs := schemaBlock.Attributes
 	if _, ok := attrs["tags_all"]; ok {
 		params["tags_all"] = params["tags"]
 	}
@@ -117,7 +125,7 @@ func (c *NoForkAsyncConnector) Connect(ctx context.Context, mg xpresource.Manage
 			tfState = copyParameters(tfState, params)
 		}
 
-		tfStateCtyValue, err := schema.JSONMapToStateValue(tfState, c.config.TerraformResource.CoreConfigSchema())
+		tfStateCtyValue, err := schema.JSONMapToStateValue(tfState, schemaBlock)
 		if err != nil {
 			return nil, errors.Wrap(err, "cannot convert JSON map to state cty.Value")
 		}
@@ -126,6 +134,11 @@ func (c *NoForkAsyncConnector) Connect(ctx context.Context, mg xpresource.Manage
 			return nil, errors.Wrap(err, "failed to convert cty.Value to terraform.InstanceState")
 		}
 		s.RawPlan = tfStateCtyValue
+		rawConfig, err := schema.JSONMapToStateValue(params, schemaBlock)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to convert params JSON map to cty.Value")
+		}
+		s.RawConfig = rawConfig
 		asyncTracker.SetTfState(s)
 	}
 
@@ -204,7 +217,14 @@ func (n *noForkAsyncExternal) Observe(ctx context.Context, mg xpresource.Managed
 		return managed.ExternalObservation{}, errors.Errorf("failed to observe the resource: %v", diag)
 	}
 	n.opTracker.SetTfState(newState)
-	noDiff := false
+	// compute the instance diff
+	instanceDiff, err := n.getResourceDataDiff(ctx, n.instanceState)
+	if err != nil {
+		return managed.ExternalObservation{}, errors.Wrap(err, "cannot compute the instance diff")
+	}
+	n.instanceDiff = instanceDiff
+	noDiff := instanceDiff.Empty()
+
 	var connDetails managed.ConnectionDetails
 	resourceExists := newState != nil && newState.ID != ""
 	if !resourceExists && mg.GetDeletionTimestamp() != nil {
@@ -251,11 +271,6 @@ func (n *noForkAsyncExternal) Observe(ctx context.Context, mg xpresource.Managed
 		if err != nil {
 			return managed.ExternalObservation{}, errors.Wrap(err, "cannot get connection details")
 		}
-		instanceDiff, err := n.getResourceDataDiff(ctx, n.opTracker.GetTfState())
-		if err != nil {
-			return managed.ExternalObservation{}, err
-		}
-		noDiff = instanceDiff.Empty()
 
 		if noDiff {
 			n.metricRecorder.SetReconcileTime(mg.GetName())
@@ -278,17 +293,13 @@ func (n *noForkAsyncExternal) Create(ctx context.Context, mg xpresource.Managed)
 	if !n.opTracker.LastOperation.MarkStart("create") {
 		return managed.ExternalCreation{}, errors.Errorf("%s operation that started at %s is still running", n.opTracker.LastOperation.Type, n.opTracker.LastOperation.StartTime().String())
 	}
-	instanceDiff, err := n.getResourceDataDiff(ctx, n.opTracker.GetTfState())
-	if err != nil {
-		return managed.ExternalCreation{}, err
-	}
 
 	ctx, cancel := context.WithDeadline(context.TODO(), n.opTracker.LastOperation.StartTime().Add(defaultAsyncTimeout))
 	go func() {
 		defer cancel()
 		defer n.opTracker.LastOperation.MarkEnd()
 		start := time.Now()
-		newState, diag := n.resourceSchema.Apply(ctx, n.opTracker.GetTfState(), instanceDiff, n.ts.Meta)
+		newState, diag := n.resourceSchema.Apply(ctx, n.opTracker.GetTfState(), n.instanceDiff, n.ts.Meta)
 		metrics.ExternalAPITime.WithLabelValues("create_async").Observe(time.Since(start).Seconds())
 		var tfErr error
 		if diag != nil && diag.HasError() {
@@ -311,16 +322,13 @@ func (n *noForkAsyncExternal) Update(ctx context.Context, mg xpresource.Managed)
 	if !n.opTracker.LastOperation.MarkStart("update") {
 		return managed.ExternalUpdate{}, errors.Errorf("%s operation that started at %s is still running", n.opTracker.LastOperation.Type, n.opTracker.LastOperation.StartTime().String())
 	}
-	instanceDiff, err := n.getResourceDataDiff(ctx, n.opTracker.GetTfState())
-	if err != nil {
-		return managed.ExternalUpdate{}, err
-	}
+
 	ctx, cancel := context.WithDeadline(context.TODO(), n.opTracker.LastOperation.StartTime().Add(defaultAsyncTimeout))
 	go func() {
 		defer cancel()
 		defer n.opTracker.LastOperation.MarkEnd()
 		start := time.Now()
-		newState, diag := n.resourceSchema.Apply(ctx, n.opTracker.GetTfState(), instanceDiff, n.ts.Meta)
+		newState, diag := n.resourceSchema.Apply(ctx, n.opTracker.GetTfState(), n.instanceDiff, n.ts.Meta)
 		metrics.ExternalAPITime.WithLabelValues("update_async").Observe(time.Since(start).Seconds())
 		var tfErr error
 		if diag != nil && diag.HasError() {
@@ -344,22 +352,20 @@ func (n *noForkAsyncExternal) Delete(ctx context.Context, mg xpresource.Managed)
 	if !n.opTracker.LastOperation.MarkStart("destroy") {
 		return errors.Errorf("%s operation that started at %s is still running", n.opTracker.LastOperation.Type, n.opTracker.LastOperation.StartTime().String())
 	}
-	instanceDiff, err := n.getResourceDataDiff(ctx, n.opTracker.GetTfState())
-	if err != nil {
-		return err
-	}
-	if instanceDiff == nil {
-		instanceDiff = tf.NewInstanceDiff()
+
+	if n.instanceDiff == nil {
+		n.instanceDiff = tf.NewInstanceDiff()
 	}
 
-	instanceDiff.Destroy = true
+	// TODO: sync
+	n.instanceDiff.Destroy = true
 	ctx, cancel := context.WithDeadline(context.TODO(), n.opTracker.LastOperation.StartTime().Add(defaultAsyncTimeout))
 	go func() {
 		defer cancel()
 		defer n.opTracker.LastOperation.MarkEnd()
 		start := time.Now()
 		tfID := n.opTracker.GetTfID()
-		newState, diag := n.resourceSchema.Apply(ctx, n.opTracker.GetTfState(), instanceDiff, n.ts.Meta)
+		newState, diag := n.resourceSchema.Apply(ctx, n.opTracker.GetTfState(), n.instanceDiff, n.ts.Meta)
 		metrics.ExternalAPITime.WithLabelValues("destroy_async").Observe(time.Since(start).Seconds())
 		var tfErr error
 		if diag != nil && diag.HasError() {
