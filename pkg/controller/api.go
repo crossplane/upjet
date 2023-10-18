@@ -68,6 +68,17 @@ func WithEventHandler(e *handler.EventHandler) APICallbacksOption {
 	}
 }
 
+// WithStatusUpdates sets whether the LastAsyncOperation status condition
+// is enabled. If set to false, APICallbacks will not use the
+// LastAsyncOperation status condition for reporting ongoing async
+// operations or errors. Error conditions will still be reported
+// as usual in the `Synced` status condition.
+func WithStatusUpdates(enabled bool) APICallbacksOption {
+	return func(callbacks *APICallbacks) {
+		callbacks.enableStatusUpdates = enabled
+	}
+}
+
 // NewAPICallbacks returns a new APICallbacks.
 func NewAPICallbacks(m ctrl.Manager, of xpresource.ManagedKind, opts ...APICallbacksOption) *APICallbacks {
 	nt := func() resource.Terraformed {
@@ -76,6 +87,9 @@ func NewAPICallbacks(m ctrl.Manager, of xpresource.ManagedKind, opts ...APICallb
 	cb := &APICallbacks{
 		kube:           m.GetClient(),
 		newTerraformed: nt,
+		// the default behavior is to use the LastAsyncOperation
+		// status condition for backwards compatibility.
+		enableStatusUpdates: true,
 	}
 	for _, o := range opts {
 		o(cb)
@@ -87,8 +101,9 @@ func NewAPICallbacks(m ctrl.Manager, of xpresource.ManagedKind, opts ...APICallb
 type APICallbacks struct {
 	eventHandler *handler.EventHandler
 
-	kube           client.Client
-	newTerraformed func() resource.Terraformed
+	kube                client.Client
+	newTerraformed      func() resource.Terraformed
+	enableStatusUpdates bool
 }
 
 func (ac *APICallbacks) callbackFn(name, op string, requeue bool) terraform.CallbackFn {
@@ -98,8 +113,10 @@ func (ac *APICallbacks) callbackFn(name, op string, requeue bool) terraform.Call
 		if kErr := ac.kube.Get(ctx, nn, tr); kErr != nil {
 			return errors.Wrapf(kErr, errGetFmt, tr.GetObjectKind().GroupVersionKind().String(), name, op)
 		}
-		tr.SetConditions(resource.LastAsyncOperationCondition(err))
-		tr.SetConditions(resource.AsyncOperationFinishedCondition())
+		if ac.enableStatusUpdates {
+			tr.SetConditions(resource.LastAsyncOperationCondition(err))
+			tr.SetConditions(resource.AsyncOperationFinishedCondition())
+		}
 		uErr := errors.Wrapf(ac.kube.Status().Update(ctx, tr), errUpdateStatusFmt, tr.GetObjectKind().GroupVersionKind().String(), name, op)
 		if ac.eventHandler != nil && requeue {
 			switch {

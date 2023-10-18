@@ -16,45 +16,34 @@ package controller
 
 import (
 	"context"
-	"github.com/crossplane/crossplane-runtime/pkg/logging"
-	"github.com/upbound/upjet/pkg/config"
-	"github.com/upbound/upjet/pkg/controller/handler"
-	"github.com/upbound/upjet/pkg/resource/json"
-	"github.com/upbound/upjet/pkg/terraform"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"time"
 
-	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
-	"github.com/crossplane/crossplane-runtime/pkg/meta"
+	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	tf "github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 	"github.com/pkg/errors"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/upbound/upjet/pkg/config"
+	"github.com/upbound/upjet/pkg/controller/handler"
 	"github.com/upbound/upjet/pkg/metrics"
-	"github.com/upbound/upjet/pkg/resource"
-	corev1 "k8s.io/api/core/v1"
+	"github.com/upbound/upjet/pkg/terraform"
 )
 
 var defaultAsyncTimeout = 1 * time.Hour
 
 type NoForkAsyncConnector struct {
 	*NoForkConnector
-	operationTrackerStore *OperationTrackerStore
-	callback              CallbackProvider
-	eventHandler          *handler.EventHandler
+	callback     CallbackProvider
+	eventHandler *handler.EventHandler
 }
 
 type NoForkAsyncOption func(connector *NoForkAsyncConnector)
 
 func NewNoForkAsyncConnector(kube client.Client, ots *OperationTrackerStore, sf terraform.SetupFn, cfg *config.Resource, opts ...NoForkAsyncOption) *NoForkAsyncConnector {
 	nfac := &NoForkAsyncConnector{
-		NoForkConnector: &NoForkConnector{
-			kube:              kube,
-			getTerraformSetup: sf,
-			config:            cfg,
-		},
-		operationTrackerStore: ots,
+		NoForkConnector: NewNoForkConnector(kube, sf, cfg, ots),
 	}
 	for _, f := range opts {
 		f(nfac)
@@ -63,98 +52,15 @@ func NewNoForkAsyncConnector(kube client.Client, ots *OperationTrackerStore, sf 
 }
 
 func (c *NoForkAsyncConnector) Connect(ctx context.Context, mg xpresource.Managed) (managed.ExternalClient, error) {
-	asyncTracker := c.operationTrackerStore.Tracker(mg.(resource.Terraformed))
-	c.metricRecorder.ObserveReconcileDelay(mg.GetObjectKind().GroupVersionKind(), mg.GetName())
-	start := time.Now()
-	ts, err := c.getTerraformSetup(ctx, c.kube, mg)
-	metrics.ExternalAPITime.WithLabelValues("connect").Observe(time.Since(start).Seconds())
+	ec, err := c.NoForkConnector.Connect(ctx, mg)
 	if err != nil {
-		return nil, errors.Wrap(err, errGetTerraformSetup)
-	}
-
-	// To Compute the ResourceDiff: n.resourceSchema.Diff(...)
-	tr := mg.(resource.Terraformed)
-	params, err := tr.GetParameters()
-	if err != nil {
-		return nil, errors.Wrap(err, "cannot get parameters")
-	}
-	if err = resource.GetSensitiveParameters(ctx, &APISecretClient{kube: c.kube}, tr, params, tr.GetConnectionDetailsMapping()); err != nil {
-		return nil, errors.Wrap(err, "cannot store sensitive parameters into params")
-	}
-
-	externalName := meta.GetExternalName(tr)
-	if externalName == "" {
-		externalName = asyncTracker.GetTfID()
-	}
-
-	c.config.ExternalName.SetIdentifierArgumentFn(params, externalName)
-	if c.config.TerraformConfigurationInjector != nil {
-		m, err := getJSONMap(mg)
-		if err != nil {
-			return nil, errors.Wrap(err, "cannot get JSON map for the managed resource's spec.forProvider value")
-		}
-		c.config.TerraformConfigurationInjector(m, params)
-	}
-
-	tfID, err := c.config.ExternalName.GetIDFn(ctx, externalName, params, ts.Map())
-	if err != nil {
-		return nil, errors.Wrap(err, "cannot get ID")
-	}
-	params["id"] = tfID
-	// we need to parameterize the following for a provider
-	// not all providers may have this attribute
-	// TODO: tags_all handling
-	schemaBlock := c.config.TerraformResource.CoreConfigSchema()
-	attrs := schemaBlock.Attributes
-	if _, ok := attrs["tags_all"]; ok {
-		params["tags_all"] = params["tags"]
-	}
-	// construct TF
-	if asyncTracker.GetTfState() == nil || asyncTracker.GetTfState().Attributes == nil {
-		tfState, err := tr.GetObservation()
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to get the observation")
-		}
-		copyParams := len(tfState) == 0
-		if err = resource.GetSensitiveParameters(ctx, &APISecretClient{kube: c.kube}, tr, tfState, tr.GetConnectionDetailsMapping()); err != nil {
-			return nil, errors.Wrap(err, "cannot store sensitive parameters into tfState")
-		}
-		c.config.ExternalName.SetIdentifierArgumentFn(tfState, meta.GetExternalName(tr))
-		tfState["id"] = tfID
-		if copyParams {
-			tfState = copyParameters(tfState, params)
-		}
-
-		tfStateCtyValue, err := schema.JSONMapToStateValue(tfState, schemaBlock)
-		if err != nil {
-			return nil, errors.Wrap(err, "cannot convert JSON map to state cty.Value")
-		}
-		s, err := c.config.TerraformResource.ShimInstanceStateFromValue(tfStateCtyValue)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to convert cty.Value to terraform.InstanceState")
-		}
-		s.RawPlan = tfStateCtyValue
-		rawConfig, err := schema.JSONMapToStateValue(params, schemaBlock)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to convert params JSON map to cty.Value")
-		}
-		s.RawConfig = rawConfig
-		asyncTracker.SetTfState(s)
+		return nil, errors.Wrap(err, "cannot initialize the no-fork async external client")
 	}
 
 	return &noForkAsyncExternal{
-		noForkExternal: &noForkExternal{
-			ts:             ts,
-			resourceSchema: c.config.TerraformResource,
-			config:         c.config,
-			kube:           c.kube,
-			params:         params,
-			logger:         c.logger.WithValues("uid", mg.GetUID(), "name", mg.GetName(), "gvk", mg.GetObjectKind().GroupVersionKind().String()),
-			metricRecorder: c.metricRecorder,
-		},
-		opTracker:    asyncTracker,
-		callback:     c.callback,
-		eventHandler: c.eventHandler,
+		noForkExternal: ec.(*noForkExternal),
+		callback:       c.callback,
+		eventHandler:   c.eventHandler,
 	}, nil
 }
 
@@ -194,7 +100,6 @@ type noForkAsyncExternal struct {
 	*noForkExternal
 	callback     CallbackProvider
 	eventHandler *handler.EventHandler
-	opTracker    *AsyncTracker
 }
 
 type CallbackFn func(error, context.Context) error
@@ -202,7 +107,6 @@ type CallbackFn func(error, context.Context) error
 func (n *noForkAsyncExternal) Observe(ctx context.Context, mg xpresource.Managed) (managed.ExternalObservation, error) {
 	if n.opTracker.LastOperation.IsRunning() {
 		n.logger.WithValues("opType", n.opTracker.LastOperation.Type).Debug("ongoing async operation")
-		mg.SetConditions(resource.AsyncOperationOngoingCondition())
 		return managed.ExternalObservation{
 			ResourceExists:   true,
 			ResourceUpToDate: true,
@@ -210,88 +114,16 @@ func (n *noForkAsyncExternal) Observe(ctx context.Context, mg xpresource.Managed
 	}
 	n.opTracker.LastOperation.Flush()
 
-	start := time.Now()
-	newState, diag := n.resourceSchema.RefreshWithoutUpgrade(ctx, n.opTracker.GetTfState(), n.ts.Meta)
-	metrics.ExternalAPITime.WithLabelValues("read").Observe(time.Since(start).Seconds())
-	if diag != nil && diag.HasError() {
-		return managed.ExternalObservation{}, errors.Errorf("failed to observe the resource: %v", diag)
-	}
-	n.opTracker.SetTfState(newState)
-	// compute the instance diff
-	instanceDiff, err := n.getResourceDataDiff(ctx, n.instanceState)
-	if err != nil {
-		return managed.ExternalObservation{}, errors.Wrap(err, "cannot compute the instance diff")
-	}
-	n.instanceDiff = instanceDiff
-	noDiff := instanceDiff.Empty()
-
-	var connDetails managed.ConnectionDetails
-	resourceExists := newState != nil && newState.ID != ""
-	if !resourceExists && mg.GetDeletionTimestamp() != nil {
-		gvk := mg.GetObjectKind().GroupVersionKind()
-		metrics.DeletionTime.WithLabelValues(gvk.Group, gvk.Version, gvk.Kind).Observe(time.Since(mg.GetDeletionTimestamp().Time).Seconds())
-	}
-	lateInitialized := false
-	if resourceExists {
-		if mg.GetCondition(xpv1.TypeReady).Status == corev1.ConditionUnknown ||
-			mg.GetCondition(xpv1.TypeReady).Status == corev1.ConditionFalse {
-			addTTR(mg)
-		}
-		// Set external name
-		en, err := n.config.ExternalName.GetExternalNameFn(map[string]any{
-			"id": n.opTracker.GetTfID(),
-		})
-		if err != nil {
-			return managed.ExternalObservation{}, errors.Wrapf(err, "failed to get the external-name from ID: %s", n.opTracker.GetTfID())
-		}
-		// if external name is set for the first time or if it has changed, this is a spec update
-		// therefore managed reconciler needs to be informed to trigger a spec update
-		externalNameChanged := en != "" && mg.GetAnnotations()[meta.AnnotationKeyExternalName] != en
-		meta.SetExternalName(mg, en)
-		mg.SetConditions(xpv1.Available())
-		stateValueMap, err := n.fromInstanceStateToJSONMap(newState)
-		if err != nil {
-			return managed.ExternalObservation{}, errors.Wrap(err, "cannot convert instance state to JSON map")
-		}
-		buff, err := json.TFParser.Marshal(stateValueMap)
-		if err != nil {
-			return managed.ExternalObservation{}, errors.Wrap(err, "cannot marshal the attributes of the new state for late-initialization")
-		}
-		lateInitialized, err = mg.(resource.Terraformed).LateInitialize(buff)
-		if err != nil {
-			return managed.ExternalObservation{}, errors.Wrap(err, "cannot late-initialize the managed resource")
-		}
-		// external name updates are considered as lateInitialized
-		lateInitialized = lateInitialized || externalNameChanged
-		err = mg.(resource.Terraformed).SetObservation(stateValueMap)
-		if err != nil {
-			return managed.ExternalObservation{}, errors.Errorf("could not set observation: %v", err)
-		}
-		connDetails, err = resource.GetConnectionDetails(stateValueMap, mg.(resource.Terraformed), n.config)
-		if err != nil {
-			return managed.ExternalObservation{}, errors.Wrap(err, "cannot get connection details")
-		}
-
-		if noDiff {
-			n.metricRecorder.SetReconcileTime(mg.GetName())
-		}
-		if !lateInitialized {
-			resource.SetUpToDateCondition(mg, noDiff)
-		}
-	}
-
-	return managed.ExternalObservation{
-		ResourceExists:          resourceExists,
-		ResourceUpToDate:        noDiff,
-		ConnectionDetails:       connDetails,
-		ResourceLateInitialized: lateInitialized,
-	}, nil
-
+	return n.noForkExternal.Observe(ctx, mg)
 }
 
 func (n *noForkAsyncExternal) Create(ctx context.Context, mg xpresource.Managed) (managed.ExternalCreation, error) {
 	if !n.opTracker.LastOperation.MarkStart("create") {
 		return managed.ExternalCreation{}, errors.Errorf("%s operation that started at %s is still running", n.opTracker.LastOperation.Type, n.opTracker.LastOperation.StartTime().String())
+	}
+	instanceDiff, err := n.getResourceDataDiff(ctx, n.opTracker.GetTfState())
+	if err != nil {
+		return managed.ExternalCreation{}, err
 	}
 
 	ctx, cancel := context.WithDeadline(context.TODO(), n.opTracker.LastOperation.StartTime().Add(defaultAsyncTimeout))
@@ -299,7 +131,7 @@ func (n *noForkAsyncExternal) Create(ctx context.Context, mg xpresource.Managed)
 		defer cancel()
 		defer n.opTracker.LastOperation.MarkEnd()
 		start := time.Now()
-		newState, diag := n.resourceSchema.Apply(ctx, n.opTracker.GetTfState(), n.instanceDiff, n.ts.Meta)
+		newState, diag := n.resourceSchema.Apply(ctx, n.opTracker.GetTfState(), instanceDiff, n.ts.Meta)
 		metrics.ExternalAPITime.WithLabelValues("create_async").Observe(time.Since(start).Seconds())
 		var tfErr error
 		if diag != nil && diag.HasError() {
@@ -322,13 +154,16 @@ func (n *noForkAsyncExternal) Update(ctx context.Context, mg xpresource.Managed)
 	if !n.opTracker.LastOperation.MarkStart("update") {
 		return managed.ExternalUpdate{}, errors.Errorf("%s operation that started at %s is still running", n.opTracker.LastOperation.Type, n.opTracker.LastOperation.StartTime().String())
 	}
-
+	instanceDiff, err := n.getResourceDataDiff(ctx, n.opTracker.GetTfState())
+	if err != nil {
+		return managed.ExternalUpdate{}, err
+	}
 	ctx, cancel := context.WithDeadline(context.TODO(), n.opTracker.LastOperation.StartTime().Add(defaultAsyncTimeout))
 	go func() {
 		defer cancel()
 		defer n.opTracker.LastOperation.MarkEnd()
 		start := time.Now()
-		newState, diag := n.resourceSchema.Apply(ctx, n.opTracker.GetTfState(), n.instanceDiff, n.ts.Meta)
+		newState, diag := n.resourceSchema.Apply(ctx, n.opTracker.GetTfState(), instanceDiff, n.ts.Meta)
 		metrics.ExternalAPITime.WithLabelValues("update_async").Observe(time.Since(start).Seconds())
 		var tfErr error
 		if diag != nil && diag.HasError() {
@@ -352,20 +187,22 @@ func (n *noForkAsyncExternal) Delete(ctx context.Context, mg xpresource.Managed)
 	if !n.opTracker.LastOperation.MarkStart("destroy") {
 		return errors.Errorf("%s operation that started at %s is still running", n.opTracker.LastOperation.Type, n.opTracker.LastOperation.StartTime().String())
 	}
-
-	if n.instanceDiff == nil {
-		n.instanceDiff = tf.NewInstanceDiff()
+	instanceDiff, err := n.getResourceDataDiff(ctx, n.opTracker.GetTfState())
+	if err != nil {
+		return err
+	}
+	if instanceDiff == nil {
+		instanceDiff = tf.NewInstanceDiff()
 	}
 
-	// TODO: sync
-	n.instanceDiff.Destroy = true
+	instanceDiff.Destroy = true
 	ctx, cancel := context.WithDeadline(context.TODO(), n.opTracker.LastOperation.StartTime().Add(defaultAsyncTimeout))
 	go func() {
 		defer cancel()
 		defer n.opTracker.LastOperation.MarkEnd()
 		start := time.Now()
 		tfID := n.opTracker.GetTfID()
-		newState, diag := n.resourceSchema.Apply(ctx, n.opTracker.GetTfState(), n.instanceDiff, n.ts.Meta)
+		newState, diag := n.resourceSchema.Apply(ctx, n.opTracker.GetTfState(), instanceDiff, n.ts.Meta)
 		metrics.ExternalAPITime.WithLabelValues("destroy_async").Observe(time.Since(start).Seconds())
 		var tfErr error
 		if diag != nil && diag.HasError() {

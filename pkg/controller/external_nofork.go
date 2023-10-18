@@ -39,11 +39,12 @@ import (
 )
 
 type NoForkConnector struct {
-	getTerraformSetup terraform.SetupFn
-	kube              client.Client
-	config            *config.Resource
-	logger            logging.Logger
-	metricRecorder    *metrics.MetricRecorder
+	getTerraformSetup     terraform.SetupFn
+	kube                  client.Client
+	config                *config.Resource
+	logger                logging.Logger
+	metricRecorder        *metrics.MetricRecorder
+	operationTrackerStore *OperationTrackerStore
 }
 
 // NoForkOption allows you to configure NoForkConnector.
@@ -64,11 +65,12 @@ func WithNoForkMetricRecorder(r *metrics.MetricRecorder) NoForkOption {
 	}
 }
 
-func NewNoForkConnector(kube client.Client, sf terraform.SetupFn, cfg *config.Resource, opts ...NoForkOption) *NoForkConnector {
+func NewNoForkConnector(kube client.Client, sf terraform.SetupFn, cfg *config.Resource, ots *OperationTrackerStore, opts ...NoForkOption) *NoForkConnector {
 	nfc := &NoForkConnector{
-		kube:              kube,
-		getTerraformSetup: sf,
-		config:            cfg,
+		kube:                  kube,
+		getTerraformSetup:     sf,
+		config:                cfg,
+		operationTrackerStore: ots,
 	}
 	for _, f := range opts {
 		f(nfc)
@@ -104,16 +106,18 @@ type noForkExternal struct {
 	resourceSchema *schema.Resource
 	config         *config.Resource
 	kube           client.Client
-	instanceState  *tf.InstanceState
 	instanceDiff   *tf.InstanceDiff
 	params         map[string]any
 	rawConfig      cty.Value
 	logger         logging.Logger
 	metricRecorder *metrics.MetricRecorder
+	opTracker      *AsyncTracker
 }
 
 func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (managed.ExternalClient, error) {
 	c.metricRecorder.ObserveReconcileDelay(mg.GetObjectKind().GroupVersionKind(), mg.GetName())
+	logger := c.logger.WithValues("uid", mg.GetUID(), "name", mg.GetName(), "gvk", mg.GetObjectKind().GroupVersionKind().String())
+	logger.Debug("Connecting to the service provider")
 	start := time.Now()
 	ts, err := c.getTerraformSetup(ctx, c.kube, mg)
 	metrics.ExternalAPITime.WithLabelValues("connect").Observe(time.Since(start).Seconds())
@@ -123,6 +127,11 @@ func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (m
 
 	// To Compute the ResourceDiff: n.resourceSchema.Diff(...)
 	tr := mg.(resource.Terraformed)
+	opTracker := c.operationTrackerStore.Tracker(tr)
+	externalName := meta.GetExternalName(tr)
+	if externalName == "" {
+		externalName = opTracker.GetTfID()
+	}
 	params, err := tr.GetParameters()
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot get parameters")
@@ -130,7 +139,7 @@ func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (m
 	if err = resource.GetSensitiveParameters(ctx, &APISecretClient{kube: c.kube}, tr, params, tr.GetConnectionDetailsMapping()); err != nil {
 		return nil, errors.Wrap(err, "cannot store sensitive parameters into params")
 	}
-	c.config.ExternalName.SetIdentifierArgumentFn(params, meta.GetExternalName(tr))
+	c.config.ExternalName.SetIdentifierArgumentFn(params, externalName)
 	if c.config.TerraformConfigurationInjector != nil {
 		m, err := getJSONMap(mg)
 		if err != nil {
@@ -139,7 +148,7 @@ func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (m
 		c.config.TerraformConfigurationInjector(m, params)
 	}
 
-	tfID, err := c.config.ExternalName.GetIDFn(ctx, meta.GetExternalName(mg), params, ts.Map())
+	tfID, err := c.config.ExternalName.GetIDFn(ctx, externalName, params, ts.Map())
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot get ID")
 	}
@@ -153,45 +162,50 @@ func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (m
 		params["tags_all"] = params["tags"]
 	}
 
-	tfState, err := tr.GetObservation()
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to get the observation")
-	}
-	copyParams := len(tfState) == 0
-	if err = resource.GetSensitiveParameters(ctx, &APISecretClient{kube: c.kube}, tr, tfState, tr.GetConnectionDetailsMapping()); err != nil {
-		return nil, errors.Wrap(err, "cannot store sensitive parameters into tfState")
-	}
-	c.config.ExternalName.SetIdentifierArgumentFn(tfState, meta.GetExternalName(tr))
-	tfState["id"] = tfID
-	if copyParams {
-		tfState = copyParameters(tfState, params)
-	}
+	var rawConfig cty.Value
+	if !opTracker.HasState() {
+		logger.Debug("Instance state not found in cache, reconstructing...")
+		tfState, err := tr.GetObservation()
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to get the observation")
+		}
+		copyParams := len(tfState) == 0
+		if err = resource.GetSensitiveParameters(ctx, &APISecretClient{kube: c.kube}, tr, tfState, tr.GetConnectionDetailsMapping()); err != nil {
+			return nil, errors.Wrap(err, "cannot store sensitive parameters into tfState")
+		}
+		c.config.ExternalName.SetIdentifierArgumentFn(tfState, externalName)
+		tfState["id"] = tfID
+		if copyParams {
+			tfState = copyParameters(tfState, params)
+		}
 
-	tfStateCtyValue, err := schema.JSONMapToStateValue(tfState, schemaBlock)
-	if err != nil {
-		return nil, errors.Wrap(err, "cannot convert JSON map to state cty.Value")
+		tfStateCtyValue, err := schema.JSONMapToStateValue(tfState, schemaBlock)
+		if err != nil {
+			return nil, errors.Wrap(err, "cannot convert JSON map to state cty.Value")
+		}
+		s, err := c.config.TerraformResource.ShimInstanceStateFromValue(tfStateCtyValue)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to convert cty.Value to terraform.InstanceState")
+		}
+		s.RawPlan = tfStateCtyValue
+		rawConfig, err = schema.JSONMapToStateValue(params, schemaBlock)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to convert params JSON map to cty.Value")
+		}
+		s.RawConfig = rawConfig
+		opTracker.SetTfState(s)
 	}
-	s, err := c.config.TerraformResource.ShimInstanceStateFromValue(tfStateCtyValue)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to convert cty.Value to terraform.InstanceState")
-	}
-	s.RawPlan = tfStateCtyValue
-	rawConfig, err := schema.JSONMapToStateValue(params, schemaBlock)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to convert params JSON map to cty.Value")
-	}
-	s.RawConfig = rawConfig
 
 	return &noForkExternal{
 		ts:             ts,
 		resourceSchema: c.config.TerraformResource,
 		config:         c.config,
 		kube:           c.kube,
-		instanceState:  s,
 		params:         params,
 		rawConfig:      rawConfig,
-		logger:         c.logger.WithValues("uid", mg.GetUID(), "name", mg.GetName(), "gvk", mg.GetObjectKind().GroupVersionKind().String()),
+		logger:         logger,
 		metricRecorder: c.metricRecorder,
+		opTracker:      opTracker,
 	}, nil
 }
 
@@ -222,15 +236,16 @@ func (n *noForkExternal) getResourceDataDiff(ctx context.Context, s *tf.Instance
 }
 
 func (n *noForkExternal) Observe(ctx context.Context, mg xpresource.Managed) (managed.ExternalObservation, error) {
+	n.logger.Debug("Observing the external resource")
 	start := time.Now()
-	newState, diag := n.resourceSchema.RefreshWithoutUpgrade(ctx, n.instanceState, n.ts.Meta)
+	newState, diag := n.resourceSchema.RefreshWithoutUpgrade(ctx, n.opTracker.GetTfState(), n.ts.Meta)
 	metrics.ExternalAPITime.WithLabelValues("read").Observe(time.Since(start).Seconds())
 	if diag != nil && diag.HasError() {
 		return managed.ExternalObservation{}, errors.Errorf("failed to observe the resource: %v", diag)
 	}
-	n.instanceState = newState
+	n.opTracker.SetTfState(newState) // TODO: missing RawConfig & RawPlan here...
 	// compute the instance diff
-	instanceDiff, err := n.getResourceDataDiff(ctx, n.instanceState)
+	instanceDiff, err := n.getResourceDataDiff(ctx, newState)
 	if err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot compute the instance diff")
 	}
@@ -243,7 +258,7 @@ func (n *noForkExternal) Observe(ctx context.Context, mg xpresource.Managed) (ma
 		gvk := mg.GetObjectKind().GroupVersionKind()
 		metrics.DeletionTime.WithLabelValues(gvk.Group, gvk.Version, gvk.Kind).Observe(time.Since(mg.GetDeletionTimestamp().Time).Seconds())
 	}
-	lateInitialized := false
+	specUpdateRequired := false
 	if resourceExists {
 		if mg.GetCondition(xpv1.TypeReady).Status == corev1.ConditionUnknown ||
 			mg.GetCondition(xpv1.TypeReady).Status == corev1.ConditionFalse {
@@ -259,7 +274,7 @@ func (n *noForkExternal) Observe(ctx context.Context, mg xpresource.Managed) (ma
 		if err != nil {
 			return managed.ExternalObservation{}, errors.Wrap(err, "cannot marshal the attributes of the new state for late-initialization")
 		}
-		lateInitialized, err = mg.(resource.Terraformed).LateInitialize(buff)
+		specUpdateRequired, err = mg.(resource.Terraformed).LateInitialize(buff)
 		if err != nil {
 			return managed.ExternalObservation{}, errors.Wrap(err, "cannot late-initialize the managed resource")
 		}
@@ -276,8 +291,14 @@ func (n *noForkExternal) Observe(ctx context.Context, mg xpresource.Managed) (ma
 		if noDiff {
 			n.metricRecorder.SetReconcileTime(mg.GetName())
 		}
-		if !lateInitialized {
+		if !specUpdateRequired {
 			resource.SetUpToDateCondition(mg, noDiff)
+		}
+		// check for an external-name change
+		if nameChanged, err := n.setExternalName(mg, newState); err != nil {
+			return managed.ExternalObservation{}, errors.Wrapf(err, "failed to set the external-name of the managed resource during observe")
+		} else {
+			specUpdateRequired = specUpdateRequired || nameChanged
 		}
 	}
 
@@ -285,13 +306,32 @@ func (n *noForkExternal) Observe(ctx context.Context, mg xpresource.Managed) (ma
 		ResourceExists:          resourceExists,
 		ResourceUpToDate:        noDiff,
 		ConnectionDetails:       connDetails,
-		ResourceLateInitialized: lateInitialized,
+		ResourceLateInitialized: specUpdateRequired,
 	}, nil
 }
 
+// sets the external-name on the MR. Returns `true`
+// if the external-name of the MR has changed.
+func (n *noForkExternal) setExternalName(mg xpresource.Managed, newState *tf.InstanceState) (bool, error) {
+	if newState.ID == "" {
+		return false, nil
+	}
+	newName, err := n.config.ExternalName.GetExternalNameFn(map[string]any{
+		"id": newState.ID,
+	})
+	if err != nil {
+		return false, errors.Wrapf(err, "failed to get the external-name from ID: %s", newState.ID)
+	}
+	oldName := meta.GetExternalName(mg)
+	// we have to make sure the newly set external-name is recorded
+	meta.SetExternalName(mg, newName)
+	return oldName != newName, nil
+}
+
 func (n *noForkExternal) Create(ctx context.Context, mg xpresource.Managed) (managed.ExternalCreation, error) {
+	n.logger.Debug("Creating the external resource")
 	start := time.Now()
-	newState, diag := n.resourceSchema.Apply(ctx, n.instanceState, n.instanceDiff, n.ts.Meta)
+	newState, diag := n.resourceSchema.Apply(ctx, n.opTracker.GetTfState(), n.instanceDiff, n.ts.Meta)
 	metrics.ExternalAPITime.WithLabelValues("create").Observe(time.Since(start).Seconds())
 	// diag := n.resourceSchema.CreateWithoutTimeout(ctx, n.resourceData, n.ts.Meta)
 	if diag != nil && diag.HasError() {
@@ -301,15 +341,11 @@ func (n *noForkExternal) Create(ctx context.Context, mg xpresource.Managed) (man
 	if newState == nil || newState.ID == "" {
 		return managed.ExternalCreation{}, errors.New("failed to read the ID of the new resource")
 	}
+	n.opTracker.SetTfState(newState)
 
-	en, err := n.config.ExternalName.GetExternalNameFn(map[string]any{
-		"id": newState.ID,
-	})
-	if err != nil {
-		return managed.ExternalCreation{}, errors.Wrapf(err, "failed to get the external-name from ID: %s", newState.ID)
+	if _, err := n.setExternalName(mg, newState); err != nil {
+		return managed.ExternalCreation{}, errors.Wrapf(err, "failed to set the external-name of the managed resource during create")
 	}
-	// we have to make sure the newly set externa-name is recorded
-	meta.SetExternalName(mg, en)
 	stateValueMap, err := n.fromInstanceStateToJSONMap(newState)
 	if err != nil {
 		return managed.ExternalCreation{}, err
@@ -327,12 +363,14 @@ func (n *noForkExternal) Create(ctx context.Context, mg xpresource.Managed) (man
 }
 
 func (n *noForkExternal) Update(ctx context.Context, mg xpresource.Managed) (managed.ExternalUpdate, error) {
+	n.logger.Debug("Updating the external resource")
 	start := time.Now()
-	newState, diag := n.resourceSchema.Apply(ctx, n.instanceState, n.instanceDiff, n.ts.Meta)
+	newState, diag := n.resourceSchema.Apply(ctx, n.opTracker.GetTfState(), n.instanceDiff, n.ts.Meta)
 	metrics.ExternalAPITime.WithLabelValues("update").Observe(time.Since(start).Seconds())
 	if diag != nil && diag.HasError() {
 		return managed.ExternalUpdate{}, errors.Errorf("failed to update the resource: %v", diag)
 	}
+	n.opTracker.SetTfState(newState)
 
 	stateValueMap, err := n.fromInstanceStateToJSONMap(newState)
 	if err != nil {
@@ -347,17 +385,19 @@ func (n *noForkExternal) Update(ctx context.Context, mg xpresource.Managed) (man
 }
 
 func (n *noForkExternal) Delete(ctx context.Context, _ xpresource.Managed) error {
+	n.logger.Debug("Deleting the external resource")
 	if n.instanceDiff == nil {
 		n.instanceDiff = tf.NewInstanceDiff()
 	}
 
 	n.instanceDiff.Destroy = true
 	start := time.Now()
-	_, diag := n.resourceSchema.Apply(ctx, n.instanceState, n.instanceDiff, n.ts.Meta)
+	newState, diag := n.resourceSchema.Apply(ctx, n.opTracker.GetTfState(), n.instanceDiff, n.ts.Meta)
 	metrics.ExternalAPITime.WithLabelValues("delete").Observe(time.Since(start).Seconds())
 	if diag != nil && diag.HasError() {
 		return errors.Errorf("failed to delete the resource: %v", diag)
 	}
+	n.opTracker.SetTfState(newState)
 	return nil
 }
 

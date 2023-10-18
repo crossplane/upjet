@@ -1,13 +1,15 @@
 package controller
 
 import (
+	"sync"
+
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	tfsdk "github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+	"k8s.io/apimachinery/pkg/types"
+
 	"github.com/upbound/upjet/pkg/resource"
 	"github.com/upbound/upjet/pkg/terraform"
-	"k8s.io/apimachinery/pkg/types"
-	"sync"
 )
 
 type AsyncTracker struct {
@@ -42,6 +44,12 @@ func (a *AsyncTracker) GetTfState() *tfsdk.InstanceState {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return a.tfState
+}
+
+func (a *AsyncTracker) HasState() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.tfState != nil && a.tfState.ID != ""
 }
 
 func (a *AsyncTracker) SetTfState(state *tfsdk.InstanceState) {

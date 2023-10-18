@@ -42,7 +42,7 @@ func Setup(mgr ctrl.Manager, o tjcontroller.Options) error {
 	}
 	eventHandler := handler.NewEventHandler(handler.WithLogger(o.Logger.WithValues("gvk", {{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind)))
 	{{- if .UseAsync }}
-	ac := tjcontroller.NewAPICallbacks(mgr, xpresource.ManagedKind({{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind), tjcontroller.WithEventHandler(eventHandler))
+	ac := tjcontroller.NewAPICallbacks(mgr, xpresource.ManagedKind({{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind), tjcontroller.WithEventHandler(eventHandler){{ if .UseNoForkClient }}, tjcontroller.WithStatusUpdates(false){{ end }})
 	{{- end}}
 	opts := []managed.ReconcilerOption{
 		managed.WithExternalConnecter(
@@ -54,14 +54,14 @@ func Setup(mgr ctrl.Manager, o tjcontroller.Options) error {
                 tjcontroller.WithNoForkAsyncCallbackProvider(ac),
                 tjcontroller.WithNoForkAsyncMetricRecorder(metrics.NewMetricRecorder({{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind, mgr, o.PollInterval)))
               {{- else -}}
-			  tjcontroller.NewNoForkConnector(mgr.GetClient(), o.SetupFn, o.Provider.Resources["{{ .ResourceType }}"], tjcontroller.WithNoForkLogger(o.Logger),
+			  tjcontroller.NewNoForkConnector(mgr.GetClient(), o.SetupFn, o.Provider.Resources["{{ .ResourceType }}"], o.OperationTrackerStore, tjcontroller.WithNoForkLogger(o.Logger),
 				tjcontroller.WithNoForkMetricRecorder(metrics.NewMetricRecorder({{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind, mgr, o.PollInterval)))
 			  {{- end -}}
 			{{- else -}}
 			tjcontroller.NewConnector(mgr.GetClient(), o.WorkspaceStore, o.SetupFn, o.Provider.Resources["{{ .ResourceType }}"], tjcontroller.WithLogger(o.Logger), tjcontroller.WithConnectorEventHandler(eventHandler),
 				{{- if .UseAsync }}
 				tjcontroller.WithCallbackProvider(ac),
-				{{- end}}
+				{{- end }}
 			)
 			{{- end -}}
 		),
