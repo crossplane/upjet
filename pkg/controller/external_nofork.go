@@ -162,7 +162,10 @@ func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (m
 		params["tags_all"] = params["tags"]
 	}
 
-	var rawConfig cty.Value
+	rawConfig, err := schema.JSONMapToStateValue(params, schemaBlock)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to convert params JSON map to cty.Value")
+	}
 	if !opTracker.HasState() {
 		logger.Debug("Instance state not found in cache, reconstructing...")
 		tfState, err := tr.GetObservation()
@@ -188,10 +191,6 @@ func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (m
 			return nil, errors.Wrap(err, "failed to convert cty.Value to terraform.InstanceState")
 		}
 		s.RawPlan = tfStateCtyValue
-		rawConfig, err = schema.JSONMapToStateValue(params, schemaBlock)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to convert params JSON map to cty.Value")
-		}
 		s.RawConfig = rawConfig
 		opTracker.SetTfState(s)
 	}
