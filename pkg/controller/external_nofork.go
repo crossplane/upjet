@@ -39,12 +39,13 @@ import (
 )
 
 type NoForkConnector struct {
-	getTerraformSetup     terraform.SetupFn
-	kube                  client.Client
-	config                *config.Resource
-	logger                logging.Logger
-	metricRecorder        *metrics.MetricRecorder
-	operationTrackerStore *OperationTrackerStore
+	getTerraformSetup           terraform.SetupFn
+	kube                        client.Client
+	config                      *config.Resource
+	logger                      logging.Logger
+	metricRecorder              *metrics.MetricRecorder
+	operationTrackerStore       *OperationTrackerStore
+	isManagementPoliciesEnabled bool
 }
 
 // NoForkOption allows you to configure NoForkConnector.
@@ -62,6 +63,14 @@ func WithNoForkLogger(l logging.Logger) NoForkOption {
 func WithNoForkMetricRecorder(r *metrics.MetricRecorder) NoForkOption {
 	return func(c *NoForkConnector) {
 		c.metricRecorder = r
+	}
+}
+
+// WithNoForkManagementPolicies configures whether the client should
+// handle management policies.
+func WithNoForkManagementPolicies(isManagementPoliciesEnabled bool) NoForkOption {
+	return func(c *NoForkConnector) {
+		c.isManagementPoliciesEnabled = isManagementPoliciesEnabled
 	}
 }
 
@@ -132,7 +141,8 @@ func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (m
 	if externalName == "" {
 		externalName = opTracker.GetTfID()
 	}
-	params, err := tr.GetParameters()
+
+	params, err := tr.GetMergedParameters(c.isManagementPoliciesEnabled)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot get parameters")
 	}

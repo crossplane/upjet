@@ -95,6 +95,14 @@ func WithNoForkAsyncMetricRecorder(r *metrics.MetricRecorder) NoForkAsyncOption 
 	}
 }
 
+// WithNoForkAsyncManagementPolicies configures whether the client should
+// handle management policies.
+func WithNoForkAsyncManagementPolicies(isManagementPoliciesEnabled bool) NoForkAsyncOption {
+	return func(c *NoForkAsyncConnector) {
+		c.isManagementPoliciesEnabled = isManagementPoliciesEnabled
+	}
+}
+
 type noForkAsyncExternal struct {
 	*noForkExternal
 	callback     CallbackProvider
