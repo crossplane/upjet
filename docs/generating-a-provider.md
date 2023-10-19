@@ -12,7 +12,7 @@ as the example, but the process is similar for any other Terraform provider.
 ## Prepare your new provider repository
 
 1. Create a new GitHub repository for the Crossplane provider by clicking the
-"**Use this template**" button in the [upjet-provider-template] repository. The
+"**Use this template**" button in the [provider-template] repository. The
 expected repository name is in the format `provider-<name>`. For example,
 `provider-github`. The script in step 3 expects this format and fails if you
 follow a different naming convention.
@@ -25,11 +25,11 @@ command:
     make submodules
     ```
 
-1. To setup your provider name and group run the `./hack/prepare.sh`
+1. To setup your provider name and group run the `./hack/helpers/prepare.sh`
 script from the repository root to prepare the code.
 
     ```bash
-    ./hack/prepare.sh
+    PROVIER=github ./hack/helpers/prepare.sh
     ```
 
 1. Ensure your organization name is correct in the `Makefile` for the
