@@ -113,8 +113,13 @@ func (ac *APICallbacks) callbackFn(name, op string, requeue bool) terraform.Call
 		if kErr := ac.kube.Get(ctx, nn, tr); kErr != nil {
 			return errors.Wrapf(kErr, errGetFmt, tr.GetObjectKind().GroupVersionKind().String(), name, op)
 		}
+		// For the no-fork architecture, we will need to be able to report
+		// reconciliation errors. The proper place is the `Synced`
+		// status condition but we need changes in the managed reconciler
+		// to do so. So we keep the `LastAsyncOperation` condition.
+		// TODO: move this to the `Synced` condition.
+		tr.SetConditions(resource.LastAsyncOperationCondition(err))
 		if ac.enableStatusUpdates {
-			tr.SetConditions(resource.LastAsyncOperationCondition(err))
 			tr.SetConditions(resource.AsyncOperationFinishedCondition())
 		}
 		uErr := errors.Wrapf(ac.kube.Status().Update(ctx, tr), errUpdateStatusFmt, tr.GetObjectKind().GroupVersionKind().String(), name, op)
