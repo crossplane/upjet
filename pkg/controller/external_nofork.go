@@ -361,8 +361,33 @@ func (n *noForkExternal) Create(ctx context.Context, mg xpresource.Managed) (man
 	return managed.ExternalCreation{ConnectionDetails: conn}, nil
 }
 
+func (n *noForkExternal) assertNoForceNew() error {
+	if n.instanceDiff == nil {
+		return nil
+	}
+	for k, ad := range n.instanceDiff.Attributes {
+		if ad == nil {
+			continue
+		}
+		// TODO: use a multi-error implementation to report changes to
+		//  all `ForceNew` arguments.
+		if ad.RequiresNew {
+			if ad.Sensitive {
+				return errors.Errorf("cannot change the value of the argument %q", k)
+			}
+			return errors.Errorf("cannot change the value of the argument %q from %q to %q", k, ad.Old, ad.New)
+		}
+	}
+	return nil
+}
+
 func (n *noForkExternal) Update(ctx context.Context, mg xpresource.Managed) (managed.ExternalUpdate, error) {
 	n.logger.Debug("Updating the external resource")
+
+	if err := n.assertNoForceNew(); err != nil {
+		return managed.ExternalUpdate{}, errors.Wrap(err, "refuse to update the external resource")
+	}
+
 	start := time.Now()
 	newState, diag := n.resourceSchema.Apply(ctx, n.opTracker.GetTfState(), n.instanceDiff, n.ts.Meta)
 	metrics.ExternalAPITime.WithLabelValues("update").Observe(time.Since(start).Seconds())
