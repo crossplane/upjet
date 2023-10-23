@@ -124,13 +124,13 @@ func (n *noForkAsyncExternal) Create(_ context.Context, mg xpresource.Managed) (
 	ctx, cancel := context.WithDeadline(context.Background(), n.opTracker.LastOperation.StartTime().Add(defaultAsyncTimeout))
 	go func() {
 		defer cancel()
-		defer n.opTracker.LastOperation.MarkEnd()
 
 		n.opTracker.logger.Debug("Async create starting...", "tfID", n.opTracker.GetTfID())
 		_, err := n.noForkExternal.Create(ctx, mg)
 		n.opTracker.LastOperation.SetError(errors.Wrap(err, "async create failed"))
 		n.opTracker.logger.Debug("Async create ended.", "error", err, "tfID", n.opTracker.GetTfID())
 
+		n.opTracker.LastOperation.MarkEnd()
 		if cErr := n.callback.Create(mg.GetName())(err, ctx); cErr != nil {
 			n.opTracker.logger.Info("Async create callback failed", "error", cErr.Error())
 		}
@@ -147,13 +147,13 @@ func (n *noForkAsyncExternal) Update(_ context.Context, mg xpresource.Managed) (
 	ctx, cancel := context.WithDeadline(context.Background(), n.opTracker.LastOperation.StartTime().Add(defaultAsyncTimeout))
 	go func() {
 		defer cancel()
-		defer n.opTracker.LastOperation.MarkEnd()
 
 		n.opTracker.logger.Debug("Async update starting...", "tfID", n.opTracker.GetTfID())
 		_, err := n.noForkExternal.Update(ctx, mg)
 		n.opTracker.LastOperation.SetError(errors.Wrap(err, "async update failed"))
 		n.opTracker.logger.Debug("Async update ended.", "error", err, "tfID", n.opTracker.GetTfID())
 
+		n.opTracker.LastOperation.MarkEnd()
 		if cErr := n.callback.Update(mg.GetName())(err, ctx); cErr != nil {
 			n.opTracker.logger.Info("Async update callback failed", "error", cErr.Error())
 		}
@@ -170,13 +170,13 @@ func (n *noForkAsyncExternal) Delete(ctx context.Context, mg xpresource.Managed)
 	ctx, cancel := context.WithDeadline(context.Background(), n.opTracker.LastOperation.StartTime().Add(defaultAsyncTimeout))
 	go func() {
 		defer cancel()
-		defer n.opTracker.LastOperation.MarkEnd()
 
 		n.opTracker.logger.Debug("Async delete starting...", "tfID", n.opTracker.GetTfID())
 		err := n.noForkExternal.Delete(ctx, mg)
 		n.opTracker.LastOperation.SetError(errors.Wrap(err, "async delete failed"))
 		n.opTracker.logger.Debug("Async delete ended.", "error", err, "tfID", n.opTracker.GetTfID())
 
+		n.opTracker.LastOperation.MarkEnd()
 		if cErr := n.callback.Destroy(mg.GetName())(err, ctx); cErr != nil {
 			n.opTracker.logger.Info("Async delete callback failed", "error", cErr.Error())
 		}

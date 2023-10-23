@@ -106,7 +106,7 @@ type APICallbacks struct {
 	enableStatusUpdates bool
 }
 
-func (ac *APICallbacks) callbackFn(name, op string, requeue bool) terraform.CallbackFn {
+func (ac *APICallbacks) callbackFn(name, op string) terraform.CallbackFn {
 	return func(err error, ctx context.Context) error {
 		nn := types.NamespacedName{Name: name}
 		tr := ac.newTerraformed()
@@ -123,16 +123,18 @@ func (ac *APICallbacks) callbackFn(name, op string, requeue bool) terraform.Call
 			tr.SetConditions(resource.AsyncOperationFinishedCondition())
 		}
 		uErr := errors.Wrapf(ac.kube.Status().Update(ctx, tr), errUpdateStatusFmt, tr.GetObjectKind().GroupVersionKind().String(), name, op)
-		if ac.eventHandler != nil && requeue {
+		if ac.eventHandler != nil {
+			rateLimiter := handler.NoRateLimiter
 			switch {
 			case err != nil:
-				// TODO: use the errors.Join from
-				// github.com/crossplane/crossplane-runtime.
-				if ok := ac.eventHandler.RequestReconcile(rateLimiterCallback, name, nil); !ok {
-					return errors.Errorf(errReconcileRequestFmt, tr.GetObjectKind().GroupVersionKind().String(), name, op)
-				}
+				rateLimiter = rateLimiterCallback
 			default:
 				ac.eventHandler.Forget(rateLimiterCallback, name)
+			}
+			// TODO: use the errors.Join from
+			// github.com/crossplane/crossplane-runtime.
+			if ok := ac.eventHandler.RequestReconcile(rateLimiter, name, nil); !ok {
+				return errors.Errorf(errReconcileRequestFmt, tr.GetObjectKind().GroupVersionKind().String(), name, op)
 			}
 		}
 		return uErr
@@ -141,28 +143,26 @@ func (ac *APICallbacks) callbackFn(name, op string, requeue bool) terraform.Call
 
 // Create makes sure the error is saved in async operation condition.
 func (ac *APICallbacks) Create(name string) terraform.CallbackFn {
-	return func(err error, ctx context.Context) error {
-		// requeue is set to true although the managed reconciler already
-		// requeues with exponential back-off during the creation phase
-		// because the upjet external client returns ResourceExists &
-		// ResourceUpToDate both set to true, if an async operation is
-		// in-progress immediately following a Create call. This will
-		// delay a reobservation of the resource (while being created)
-		// for the poll period.
-		return ac.callbackFn(name, "create", true)(err, ctx)
-	}
+	// request will be requeued although the managed reconciler already
+	// requeues with exponential back-off during the creation phase
+	// because the upjet external client returns ResourceExists &
+	// ResourceUpToDate both set to true, if an async operation is
+	// in-progress immediately following a Create call. This will
+	// delay a reobservation of the resource (while being created)
+	// for the poll period.
+	return ac.callbackFn(name, "create")
 }
 
 // Update makes sure the error is saved in async operation condition.
 func (ac *APICallbacks) Update(name string) terraform.CallbackFn {
-	return func(err error, ctx context.Context) error {
-		return ac.callbackFn(name, "update", true)(err, ctx)
-	}
+	return ac.callbackFn(name, "update")
 }
 
 // Destroy makes sure the error is saved in async operation condition.
 func (ac *APICallbacks) Destroy(name string) terraform.CallbackFn {
-	// requeue is set to false because the managed reconciler already requeues
-	// with exponential back-off during the deletion phase.
-	return ac.callbackFn(name, "destroy", false)
+	// request will be requeued although the managed reconciler requeues
+	// with exponential back-off during the deletion phase because
+	// during the async deletion operation, external client's
+	// observe just returns success to the managed reconciler.
+	return ac.callbackFn(name, "destroy")
 }
