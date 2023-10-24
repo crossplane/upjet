@@ -236,6 +236,13 @@ func (n *noForkExternal) getResourceDataDiff(ctx context.Context, s *tf.Instance
 
 func (n *noForkExternal) Observe(ctx context.Context, mg xpresource.Managed) (managed.ExternalObservation, error) {
 	n.logger.Debug("Observing the external resource")
+
+	if meta.WasDeleted(mg) && n.opTracker.IsDeleted() {
+		return managed.ExternalObservation{
+			ResourceExists: false,
+		}, nil
+	}
+
 	start := time.Now()
 	newState, diag := n.resourceSchema.RefreshWithoutUpgrade(ctx, n.opTracker.GetTfState(), n.ts.Meta)
 	metrics.ExternalAPITime.WithLabelValues("read").Observe(time.Since(start).Seconds())
@@ -422,6 +429,8 @@ func (n *noForkExternal) Delete(ctx context.Context, _ xpresource.Managed) error
 		return errors.Errorf("failed to delete the resource: %v", diag)
 	}
 	n.opTracker.SetTfState(newState)
+	// mark the resource as logically deleted if the TF call clears the state
+	n.opTracker.SetDeleted(newState == nil)
 	return nil
 }
 

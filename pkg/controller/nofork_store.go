@@ -2,6 +2,7 @@ package controller
 
 import (
 	"sync"
+	"sync/atomic"
 
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
@@ -18,6 +19,16 @@ type AsyncTracker struct {
 	mu            *sync.Mutex
 	tfID          string
 	tfState       *tfsdk.InstanceState
+	// lifecycle of certain external resources are bound to a parent resource's
+	// lifecycle, and they cannot be deleted without actually deleting
+	// the owning external resource (e.g.,  a database resource as the parent
+	// resource and a database configuration resource whose lifecycle is bound
+	// to it. For such resources, Terraform still removes the state for them
+	// after a successful delete call either by resetting to some defaults in
+	// the parent resource, or by a noop. We logically delete such resources as
+	// deleted after a successful delete call so that the next observe can
+	// tell the managed reconciler that the resource no longer "exists".
+	isDeleted atomic.Bool
 }
 
 type AsyncTrackerOption func(manager *AsyncTracker)
@@ -71,6 +82,18 @@ func (a *AsyncTracker) SetTfID(tfId string) {
 	//a.mu.Lock()
 	//defer a.mu.Unlock()
 	a.tfID = tfId
+}
+
+// IsDeleted returns whether the associated external resource
+// has logically been deleted.
+func (a *AsyncTracker) IsDeleted() bool {
+	return a.isDeleted.Load()
+}
+
+// SetDeleted sets the logical deletion status of
+// the associated external resource.
+func (a *AsyncTracker) SetDeleted(deleted bool) {
+	a.isDeleted.Store(deleted)
 }
 
 type OperationTrackerStore struct {
