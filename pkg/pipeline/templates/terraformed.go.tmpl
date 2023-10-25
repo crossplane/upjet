@@ -9,8 +9,8 @@
 package {{ .APIVersion }}
 
 import (
-	"github.com/pkg/errors"
 	"dario.cat/mergo"
+	"github.com/pkg/errors"
 
 	"github.com/crossplane/upjet/pkg/resource"
 	"github.com/crossplane/upjet/pkg/resource/json"
@@ -88,12 +88,12 @@ import (
     }
 
     // GetInitParameters of this {{ .CRD.Kind }}
-    func (tr *{{ .CRD.Kind }}) GetMergedParameters(isBetaManagementPoliciesEnabled bool) (map[string]any, error) {
+    func (tr *{{ .CRD.Kind }}) GetMergedParameters(shouldMergeInitProvider bool) (map[string]any, error) {
         params, err := tr.GetParameters()
         if err != nil {
             return nil, errors.Wrapf(err, "cannot get parameters for resource '%q'", tr.GetName())
         }
-        if !isBetaManagementPoliciesEnabled {
+        if !shouldMergeInitProvider {
             return params, nil
         }
 

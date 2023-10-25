@@ -114,13 +114,43 @@ type noForkExternal struct {
 	ts             terraform.Setup
 	resourceSchema *schema.Resource
 	config         *config.Resource
-	kube           client.Client
 	instanceDiff   *tf.InstanceDiff
 	params         map[string]any
 	rawConfig      cty.Value
 	logger         logging.Logger
 	metricRecorder *metrics.MetricRecorder
 	opTracker      *AsyncTracker
+}
+
+func getExtendedParameters(ctx context.Context, tr resource.Terraformed, externalName string, config *config.Resource, ts terraform.Setup, initParamsMerged bool, kube client.Client) (map[string]any, error) {
+	params, err := tr.GetMergedParameters(initParamsMerged)
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot get merged parameters")
+	}
+	if err = resource.GetSensitiveParameters(ctx, &APISecretClient{kube: kube}, tr, params, tr.GetConnectionDetailsMapping()); err != nil {
+		return nil, errors.Wrap(err, "cannot store sensitive parameters into params")
+	}
+	config.ExternalName.SetIdentifierArgumentFn(params, externalName)
+	if config.TerraformConfigurationInjector != nil {
+		m, err := getJSONMap(tr)
+		if err != nil {
+			return nil, errors.Wrap(err, "cannot get JSON map for the managed resource's spec.forProvider value")
+		}
+		config.TerraformConfigurationInjector(m, params)
+	}
+
+	tfID, err := config.ExternalName.GetIDFn(ctx, externalName, params, ts.Map())
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot get ID")
+	}
+	params["id"] = tfID
+	// we need to parameterize the following for a provider
+	// not all providers may have this attribute
+	// TODO: tags_all handling
+	if _, ok := config.TerraformResource.CoreConfigSchema().Attributes["tags_all"]; ok {
+		params["tags_all"] = params["tags"]
+	}
+	return params, nil
 }
 
 func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (managed.ExternalClient, error) {
@@ -142,36 +172,12 @@ func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (m
 		externalName = opTracker.GetTfID()
 	}
 
-	params, err := tr.GetMergedParameters(c.isManagementPoliciesEnabled)
+	params, err := getExtendedParameters(ctx, tr, externalName, c.config, ts, c.isManagementPoliciesEnabled, c.kube)
 	if err != nil {
-		return nil, errors.Wrap(err, "cannot get parameters")
-	}
-	if err = resource.GetSensitiveParameters(ctx, &APISecretClient{kube: c.kube}, tr, params, tr.GetConnectionDetailsMapping()); err != nil {
-		return nil, errors.Wrap(err, "cannot store sensitive parameters into params")
-	}
-	c.config.ExternalName.SetIdentifierArgumentFn(params, externalName)
-	if c.config.TerraformConfigurationInjector != nil {
-		m, err := getJSONMap(mg)
-		if err != nil {
-			return nil, errors.Wrap(err, "cannot get JSON map for the managed resource's spec.forProvider value")
-		}
-		c.config.TerraformConfigurationInjector(m, params)
+		return nil, errors.Wrapf(err, "failed to get the extended parameters for resource %q", mg.GetName())
 	}
 
-	tfID, err := c.config.ExternalName.GetIDFn(ctx, externalName, params, ts.Map())
-	if err != nil {
-		return nil, errors.Wrap(err, "cannot get ID")
-	}
-	params["id"] = tfID
-	// we need to parameterize the following for a provider
-	// not all providers may have this attribute
-	// TODO: tags_all handling
 	schemaBlock := c.config.TerraformResource.CoreConfigSchema()
-	attrs := schemaBlock.Attributes
-	if _, ok := attrs["tags_all"]; ok {
-		params["tags_all"] = params["tags"]
-	}
-
 	rawConfig, err := schema.JSONMapToStateValue(params, schemaBlock)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to convert params JSON map to cty.Value")
@@ -187,7 +193,7 @@ func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (m
 			return nil, errors.Wrap(err, "cannot store sensitive parameters into tfState")
 		}
 		c.config.ExternalName.SetIdentifierArgumentFn(tfState, externalName)
-		tfState["id"] = tfID
+		tfState["id"] = params["id"]
 		if copyParams {
 			tfState = copyParameters(tfState, params)
 		}
@@ -209,7 +215,6 @@ func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (m
 		ts:             ts,
 		resourceSchema: c.config.TerraformResource,
 		config:         c.config,
-		kube:           c.kube,
 		params:         params,
 		rawConfig:      rawConfig,
 		logger:         logger,
@@ -237,7 +242,7 @@ func (n *noForkExternal) getResourceDataDiff(ctx context.Context, s *tf.Instance
 		}
 		instanceDiff.RawPlan = v
 	}
-	if instanceDiff != nil && len(instanceDiff.Attributes) > 0 {
+	if instanceDiff != nil && !instanceDiff.Empty() {
 		n.logger.Debug("Diff detected", "instanceDiff", instanceDiff.GoString())
 		instanceDiff.RawConfig = n.rawConfig
 	}
