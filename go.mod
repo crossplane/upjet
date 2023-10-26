@@ -26,7 +26,6 @@ require (
 	github.com/prometheus/client_golang v1.16.0
 	github.com/spf13/afero v1.10.0
 	github.com/tmccombs/hcl2json v0.3.3
-	github.com/upbound/upjet v0.10.0
 	github.com/yuin/goldmark v1.4.13
 	github.com/zclconf/go-cty v1.11.0
 	golang.org/x/net v0.15.0
