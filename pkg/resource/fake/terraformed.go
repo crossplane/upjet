@@ -46,6 +46,10 @@ type Parameterizable struct {
 	InitParameters map[string]any
 }
 
+func (t *Terraformed) GetMergedParameters(_ bool) (map[string]any, error) {
+	return t.Parameters, nil
+}
+
 // GetParameters is a mock.
 func (p *Parameterizable) GetParameters() (map[string]any, error) {
 	return p.Parameters, nil
