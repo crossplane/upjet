@@ -54,7 +54,7 @@ func Setup(mgr ctrl.Manager, o tjcontroller.Options) error {
                 tjcontroller.WithNoForkAsyncCallbackProvider(ac),
                 tjcontroller.WithNoForkAsyncMetricRecorder(metrics.NewMetricRecorder({{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind, mgr, o.PollInterval)),
                 {{if .FeaturesPackageAlias -}}
-                  tjcontroller.WithNoForkAsyncManagementPolicies(o.Features.Enabled({{ .FeaturesPackageAlias }}EnableAlphaManagementPolicies))
+                  tjcontroller.WithNoForkAsyncManagementPolicies(o.Features.Enabled({{ .FeaturesPackageAlias }}EnableBetaManagementPolicies))
                 {{- end -}}
                 )
               {{- else -}}
@@ -62,7 +62,7 @@ func Setup(mgr ctrl.Manager, o tjcontroller.Options) error {
 				tjcontroller.WithNoForkLogger(o.Logger),
 				tjcontroller.WithNoForkMetricRecorder(metrics.NewMetricRecorder({{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind, mgr, o.PollInterval)),
 				{{if .FeaturesPackageAlias -}}
-				  tjcontroller.WithNoForkManagementPolicies(o.Features.Enabled({{ .FeaturesPackageAlias }}EnableAlphaManagementPolicies))
+				  tjcontroller.WithNoForkManagementPolicies(o.Features.Enabled({{ .FeaturesPackageAlias }}EnableBetaManagementPolicies))
 				{{- end -}}
 				)
 			  {{- end -}}
