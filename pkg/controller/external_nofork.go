@@ -153,6 +153,57 @@ func getExtendedParameters(ctx context.Context, tr resource.Terraformed, externa
 	return params, nil
 }
 
+func (c *NoForkConnector) processParamsWithStateFunc(schemaMap map[string]*schema.Schema, params map[string]any) map[string]any {
+	for key, param := range params {
+		if sc, ok := schemaMap[key]; ok {
+			params[key] = c.applyStateFuncToParam(sc, param)
+		} else {
+			params[key] = param
+		}
+	}
+	return params
+}
+
+func (c *NoForkConnector) applyStateFuncToParam(sc *schema.Schema, param any) any {
+	switch sc.Type {
+	case schema.TypeMap:
+		if sc.Elem == nil {
+			return param
+		}
+		// TypeMap only supports schema in Elem
+		if mapSchema, ok := sc.Elem.(*schema.Schema); ok {
+			pmap := param.(map[string]any)
+			for pk, pv := range pmap {
+				pmap[pk] = c.applyStateFuncToParam(mapSchema, pv)
+			}
+			return pmap
+		}
+	case schema.TypeSet, schema.TypeList:
+		pArray := param.([]any)
+		if setSchema, ok := sc.Elem.(*schema.Schema); ok {
+			for i, p := range pArray {
+				pArray[i] = c.applyStateFuncToParam(setSchema, p)
+			}
+			return pArray
+		} else if setResource, ok := sc.Elem.(*schema.Resource); ok {
+			for i, p := range pArray {
+				resParam := p.(map[string]any)
+				pArray[i] = c.processParamsWithStateFunc(setResource.Schema, resParam)
+			}
+		}
+	case schema.TypeBool, schema.TypeInt, schema.TypeFloat, schema.TypeString:
+		if sc.StateFunc != nil {
+			return sc.StateFunc(param)
+		}
+		return param
+	case schema.TypeInvalid:
+		return param
+	default:
+		return param
+	}
+	return param
+}
+
 func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (managed.ExternalClient, error) {
 	c.metricRecorder.ObserveReconcileDelay(mg.GetObjectKind().GroupVersionKind(), mg.GetName())
 	logger := c.logger.WithValues("uid", mg.GetUID(), "name", mg.GetName(), "gvk", mg.GetObjectKind().GroupVersionKind().String())
@@ -168,14 +219,12 @@ func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (m
 	tr := mg.(resource.Terraformed)
 	opTracker := c.operationTrackerStore.Tracker(tr)
 	externalName := meta.GetExternalName(tr)
-	if externalName == "" {
-		externalName = opTracker.GetTfID()
-	}
 
 	params, err := getExtendedParameters(ctx, tr, externalName, c.config, ts, c.isManagementPoliciesEnabled, c.kube)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to get the extended parameters for resource %q", mg.GetName())
 	}
+	params = c.processParamsWithStateFunc(c.config.TerraformResource.Schema, params)
 
 	schemaBlock := c.config.TerraformResource.CoreConfigSchema()
 	rawConfig, err := schema.JSONMapToStateValue(params, schemaBlock)
