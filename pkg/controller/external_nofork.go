@@ -179,6 +179,9 @@ func (c *NoForkConnector) applyStateFuncToParam(sc *schema.Schema, param any) an
 			return pmap
 		}
 	case schema.TypeSet, schema.TypeList:
+		if sc.Elem == nil {
+			return param
+		}
 		pArray := param.([]any)
 		if setSchema, ok := sc.Elem.(*schema.Schema); ok {
 			for i, p := range pArray {
