@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/crossplane/upjet/pkg/registry"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 	"github.com/pkg/errors"
@@ -22,6 +21,8 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
+
+	"github.com/crossplane/upjet/pkg/registry"
 )
 
 // SetIdentifierArgumentsFn sets the name of the resource in Terraform attributes map,
@@ -294,10 +295,8 @@ type Resource struct {
 	// databases.
 	UseAsync bool
 
-	// UseNoForkClient indicates that a no-fork external client should
-	// be generated instead of the Terraform CLI-forking client.
-	UseNoForkClient bool
-
+	// InitializerFns specifies the initializer functions to be used
+	// for this Resource.
 	InitializerFns []NewInitializerFn
 
 	// OperationTimeouts allows configuring resource operation timeouts.
@@ -339,6 +338,14 @@ type Resource struct {
 	// TerraformCustomDiff allows a resource.Terraformed to customize how its
 	// Terraform InstanceDiff is computed during reconciliation.
 	TerraformCustomDiff CustomDiff
+
+	// useNoForkClient indicates that a no-fork external client should
+	// be generated instead of the Terraform CLI-forking client.
+	useNoForkClient bool
+}
+
+func (r *Resource) ShouldUseNoForkClient() bool {
+	return r.useNoForkClient
 }
 
 // CustomDiff customizes the computed Terraform InstanceDiff. This can be used

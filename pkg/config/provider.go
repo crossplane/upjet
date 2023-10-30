@@ -8,10 +8,12 @@ import (
 	"fmt"
 	"regexp"
 
+	tfjson "github.com/hashicorp/terraform-json"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/pkg/errors"
 
 	"github.com/crossplane/upjet/pkg/registry"
+	conversiontfjson "github.com/crossplane/upjet/pkg/types/conversion/tfjson"
 )
 
 // ResourceConfiguratorFn is a function that implements the ResourceConfigurator
@@ -106,11 +108,21 @@ type Provider struct {
 	skippedResourceNames []string
 
 	// IncludeList is a list of regex for the Terraform resources to be
-	// included. For example, to include "aws_shield_protection_group" into
+	// included and reconciled via the Terraform CLI.
+	// For example, to include "aws_shield_protection_group" into
 	// the generated resources, one can add "aws_shield_protection_group$".
 	// To include whole aws waf group, one can add "aws_waf.*" to the list.
 	// Defaults to []string{".+"} which would include all resources.
 	IncludeList []string
+
+	// NoForkIncludeList  is a list of regex for the Terraform resources to be
+	// included and reconciled in the no-fork architecture (without the
+	// Terraform CLI).
+	// For example, to include "aws_shield_protection_group" into
+	// the generated resources, one can add "aws_shield_protection_group$".
+	// To include whole aws waf group, one can add "aws_waf.*" to the list.
+	// Defaults to []string{".+"} which would include all resources.
+	NoForkIncludeList []string
 
 	// Resources is a map holding resource configurations where key is Terraform
 	// resource name.
@@ -158,6 +170,20 @@ func WithIncludeList(l []string) ProviderOption {
 	}
 }
 
+// WithNoForkIncludeList configures IncludeList for this Provider.
+func WithNoForkIncludeList(l []string) ProviderOption {
+	return func(p *Provider) {
+		p.NoForkIncludeList = l
+	}
+}
+
+// WithTerraformProvider configures the TerraformProvider for this Provider.
+func WithTerraformProvider(tp *schema.Provider) ProviderOption {
+	return func(p *Provider) {
+		p.TerraformProvider = tp
+	}
+}
+
 // WithSkipList configures SkipList for this Provider.
 func WithSkipList(l []string) ProviderOption {
 	return func(p *Provider) {
@@ -202,8 +228,23 @@ func WithMainTemplate(template string) ProviderOption {
 	}
 }
 
-// NewProvider builds and returns a new Provider from provider native schema.
-func NewProvider(resourceMap map[string]*schema.Resource, prefix string, modulePath string, metadata []byte, opts ...ProviderOption) *Provider { // nolint:gocyclo
+// NewProvider builds and returns a new Provider from provider
+// tfjson schema, that is generated using Terraform CLI with:
+// `terraform providers schema --json`
+func NewProvider(schema []byte, prefix string, modulePath string, metadata []byte, opts ...ProviderOption) *Provider { // nolint:gocyclo
+	ps := tfjson.ProviderSchemas{}
+	if err := ps.UnmarshalJSON(schema); err != nil {
+		panic(err)
+	}
+	if len(ps.Schemas) != 1 {
+		panic(fmt.Sprintf("there should exactly be 1 provider schema but there are %d", len(ps.Schemas)))
+	}
+	var rs map[string]*tfjson.Schema
+	for _, v := range ps.Schemas {
+		rs = v.ResourceSchemas
+		break
+	}
+	resourceMap := conversiontfjson.GetV2ResourceMap(rs)
 	providerMetadata, err := registry.NewProviderMetadataFromFile(metadata)
 	if err != nil {
 		panic(errors.Wrap(err, "cannot load provider metadata"))
@@ -233,11 +274,27 @@ func NewProvider(resourceMap map[string]*schema.Resource, prefix string, moduleP
 			// There are resources with no schema, that we will address later.
 			fmt.Printf("Skipping resource %s because it has no schema\n", name)
 		}
-		if len(terraformResource.Schema) == 0 || matches(name, p.SkipList) || !matches(name, p.IncludeList) {
+		// if in both of the include lists, the new behavior prevails
+		isNoFork := matches(name, p.NoForkIncludeList)
+		if len(terraformResource.Schema) == 0 || matches(name, p.SkipList) || (!matches(name, p.IncludeList) && !isNoFork) {
 			p.skippedResourceNames = append(p.skippedResourceNames, name)
 			continue
 		}
+		if isNoFork {
+			if p.TerraformProvider == nil || p.TerraformProvider.ResourcesMap[name] == nil {
+				panic(errors.Errorf("resource %q is configured to be reconciled without the Terraform CLI"+
+					"but either config.Provider.TerraformProvider is not configured or the Go schema does not exist for the resource", name))
+			}
+			terraformResource = p.TerraformProvider.ResourcesMap[name]
+			// TODO: we will need to bump the terraform-plugin-sdk dependency to handle
+			// schema.Resource.SchemaFunc
+			if terraformResource.Schema == nil {
+				p.skippedResourceNames = append(p.skippedResourceNames, name)
+				continue
+			}
+		}
 		p.Resources[name] = DefaultResource(name, terraformResource, providerMetadata.Resources[name], p.DefaultResourceOptions...)
+		p.Resources[name].useNoForkClient = isNoFork
 	}
 	for i, refInjector := range p.refInjectors {
 		if err := refInjector.InjectReferences(p.Resources); err != nil {
