@@ -114,16 +114,15 @@ func getJSONMap(mg xpresource.Managed) (map[string]any, error) {
 }
 
 type noForkExternal struct {
-	ts                             terraform.Setup
-	resourceSchema                 *schema.Resource
-	config                         *config.Resource
-	instanceDiff                   *tf.InstanceDiff
-	params                         map[string]any
-	initProviderExclusiveParamKeys []string
-	rawConfig                      cty.Value
-	logger                         logging.Logger
-	metricRecorder                 *metrics.MetricRecorder
-	opTracker                      *AsyncTracker
+	ts             terraform.Setup
+	resourceSchema *schema.Resource
+	config         *config.Resource
+	instanceDiff   *tf.InstanceDiff
+	params         map[string]any
+	rawConfig      cty.Value
+	logger         logging.Logger
+	metricRecorder *metrics.MetricRecorder
+	opTracker      *AsyncTracker
 }
 
 func getExtendedParameters(ctx context.Context, tr resource.Terraformed, externalName string, config *config.Resource, ts terraform.Setup, initParamsMerged bool, kube client.Client) (map[string]any, error) {
@@ -226,17 +225,6 @@ func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (m
 	tr := mg.(resource.Terraformed)
 	opTracker := c.operationTrackerStore.Tracker(tr)
 	externalName := meta.GetExternalName(tr)
-
-	paramsForProvider, err := tr.GetParameters()
-	if err != nil {
-		errors.Wrap(err, "cannot get forProvider parameters.")
-	}
-	paramsInitProvider, err := tr.GetInitParameters()
-	if err != nil {
-		errors.Wrap(err, "cannot get initProvider parameters.")
-	}
-	initProviderExclusiveParams := GetTerraformIgnoreChanges(paramsForProvider, paramsInitProvider)
-
 	params, err := getExtendedParameters(ctx, tr, externalName, c.config, ts, c.isManagementPoliciesEnabled, c.kube)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to get the extended parameters for resource %q", mg.GetName())
@@ -278,15 +266,14 @@ func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (m
 	}
 
 	return &noForkExternal{
-		ts:                             ts,
-		resourceSchema:                 c.config.TerraformResource,
-		config:                         c.config,
-		params:                         params,
-		initProviderExclusiveParamKeys: initProviderExclusiveParams,
-		rawConfig:                      rawConfig,
-		logger:                         logger,
-		metricRecorder:                 c.metricRecorder,
-		opTracker:                      opTracker,
+		ts:             ts,
+		resourceSchema: c.config.TerraformResource,
+		config:         c.config,
+		params:         params,
+		rawConfig:      rawConfig,
+		logger:         logger,
+		metricRecorder: c.metricRecorder,
+		opTracker:      opTracker,
 	}, nil
 }
 
@@ -303,13 +290,13 @@ func deleteInstanceDiffAttribute(instanceDiff *tf.InstanceDiff, paramKey string)
 	if lengthValue, ok := instanceDiff.Attributes[lengthKey]; ok {
 		newValue, err := strconv.Atoi(lengthValue.New)
 		if err != nil {
-			return errors.Wrap(err, "cannot convert instance diff attribute to integer")
+			return errors.Wrapf(err, "cannot convert instance diff attribute %q to integer", lengthValue.New)
 		}
 
 		// TODO: consider what happens if oldValue = ""
 		oldValue, err := strconv.Atoi(lengthValue.Old)
 		if err != nil {
-			return errors.Wrap(err, "cannot convert instance diff attribute to integer")
+			return errors.Wrapf(err, "cannot convert instance diff attribute %q to integer", lengthValue.Old)
 		}
 
 		newValue -= 1
@@ -324,7 +311,45 @@ func deleteInstanceDiffAttribute(instanceDiff *tf.InstanceDiff, paramKey string)
 	return nil
 }
 
-func (n *noForkExternal) getResourceDataDiff(ctx context.Context, s *tf.InstanceState, resourceExists bool) (*tf.InstanceDiff, error) {
+func filterInitExclusiveDiffs(tr resource.Terraformed, instanceDiff *tf.InstanceDiff) error {
+	if instanceDiff == nil || instanceDiff.Empty() {
+		return nil
+	}
+	paramsForProvider, err := tr.GetParameters()
+	if err != nil {
+		return errors.Wrap(err, "cannot get spec.forProvider parameters")
+	}
+	paramsInitProvider, err := tr.GetInitParameters()
+	if err != nil {
+		return errors.Wrap(err, "cannot get spec.initProvider parameters")
+	}
+	initProviderExclusiveParamKeys := getTerraformIgnoreChanges(paramsForProvider, paramsInitProvider)
+
+	for _, keyToIgnore := range initProviderExclusiveParamKeys {
+		for attributeKey := range instanceDiff.Attributes {
+			if keyToIgnore != attributeKey {
+				continue
+			}
+
+			if err := deleteInstanceDiffAttribute(instanceDiff, keyToIgnore); err != nil {
+				return errors.Wrapf(err, "cannot delete key %q from instance diff", keyToIgnore)
+			}
+
+			keyComponents := strings.Split(keyToIgnore, ".")
+			if keyComponents[0] != "tags" {
+				continue
+			}
+			keyComponents[0] = "tags_all"
+			keyToIgnore = strings.Join(keyComponents, ".")
+			if err := deleteInstanceDiffAttribute(instanceDiff, keyToIgnore); err != nil {
+				return errors.Wrapf(err, "cannot delete key %q from instance diff", keyToIgnore)
+			}
+		}
+	}
+	return nil
+}
+
+func (n *noForkExternal) getResourceDataDiff(tr resource.Terraformed, ctx context.Context, s *tf.InstanceState, resourceExists bool) (*tf.InstanceDiff, error) {
 	instanceDiff, err := schema.InternalMap(n.resourceSchema.Schema).Diff(ctx, s, tf.NewResourceConfigRaw(n.params), nil, n.ts.Meta, false)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get *terraform.InstanceDiff")
@@ -335,27 +360,10 @@ func (n *noForkExternal) getResourceDataDiff(ctx context.Context, s *tf.Instance
 			return nil, errors.Wrap(err, "failed to compute the customized terraform.InstanceDiff")
 		}
 	}
-	if !instanceDiff.Empty() && resourceExists {
-		for _, keyToIgnore := range n.initProviderExclusiveParamKeys {
-			for attributeKey := range instanceDiff.Attributes {
-				if keyToIgnore != attributeKey {
-					continue
-				}
 
-				if err := deleteInstanceDiffAttribute(instanceDiff, keyToIgnore); err != nil {
-					return nil, errors.Wrapf(err, "cannot delete key (%v) from instance diff.", keyToIgnore)
-				}
-
-				keyComponents := strings.Split(keyToIgnore, ".")
-				if keyComponents[0] != "tags" {
-					continue
-				}
-				keyComponents[0] = "tags_all"
-				keyToIgnore = strings.Join(keyComponents, ".")
-				if err := deleteInstanceDiffAttribute(instanceDiff, keyToIgnore); err != nil {
-					return nil, errors.Wrapf(err, "cannot delete key (%v) from instance diff.", keyToIgnore)
-				}
-			}
+	if resourceExists {
+		if err := filterInitExclusiveDiffs(tr, instanceDiff); err != nil {
+			return nil, errors.Wrap(err, "failed to filter the diffs exclusive to spec.initProvider in the terraform.InstanceDiff")
 		}
 	}
 	if instanceDiff != nil {
@@ -393,7 +401,7 @@ func (n *noForkExternal) Observe(ctx context.Context, mg xpresource.Managed) (ma
 	n.opTracker.SetTfState(newState) // TODO: missing RawConfig & RawPlan here...
 
 	resourceExists := newState != nil && newState.ID != ""
-	instanceDiff, err := n.getResourceDataDiff(ctx, newState, resourceExists)
+	instanceDiff, err := n.getResourceDataDiff(mg.(resource.Terraformed), ctx, newState, resourceExists)
 	if err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot compute the instance diff")
 	}
@@ -588,13 +596,13 @@ func (n *noForkExternal) fromInstanceStateToJSONMap(newState *tf.InstanceState) 
 	return stateValueMap, nil
 }
 
-// GetTerraformIgnoreChanges returns a sorted Terraform `ignore_changes`
+// getTerraformIgnoreChanges returns a sorted Terraform `ignore_changes`
 // lifecycle meta-argument expression by looking for differences between
 // the `initProvider` and `forProvider` maps. The ignored fields are the ones
 // that are present in initProvider, but not in forProvider.
 // TODO: This method is copy-pasted from `pkg/resource/ignored.go` and adapted.
 // Consider merging this implementation with the original one.
-func GetTerraformIgnoreChanges(forProvider, initProvider map[string]any) []string {
+func getTerraformIgnoreChanges(forProvider, initProvider map[string]any) []string {
 	ignored := getIgnoredFieldsMap("%s", forProvider, initProvider)
 	return ignored
 }
