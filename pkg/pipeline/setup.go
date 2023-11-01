@@ -12,10 +12,11 @@ import (
 	"sort"
 	"text/template"
 
-	"github.com/crossplane/upjet/pkg/config"
-	"github.com/crossplane/upjet/pkg/pipeline/templates"
 	"github.com/muvaf/typewriter/pkg/wrapper"
 	"github.com/pkg/errors"
+
+	"github.com/crossplane/upjet/pkg/config"
+	"github.com/crossplane/upjet/pkg/pipeline/templates"
 )
 
 // NewProviderGenerator returns a new ProviderGenerator.

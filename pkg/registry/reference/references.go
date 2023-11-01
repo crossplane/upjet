@@ -8,10 +8,11 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/pkg/errors"
+
 	"github.com/crossplane/upjet/pkg/config"
 	"github.com/crossplane/upjet/pkg/registry"
 	"github.com/crossplane/upjet/pkg/types"
-	"github.com/pkg/errors"
 )
 
 const (

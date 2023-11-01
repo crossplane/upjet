@@ -8,10 +8,9 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/crossplane/crossplane-runtime/pkg/test"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
-
-	"github.com/crossplane/crossplane-runtime/pkg/test"
 )
 
 func Test_parseAsUpjetOption(t *testing.T) {

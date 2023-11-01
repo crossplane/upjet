@@ -7,10 +7,10 @@ package terraform
 import (
 	"sync"
 
-	tferrors "github.com/crossplane/upjet/pkg/terraform/errors"
+	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	"github.com/pkg/errors"
 
-	"github.com/crossplane/crossplane-runtime/pkg/logging"
+	tferrors "github.com/crossplane/upjet/pkg/terraform/errors"
 )
 
 // ProviderHandle represents native plugin (Terraform provider) process

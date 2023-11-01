@@ -11,13 +11,13 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/crossplane/upjet/pkg/config"
+	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	twtypes "github.com/muvaf/typewriter/pkg/types"
 	"github.com/pkg/errors"
 	"k8s.io/utils/ptr"
 
-	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
+	"github.com/crossplane/upjet/pkg/config"
 )
 
 const (

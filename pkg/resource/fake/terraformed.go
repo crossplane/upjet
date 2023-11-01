@@ -5,11 +5,10 @@
 package fake
 
 import (
+	"github.com/crossplane/crossplane-runtime/pkg/resource/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/json"
-
-	"github.com/crossplane/crossplane-runtime/pkg/resource/fake"
 )
 
 // Observable is mock Observable.

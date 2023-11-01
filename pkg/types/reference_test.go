@@ -9,10 +9,11 @@ import (
 	"go/types"
 	"testing"
 
-	"github.com/crossplane/upjet/pkg/config"
-	"github.com/crossplane/upjet/pkg/types/name"
 	"github.com/google/go-cmp/cmp"
 	twtypes "github.com/muvaf/typewriter/pkg/types"
+
+	"github.com/crossplane/upjet/pkg/config"
+	"github.com/crossplane/upjet/pkg/types/name"
 )
 
 func TestBuilder_generateReferenceFields(t *testing.T) {

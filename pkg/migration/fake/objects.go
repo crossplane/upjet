@@ -7,10 +7,10 @@
 package fake
 
 import (
-	"github.com/crossplane/upjet/pkg/migration/fake/mocks"
+	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	"github.com/crossplane/upjet/pkg/migration/fake/mocks"
 )
 
 const (

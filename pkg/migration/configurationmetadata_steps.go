@@ -8,10 +8,9 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/pkg/errors"
-
 	xpmetav1 "github.com/crossplane/crossplane/apis/pkg/meta/v1"
 	xpmetav1alpha1 "github.com/crossplane/crossplane/apis/pkg/meta/v1alpha1"
+	"github.com/pkg/errors"
 )
 
 const (

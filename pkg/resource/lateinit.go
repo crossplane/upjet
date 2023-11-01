@@ -10,12 +10,12 @@ import (
 	"runtime/debug"
 	"strings"
 
-	"github.com/crossplane/upjet/pkg/config"
+	xpmeta "github.com/crossplane/crossplane-runtime/pkg/meta"
+	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	xpmeta "github.com/crossplane/crossplane-runtime/pkg/meta"
-	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
+	"github.com/crossplane/upjet/pkg/config"
 )
 
 const (

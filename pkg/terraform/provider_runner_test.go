@@ -14,14 +14,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/crossplane/crossplane-runtime/pkg/logging"
+	"github.com/crossplane/crossplane-runtime/pkg/test"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	clock "k8s.io/utils/clock/testing"
 	"k8s.io/utils/exec"
 	testingexec "k8s.io/utils/exec/testing"
-
-	"github.com/crossplane/crossplane-runtime/pkg/logging"
-	"github.com/crossplane/crossplane-runtime/pkg/test"
 )
 
 func TestStartSharedServer(t *testing.T) {
