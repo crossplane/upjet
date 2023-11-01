@@ -7,7 +7,6 @@ package controller
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -139,7 +138,8 @@ func getExtendedParameters(ctx context.Context, tr resource.Terraformed, externa
 	params["id"] = tfID
 	// we need to parameterize the following for a provider
 	// not all providers may have this attribute
-	// TODO: tags_all handling
+	// TODO: tags-tags_all implementation is AWS specific.
+	// Consider making this logic independent of provider.
 	if _, ok := config.TerraformResource.CoreConfigSchema().Attributes["tags_all"]; ok {
 		params["tags_all"] = params["tags"]
 	}
@@ -267,44 +267,12 @@ func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (m
 	}, nil
 }
 
-func deleteInstanceDiffAttribute(instanceDiff *tf.InstanceDiff, paramKey string) error {
-	delete(instanceDiff.Attributes, paramKey)
-
-	keyComponents := strings.Split(paramKey, ".")
-	if len(keyComponents) < 2 {
-		return nil
-	}
-
-	keyComponents[len(keyComponents)-1] = "%"
-	lengthKey := strings.Join(keyComponents, ".")
-	if lengthValue, ok := instanceDiff.Attributes[lengthKey]; ok {
-		newValue, err := strconv.Atoi(lengthValue.New)
-		if err != nil {
-			return errors.Wrapf(err, "cannot convert instance diff attribute %q to integer", lengthValue.New)
-		}
-
-		// TODO: consider what happens if oldValue = ""
-		oldValue, err := strconv.Atoi(lengthValue.Old)
-		if err != nil {
-			return errors.Wrapf(err, "cannot convert instance diff attribute %q to integer", lengthValue.Old)
-		}
-
-		newValue -= 1
-		if oldValue == newValue {
-			delete(instanceDiff.Attributes, lengthKey)
-		} else {
-			// TODO: consider what happens if oldValue = ""
-			lengthValue.New = strconv.Itoa(newValue)
-		}
-	}
-
-	return nil
-}
-
+// TODO: Remeasure cyclomatic complexity of this function and consider addressing.
 func filterInitExclusiveDiffs(tr resource.Terraformed, instanceDiff *tf.InstanceDiff) error { //nolint:gocyclo
 	if instanceDiff == nil || instanceDiff.Empty() {
 		return nil
 	}
+
 	paramsForProvider, err := tr.GetParameters()
 	if err != nil {
 		return errors.Wrap(err, "cannot get spec.forProvider parameters")
@@ -313,27 +281,61 @@ func filterInitExclusiveDiffs(tr resource.Terraformed, instanceDiff *tf.Instance
 	if err != nil {
 		return errors.Wrap(err, "cannot get spec.initProvider parameters")
 	}
-	initProviderExclusiveParamKeys := getTerraformIgnoreChanges(paramsForProvider, paramsInitProvider)
 
+	initProviderExclusiveParamKeys := getTerraformIgnoreChanges(paramsForProvider, paramsInitProvider)
 	for _, keyToIgnore := range initProviderExclusiveParamKeys {
 		for attributeKey := range instanceDiff.Attributes {
-			if keyToIgnore != attributeKey {
+			keyToIgnoreAsPrefix := fmt.Sprintf("%s.", keyToIgnore)
+			if keyToIgnore != attributeKey && !strings.HasPrefix(attributeKey, keyToIgnoreAsPrefix) {
 				continue
 			}
 
-			if err := deleteInstanceDiffAttribute(instanceDiff, keyToIgnore); err != nil {
-				return errors.Wrapf(err, "cannot delete key %q from instance diff", keyToIgnore)
-			}
+			delete(instanceDiff.Attributes, attributeKey)
 
-			keyComponents := strings.Split(keyToIgnore, ".")
+			// TODO: tags-tags_all implementation is AWS specific.
+			// Consider making this logic independent of provider.
+			keyComponents := strings.Split(attributeKey, ".")
 			if keyComponents[0] != "tags" {
 				continue
 			}
 			keyComponents[0] = "tags_all"
-			keyToIgnore = strings.Join(keyComponents, ".")
-			if err := deleteInstanceDiffAttribute(instanceDiff, keyToIgnore); err != nil {
-				return errors.Wrapf(err, "cannot delete key %q from instance diff", keyToIgnore)
-			}
+			tagsAllAttributeKey := strings.Join(keyComponents, ".")
+			delete(instanceDiff.Attributes, tagsAllAttributeKey)
+		}
+	}
+
+	// Delete length keys, such as "tags.%" (schema.TypeMap) and
+	// "cidrBlocks.#" (schema.TypeSet), because of two reasons:
+	//
+	// 1. Diffs are applied successfully without them, except for
+	// schema.TypeList.
+	//
+	// 2. If only length keys remain in the diff, after ignored
+	// attributes are removed above, they cause diff to be considered
+	// non-empty, even though it is effectively empty, therefore causing
+	// an infinite update loop.
+	for _, keyToIgnore := range initProviderExclusiveParamKeys {
+		keyComponents := strings.Split(keyToIgnore, ".")
+		if len(keyComponents) < 2 {
+			continue
+		}
+
+		// TODO: Consider locating the schema corresponding to keyToIgnore
+		// and checking whether it's a collection, before attempting to
+		// delete its length key.
+		for _, lengthSymbol := range []string{"%", "#"} {
+			keyComponents[len(keyComponents)-1] = lengthSymbol
+			lengthKey := strings.Join(keyComponents, ".")
+			delete(instanceDiff.Attributes, lengthKey)
+		}
+
+		// TODO: tags-tags_all implementation is AWS specific.
+		// Consider making this logic independent of provider.
+		if keyComponents[0] == "tags" {
+			keyComponents[0] = "tags_all"
+			keyComponents[len(keyComponents)-1] = "%"
+			lengthKey := strings.Join(keyComponents, ".")
+			delete(instanceDiff.Attributes, lengthKey)
 		}
 	}
 	return nil
@@ -670,18 +672,17 @@ func getIgnoredFieldsArray(format string, forProvider, initProvider []any) []str
 	ignored := []string{}
 	for i := range initProvider {
 		// Construct the full field path with array index and prefix.
-		fieldPath := fmt.Sprintf("%s[%d]", format, i)
+		fieldPath := fmt.Sprintf("%s.%d", format, i)
 		if i < len(forProvider) {
 			if _, ok := initProvider[i].(map[string]any); ok {
 				ignored = append(ignored, getIgnoredFieldsMap(fieldPath+".%s", forProvider[i].(map[string]any), initProvider[i].(map[string]any))...)
 			}
 			if _, ok := initProvider[i].([]any); ok {
-				ignored = append(ignored, getIgnoredFieldsArray(fieldPath+"%s", forProvider[i].([]any), initProvider[i].([]any))...)
+				ignored = append(ignored, getIgnoredFieldsArray(fieldPath, forProvider[i].([]any), initProvider[i].([]any))...)
 			}
 		} else {
 			ignored = append(ignored, fieldPath)
 		}
-
 	}
 	return ignored
 }
