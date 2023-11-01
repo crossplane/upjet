@@ -231,7 +231,7 @@ func WithMainTemplate(template string) ProviderOption {
 // NewProvider builds and returns a new Provider from provider
 // tfjson schema, that is generated using Terraform CLI with:
 // `terraform providers schema --json`
-func NewProvider(schema []byte, prefix string, modulePath string, metadata []byte, opts ...ProviderOption) *Provider { // nolint:gocyclo
+func NewProvider(schema []byte, prefix string, modulePath string, metadata []byte, opts ...ProviderOption) *Provider { //nolint:gocyclo
 	ps := tfjson.ProviderSchemas{}
 	if err := ps.UnmarshalJSON(schema); err != nil {
 		panic(err)

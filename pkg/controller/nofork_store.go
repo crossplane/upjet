@@ -82,12 +82,6 @@ func (a *AsyncTracker) GetTfID() string {
 	return a.tfState.ID
 }
 
-func (a *AsyncTracker) SetTfID(tfId string) {
-	//a.mu.Lock()
-	//defer a.mu.Unlock()
-	a.tfID = tfId
-}
-
 // IsDeleted returns whether the associated external resource
 // has logically been deleted.
 func (a *AsyncTracker) IsDeleted() bool {

@@ -12,13 +12,14 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/pkg/errors"
+	"k8s.io/utils/ptr"
+
 	"github.com/crossplane/upjet/pkg"
 	"github.com/crossplane/upjet/pkg/config"
 	"github.com/crossplane/upjet/pkg/types/comments"
 	"github.com/crossplane/upjet/pkg/types/name"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/pkg/errors"
-	"k8s.io/utils/ptr"
 )
 
 var parentheses = regexp.MustCompile(`\(([^)]+)\)`)
@@ -213,7 +214,7 @@ func NewReferenceField(g *Builder, cfg *config.Resource, r *resource, sch *schem
 }
 
 // AddToResource adds built field to the resource.
-func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames, addToObservation bool) {
+func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames, addToObservation bool) { //nolint:gocyclo
 	if f.Comment.UpjetOptions.FieldJSONTag != nil {
 		f.JSONTag = *f.Comment.UpjetOptions.FieldJSONTag
 	}

@@ -157,7 +157,7 @@ func (c *NoForkConnector) processParamsWithStateFunc(schemaMap map[string]*schem
 	return params
 }
 
-func (c *NoForkConnector) applyStateFuncToParam(sc *schema.Schema, param any) any {
+func (c *NoForkConnector) applyStateFuncToParam(sc *schema.Schema, param any) any { //nolint:gocyclo
 	switch sc.Type {
 	case schema.TypeMap:
 		if sc.Elem == nil {
@@ -301,7 +301,7 @@ func deleteInstanceDiffAttribute(instanceDiff *tf.InstanceDiff, paramKey string)
 	return nil
 }
 
-func filterInitExclusiveDiffs(tr resource.Terraformed, instanceDiff *tf.InstanceDiff) error {
+func filterInitExclusiveDiffs(tr resource.Terraformed, instanceDiff *tf.InstanceDiff) error { //nolint:gocyclo
 	if instanceDiff == nil || instanceDiff.Empty() {
 		return nil
 	}
@@ -373,7 +373,7 @@ func (n *noForkExternal) getResourceDataDiff(tr resource.Terraformed, ctx contex
 	return instanceDiff, nil
 }
 
-func (n *noForkExternal) Observe(ctx context.Context, mg xpresource.Managed) (managed.ExternalObservation, error) {
+func (n *noForkExternal) Observe(ctx context.Context, mg xpresource.Managed) (managed.ExternalObservation, error) { //nolint:gocyclo
 	n.logger.Debug("Observing the external resource")
 
 	if meta.WasDeleted(mg) && n.opTracker.IsDeleted() {

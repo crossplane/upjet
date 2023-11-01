@@ -140,7 +140,7 @@ func (r *MetricRecorder) ObserveReconcileDelay(gvk schema.GroupVersionKind, name
 	if o == nil || !o.(*Observations).observeReconcileDelay || o.(*Observations).expectedReconcileTime == nil {
 		return
 	}
-	d := time.Now().Sub(*o.(*Observations).expectedReconcileTime)
+	d := time.Since(*o.(*Observations).expectedReconcileTime)
 	if d < 0 {
 		d = 0
 	}
