@@ -21,7 +21,6 @@ type AsyncTracker struct {
 	LastOperation *terraform.Operation
 	logger        logging.Logger
 	mu            *sync.Mutex
-	tfID          string
 	tfState       *tfsdk.InstanceState
 	// lifecycle of certain external resources are bound to a parent resource's
 	// lifecycle, and they cannot be deleted without actually deleting

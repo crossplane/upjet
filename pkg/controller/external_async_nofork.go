@@ -160,7 +160,7 @@ func (n *noForkAsyncExternal) Update(_ context.Context, mg xpresource.Managed) (
 	return managed.ExternalUpdate{}, nil
 }
 
-func (n *noForkAsyncExternal) Delete(ctx context.Context, mg xpresource.Managed) error {
+func (n *noForkAsyncExternal) Delete(_ context.Context, mg xpresource.Managed) error {
 	if !n.opTracker.LastOperation.MarkStart("delete") {
 		return errors.Errorf("%s operation that started at %s is still running", n.opTracker.LastOperation.Type, n.opTracker.LastOperation.StartTime().String())
 	}
