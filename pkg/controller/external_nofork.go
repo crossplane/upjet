@@ -339,8 +339,44 @@ func filterInitExclusiveDiffs(tr resource.Terraformed, instanceDiff *tf.Instance
 	return nil
 }
 
+// resource timeouts configuration
+func getTimeoutParameters(config *config.Resource) map[string]any {
+	timeouts := make(map[string]any)
+	// first use the timeout overrides specified in
+	// the Terraform resource schema
+	if config.TerraformResource.Timeouts != nil {
+		if config.TerraformResource.Timeouts.Create != nil && *config.TerraformResource.Timeouts.Create != 0 {
+			timeouts[schema.TimeoutCreate] = config.TerraformResource.Timeouts.Create.Nanoseconds()
+		}
+		if config.TerraformResource.Timeouts.Update != nil && *config.TerraformResource.Timeouts.Update != 0 {
+			timeouts[schema.TimeoutUpdate] = config.TerraformResource.Timeouts.Update.Nanoseconds()
+		}
+		if config.TerraformResource.Timeouts.Delete != nil && *config.TerraformResource.Timeouts.Delete != 0 {
+			timeouts[schema.TimeoutDelete] = config.TerraformResource.Timeouts.Delete.Nanoseconds()
+		}
+		if config.TerraformResource.Timeouts.Read != nil && *config.TerraformResource.Timeouts.Read != 0 {
+			timeouts[schema.TimeoutRead] = config.TerraformResource.Timeouts.Read.Nanoseconds()
+		}
+	}
+	// then, override any Terraform defaults using any upjet
+	// resource configuration overrides
+	if config.OperationTimeouts.Create != 0 {
+		timeouts[schema.TimeoutCreate] = config.OperationTimeouts.Create.Nanoseconds()
+	}
+	if config.OperationTimeouts.Update != 0 {
+		timeouts[schema.TimeoutUpdate] = config.OperationTimeouts.Update.Nanoseconds()
+	}
+	if config.OperationTimeouts.Delete != 0 {
+		timeouts[schema.TimeoutDelete] = config.OperationTimeouts.Delete.Nanoseconds()
+	}
+	if config.OperationTimeouts.Read != 0 {
+		timeouts[schema.TimeoutRead] = config.OperationTimeouts.Read.Nanoseconds()
+	}
+	return timeouts
+}
+
 func (n *noForkExternal) getResourceDataDiff(tr resource.Terraformed, ctx context.Context, s *tf.InstanceState, resourceExists bool) (*tf.InstanceDiff, error) {
-  resourceConfig := tf.NewResourceConfigRaw(n.params)
+	resourceConfig := tf.NewResourceConfigRaw(n.params)
 	instanceDiff, err := schema.InternalMap(n.resourceSchema.Schema).Diff(ctx, s, resourceConfig, nil, n.ts.Meta, false)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get *terraform.InstanceDiff")
@@ -370,6 +406,13 @@ func (n *noForkExternal) getResourceDataDiff(tr resource.Terraformed, ctx contex
 		// Assumption: Source of truth when applying diffs, for instance on updates, is instanceDiff.Attributes.
 		// Setting instanceDiff.RawConfig has no effect on diff application.
 		instanceDiff.RawConfig = n.rawConfig
+	}
+	timeouts := getTimeoutParameters(n.config)
+	if instanceDiff.Meta == nil && len(timeouts) > 0 {
+		instanceDiff.Meta = make(map[string]interface{})
+	}
+	if len(timeouts) > 0 {
+		instanceDiff.Meta[schema.TimeoutKey] = timeouts
 	}
 	return instanceDiff, nil
 }
