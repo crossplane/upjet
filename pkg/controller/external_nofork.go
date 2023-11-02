@@ -340,12 +340,13 @@ func filterInitExclusiveDiffs(tr resource.Terraformed, instanceDiff *tf.Instance
 }
 
 func (n *noForkExternal) getResourceDataDiff(tr resource.Terraformed, ctx context.Context, s *tf.InstanceState, resourceExists bool) (*tf.InstanceDiff, error) {
-	instanceDiff, err := schema.InternalMap(n.resourceSchema.Schema).Diff(ctx, s, tf.NewResourceConfigRaw(n.params), nil, n.ts.Meta, false)
+  resourceConfig := tf.NewResourceConfigRaw(n.params)
+	instanceDiff, err := schema.InternalMap(n.resourceSchema.Schema).Diff(ctx, s, resourceConfig, nil, n.ts.Meta, false)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get *terraform.InstanceDiff")
 	}
 	if n.config.TerraformCustomDiff != nil {
-		instanceDiff, err = n.config.TerraformCustomDiff(instanceDiff)
+		instanceDiff, err = n.config.TerraformCustomDiff(instanceDiff, s, resourceConfig)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to compute the customized terraform.InstanceDiff")
 		}

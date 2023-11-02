@@ -350,7 +350,7 @@ func (r *Resource) ShouldUseNoForkClient() bool {
 // CustomDiff customizes the computed Terraform InstanceDiff. This can be used
 // in cases where, for example, changes in a certain argument should just be
 // dismissed. The new InstanceDiff is returned along with any errors.
-type CustomDiff func(diff *terraform.InstanceDiff) (*terraform.InstanceDiff, error)
+type CustomDiff func(diff *terraform.InstanceDiff, state *terraform.InstanceState, config *terraform.ResourceConfig) (*terraform.InstanceDiff, error)
 
 // ConfigurationInjector is a function that injects Terraform configuration
 // values from the specified managed resource into the specified configuration
