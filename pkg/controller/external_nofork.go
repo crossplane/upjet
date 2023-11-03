@@ -409,10 +409,13 @@ func (n *noForkExternal) getResourceDataDiff(tr resource.Terraformed, ctx contex
 		instanceDiff.RawConfig = n.rawConfig
 	}
 	timeouts := getTimeoutParameters(n.config)
-	if instanceDiff.Meta == nil && len(timeouts) > 0 {
-		instanceDiff.Meta = make(map[string]interface{})
-	}
 	if len(timeouts) > 0 {
+		if instanceDiff == nil {
+			instanceDiff = tf.NewInstanceDiff()
+		}
+		if instanceDiff.Meta == nil {
+			instanceDiff.Meta = make(map[string]interface{})
+		}
 		instanceDiff.Meta[schema.TimeoutKey] = timeouts
 	}
 	return instanceDiff, nil
