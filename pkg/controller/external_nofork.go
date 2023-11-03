@@ -267,7 +267,6 @@ func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (m
 	}, nil
 }
 
-// TODO: Remeasure cyclomatic complexity of this function and consider addressing.
 func filterInitExclusiveDiffs(tr resource.Terraformed, instanceDiff *tf.InstanceDiff) error { //nolint:gocyclo
 	if instanceDiff == nil || instanceDiff.Empty() {
 		return nil
@@ -342,7 +341,7 @@ func filterInitExclusiveDiffs(tr resource.Terraformed, instanceDiff *tf.Instance
 }
 
 // resource timeouts configuration
-func getTimeoutParameters(config *config.Resource) map[string]any {
+func getTimeoutParameters(config *config.Resource) map[string]any { //nolint:gocyclo
 	timeouts := make(map[string]any)
 	// first use the timeout overrides specified in
 	// the Terraform resource schema
@@ -377,7 +376,7 @@ func getTimeoutParameters(config *config.Resource) map[string]any {
 	return timeouts
 }
 
-func (n *noForkExternal) getResourceDataDiff(tr resource.Terraformed, ctx context.Context, s *tf.InstanceState, resourceExists bool) (*tf.InstanceDiff, error) {
+func (n *noForkExternal) getResourceDataDiff(tr resource.Terraformed, ctx context.Context, s *tf.InstanceState, resourceExists bool) (*tf.InstanceDiff, error) { //nolint:gocyclo
 	resourceConfig := tf.NewResourceConfigRaw(n.params)
 	instanceDiff, err := schema.InternalMap(n.resourceSchema.Schema).Diff(ctx, s, resourceConfig, nil, n.ts.Meta, false)
 	if err != nil {
