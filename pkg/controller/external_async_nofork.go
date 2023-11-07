@@ -18,6 +18,7 @@ import (
 	"github.com/crossplane/upjet/pkg/controller/handler"
 	"github.com/crossplane/upjet/pkg/metrics"
 	"github.com/crossplane/upjet/pkg/terraform"
+	tferrors "github.com/crossplane/upjet/pkg/terraform/errors"
 )
 
 var defaultAsyncTimeout = 1 * time.Hour
@@ -125,7 +126,8 @@ func (n *noForkAsyncExternal) Create(_ context.Context, mg xpresource.Managed) (
 
 		n.opTracker.logger.Debug("Async create starting...", "tfID", n.opTracker.GetTfID())
 		_, err := n.noForkExternal.Create(ctx, mg)
-		n.opTracker.LastOperation.SetError(errors.Wrap(err, "async create failed"))
+		err = tferrors.NewAsyncCreateFailed(err)
+		n.opTracker.LastOperation.SetError(err)
 		n.opTracker.logger.Debug("Async create ended.", "error", err, "tfID", n.opTracker.GetTfID())
 
 		n.opTracker.LastOperation.MarkEnd()
@@ -148,7 +150,8 @@ func (n *noForkAsyncExternal) Update(_ context.Context, mg xpresource.Managed) (
 
 		n.opTracker.logger.Debug("Async update starting...", "tfID", n.opTracker.GetTfID())
 		_, err := n.noForkExternal.Update(ctx, mg)
-		n.opTracker.LastOperation.SetError(errors.Wrap(err, "async update failed"))
+		err = tferrors.NewAsyncUpdateFailed(err)
+		n.opTracker.LastOperation.SetError(err)
 		n.opTracker.logger.Debug("Async update ended.", "error", err, "tfID", n.opTracker.GetTfID())
 
 		n.opTracker.LastOperation.MarkEnd()
@@ -170,8 +173,8 @@ func (n *noForkAsyncExternal) Delete(_ context.Context, mg xpresource.Managed) e
 		defer cancel()
 
 		n.opTracker.logger.Debug("Async delete starting...", "tfID", n.opTracker.GetTfID())
-		err := n.noForkExternal.Delete(ctx, mg)
-		n.opTracker.LastOperation.SetError(errors.Wrap(err, "async delete failed"))
+		err := tferrors.NewAsyncDeleteFailed(n.noForkExternal.Delete(ctx, mg))
+		n.opTracker.LastOperation.SetError(err)
 		n.opTracker.logger.Debug("Async delete ended.", "error", err, "tfID", n.opTracker.GetTfID())
 
 		n.opTracker.LastOperation.MarkEnd()

@@ -184,3 +184,66 @@ func IsRetryScheduleError(err error) bool {
 	r := &retrySchedule{}
 	return errors.As(err, &r)
 }
+
+type asyncCreateFailed struct {
+	error
+}
+
+// NewAsyncCreateFailed returns a new async crate failure.
+func NewAsyncCreateFailed(err error) error {
+	if err == nil {
+		return nil
+	}
+	return &asyncCreateFailed{
+		error: errors.Wrap(err, "async create failed"),
+	}
+}
+
+// IsAsyncCreateFailed returns whether error is due to failure of
+// an async create operation.
+func IsAsyncCreateFailed(err error) bool {
+	r := &asyncCreateFailed{}
+	return errors.As(err, &r)
+}
+
+type asyncUpdateFailed struct {
+	error
+}
+
+// NewAsyncUpdateFailed returns a new async update failure.
+func NewAsyncUpdateFailed(err error) error {
+	if err == nil {
+		return nil
+	}
+	return &asyncUpdateFailed{
+		error: errors.Wrap(err, "async update failed"),
+	}
+}
+
+// IsAsyncUpdateFailed returns whether error is due to failure of
+// an async update operation.
+func IsAsyncUpdateFailed(err error) bool {
+	r := &asyncUpdateFailed{}
+	return errors.As(err, &r)
+}
+
+type asyncDeleteFailed struct {
+	error
+}
+
+// NewAsyncDeleteFailed returns a new async delete failure.
+func NewAsyncDeleteFailed(err error) error {
+	if err == nil {
+		return nil
+	}
+	return &asyncDeleteFailed{
+		error: errors.Wrap(err, "async delete failed"),
+	}
+}
+
+// IsAsyncDeleteFailed returns whether error is due to failure of
+// an async delete operation.
+func IsAsyncDeleteFailed(err error) bool {
+	r := &asyncDeleteFailed{}
+	return errors.As(err, &r)
+}
