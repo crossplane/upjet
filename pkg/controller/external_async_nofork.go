@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
+	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/pkg/errors"
@@ -17,6 +18,7 @@ import (
 	"github.com/crossplane/upjet/pkg/config"
 	"github.com/crossplane/upjet/pkg/controller/handler"
 	"github.com/crossplane/upjet/pkg/metrics"
+	"github.com/crossplane/upjet/pkg/resource"
 	"github.com/crossplane/upjet/pkg/terraform"
 	tferrors "github.com/crossplane/upjet/pkg/terraform/errors"
 )
@@ -112,7 +114,14 @@ func (n *noForkAsyncExternal) Observe(ctx context.Context, mg xpresource.Managed
 	}
 	n.opTracker.LastOperation.Flush()
 
-	return n.noForkExternal.Observe(ctx, mg)
+	o, err := n.noForkExternal.Observe(ctx, mg)
+	// clear any previously reported LastAsyncOperation error condition here,
+	// because there are no pending updates on the existing resource and it's
+	// not scheduled to be deleted.
+	if err == nil && o.ResourceExists && o.ResourceUpToDate && !meta.WasDeleted(mg) {
+		mg.(resource.Terraformed).SetConditions(resource.LastAsyncOperationCondition(nil))
+	}
+	return o, err
 }
 
 func (n *noForkAsyncExternal) Create(_ context.Context, mg xpresource.Managed) (managed.ExternalCreation, error) {

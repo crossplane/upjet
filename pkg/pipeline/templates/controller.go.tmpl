@@ -83,7 +83,6 @@ func Setup(mgr ctrl.Manager, o tjcontroller.Options) error {
         {{- else }}
         managed.WithFinalizer(terraform.NewWorkspaceFinalizer(o.WorkspaceStore, xpresource.NewAPIFinalizer(mgr.GetClient(), managed.FinalizerName))),
         {{- end }}
-
 		managed.WithTimeout(3*time.Minute),
 		managed.WithInitializers(initializers),
 		managed.WithConnectionPublishers(cps...),
