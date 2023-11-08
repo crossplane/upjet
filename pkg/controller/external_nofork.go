@@ -17,6 +17,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/hashicorp/go-cty/cty"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	tf "github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 	"github.com/pkg/errors"
@@ -102,9 +103,14 @@ func getJSONMap(mg xpresource.Managed) (map[string]any, error) {
 	return v.(map[string]any), nil
 }
 
+type Resource interface {
+	Apply(ctx context.Context, s *tf.InstanceState, d *tf.InstanceDiff, meta interface{}) (*tf.InstanceState, diag.Diagnostics)
+	RefreshWithoutUpgrade(ctx context.Context, s *tf.InstanceState, meta interface{}) (*tf.InstanceState, diag.Diagnostics)
+}
+
 type noForkExternal struct {
 	ts             terraform.Setup
-	resourceSchema *schema.Resource
+	resourceSchema Resource
 	config         *config.Resource
 	instanceDiff   *tf.InstanceDiff
 	params         map[string]any
@@ -399,7 +405,7 @@ func getTimeoutParameters(config *config.Resource) map[string]any { //nolint:goc
 
 func (n *noForkExternal) getResourceDataDiff(tr resource.Terraformed, ctx context.Context, s *tf.InstanceState, resourceExists bool) (*tf.InstanceDiff, error) { //nolint:gocyclo
 	resourceConfig := tf.NewResourceConfigRaw(n.params)
-	instanceDiff, err := schema.InternalMap(n.resourceSchema.Schema).Diff(ctx, s, resourceConfig, nil, n.ts.Meta, false)
+	instanceDiff, err := schema.InternalMap(n.config.TerraformResource.Schema).Diff(ctx, s, resourceConfig, nil, n.ts.Meta, false)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get *terraform.InstanceDiff")
 	}
@@ -417,7 +423,7 @@ func (n *noForkExternal) getResourceDataDiff(tr resource.Terraformed, ctx contex
 	}
 	if instanceDiff != nil {
 		v := cty.EmptyObjectVal
-		v, err = instanceDiff.ApplyToValue(v, n.resourceSchema.CoreConfigSchema())
+		v, err = instanceDiff.ApplyToValue(v, n.config.TerraformResource.CoreConfigSchema())
 		if err != nil {
 			return nil, errors.Wrap(err, "cannot apply Terraform instance diff to an empty value")
 		}
@@ -643,7 +649,7 @@ func (n *noForkExternal) Delete(ctx context.Context, _ xpresource.Managed) error
 }
 
 func (n *noForkExternal) fromInstanceStateToJSONMap(newState *tf.InstanceState) (map[string]interface{}, error) {
-	impliedType := n.resourceSchema.CoreConfigSchema().ImpliedType()
+	impliedType := n.config.TerraformResource.CoreConfigSchema().ImpliedType()
 	attrsAsCtyValue, err := newState.AttrsAsObjectValue(impliedType)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not convert attrs to cty value")
