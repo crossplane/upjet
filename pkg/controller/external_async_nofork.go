@@ -173,7 +173,11 @@ func (n *noForkAsyncExternal) Update(_ context.Context, mg xpresource.Managed) (
 }
 
 func (n *noForkAsyncExternal) Delete(_ context.Context, mg xpresource.Managed) error {
-	if !n.opTracker.LastOperation.MarkStart("delete") {
+	switch {
+	case n.opTracker.LastOperation.Type == "delete":
+		n.opTracker.logger.Debug("The previous delete operation is still ongoing", "tfID", n.opTracker.GetTfID())
+		return nil
+	case !n.opTracker.LastOperation.MarkStart("delete"):
 		return errors.Errorf("%s operation that started at %s is still running", n.opTracker.LastOperation.Type, n.opTracker.LastOperation.StartTime().String())
 	}
 
