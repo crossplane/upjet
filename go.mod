@@ -28,6 +28,7 @@ require (
 	github.com/tmccombs/hcl2json v0.3.3
 	github.com/yuin/goldmark v1.4.13
 	github.com/zclconf/go-cty v1.11.0
+	github.com/zclconf/go-cty-yaml v1.0.3
 	golang.org/x/net v0.15.0
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6
 	gopkg.in/yaml.v2 v2.4.0
