@@ -147,6 +147,9 @@ func getExtendedParameters(ctx context.Context, tr resource.Terraformed, externa
 }
 
 func (c *NoForkConnector) processParamsWithStateFunc(schemaMap map[string]*schema.Schema, params map[string]any) map[string]any {
+	if params == nil {
+		return params
+	}
 	for key, param := range params {
 		if sc, ok := schemaMap[key]; ok {
 			params[key] = c.applyStateFuncToParam(sc, param)
@@ -158,14 +161,17 @@ func (c *NoForkConnector) processParamsWithStateFunc(schemaMap map[string]*schem
 }
 
 func (c *NoForkConnector) applyStateFuncToParam(sc *schema.Schema, param any) any { //nolint:gocyclo
+	if param == nil {
+		return param
+	}
 	switch sc.Type {
 	case schema.TypeMap:
 		if sc.Elem == nil {
 			return param
 		}
+		pmap, okParam := param.(map[string]any)
 		// TypeMap only supports schema in Elem
-		if mapSchema, ok := sc.Elem.(*schema.Schema); ok {
-			pmap := param.(map[string]any)
+		if mapSchema, ok := sc.Elem.(*schema.Schema); ok && okParam {
 			for pk, pv := range pmap {
 				pmap[pk] = c.applyStateFuncToParam(mapSchema, pv)
 			}
@@ -175,16 +181,17 @@ func (c *NoForkConnector) applyStateFuncToParam(sc *schema.Schema, param any) an
 		if sc.Elem == nil {
 			return param
 		}
-		pArray := param.([]any)
-		if setSchema, ok := sc.Elem.(*schema.Schema); ok {
+		pArray, okParam := param.([]any)
+		if setSchema, ok := sc.Elem.(*schema.Schema); ok && okParam {
 			for i, p := range pArray {
 				pArray[i] = c.applyStateFuncToParam(setSchema, p)
 			}
 			return pArray
 		} else if setResource, ok := sc.Elem.(*schema.Resource); ok {
 			for i, p := range pArray {
-				resParam := p.(map[string]any)
-				pArray[i] = c.processParamsWithStateFunc(setResource.Schema, resParam)
+				if resParam, okRParam := p.(map[string]any); okRParam {
+					pArray[i] = c.processParamsWithStateFunc(setResource.Schema, resParam)
+				}
 			}
 		}
 	case schema.TypeBool, schema.TypeInt, schema.TypeFloat, schema.TypeString:
