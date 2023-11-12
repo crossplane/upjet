@@ -15,6 +15,7 @@ import (
 	"github.com/crossplane/upjet/pkg"
 	"github.com/crossplane/upjet/pkg/config"
 	"github.com/crossplane/upjet/pkg/types/comments"
+	"github.com/crossplane/upjet/pkg/types/markers"
 	"github.com/crossplane/upjet/pkg/types/name"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/pkg/errors"
@@ -151,7 +152,36 @@ func NewField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema,
 	f.FieldType = fieldType
 	f.InitType = initType
 
+	AddServerSideApplyMarkers(f)
+
 	return f, nil
+}
+
+// AddServerSideApplyMarkers adds server-side apply comment markers to indicate
+// that scalar maps and sets can be merged granularly, not replace atomically.
+func AddServerSideApplyMarkers(f *Field) {
+	switch f.Schema.Type { //nolint:exhaustive
+	case schema.TypeMap:
+		// A map should always have an element of type Schema.
+		if es, ok := f.Schema.Elem.(*schema.Schema); ok {
+			switch es.Type { //nolint:exhaustive
+			// We assume scalar types can be granular maps.
+			case schema.TypeString, schema.TypeBool, schema.TypeInt, schema.TypeFloat:
+				f.Comment.ServerSideApplyOptions.MapType = ptr.To[markers.MapType](markers.MapTypeGranular)
+			}
+		}
+	case schema.TypeSet:
+		if es, ok := f.Schema.Elem.(*schema.Schema); ok {
+			switch es.Type { //nolint:exhaustive
+			// We assume scalar types can be granular maps.
+			case schema.TypeString, schema.TypeBool, schema.TypeInt, schema.TypeFloat:
+				f.Comment.ServerSideApplyOptions.ListType = ptr.To[markers.ListType](markers.ListTypeSet)
+			}
+		}
+	}
+	// TODO(negz): Can we reliably add SSA markers for lists of objects? Do we
+	// have cases where we're turning a Terraform map of maps into a list of
+	// objects with a well-known key that we could merge on?
 }
 
 // NewSensitiveField returns a constructed sensitive Field object.
