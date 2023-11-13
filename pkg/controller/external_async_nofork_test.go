@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package controller
 
 import (
@@ -87,7 +91,7 @@ func prepareNoForkAsyncExternal(r Resource, cfg *config.Resource, fns CallbackFn
 				"name": "example",
 			},
 			rawConfig: rawConfig,
-			logger:    log,
+			logger:    logTest,
 			opTracker: NewAsyncTracker(),
 		},
 		callback: fns,
@@ -121,7 +125,7 @@ func TestAsyncNoForkConnect(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			c := NewNoForkAsyncConnector(nil, tc.args.ots, tc.args.setupFn, tc.args.cfg, WithNoForkAsyncLogger(log))
+			c := NewNoForkAsyncConnector(nil, tc.args.ots, tc.args.setupFn, tc.args.cfg, WithNoForkAsyncLogger(logTest))
 			_, err := c.Connect(context.TODO(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nConnect(...): -want error, +got error:\n", diff)

@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package controller
 
 import (
@@ -24,8 +28,8 @@ import (
 
 var (
 	zl      = zap.New(zap.UseDevMode(true))
-	log     = logging.NewLogrLogger(zl.WithName("provider-aws"))
-	ots     = NewOperationStore(log)
+	logTest = logging.NewLogrLogger(zl.WithName("provider-aws"))
+	ots     = NewOperationStore(logTest)
 	timeout = time.Duration(1200000000000)
 	cfg     = &config.Resource{
 		TerraformResource: &schema.Resource{
@@ -94,7 +98,7 @@ func prepareNoForkExternal(r Resource, cfg *config.Resource) *noForkExternal {
 			"name": "example",
 		},
 		rawConfig: rawConfig,
-		logger:    log,
+		logger:    logTest,
 		opTracker: NewAsyncTracker(),
 	}
 }
@@ -140,7 +144,7 @@ func TestNoForkConnect(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			c := NewNoForkConnector(nil, tc.args.setupFn, tc.args.cfg, tc.args.ots, WithNoForkLogger(log))
+			c := NewNoForkConnector(nil, tc.args.setupFn, tc.args.cfg, tc.args.ots, WithNoForkLogger(logTest))
 			_, err := c.Connect(context.TODO(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nConnect(...): -want error, +got error:\n", diff)
