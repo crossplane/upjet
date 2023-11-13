@@ -140,6 +140,29 @@ func TestNoForkConnect(t *testing.T) {
 				ots: ots,
 			},
 		},
+		"HCL": {
+			args: args{
+				setupFn: func(_ context.Context, _ client.Client, _ xpresource.Managed) (terraform.Setup, error) {
+					return terraform.Setup{}, nil
+				},
+				cfg: cfg,
+				obj: &fake.Terraformed{
+					Parameterizable: fake.Parameterizable{
+						Parameters: map[string]any{
+							"name": "      ${jsonencode({\n          type = \"object\"\n        })}",
+							"map": map[string]any{
+								"key": "value",
+							},
+							"list": []any{"elem1", "elem2"},
+						},
+					},
+					Observable: fake.Observable{
+						Observation: map[string]any{},
+					},
+				},
+				ots: ots,
+			},
+		},
 	}
 
 	for name, tc := range cases {
@@ -201,6 +224,42 @@ func TestNoForkObserve(t *testing.T) {
 				obs: managed.ExternalObservation{
 					ResourceExists:          true,
 					ResourceUpToDate:        true,
+					ResourceLateInitialized: true,
+					ConnectionDetails:       nil,
+					Diff:                    "",
+				},
+			},
+		},
+		"InitProvider": {
+			args: args{
+				r: mockResource{
+					RefreshWithoutUpgradeFn: func(ctx context.Context, s *tf.InstanceState, meta interface{}) (*tf.InstanceState, diag.Diagnostics) {
+						return &tf.InstanceState{ID: "example-id", Attributes: map[string]string{"name": "example2"}}, nil
+					},
+				},
+				cfg: cfg,
+				obj: &fake.Terraformed{
+					Parameterizable: fake.Parameterizable{
+						Parameters: map[string]any{
+							"name": "example",
+							"map": map[string]any{
+								"key": "value",
+							},
+							"list": []any{"elem1", "elem2"},
+						},
+						InitParameters: map[string]any{
+							"list": []any{"elem1", "elem2", "elem3"},
+						},
+					},
+					Observable: fake.Observable{
+						Observation: map[string]any{},
+					},
+				},
+			},
+			want: want{
+				obs: managed.ExternalObservation{
+					ResourceExists:          true,
+					ResourceUpToDate:        false,
 					ResourceLateInitialized: true,
 					ConnectionDetails:       nil,
 					Diff:                    "",

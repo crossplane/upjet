@@ -321,3 +321,291 @@ func TestNewPlanFailed(t *testing.T) {
 		})
 	}
 }
+
+func TestNewRetryScheduleError(t *testing.T) {
+	type args struct {
+		invocationCount, ttl int
+	}
+	tests := map[string]struct {
+		args
+		wantErrMessage string
+	}{
+		"Successful": {
+			args: args{
+				invocationCount: 101,
+				ttl:             100,
+			},
+			wantErrMessage: "native provider reuse budget has been exceeded: invocationCount: 101, ttl: 100",
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			err := NewRetryScheduleError(tc.args.invocationCount, tc.args.ttl)
+			got := err.Error()
+			if diff := cmp.Diff(tc.wantErrMessage, got); diff != "" {
+				t.Errorf("\nNewRetryScheduleError(...): -want message, +got message:\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestIsRetryScheduleError(t *testing.T) {
+	var nilErr *retrySchedule
+	type args struct {
+		err error
+	}
+	tests := map[string]struct {
+		args
+		want bool
+	}{
+		"NilError": {
+			args: args{},
+			want: false,
+		},
+		"NilRetryScheduleError": {
+			args: args{
+				err: nilErr,
+			},
+			want: true,
+		},
+		"NonRetryScheduleError": {
+			args: args{
+				err: errorBoom,
+			},
+			want: false,
+		},
+		"Successful": {
+			args: args{err: NewRetryScheduleError(101, 100)},
+			want: true,
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			if got := IsRetryScheduleError(tc.args.err); got != tc.want {
+				t.Errorf("IsRetryScheduleError() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestNewAsyncCreateFailed(t *testing.T) {
+	type args struct {
+		err error
+	}
+	tests := map[string]struct {
+		args
+		wantErrMessage string
+	}{
+		"Successful": {
+			args: args{
+				err: errors.New("already exists"),
+			},
+			wantErrMessage: "async create failed: already exists",
+		},
+		"Nil": {
+			args: args{
+				err: nil,
+			},
+			wantErrMessage: "",
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			err := NewAsyncCreateFailed(tc.args.err)
+			got := ""
+			if err != nil {
+				got = err.Error()
+			}
+			if diff := cmp.Diff(tc.wantErrMessage, got); diff != "" {
+				t.Errorf("\nNewAsyncCreateFailed(...): -want message, +got message:\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestIsAsyncCreateFailed(t *testing.T) {
+	var nilErr *asyncCreateFailed
+	type args struct {
+		err error
+	}
+	tests := map[string]struct {
+		args
+		want bool
+	}{
+		"NilError": {
+			args: args{},
+			want: false,
+		},
+		"NilAsyncCreateError": {
+			args: args{
+				err: nilErr,
+			},
+			want: true,
+		},
+		"NonAsyncCreateError": {
+			args: args{
+				err: errorBoom,
+			},
+			want: false,
+		},
+		"Successful": {
+			args: args{err: NewAsyncCreateFailed(errors.New("test"))},
+			want: true,
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			if got := IsAsyncCreateFailed(tc.args.err); got != tc.want {
+				t.Errorf("IsAsyncCreateFailed() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestAsyncUpdateFailed(t *testing.T) {
+	type args struct {
+		err error
+	}
+	tests := map[string]struct {
+		args
+		wantErrMessage string
+	}{
+		"Successful": {
+			args: args{
+				err: errors.New("immutable field"),
+			},
+			wantErrMessage: "async update failed: immutable field",
+		},
+		"Nil": {
+			args: args{
+				err: nil,
+			},
+			wantErrMessage: "",
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			err := NewAsyncUpdateFailed(tc.args.err)
+			got := ""
+			if err != nil {
+				got = err.Error()
+			}
+			if diff := cmp.Diff(tc.wantErrMessage, got); diff != "" {
+				t.Errorf("\nAsyncUpdateFailed(...): -want message, +got message:\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestIsAsyncUpdateFailed(t *testing.T) {
+	var nilErr *asyncUpdateFailed
+	type args struct {
+		err error
+	}
+	tests := map[string]struct {
+		args
+		want bool
+	}{
+		"NilError": {
+			args: args{},
+			want: false,
+		},
+		"NilAsyncUpdateError": {
+			args: args{
+				err: nilErr,
+			},
+			want: true,
+		},
+		"NonAsyncUpdateError": {
+			args: args{
+				err: errorBoom,
+			},
+			want: false,
+		},
+		"Successful": {
+			args: args{err: NewAsyncUpdateFailed(errors.New("test"))},
+			want: true,
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			if got := IsAsyncUpdateFailed(tc.args.err); got != tc.want {
+				t.Errorf("IsAsyncUpdateFailed() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestAsyncDeleteFailed(t *testing.T) {
+	type args struct {
+		err error
+	}
+	tests := map[string]struct {
+		args
+		wantErrMessage string
+	}{
+		"Successful": {
+			args: args{
+				err: errors.New("dependency violation"),
+			},
+			wantErrMessage: "async delete failed: dependency violation",
+		},
+		"Nil": {
+			args: args{
+				err: nil,
+			},
+			wantErrMessage: "",
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			err := NewAsyncDeleteFailed(tc.args.err)
+			got := ""
+			if err != nil {
+				got = err.Error()
+			}
+			if diff := cmp.Diff(tc.wantErrMessage, got); diff != "" {
+				t.Errorf("\nAsyncDeleteFailed(...): -want message, +got message:\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestIsAsyncDeleteFailed(t *testing.T) {
+	var nilErr *asyncDeleteFailed
+	type args struct {
+		err error
+	}
+	tests := map[string]struct {
+		args
+		want bool
+	}{
+		"NilError": {
+			args: args{},
+			want: false,
+		},
+		"NilAsyncUpdateError": {
+			args: args{
+				err: nilErr,
+			},
+			want: true,
+		},
+		"NonAsyncUpdateError": {
+			args: args{
+				err: errorBoom,
+			},
+			want: false,
+		},
+		"Successful": {
+			args: args{err: NewAsyncDeleteFailed(errors.New("test"))},
+			want: true,
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			if got := IsAsyncDeleteFailed(tc.args.err); got != tc.want {
+				t.Errorf("IsAsyncDeleteFailed() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
