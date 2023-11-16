@@ -377,7 +377,7 @@ your provider, you can learn more about
 [testing your resources](testing-with-uptest.md) with Uptest.
 
 [Terraform GitHub provider]: https://registry.terraform.io/providers/integrations/github/latest/docs
-[upjet-provider-template]: https://github.com/crossplane/upjet-provider-template
+[upjet-provider-template]: https://github.com/upbound/upjet-provider-template
 [upbound/build]: https://github.com/upbound/build
 [github_repository]: https://registry.terraform.io/providers/integrations/github/latest/docs/resources/repository
 [github_branch]: https://registry.terraform.io/providers/integrations/github/latest/docs/resources/branch
