@@ -11,7 +11,13 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/crossplane/upjet/pkg/migration/fake"
+	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
+	"github.com/crossplane/crossplane-runtime/pkg/test"
+	v1 "github.com/crossplane/crossplane/apis/apiextensions/v1"
+	xpmetav1 "github.com/crossplane/crossplane/apis/pkg/meta/v1"
+	xpmetav1alpha1 "github.com/crossplane/crossplane/apis/pkg/meta/v1alpha1"
+	xppkgv1 "github.com/crossplane/crossplane/apis/pkg/v1"
+	xppkgv1beta1 "github.com/crossplane/crossplane/apis/pkg/v1beta1"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -21,14 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/yaml"
 	k8syaml "sigs.k8s.io/yaml"
 
-	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
-	"github.com/crossplane/crossplane-runtime/pkg/test"
-
-	v1 "github.com/crossplane/crossplane/apis/apiextensions/v1"
-	xpmetav1 "github.com/crossplane/crossplane/apis/pkg/meta/v1"
-	xpmetav1alpha1 "github.com/crossplane/crossplane/apis/pkg/meta/v1alpha1"
-	xppkgv1 "github.com/crossplane/crossplane/apis/pkg/v1"
-	xppkgv1beta1 "github.com/crossplane/crossplane/apis/pkg/v1beta1"
+	"github.com/crossplane/upjet/pkg/migration/fake"
 )
 
 func TestGeneratePlan(t *testing.T) {

@@ -7,9 +7,8 @@ package terraform
 import (
 	"context"
 
-	"github.com/pkg/errors"
-
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
+	"github.com/pkg/errors"
 )
 
 const (

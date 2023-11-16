@@ -8,17 +8,17 @@ import (
 	"context"
 	"testing"
 
-	"github.com/crossplane/upjet/pkg/resource"
-	"github.com/crossplane/upjet/pkg/resource/fake"
-	tjerrors "github.com/crossplane/upjet/pkg/terraform/errors"
+	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
+	xpfake "github.com/crossplane/crossplane-runtime/pkg/resource/fake"
+	"github.com/crossplane/crossplane-runtime/pkg/test"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrl "sigs.k8s.io/controller-runtime/pkg/manager"
 
-	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
-	xpfake "github.com/crossplane/crossplane-runtime/pkg/resource/fake"
-	"github.com/crossplane/crossplane-runtime/pkg/test"
+	"github.com/crossplane/upjet/pkg/resource"
+	"github.com/crossplane/upjet/pkg/resource/fake"
+	tjerrors "github.com/crossplane/upjet/pkg/terraform/errors"
 )
 
 func TestAPICallbacksCreate(t *testing.T) {

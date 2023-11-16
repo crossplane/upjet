@@ -44,8 +44,7 @@ linters-settings:
     sections:
       - standard
       - default
-      - prefix(github.com/crossplane/crossplane-runtime)
-      - prefix(github.com/crossplane/crossplane)
+      - prefix(github.com/crossplane/upjet)
       - blank
       - dot
 

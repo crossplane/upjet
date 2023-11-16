@@ -12,13 +12,14 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/pkg/errors"
+	"k8s.io/utils/ptr"
+
 	"github.com/crossplane/upjet/pkg"
 	"github.com/crossplane/upjet/pkg/config"
 	"github.com/crossplane/upjet/pkg/types/comments"
 	"github.com/crossplane/upjet/pkg/types/name"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/pkg/errors"
-	"k8s.io/utils/ptr"
 )
 
 var parentheses = regexp.MustCompile(`\(([^)]+)\)`)
@@ -213,15 +214,21 @@ func NewReferenceField(g *Builder, cfg *config.Resource, r *resource, sch *schem
 }
 
 // AddToResource adds built field to the resource.
-func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames) {
-	if f.Comment.UpjetOptions.FieldTFTag != nil {
-		f.TFTag = *f.Comment.UpjetOptions.FieldTFTag
-	}
+func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames, addToObservation bool) { //nolint:gocyclo
 	if f.Comment.UpjetOptions.FieldJSONTag != nil {
 		f.JSONTag = *f.Comment.UpjetOptions.FieldJSONTag
 	}
 
 	field := types.NewField(token.NoPos, g.Package, f.FieldNameCamel, f.FieldType, false)
+	// if the field is explicitly configured to be added to
+	// the Observation type
+	if addToObservation {
+		r.addObservationField(f, field)
+	}
+
+	if f.Comment.UpjetOptions.FieldTFTag != nil {
+		f.TFTag = *f.Comment.UpjetOptions.FieldTFTag
+	}
 
 	// Note(turkenh): We want atProvider to be a superset of forProvider, so
 	// we always add the field as an observation field and then add it as a
@@ -230,9 +237,10 @@ func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames) {
 	// We do this only if tf tag is not set to "-" because otherwise it won't
 	// be populated from the tfstate. We typically set tf tag to "-" for
 	// sensitive fields which were replaced with secretKeyRefs.
-	if f.TFTag != "-" {
+	if f.TFTag != "-" && !addToObservation {
 		r.addObservationField(f, field)
 	}
+
 	if !IsObservation(f.Schema) {
 		if f.AsBlocksMode {
 			f.TFTag = strings.TrimSuffix(f.TFTag, ",omitempty")
@@ -259,12 +267,16 @@ func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames) {
 	f.Comment.Required = nil
 	g.comments.AddFieldComment(typeNames.InitTypeName, f.FieldNameCamel, f.Comment.Build())
 
-	// Note(turkenh): We don't want reference resolver to be generated for
-	// fields under status.atProvider. So, we don't want reference comments to
-	// be added, hence we are unsetting reference on the field comment just
-	// before adding it as an observation field.
-	f.Comment.Reference = config.Reference{}
-	g.comments.AddFieldComment(typeNames.ObservationTypeName, f.FieldNameCamel, f.Comment.Build())
+	if addToObservation {
+		g.comments.AddFieldComment(typeNames.ObservationTypeName, f.FieldNameCamel, f.Comment.CommentWithoutOptions().Build())
+	} else {
+		// Note(turkenh): We don't want reference resolver to be generated for
+		// fields under status.atProvider. So, we don't want reference comments to
+		// be added, hence we are unsetting reference on the field comment just
+		// before adding it as an observation field.
+		f.Comment.Reference = config.Reference{}
+		g.comments.AddFieldComment(typeNames.ObservationTypeName, f.FieldNameCamel, f.Comment.Build())
+	}
 }
 
 // isInit returns true if the field should be added to initProvider.

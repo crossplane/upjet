@@ -8,10 +8,12 @@ import (
 	"fmt"
 	"regexp"
 
+	tfjson "github.com/hashicorp/terraform-json"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/pkg/errors"
+
 	"github.com/crossplane/upjet/pkg/registry"
 	conversiontfjson "github.com/crossplane/upjet/pkg/types/conversion/tfjson"
-	tfjson "github.com/hashicorp/terraform-json"
-	"github.com/pkg/errors"
 )
 
 // ResourceConfiguratorFn is a function that implements the ResourceConfigurator
@@ -106,15 +108,28 @@ type Provider struct {
 	skippedResourceNames []string
 
 	// IncludeList is a list of regex for the Terraform resources to be
-	// included. For example, to include "aws_shield_protection_group" into
+	// included and reconciled via the Terraform CLI.
+	// For example, to include "aws_shield_protection_group" into
 	// the generated resources, one can add "aws_shield_protection_group$".
 	// To include whole aws waf group, one can add "aws_waf.*" to the list.
 	// Defaults to []string{".+"} which would include all resources.
 	IncludeList []string
 
+	// NoForkIncludeList  is a list of regex for the Terraform resources to be
+	// included and reconciled in the no-fork architecture (without the
+	// Terraform CLI).
+	// For example, to include "aws_shield_protection_group" into
+	// the generated resources, one can add "aws_shield_protection_group$".
+	// To include whole aws waf group, one can add "aws_waf.*" to the list.
+	// Defaults to []string{".+"} which would include all resources.
+	NoForkIncludeList []string
+
 	// Resources is a map holding resource configurations where key is Terraform
 	// resource name.
 	Resources map[string]*Resource
+
+	// TerraformProvider is the Terraform schema of the provider.
+	TerraformProvider *schema.Provider
 
 	// refInjectors is an ordered list of `ReferenceInjector`s for
 	// injecting references across this Provider's resources.
@@ -152,6 +167,20 @@ func WithShortName(s string) ProviderOption {
 func WithIncludeList(l []string) ProviderOption {
 	return func(p *Provider) {
 		p.IncludeList = l
+	}
+}
+
+// WithNoForkIncludeList configures IncludeList for this Provider.
+func WithNoForkIncludeList(l []string) ProviderOption {
+	return func(p *Provider) {
+		p.NoForkIncludeList = l
+	}
+}
+
+// WithTerraformProvider configures the TerraformProvider for this Provider.
+func WithTerraformProvider(tp *schema.Provider) ProviderOption {
+	return func(p *Provider) {
+		p.TerraformProvider = tp
 	}
 }
 
@@ -215,7 +244,6 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadata []byt
 		rs = v.ResourceSchemas
 		break
 	}
-
 	resourceMap := conversiontfjson.GetV2ResourceMap(rs)
 	providerMetadata, err := registry.NewProviderMetadataFromFile(metadata)
 	if err != nil {
@@ -246,11 +274,27 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadata []byt
 			// There are resources with no schema, that we will address later.
 			fmt.Printf("Skipping resource %s because it has no schema\n", name)
 		}
-		if len(terraformResource.Schema) == 0 || matches(name, p.SkipList) || !matches(name, p.IncludeList) {
+		// if in both of the include lists, the new behavior prevails
+		isNoFork := matches(name, p.NoForkIncludeList)
+		if len(terraformResource.Schema) == 0 || matches(name, p.SkipList) || (!matches(name, p.IncludeList) && !isNoFork) {
 			p.skippedResourceNames = append(p.skippedResourceNames, name)
 			continue
 		}
+		if isNoFork {
+			if p.TerraformProvider == nil || p.TerraformProvider.ResourcesMap[name] == nil {
+				panic(errors.Errorf("resource %q is configured to be reconciled without the Terraform CLI"+
+					"but either config.Provider.TerraformProvider is not configured or the Go schema does not exist for the resource", name))
+			}
+			terraformResource = p.TerraformProvider.ResourcesMap[name]
+			// TODO: we will need to bump the terraform-plugin-sdk dependency to handle
+			// schema.Resource.SchemaFunc
+			if terraformResource.Schema == nil {
+				p.skippedResourceNames = append(p.skippedResourceNames, name)
+				continue
+			}
+		}
 		p.Resources[name] = DefaultResource(name, terraformResource, providerMetadata.Resources[name], p.DefaultResourceOptions...)
+		p.Resources[name].useNoForkClient = isNoFork
 	}
 	for i, refInjector := range p.refInjectors {
 		if err := refInjector.InjectReferences(p.Resources); err != nil {

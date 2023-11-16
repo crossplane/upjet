@@ -9,10 +9,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/crossplane/upjet/pkg/config"
-	"github.com/crossplane/upjet/pkg/pipeline/templates"
 	"github.com/muvaf/typewriter/pkg/wrapper"
 	"github.com/pkg/errors"
+
+	"github.com/crossplane/upjet/pkg/config"
+	"github.com/crossplane/upjet/pkg/pipeline/templates"
 )
 
 // NewControllerGenerator returns a new ControllerGenerator.
@@ -49,6 +50,7 @@ func (cg *ControllerGenerator) Generate(cfg *config.Resource, typesPkgPath strin
 		"DisableNameInitializer": cfg.ExternalName.DisableNameInitializer,
 		"TypePackageAlias":       ctrlFile.Imports.UsePackage(typesPkgPath),
 		"UseAsync":               cfg.UseAsync,
+		"UseNoForkClient":        cfg.ShouldUseNoForkClient(),
 		"ResourceType":           cfg.Name,
 		"Initializers":           cfg.InitializerFns,
 	}

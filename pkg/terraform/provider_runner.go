@@ -12,11 +12,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	"github.com/pkg/errors"
 	"k8s.io/utils/clock"
 	"k8s.io/utils/exec"
-
-	"github.com/crossplane/crossplane-runtime/pkg/logging"
 )
 
 const (

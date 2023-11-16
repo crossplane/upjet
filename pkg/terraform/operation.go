@@ -15,6 +15,7 @@ type Operation struct {
 
 	startTime *time.Time
 	endTime   *time.Time
+	err       error
 	mu        sync.RWMutex
 }
 
@@ -49,6 +50,7 @@ func (o *Operation) Flush() {
 	o.Type = ""
 	o.startTime = nil
 	o.endTime = nil
+	o.err = nil
 }
 
 // IsEnded returns whether the operation has ended, regardless of its result.
@@ -77,4 +79,18 @@ func (o *Operation) EndTime() time.Time {
 	o.mu.RLock()
 	defer o.mu.RUnlock()
 	return *o.endTime
+}
+
+// SetError records the given error on the current operation.
+func (o *Operation) SetError(err error) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.err = err
+}
+
+// Error returns the recorded error of the current operation.
+func (o *Operation) Error() error {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+	return o.err
 }

@@ -5,12 +5,12 @@
 package resource
 
 import (
-	tferrors "github.com/crossplane/upjet/pkg/terraform/errors"
+	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
-	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
+	tferrors "github.com/crossplane/upjet/pkg/terraform/errors"
 )
 
 // Condition constants.
@@ -18,12 +18,15 @@ const (
 	TypeLastAsyncOperation = "LastAsyncOperation"
 	TypeAsyncOperation     = "AsyncOperation"
 
-	ReasonApplyFailure     xpv1.ConditionReason = "ApplyFailure"
-	ReasonDestroyFailure   xpv1.ConditionReason = "DestroyFailure"
-	ReasonSuccess          xpv1.ConditionReason = "Success"
-	ReasonOngoing          xpv1.ConditionReason = "Ongoing"
-	ReasonFinished         xpv1.ConditionReason = "Finished"
-	ReasonResourceUpToDate xpv1.ConditionReason = "UpToDate"
+	ReasonApplyFailure       xpv1.ConditionReason = "ApplyFailure"
+	ReasonDestroyFailure     xpv1.ConditionReason = "DestroyFailure"
+	ReasonAsyncCreateFailure xpv1.ConditionReason = "AsyncCreateFailure"
+	ReasonAsyncUpdateFailure xpv1.ConditionReason = "AsyncUpdateFailure"
+	ReasonAsyncDeleteFailure xpv1.ConditionReason = "AsyncDeleteFailure"
+	ReasonSuccess            xpv1.ConditionReason = "Success"
+	ReasonOngoing            xpv1.ConditionReason = "Ongoing"
+	ReasonFinished           xpv1.ConditionReason = "Finished"
+	ReasonResourceUpToDate   xpv1.ConditionReason = "UpToDate"
 )
 
 // LastAsyncOperationCondition returns the condition depending on the content
@@ -51,6 +54,30 @@ func LastAsyncOperationCondition(err error) xpv1.Condition {
 			Status:             corev1.ConditionFalse,
 			LastTransitionTime: metav1.Now(),
 			Reason:             ReasonDestroyFailure,
+			Message:            err.Error(),
+		}
+	case tferrors.IsAsyncCreateFailed(err):
+		return xpv1.Condition{
+			Type:               TypeLastAsyncOperation,
+			Status:             corev1.ConditionFalse,
+			LastTransitionTime: metav1.Now(),
+			Reason:             ReasonAsyncCreateFailure,
+			Message:            err.Error(),
+		}
+	case tferrors.IsAsyncUpdateFailed(err):
+		return xpv1.Condition{
+			Type:               TypeLastAsyncOperation,
+			Status:             corev1.ConditionFalse,
+			LastTransitionTime: metav1.Now(),
+			Reason:             ReasonAsyncUpdateFailure,
+			Message:            err.Error(),
+		}
+	case tferrors.IsAsyncDeleteFailed(err):
+		return xpv1.Condition{
+			Type:               TypeLastAsyncOperation,
+			Status:             corev1.ConditionFalse,
+			LastTransitionTime: metav1.Now(),
+			Reason:             ReasonAsyncDeleteFailure,
 			Message:            err.Error(),
 		}
 	default:

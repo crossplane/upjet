@@ -5,11 +5,10 @@
 package fake
 
 import (
+	"github.com/crossplane/crossplane-runtime/pkg/resource/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/json"
-
-	"github.com/crossplane/crossplane-runtime/pkg/resource/fake"
 )
 
 // Observable is mock Observable.
@@ -44,6 +43,10 @@ func (o *Observable) GetAdditionalConnectionDetails(_ map[string]any) (map[strin
 type Parameterizable struct {
 	Parameters     map[string]any
 	InitParameters map[string]any
+}
+
+func (t *Terraformed) GetMergedParameters(_ bool) (map[string]any, error) {
+	return t.Parameters, nil
 }
 
 // GetParameters is a mock.

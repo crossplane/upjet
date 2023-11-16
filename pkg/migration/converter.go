@@ -7,6 +7,14 @@ package migration
 import (
 	"fmt"
 
+	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
+	xpmeta "github.com/crossplane/crossplane-runtime/pkg/meta"
+	"github.com/crossplane/crossplane-runtime/pkg/resource"
+	xpv1 "github.com/crossplane/crossplane/apis/apiextensions/v1"
+	xpmetav1 "github.com/crossplane/crossplane/apis/pkg/meta/v1"
+	xpmetav1alpha1 "github.com/crossplane/crossplane/apis/pkg/meta/v1alpha1"
+	xppkgv1 "github.com/crossplane/crossplane/apis/pkg/v1"
+	xppkgv1beta1 "github.com/crossplane/crossplane/apis/pkg/v1beta1"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -15,16 +23,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/json"
 	k8sjson "sigs.k8s.io/json"
-
-	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
-	xpmeta "github.com/crossplane/crossplane-runtime/pkg/meta"
-	"github.com/crossplane/crossplane-runtime/pkg/resource"
-
-	xpv1 "github.com/crossplane/crossplane/apis/apiextensions/v1"
-	xpmetav1 "github.com/crossplane/crossplane/apis/pkg/meta/v1"
-	xpmetav1alpha1 "github.com/crossplane/crossplane/apis/pkg/meta/v1alpha1"
-	xppkgv1 "github.com/crossplane/crossplane/apis/pkg/v1"
-	xppkgv1beta1 "github.com/crossplane/crossplane/apis/pkg/v1beta1"
 )
 
 const (

@@ -9,18 +9,19 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/crossplane/upjet/pkg/registry"
+	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
+	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
+	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
-	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
-	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
-	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
+	"github.com/crossplane/upjet/pkg/registry"
 )
 
 // SetIdentifierArgumentsFn sets the name of the resource in Terraform attributes map,
@@ -293,6 +294,8 @@ type Resource struct {
 	// databases.
 	UseAsync bool
 
+	// InitializerFns specifies the initializer functions to be used
+	// for this Resource.
 	InitializerFns []NewInitializerFn
 
 	// OperationTimeouts allows configuring resource operation timeouts.
@@ -318,4 +321,65 @@ type Resource struct {
 	// the plural name of the generated CRD. Overriding this sets both the
 	// path and the plural name for the generated CRD.
 	Path string
+
+	// SchemaElementOptions is a map from the schema element paths to
+	// SchemaElementOption for configuring options for schema elements.
+	SchemaElementOptions SchemaElementOptions
+
+	// TerraformConfigurationInjector allows a managed resource to inject
+	// configuration values in the Terraform configuration map obtained by
+	// deserializing its `spec.forProvider` value. Managed resources can
+	// use this resource configuration option to inject Terraform
+	// configuration parameters into their deserialized configuration maps,
+	// if the deserialization skips certain fields.
+	TerraformConfigurationInjector ConfigurationInjector
+
+	// TerraformCustomDiff allows a resource.Terraformed to customize how its
+	// Terraform InstanceDiff is computed during reconciliation.
+	TerraformCustomDiff CustomDiff
+
+	// useNoForkClient indicates that a no-fork external client should
+	// be generated instead of the Terraform CLI-forking client.
+	useNoForkClient bool
+}
+
+func (r *Resource) ShouldUseNoForkClient() bool {
+	return r.useNoForkClient
+}
+
+// CustomDiff customizes the computed Terraform InstanceDiff. This can be used
+// in cases where, for example, changes in a certain argument should just be
+// dismissed. The new InstanceDiff is returned along with any errors.
+type CustomDiff func(diff *terraform.InstanceDiff, state *terraform.InstanceState, config *terraform.ResourceConfig) (*terraform.InstanceDiff, error)
+
+// ConfigurationInjector is a function that injects Terraform configuration
+// values from the specified managed resource into the specified configuration
+// map. jsonMap is the map obtained by converting the `spec.forProvider` using
+// the JSON tags and tfMap is obtained by using the TF tags.
+type ConfigurationInjector func(jsonMap map[string]any, tfMap map[string]any)
+
+// SchemaElementOptions represents schema element options for the
+// schema elements of a Resource.
+type SchemaElementOptions map[string]*SchemaElementOption
+
+// SetAddToObservation sets the AddToObservation for the specified key.
+func (m SchemaElementOptions) SetAddToObservation(el string) {
+	if m[el] == nil {
+		m[el] = &SchemaElementOption{}
+	}
+	m[el].AddToObservation = true
+}
+
+// AddToObservation returns true if the schema element at the specified path
+// should be added to the CRD type's Observation type.
+func (m SchemaElementOptions) AddToObservation(el string) bool {
+	return m[el] != nil && m[el].AddToObservation
+}
+
+// SchemaElementOption represents configuration options on a schema element.
+type SchemaElementOption struct {
+	// AddToObservation is set to true if the field represented by
+	// a schema element is to be added to the generated CRD type's
+	// Observation type.
+	AddToObservation bool
 }

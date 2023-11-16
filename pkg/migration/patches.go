@@ -11,11 +11,10 @@ import (
 	"regexp"
 	"strings"
 
+	xpv1 "github.com/crossplane/crossplane/apis/apiextensions/v1"
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-
-	xpv1 "github.com/crossplane/crossplane/apis/apiextensions/v1"
 )
 
 var (

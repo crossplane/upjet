@@ -7,8 +7,9 @@ package markers
 import (
 	"testing"
 
-	"github.com/crossplane/upjet/pkg/config"
 	"github.com/google/go-cmp/cmp"
+
+	"github.com/crossplane/upjet/pkg/config"
 )
 
 func TestCrossplaneOptions_String(t *testing.T) {

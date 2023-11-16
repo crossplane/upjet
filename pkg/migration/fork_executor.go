@@ -7,10 +7,9 @@ package migration
 import (
 	"os"
 
+	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	"github.com/pkg/errors"
 	"k8s.io/utils/exec"
-
-	"github.com/crossplane/crossplane-runtime/pkg/logging"
 )
 
 const (

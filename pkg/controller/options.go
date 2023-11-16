@@ -8,11 +8,11 @@ import (
 	"crypto/tls"
 	"time"
 
-	"github.com/crossplane/upjet/pkg/config"
-	"github.com/crossplane/upjet/pkg/terraform"
+	"github.com/crossplane/crossplane-runtime/pkg/controller"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	"github.com/crossplane/crossplane-runtime/pkg/controller"
+	"github.com/crossplane/upjet/pkg/config"
+	"github.com/crossplane/upjet/pkg/terraform"
 )
 
 // Options contains incriminating options for a given Upjet controller instance.
@@ -27,6 +27,8 @@ type Options struct {
 	// WorkspaceStore will be used to pick/initialize the workspace the specific CR
 	// instance should use.
 	WorkspaceStore *terraform.WorkspaceStore
+
+	OperationTrackerStore *OperationTrackerStore
 
 	// SetupFn contains the provider-specific initialization logic, such as
 	// preparing the auth token for Terraform CLI.

@@ -8,8 +8,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/crossplane/upjet/pkg/registry"
 	"gopkg.in/alecthomas/kingpin.v2"
+
+	"github.com/crossplane/upjet/pkg/registry"
 )
 
 func main() {

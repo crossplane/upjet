@@ -6,7 +6,6 @@ package migration
 
 import (
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
-
 	xpv1 "github.com/crossplane/crossplane/apis/apiextensions/v1"
 	xpmetav1 "github.com/crossplane/crossplane/apis/pkg/meta/v1"
 	xpmetav1alpha1 "github.com/crossplane/crossplane/apis/pkg/meta/v1alpha1"

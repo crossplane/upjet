@@ -7,10 +7,11 @@ package config
 import (
 	"testing"
 
-	"github.com/crossplane/upjet/pkg/registry"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/crossplane/upjet/pkg/registry"
 )
 
 func TestDefaultResource(t *testing.T) {
@@ -32,14 +33,15 @@ func TestDefaultResource(t *testing.T) {
 				name: "aws_ec2_instance",
 			},
 			want: &Resource{
-				Name:         "aws_ec2_instance",
-				ShortGroup:   "ec2",
-				Kind:         "Instance",
-				Version:      "v1alpha1",
-				ExternalName: NameAsIdentifier,
-				References:   map[string]Reference{},
-				Sensitive:    NopSensitive,
-				UseAsync:     true,
+				Name:                 "aws_ec2_instance",
+				ShortGroup:           "ec2",
+				Kind:                 "Instance",
+				Version:              "v1alpha1",
+				ExternalName:         NameAsIdentifier,
+				References:           map[string]Reference{},
+				Sensitive:            NopSensitive,
+				UseAsync:             true,
+				SchemaElementOptions: SchemaElementOptions{},
 			},
 		},
 		"TwoSectionsName": {
@@ -48,14 +50,15 @@ func TestDefaultResource(t *testing.T) {
 				name: "aws_instance",
 			},
 			want: &Resource{
-				Name:         "aws_instance",
-				ShortGroup:   "aws",
-				Kind:         "Instance",
-				Version:      "v1alpha1",
-				ExternalName: NameAsIdentifier,
-				References:   map[string]Reference{},
-				Sensitive:    NopSensitive,
-				UseAsync:     true,
+				Name:                 "aws_instance",
+				ShortGroup:           "aws",
+				Kind:                 "Instance",
+				Version:              "v1alpha1",
+				ExternalName:         NameAsIdentifier,
+				References:           map[string]Reference{},
+				Sensitive:            NopSensitive,
+				UseAsync:             true,
+				SchemaElementOptions: SchemaElementOptions{},
 			},
 		},
 		"NameWithPrefixAcronym": {
@@ -64,14 +67,15 @@ func TestDefaultResource(t *testing.T) {
 				name: "aws_db_sql_server",
 			},
 			want: &Resource{
-				Name:         "aws_db_sql_server",
-				ShortGroup:   "db",
-				Kind:         "SQLServer",
-				Version:      "v1alpha1",
-				ExternalName: NameAsIdentifier,
-				References:   map[string]Reference{},
-				Sensitive:    NopSensitive,
-				UseAsync:     true,
+				Name:                 "aws_db_sql_server",
+				ShortGroup:           "db",
+				Kind:                 "SQLServer",
+				Version:              "v1alpha1",
+				ExternalName:         NameAsIdentifier,
+				References:           map[string]Reference{},
+				Sensitive:            NopSensitive,
+				UseAsync:             true,
+				SchemaElementOptions: SchemaElementOptions{},
 			},
 		},
 		"NameWithSuffixAcronym": {
@@ -80,14 +84,15 @@ func TestDefaultResource(t *testing.T) {
 				name: "aws_db_server_id",
 			},
 			want: &Resource{
-				Name:         "aws_db_server_id",
-				ShortGroup:   "db",
-				Kind:         "ServerID",
-				Version:      "v1alpha1",
-				ExternalName: NameAsIdentifier,
-				References:   map[string]Reference{},
-				Sensitive:    NopSensitive,
-				UseAsync:     true,
+				Name:                 "aws_db_server_id",
+				ShortGroup:           "db",
+				Kind:                 "ServerID",
+				Version:              "v1alpha1",
+				ExternalName:         NameAsIdentifier,
+				References:           map[string]Reference{},
+				Sensitive:            NopSensitive,
+				UseAsync:             true,
+				SchemaElementOptions: SchemaElementOptions{},
 			},
 		},
 		"NameWithMultipleAcronyms": {
@@ -96,14 +101,15 @@ func TestDefaultResource(t *testing.T) {
 				name: "aws_db_sql_server_id",
 			},
 			want: &Resource{
-				Name:         "aws_db_sql_server_id",
-				ShortGroup:   "db",
-				Kind:         "SQLServerID",
-				Version:      "v1alpha1",
-				ExternalName: NameAsIdentifier,
-				References:   map[string]Reference{},
-				Sensitive:    NopSensitive,
-				UseAsync:     true,
+				Name:                 "aws_db_sql_server_id",
+				ShortGroup:           "db",
+				Kind:                 "SQLServerID",
+				Version:              "v1alpha1",
+				ExternalName:         NameAsIdentifier,
+				References:           map[string]Reference{},
+				Sensitive:            NopSensitive,
+				UseAsync:             true,
+				SchemaElementOptions: SchemaElementOptions{},
 			},
 		},
 	}
@@ -113,6 +119,7 @@ func TestDefaultResource(t *testing.T) {
 		cmpopts.IgnoreFields(Sensitive{}, "fieldPaths", "AdditionalConnectionDetailsFn"),
 		cmpopts.IgnoreFields(LateInitializer{}, "ignoredCanonicalFieldPaths"),
 		cmpopts.IgnoreFields(ExternalName{}, "SetIdentifierArgumentFn", "GetExternalNameFn", "GetIDFn"),
+		cmpopts.IgnoreFields(Resource{}, "useNoForkClient"),
 	}
 
 	for name, tc := range cases {

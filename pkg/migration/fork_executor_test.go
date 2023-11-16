@@ -7,12 +7,11 @@ package migration
 import (
 	"testing"
 
+	"github.com/crossplane/crossplane-runtime/pkg/test"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	k8sExec "k8s.io/utils/exec"
 	testingexec "k8s.io/utils/exec/testing"
-
-	"github.com/crossplane/crossplane-runtime/pkg/test"
 )
 
 var (

@@ -90,3 +90,13 @@ func (c *Comment) Build() string {
 	all := strings.ReplaceAll("// "+c.String(), "\n", "\n// ")
 	return strings.TrimSuffix(all, "// ")
 }
+
+// CommentWithoutOptions returns a new Comment without the Options.
+func (c *Comment) CommentWithoutOptions() *Comment {
+	if c == nil {
+		return nil
+	}
+	return &Comment{
+		Text: c.Text,
+	}
+}

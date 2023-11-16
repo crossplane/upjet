@@ -11,10 +11,11 @@ import (
 	"reflect"
 	"strings"
 
+	"k8s.io/utils/ptr"
+
 	"github.com/crossplane/upjet/pkg/types/comments"
 	"github.com/crossplane/upjet/pkg/types/markers"
 	"github.com/crossplane/upjet/pkg/types/name"
-	"k8s.io/utils/ptr"
 )
 
 const (

@@ -7,15 +7,17 @@ package handler
 import (
 	"context"
 	"sync"
+	"time"
 
+	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
-	"github.com/crossplane/crossplane-runtime/pkg/logging"
 )
+
+const NoRateLimiter = ""
 
 // EventHandler handles Kubernetes events by queueing reconcile requests for
 // objects and allows upjet components to queue reconcile requests.
@@ -64,16 +66,19 @@ func (e *EventHandler) RequestReconcile(rateLimiterName, name string, failureLim
 			Name: name,
 		},
 	}
-	rateLimiter := e.rateLimiterMap[rateLimiterName]
-	if rateLimiter == nil {
-		rateLimiter = workqueue.DefaultControllerRateLimiter()
-		e.rateLimiterMap[rateLimiterName] = rateLimiter
+	var when time.Duration = 0
+	if rateLimiterName != NoRateLimiter {
+		rateLimiter := e.rateLimiterMap[rateLimiterName]
+		if rateLimiter == nil {
+			rateLimiter = workqueue.DefaultControllerRateLimiter()
+			e.rateLimiterMap[rateLimiterName] = rateLimiter
+		}
+		if failureLimit != nil && rateLimiter.NumRequeues(item) > *failureLimit {
+			logger.Info("Failure limit has been exceeded.", "failureLimit", *failureLimit, "numRequeues", rateLimiter.NumRequeues(item))
+			return false
+		}
+		when = rateLimiter.When(item)
 	}
-	if failureLimit != nil && rateLimiter.NumRequeues(item) > *failureLimit {
-		logger.Info("Failure limit has been exceeded.", "failureLimit", *failureLimit, "numRequeues", rateLimiter.NumRequeues(item))
-		return false
-	}
-	when := rateLimiter.When(item)
 	e.queue.AddAfter(item, when)
 	logger.Debug("Reconcile request has been requeued.", "rateLimiterName", rateLimiterName, "when", when)
 	return true

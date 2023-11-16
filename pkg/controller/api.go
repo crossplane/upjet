@@ -7,9 +7,8 @@ package controller
 import (
 	"context"
 
-	"github.com/crossplane/upjet/pkg/controller/handler"
-	"github.com/crossplane/upjet/pkg/resource"
-	"github.com/crossplane/upjet/pkg/terraform"
+	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -17,8 +16,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrl "sigs.k8s.io/controller-runtime/pkg/manager"
 
-	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
-	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
+	"github.com/crossplane/upjet/pkg/controller/handler"
+	"github.com/crossplane/upjet/pkg/resource"
+	"github.com/crossplane/upjet/pkg/terraform"
 )
 
 const (
@@ -68,6 +68,17 @@ func WithEventHandler(e *handler.EventHandler) APICallbacksOption {
 	}
 }
 
+// WithStatusUpdates sets whether the LastAsyncOperation status condition
+// is enabled. If set to false, APICallbacks will not use the
+// LastAsyncOperation status condition for reporting ongoing async
+// operations or errors. Error conditions will still be reported
+// as usual in the `Synced` status condition.
+func WithStatusUpdates(enabled bool) APICallbacksOption {
+	return func(callbacks *APICallbacks) {
+		callbacks.enableStatusUpdates = enabled
+	}
+}
+
 // NewAPICallbacks returns a new APICallbacks.
 func NewAPICallbacks(m ctrl.Manager, of xpresource.ManagedKind, opts ...APICallbacksOption) *APICallbacks {
 	nt := func() resource.Terraformed {
@@ -76,6 +87,9 @@ func NewAPICallbacks(m ctrl.Manager, of xpresource.ManagedKind, opts ...APICallb
 	cb := &APICallbacks{
 		kube:           m.GetClient(),
 		newTerraformed: nt,
+		// the default behavior is to use the LastAsyncOperation
+		// status condition for backwards compatibility.
+		enableStatusUpdates: true,
 	}
 	for _, o := range opts {
 		o(cb)
@@ -87,30 +101,40 @@ func NewAPICallbacks(m ctrl.Manager, of xpresource.ManagedKind, opts ...APICallb
 type APICallbacks struct {
 	eventHandler *handler.EventHandler
 
-	kube           client.Client
-	newTerraformed func() resource.Terraformed
+	kube                client.Client
+	newTerraformed      func() resource.Terraformed
+	enableStatusUpdates bool
 }
 
-func (ac *APICallbacks) callbackFn(name, op string, requeue bool) terraform.CallbackFn {
+func (ac *APICallbacks) callbackFn(name, op string) terraform.CallbackFn {
 	return func(err error, ctx context.Context) error {
 		nn := types.NamespacedName{Name: name}
 		tr := ac.newTerraformed()
 		if kErr := ac.kube.Get(ctx, nn, tr); kErr != nil {
 			return errors.Wrapf(kErr, errGetFmt, tr.GetObjectKind().GroupVersionKind().String(), name, op)
 		}
+		// For the no-fork architecture, we will need to be able to report
+		// reconciliation errors. The proper place is the `Synced`
+		// status condition but we need changes in the managed reconciler
+		// to do so. So we keep the `LastAsyncOperation` condition.
+		// TODO: move this to the `Synced` condition.
 		tr.SetConditions(resource.LastAsyncOperationCondition(err))
-		tr.SetConditions(resource.AsyncOperationFinishedCondition())
+		if ac.enableStatusUpdates {
+			tr.SetConditions(resource.AsyncOperationFinishedCondition())
+		}
 		uErr := errors.Wrapf(ac.kube.Status().Update(ctx, tr), errUpdateStatusFmt, tr.GetObjectKind().GroupVersionKind().String(), name, op)
-		if ac.eventHandler != nil && requeue {
+		if ac.eventHandler != nil {
+			rateLimiter := handler.NoRateLimiter
 			switch {
 			case err != nil:
-				// TODO: use the errors.Join from
-				// github.com/crossplane/crossplane-runtime.
-				if ok := ac.eventHandler.RequestReconcile(rateLimiterCallback, name, nil); !ok {
-					return errors.Errorf(errReconcileRequestFmt, tr.GetObjectKind().GroupVersionKind().String(), name, op)
-				}
+				rateLimiter = rateLimiterCallback
 			default:
 				ac.eventHandler.Forget(rateLimiterCallback, name)
+			}
+			// TODO: use the errors.Join from
+			// github.com/crossplane/crossplane-runtime.
+			if ok := ac.eventHandler.RequestReconcile(rateLimiter, name, nil); !ok {
+				return errors.Errorf(errReconcileRequestFmt, tr.GetObjectKind().GroupVersionKind().String(), name, op)
 			}
 		}
 		return uErr
@@ -119,28 +143,26 @@ func (ac *APICallbacks) callbackFn(name, op string, requeue bool) terraform.Call
 
 // Create makes sure the error is saved in async operation condition.
 func (ac *APICallbacks) Create(name string) terraform.CallbackFn {
-	return func(err error, ctx context.Context) error {
-		// requeue is set to true although the managed reconciler already
-		// requeues with exponential back-off during the creation phase
-		// because the upjet external client returns ResourceExists &
-		// ResourceUpToDate both set to true, if an async operation is
-		// in-progress immediately following a Create call. This will
-		// delay a reobservation of the resource (while being created)
-		// for the poll period.
-		return ac.callbackFn(name, "create", true)(err, ctx)
-	}
+	// request will be requeued although the managed reconciler already
+	// requeues with exponential back-off during the creation phase
+	// because the upjet external client returns ResourceExists &
+	// ResourceUpToDate both set to true, if an async operation is
+	// in-progress immediately following a Create call. This will
+	// delay a reobservation of the resource (while being created)
+	// for the poll period.
+	return ac.callbackFn(name, "create")
 }
 
 // Update makes sure the error is saved in async operation condition.
 func (ac *APICallbacks) Update(name string) terraform.CallbackFn {
-	return func(err error, ctx context.Context) error {
-		return ac.callbackFn(name, "update", true)(err, ctx)
-	}
+	return ac.callbackFn(name, "update")
 }
 
 // Destroy makes sure the error is saved in async operation condition.
 func (ac *APICallbacks) Destroy(name string) terraform.CallbackFn {
-	// requeue is set to false because the managed reconciler already requeues
-	// with exponential back-off during the deletion phase.
-	return ac.callbackFn(name, "destroy", false)
+	// request will be requeued although the managed reconciler requeues
+	// with exponential back-off during the deletion phase because
+	// during the async deletion operation, external client's
+	// observe just returns success to the managed reconciler.
+	return ac.callbackFn(name, "destroy")
 }
