@@ -173,7 +173,7 @@ func (fp *FileProducer) BuildMainTF() map[string]any {
 
 // WriteMainTF writes the content main configuration file that has the desired
 // state configuration for Terraform.
-func (fp *FileProducer) WriteMainTF() error {
+func (fp *FileProducer) WriteMainTF() (ProviderHandle, error) {
 	m := fp.BuildMainTF()
 	rawMainTF, err := json.JSParser.Marshal(m)
 	if err != nil {
