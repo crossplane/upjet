@@ -130,6 +130,8 @@ type FileProducer struct {
 	features    *feature.Flags
 }
 
+// BuildMainTF produces the contents of the mainTF file as a map.  This format is conducive to
+// inspection for tests.  WriteMainTF calls this function an serializes the result to a file as JSON.
 func (fp *FileProducer) BuildMainTF() map[string]any {
 	// If the resource is in a deletion process, we need to remove the deletion
 	// protection.
