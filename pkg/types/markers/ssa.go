@@ -4,64 +4,20 @@
 
 package markers
 
-import "fmt"
+import (
+	"fmt"
 
-// A ListType is a type of list.
-type ListType string
-
-// Types of lists.
-const (
-	// ListTypeAtomic means the entire list is replaced during merge. At any
-	// point in time, a single manager owns the list.
-	ListTypeAtomic ListType = "atomic"
-
-	// ListTypeSet can be granularly merged, and different managers can own
-	// different elements in the list. The list can include only scalar
-	// elements.
-	ListTypeSet ListType = "set"
-
-	// ListTypeMap can be granularly merged, and different managers can own
-	// different elements in the list. The list can include only nested types
-	// (i.e. objects).
-	ListTypeMap ListType = "map"
-)
-
-// A MapType is a type of map.
-type MapType string
-
-// Types of maps.
-const (
-	// MapTypeAtomic means that the map can only be entirely replaced by a
-	// single manager.
-	MapTypeAtomic MapType = "atomic"
-
-	// MapTypeGranular means that the map supports separate managers updating
-	// individual fields.
-	MapTypeGranular MapType = "granular"
-)
-
-// A StructType is a type of struct.
-type StructType string
-
-// Struct types.
-const (
-	// StructTypeAtomic means that the struct can only be entirely replaced by a
-	// single manager.
-	StructTypeAtomic StructType = "atomic"
-
-	// StructTypeGranular means that the struct supports separate managers
-	// updating individual fields.
-	StructTypeGranular StructType = "granular"
+	"github.com/crossplane/upjet/pkg/config"
 )
 
 // ServerSideApplyOptions represents the server-side apply merge options that
 // upjet needs to control.
 // https://kubernetes.io/docs/reference/using-api/server-side-apply/#merge-strategy
 type ServerSideApplyOptions struct {
-	ListType   *ListType
+	ListType   *config.ListType
 	ListMapKey []string
-	MapType    *MapType
-	StructType *StructType
+	MapType    *config.MapType
+	StructType *config.StructType
 }
 
 func (o ServerSideApplyOptions) String() string {

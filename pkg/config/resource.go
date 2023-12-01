@@ -24,6 +24,54 @@ import (
 	"github.com/crossplane/upjet/pkg/registry"
 )
 
+// A ListType is a type of list.
+type ListType string
+
+// Types of lists.
+const (
+	// ListTypeAtomic means the entire list is replaced during merge. At any
+	// point in time, a single manager owns the list.
+	ListTypeAtomic ListType = "atomic"
+
+	// ListTypeSet can be granularly merged, and different managers can own
+	// different elements in the list. The list can include only scalar
+	// elements.
+	ListTypeSet ListType = "set"
+
+	// ListTypeMap can be granularly merged, and different managers can own
+	// different elements in the list. The list can include only nested types
+	// (i.e. objects).
+	ListTypeMap ListType = "map"
+)
+
+// A MapType is a type of map.
+type MapType string
+
+// Types of maps.
+const (
+	// MapTypeAtomic means that the map can only be entirely replaced by a
+	// single manager.
+	MapTypeAtomic MapType = "atomic"
+
+	// MapTypeGranular means that the map supports separate managers updating
+	// individual fields.
+	MapTypeGranular MapType = "granular"
+)
+
+// A StructType is a type of struct.
+type StructType string
+
+// Struct types.
+const (
+	// StructTypeAtomic means that the struct can only be entirely replaced by a
+	// single manager.
+	StructTypeAtomic StructType = "atomic"
+
+	// StructTypeGranular means that the struct supports separate managers
+	// updating individual fields.
+	StructTypeGranular StructType = "granular"
+)
+
 // SetIdentifierArgumentsFn sets the name of the resource in Terraform attributes map,
 // i.e. Main HCL file.
 type SetIdentifierArgumentsFn func(base map[string]any, externalName string)
@@ -266,6 +314,60 @@ func setExternalTagsWithPaved(externalTags map[string]string, paved *fieldpath.P
 	return pavedByte, nil
 }
 
+type InjectedKey struct {
+	Key          string
+	DefaultValue string
+}
+
+// ListMapKeys is the list map keys when the server-side apply merge strategy
+// islistType=map.
+type ListMapKeys struct {
+	// InjectedKey can be used to inject the specified index key
+	// into the generated CRD schema for the list object when
+	// the SSA merge strategy for the parent list is `map`.
+	// If a non-zero `InjectedKey` is specified, then a field of type string with
+	// the specified name is injected into the Terraform schema and used as
+	// a list map key together with any other existing keys specified in `Keys`.
+	InjectedKey InjectedKey
+	// Keys is the set of list map keys to be used while SSA merges list items.
+	// If InjectedKey is non-zero, then it's automatically put into Keys and
+	// you must not specify the InjectedKey in Keys explicitly.
+	Keys []string
+}
+
+// ListMergeStrategy configures the corresponding field as list
+// and configures its server-side apply merge strategy.
+type ListMergeStrategy struct {
+	// ListMapKeys is the list map keys when the SSA merge strategy is
+	// `listType=map`.  The keys specified here must be a set of scalar Terraform
+	// argument names to be used as the list map keys for the object list.
+	ListMapKeys ListMapKeys
+	// MergeStrategy is the SSA merge strategy for an object list. Valid values
+	// are: `atomic`, `set` and `map`
+	MergeStrategy ListType
+}
+
+// MergeStrategy configures the server-side apply merge strategy for the
+// corresponding field. One and only one of the pointer members can be set
+// and the specified merge strategy configuration must match the field's
+// type, e.g., you cannot set MapMergeStrategy for a field of type list.
+type MergeStrategy struct {
+	ListMergeStrategy   ListMergeStrategy
+	MapMergeStrategy    MapType
+	StructMergeStrategy StructType
+}
+
+// ServerSideApplyMergeStrategies configures the server-side apply merge strategy
+// for the field at the specified path as the map key. The key is
+// a Terraform configuration argument path such as a.b.c, without any
+// index notation (i.e., array/map components do not need indices).
+// It's an error to set a configuration option which does not match
+// the object type at the specified path or to leave the corresponding
+// configuration entry empty. For example, if the field at path a.b.c is
+// a list, then ListMergeStrategy must be set and it should be the only
+// configuration entry set.
+type ServerSideApplyMergeStrategies map[string]MergeStrategy
+
 // Resource is the set of information that you can override at different steps
 // of the code generation pipeline.
 type Resource struct {
@@ -337,6 +439,12 @@ type Resource struct {
 	// TerraformCustomDiff allows a resource.Terraformed to customize how its
 	// Terraform InstanceDiff is computed during reconciliation.
 	TerraformCustomDiff CustomDiff
+
+	// ServerSideApplyMergeStrategies configures the server-side apply merge
+	// strategy for the fields at the given map keys. The map key is
+	// a Terraform configuration argument path such as a.b.c, without any
+	// index notation (i.e., array/map components do not need indices).
+	ServerSideApplyMergeStrategies ServerSideApplyMergeStrategies
 
 	// useNoForkClient indicates that a no-fork external client should
 	// be generated instead of the Terraform CLI-forking client.

@@ -27,6 +27,9 @@ const (
 
 	// ref: https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#validation-rules
 	celEscapeSequence = "__%s__"
+	// description for an injected list map key field in the context of the
+	// server-side apply object list merging
+	descriptionInjectedKey = "This is an injected field with a default value for being able to merge items of the parent object list."
 )
 
 var (
@@ -67,6 +70,10 @@ func NewBuilder(pkg *types.Package) *Builder {
 
 // Build returns parameters and observation types built out of Terraform schema.
 func (g *Builder) Build(cfg *config.Resource) (Generated, error) {
+	if err := injectServerSideApplyListMergeKeys(cfg); err != nil {
+		return Generated{}, errors.Wrapf(err, "cannot inject server-side apply merge keys for resource %q", cfg.Name)
+	}
+
 	fp, ap, ip, err := g.buildResource(cfg.TerraformResource, cfg, nil, nil, false, cfg.Kind)
 	return Generated{
 		Types:            g.genTypes,
@@ -75,7 +82,46 @@ func (g *Builder) Build(cfg *config.Resource) (Generated, error) {
 		InitProviderType: ip,
 		AtProviderType:   ap,
 		ValidationRules:  g.validationRules,
-	}, errors.Wrapf(err, "cannot build the Types")
+	}, errors.Wrapf(err, "cannot build the Types for resource %q", cfg.Name)
+}
+
+func injectServerSideApplyListMergeKeys(cfg *config.Resource) error { //nolint:gocyclo // Easier to follow the logic in a single function
+	for f, s := range cfg.ServerSideApplyMergeStrategies {
+		if s.ListMergeStrategy.MergeStrategy != config.ListTypeMap {
+			continue
+		}
+		if s.ListMergeStrategy.ListMapKeys.InjectedKey.Key == "" && len(s.ListMergeStrategy.ListMapKeys.Keys) == 0 {
+			return errors.Errorf("list map keys configuration for the object list %q is empty", f)
+		}
+		if s.ListMergeStrategy.ListMapKeys.InjectedKey.Key == "" {
+			continue
+		}
+		sch := config.GetSchema(cfg.TerraformResource, f)
+		if sch == nil {
+			return errors.Errorf("cannot find the Terraform schema for the argument at the path %q", f)
+		}
+		if sch.Type != schema.TypeList && sch.Type != schema.TypeSet {
+			return errors.Errorf("fieldpath %q is not a Terraform list or set", f)
+		}
+		el, ok := sch.Elem.(*schema.Resource)
+		if !ok {
+			return errors.Errorf("fieldpath %q is a Terraform list or set but its element type is not a Terraform *schema.Resource", f)
+		}
+		for k := range el.Schema {
+			if k == s.ListMergeStrategy.ListMapKeys.InjectedKey.Key {
+				return errors.Errorf("element schema for the object list %q already contains the argument key %q", f, k)
+			}
+		}
+		el.Schema[s.ListMergeStrategy.ListMapKeys.InjectedKey.Key] = &schema.Schema{
+			Type:        schema.TypeString,
+			Required:    true,
+			Description: descriptionInjectedKey,
+		}
+		if s.ListMergeStrategy.ListMapKeys.InjectedKey.DefaultValue != "" {
+			el.Schema[s.ListMergeStrategy.ListMapKeys.InjectedKey.Key].Default = s.ListMergeStrategy.ListMapKeys.InjectedKey.DefaultValue
+		}
+	}
+	return nil
 }
 
 func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPath []string, xpPath []string, asBlocksMode bool, names ...string) (*types.Named, *types.Named, *types.Named, error) { //nolint:gocyclo
