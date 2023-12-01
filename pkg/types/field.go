@@ -152,7 +152,9 @@ func NewField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema,
 	f.FieldType = fieldType
 	f.InitType = initType
 
-	AddServerSideApplyMarkers(f)
+	if !sch.Sensitive {
+		AddServerSideApplyMarkers(f)
+	}
 
 	return f, nil
 }
@@ -173,7 +175,7 @@ func AddServerSideApplyMarkers(f *Field) {
 	case schema.TypeSet:
 		if es, ok := f.Schema.Elem.(*schema.Schema); ok {
 			switch es.Type { //nolint:exhaustive
-			// We assume scalar types can be granular maps.
+			// We assume scalar types can be granular sets.
 			case schema.TypeString, schema.TypeBool, schema.TypeInt, schema.TypeFloat:
 				f.Comment.ServerSideApplyOptions.ListType = ptr.To[markers.ListType](markers.ListTypeSet)
 			}

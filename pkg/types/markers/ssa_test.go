@@ -20,20 +20,20 @@ func TestServerSideApplyOptions(t *testing.T) {
 			o: ServerSideApplyOptions{
 				MapType: ptr.To[MapType](MapTypeAtomic),
 			},
-			want: "+mapType:atomic\n",
+			want: "+mapType=atomic\n",
 		},
 		"StructType": {
 			o: ServerSideApplyOptions{
 				StructType: ptr.To[StructType](StructTypeAtomic),
 			},
-			want: "+structType:atomic\n",
+			want: "+structType=atomic\n",
 		},
 		"ListType": {
 			o: ServerSideApplyOptions{
 				ListType:   ptr.To[ListType](ListTypeMap),
 				ListMapKey: []string{"name", "coolness"},
 			},
-			want: "+listType:map\n+listMapKey:name\n+listMapKey:coolness\n",
+			want: "+listType=map\n+listMapKey=name\n+listMapKey=coolness\n",
 		},
 	}
 

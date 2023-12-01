@@ -20,7 +20,7 @@ const (
 	// elements.
 	ListTypeSet ListType = "set"
 
-	// ListTypeSet can be granularly merged, and different managers can own
+	// ListTypeMap can be granularly merged, and different managers can own
 	// different elements in the list. The list can include only nested types
 	// (i.e. objects).
 	ListTypeMap ListType = "map"
@@ -68,19 +68,19 @@ func (o ServerSideApplyOptions) String() string {
 	m := ""
 
 	if o.ListType != nil {
-		m += fmt.Sprintf("+listType:%s\n", *o.ListType)
+		m += fmt.Sprintf("+listType=%s\n", *o.ListType)
 	}
 
 	for _, k := range o.ListMapKey {
-		m += fmt.Sprintf("+listMapKey:%s\n", k)
+		m += fmt.Sprintf("+listMapKey=%s\n", k)
 	}
 
 	if o.MapType != nil {
-		m += fmt.Sprintf("+mapType:%s\n", *o.MapType)
+		m += fmt.Sprintf("+mapType=%s\n", *o.MapType)
 	}
 
 	if o.StructType != nil {
-		m += fmt.Sprintf("+structType:%s\n", *o.StructType)
+		m += fmt.Sprintf("+structType=%s\n", *o.StructType)
 	}
 
 	return m
