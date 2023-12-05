@@ -9,11 +9,13 @@ type Options struct {
 	UpjetOptions
 	CrossplaneOptions
 	KubebuilderOptions
+	ServerSideApplyOptions
 }
 
 // String returns a string representation of this Options object.
 func (o Options) String() string {
 	return o.UpjetOptions.String() +
 		o.CrossplaneOptions.String() +
-		o.KubebuilderOptions.String()
+		o.KubebuilderOptions.String() +
+		o.ServerSideApplyOptions.String()
 }
