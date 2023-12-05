@@ -227,7 +227,7 @@ func (c *NoForkConnector) applyStateFuncToParam(sc *schema.Schema, param any) an
 	return param
 }
 
-func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (managed.ExternalClient, error) {
+func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (managed.ExternalClient, error) { //nolint:gocyclo
 	c.metricRecorder.ObserveReconcileDelay(mg.GetObjectKind().GroupVersionKind(), mg.GetName())
 	logger := c.logger.WithValues("uid", mg.GetUID(), "name", mg.GetName(), "gvk", mg.GetObjectKind().GroupVersionKind().String())
 	logger.Debug("Connecting to the service provider")
@@ -279,6 +279,17 @@ func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (m
 		}
 		s.RawPlan = tfStateCtyValue
 		s.RawConfig = rawConfig
+
+		timeouts := getTimeoutParameters(c.config)
+		if len(timeouts) > 0 {
+			if s == nil {
+				s = &tf.InstanceState{}
+			}
+			if s.Meta == nil {
+				s.Meta = make(map[string]interface{})
+			}
+			s.Meta[schema.TimeoutKey] = timeouts
+		}
 		opTracker.SetTfState(s)
 	}
 
