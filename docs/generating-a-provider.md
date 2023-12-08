@@ -57,7 +57,7 @@ variables in the `Makefile`:
   export TERRAFORM_DOCS_PATH := website/docs/r
   ```
 
-  Refer to [the Dockerfile](https://github.com/crossplane/upjet-provider-template/blob/main/cluster/images/upjet-provider-template/Dockerfile) to see the variables called when building the provider.
+  Refer to [the Dockerfile](https://github.com/upbound/upjet-provider-template/blob/main/cluster/images/upjet-provider-template/Dockerfile) to see the variables called when building the provider.
 
 ## Configure the provider resources
 
@@ -377,7 +377,7 @@ your provider, you can learn more about
 [testing your resources](testing-with-uptest.md) with Uptest.
 
 [Terraform GitHub provider]: https://registry.terraform.io/providers/integrations/github/latest/docs
-[upjet-provider-template]: https://github.com/crossplane/upjet-provider-template
+[upjet-provider-template]: https://github.com/upbound/upjet-provider-template
 [upbound/build]: https://github.com/upbound/build
 [github_repository]: https://registry.terraform.io/providers/integrations/github/latest/docs/resources/repository
 [github_branch]: https://registry.terraform.io/providers/integrations/github/latest/docs/resources/branch
