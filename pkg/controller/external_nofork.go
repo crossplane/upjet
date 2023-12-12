@@ -416,7 +416,7 @@ func getTimeoutParameters(config *config.Resource) map[string]any { //nolint:goc
 
 func (n *noForkExternal) getResourceDataDiff(tr resource.Terraformed, ctx context.Context, s *tf.InstanceState, resourceExists bool) (*tf.InstanceDiff, error) { //nolint:gocyclo
 	resourceConfig := tf.NewResourceConfigRaw(n.params)
-	instanceDiff, err := schema.InternalMap(n.config.TerraformResource.Schema).Diff(ctx, s, resourceConfig, nil, n.ts.Meta, false)
+	instanceDiff, err := schema.InternalMap(n.config.TerraformResource.Schema).Diff(ctx, s, resourceConfig, n.config.TerraformResource.CustomizeDiff, n.ts.Meta, false)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get *terraform.InstanceDiff")
 	}
