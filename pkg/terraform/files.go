@@ -130,9 +130,9 @@ type FileProducer struct {
 	features    *feature.Flags
 }
 
-// WriteMainTF writes the content main configuration file that has the desired
-// state configuration for Terraform.
-func (fp *FileProducer) WriteMainTF() (ProviderHandle, error) {
+// BuildMainTF produces the contents of the mainTF file as a map.  This format is conducive to
+// inspection for tests.  WriteMainTF calls this function an serializes the result to a file as JSON.
+func (fp *FileProducer) BuildMainTF() map[string]any {
 	// If the resource is in a deletion process, we need to remove the deletion
 	// protection.
 	lifecycle := map[string]any{
@@ -153,7 +153,7 @@ func (fp *FileProducer) WriteMainTF() (ProviderHandle, error) {
 	// Note(turkenh): To use third party providers, we need to configure
 	// provider name in required_providers.
 	providerSource := strings.Split(fp.Setup.Requirement.Source, "/")
-	m := map[string]any{
+	return map[string]any{
 		"terraform": map[string]any{
 			"required_providers": map[string]any{
 				providerSource[len(providerSource)-1]: map[string]string{
@@ -171,6 +171,12 @@ func (fp *FileProducer) WriteMainTF() (ProviderHandle, error) {
 			},
 		},
 	}
+}
+
+// WriteMainTF writes the content main configuration file that has the desired
+// state configuration for Terraform.
+func (fp *FileProducer) WriteMainTF() (ProviderHandle, error) {
+	m := fp.BuildMainTF()
 	rawMainTF, err := json.JSParser.Marshal(m)
 	if err != nil {
 		return InvalidProviderHandle, errors.Wrap(err, "cannot marshal main hcl object")
