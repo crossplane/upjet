@@ -107,6 +107,9 @@ func GetSensitiveAttributes(from map[string]any, mapping map[string]string) (map
 	for tf := range mapping {
 		fieldPaths, err := paved.ExpandWildcards(tf)
 		if err != nil {
+			if fieldpath.IsNotFound(err) {
+				continue
+			}
 			return nil, errors.Wrap(err, errCannotExpandWildcards)
 		}
 
