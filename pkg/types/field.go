@@ -19,8 +19,13 @@ import (
 	"github.com/crossplane/upjet/pkg"
 	"github.com/crossplane/upjet/pkg/config"
 	"github.com/crossplane/upjet/pkg/types/comments"
-	"github.com/crossplane/upjet/pkg/types/markers"
 	"github.com/crossplane/upjet/pkg/types/name"
+)
+
+const (
+	errFmtInvalidSSAConfiguration = "invalid server-side apply merge strategy configuration: Field schema for %q is of type %q and the specified configuration must only set %q"
+	errFmtUnsupportedSSAField     = "cannot configure the server-side apply merge strategy for %q: Configuration can only be specified for lists, sets or maps"
+	errFmtMissingListMapKeys      = "server-side apply merge strategy configuration for %q belongs to a list of type map but list map keys configuration is missing"
 )
 
 var parentheses = regexp.MustCompile(`\(([^)]+)\)`)
@@ -40,6 +45,9 @@ type Field struct {
 	TransformedName                          string
 	SelectorName                             string
 	Identifier                               bool
+	// Injected is set if this Field is an injected field to the Terraform
+	// schema as an object list map key for server-side apply merges.
+	Injected bool
 }
 
 // getDocString tries to extract the documentation string for the specified
@@ -153,16 +161,18 @@ func NewField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema,
 	f.FieldType = fieldType
 	f.InitType = initType
 
-	if !sch.Sensitive {
-		AddServerSideApplyMarkers(f)
-	}
-
-	return f, nil
+	AddServerSideApplyMarkers(f)
+	return f, errors.Wrapf(AddServerSideApplyMarkersFromConfig(f, cfg), "cannot add the server-side apply merge strategy markers for the field")
 }
 
 // AddServerSideApplyMarkers adds server-side apply comment markers to indicate
 // that scalar maps and sets can be merged granularly, not replace atomically.
 func AddServerSideApplyMarkers(f *Field) {
+	// for sensitive fields, we generate secret or secret key references
+	if f.Schema.Sensitive {
+		return
+	}
+
 	switch f.Schema.Type { //nolint:exhaustive
 	case schema.TypeMap:
 		// A map should always have an element of type Schema.
@@ -170,7 +180,7 @@ func AddServerSideApplyMarkers(f *Field) {
 			switch es.Type { //nolint:exhaustive
 			// We assume scalar types can be granular maps.
 			case schema.TypeString, schema.TypeBool, schema.TypeInt, schema.TypeFloat:
-				f.Comment.ServerSideApplyOptions.MapType = ptr.To[markers.MapType](markers.MapTypeGranular)
+				f.Comment.ServerSideApplyOptions.MapType = ptr.To[config.MapType](config.MapTypeGranular)
 			}
 		}
 	case schema.TypeSet:
@@ -178,13 +188,70 @@ func AddServerSideApplyMarkers(f *Field) {
 			switch es.Type { //nolint:exhaustive
 			// We assume scalar types can be granular sets.
 			case schema.TypeString, schema.TypeBool, schema.TypeInt, schema.TypeFloat:
-				f.Comment.ServerSideApplyOptions.ListType = ptr.To[markers.ListType](markers.ListTypeSet)
+				f.Comment.ServerSideApplyOptions.ListType = ptr.To[config.ListType](config.ListTypeSet)
 			}
 		}
 	}
 	// TODO(negz): Can we reliably add SSA markers for lists of objects? Do we
 	// have cases where we're turning a Terraform map of maps into a list of
 	// objects with a well-known key that we could merge on?
+}
+
+func setInjectedField(fp, k string, f *Field, s config.MergeStrategy) bool {
+	if fp != fmt.Sprintf("%s.%s", k, s.ListMergeStrategy.ListMapKeys.InjectedKey.Key) {
+		return false
+	}
+
+	if s.ListMergeStrategy.ListMapKeys.InjectedKey.DefaultValue != "" {
+		f.Comment.KubebuilderOptions.Default = ptr.To[string](s.ListMergeStrategy.ListMapKeys.InjectedKey.DefaultValue)
+	}
+	f.TFTag = "-" // prevent serialization into Terraform configuration
+	f.Injected = true
+	return true
+}
+
+func AddServerSideApplyMarkersFromConfig(f *Field, cfg *config.Resource) error { //nolint:gocyclo // Easier to follow the logic in a single function
+	// for sensitive fields, we generate secret or secret key references
+	if f.Schema.Sensitive {
+		return nil
+	}
+	fp := strings.ReplaceAll(strings.Join(f.TerraformPaths, "."), ".*.", ".")
+	fp = strings.TrimSuffix(fp, ".*")
+	for k, s := range cfg.ServerSideApplyMergeStrategies {
+		if setInjectedField(fp, k, f, s) || k != fp {
+			continue
+		}
+		switch f.Schema.Type { //nolint:exhaustive
+		case schema.TypeList, schema.TypeSet:
+			if s.ListMergeStrategy.MergeStrategy == "" || s.MapMergeStrategy != "" || s.StructMergeStrategy != "" {
+				return errors.Errorf(errFmtInvalidSSAConfiguration, k, "list", "ListMergeStrategy")
+			}
+			f.Comment.ServerSideApplyOptions.ListType = ptr.To[config.ListType](s.ListMergeStrategy.MergeStrategy)
+			if s.ListMergeStrategy.MergeStrategy != config.ListTypeMap {
+				continue
+			}
+			f.Comment.ServerSideApplyOptions.ListMapKey = make([]string, 0, len(s.ListMergeStrategy.ListMapKeys.Keys)+1)
+			f.Comment.ServerSideApplyOptions.ListMapKey = append(f.Comment.ServerSideApplyOptions.ListMapKey, s.ListMergeStrategy.ListMapKeys.Keys...)
+			if s.ListMergeStrategy.ListMapKeys.InjectedKey.Key != "" {
+				f.Comment.ServerSideApplyOptions.ListMapKey = append(f.Comment.ServerSideApplyOptions.ListMapKey, s.ListMergeStrategy.ListMapKeys.InjectedKey.Key)
+			}
+			if len(f.Comment.ServerSideApplyOptions.ListMapKey) == 0 {
+				return errors.Errorf(errFmtMissingListMapKeys, k)
+			}
+		case schema.TypeMap:
+			if s.MapMergeStrategy == "" || s.ListMergeStrategy.MergeStrategy != "" || s.StructMergeStrategy != "" {
+				return errors.Errorf(errFmtInvalidSSAConfiguration, k, "map", "MapMergeStrategy")
+			}
+			f.Comment.ServerSideApplyOptions.MapType = ptr.To[config.MapType](s.MapMergeStrategy) // better to have a copy of the strategy
+		default:
+			// currently the generated APIs do not contain embedded objects, embedded
+			// objects are represented as lists of max size 1. However, this may
+			// change in the future, i.e., we may decide to generate HCL lists of max
+			// size 1 as embedded objects.
+			return errors.Errorf(errFmtUnsupportedSSAField, k)
+		}
+	}
+	return nil
 }
 
 // NewSensitiveField returns a constructed sensitive Field object.
@@ -267,9 +334,15 @@ func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames, add
 	// parameter field if it's not an observation (only) field, i.e. parameter.
 	//
 	// We do this only if tf tag is not set to "-" because otherwise it won't
-	// be populated from the tfstate. We typically set tf tag to "-" for
-	// sensitive fields which were replaced with secretKeyRefs.
-	if f.TFTag != "-" && !addToObservation {
+	// be populated from the tfstate. Injected fields are included in the
+	// observation because an associative-list in the spec should also be
+	// an associative-list in the observation (status).
+	// We also make sure that this field has not already been added to the
+	// observation type via an explicit resource configuration.
+	// We typically set tf tag to "-" for sensitive fields which were replaced
+	// with secretKeyRefs, or for injected fields into the CRD schema,
+	// which do not exist in the Terraform schema.
+	if (f.TFTag != "-" || f.Injected) && !addToObservation {
 		r.addObservationField(f, field)
 	}
 
@@ -313,7 +386,8 @@ func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames, add
 
 // isInit returns true if the field should be added to initProvider.
 // We don't add Identifiers, references or fields which tag is set to
-// "-".
+// "-" unless they are injected object list map keys for server-side apply
+// merges.
 //
 // Identifiers as they should not be ignorable or part of init due
 // the fact being created for one identifier and then updated for another
@@ -327,7 +401,7 @@ func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames, add
 // an earlier step, so they cannot be included as well. Plus probably they
 // should also not change for Create and Update steps.
 func (f *Field) isInit() bool {
-	return !f.Identifier && f.Reference == nil && f.TFTag != "-"
+	return !f.Identifier && f.Reference == nil && (f.TFTag != "-" || f.Injected)
 }
 
 func getDescription(s string) string {

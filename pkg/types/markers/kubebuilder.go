@@ -12,6 +12,7 @@ type KubebuilderOptions struct {
 	Required *bool
 	Minimum  *int
 	Maximum  *int
+	Default  *string
 }
 
 func (o KubebuilderOptions) String() string {
@@ -29,6 +30,9 @@ func (o KubebuilderOptions) String() string {
 	}
 	if o.Maximum != nil {
 		m += fmt.Sprintf("+kubebuilder:validation:Maximum=%d\n", *o.Maximum)
+	}
+	if o.Default != nil {
+		m += fmt.Sprintf("+kubebuilder:default:=%s\n", *o.Default)
 	}
 
 	return m

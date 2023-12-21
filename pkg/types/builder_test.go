@@ -314,6 +314,7 @@ func TestBuild(t *testing.T) {
 		"Invalid_Sensitive_Fields": {
 			args: args{
 				cfg: &config.Resource{
+					Name: "test_resource",
 					TerraformResource: &schema.Resource{
 						Schema: map[string]*schema.Schema{
 							"key_1": {
@@ -325,7 +326,7 @@ func TestBuild(t *testing.T) {
 				},
 			},
 			want: want{
-				err: errors.Wrapf(fmt.Errorf(`got type %q for field %q, only types "string", "*string", []string, []*string, "map[string]string" and "map[string]*string" supported as sensitive`, "*float64", "Key1"), "cannot build the Types"),
+				err: errors.Wrapf(fmt.Errorf(`got type %q for field %q, only types "string", "*string", []string, []*string, "map[string]string" and "map[string]*string" supported as sensitive`, "*float64", "Key1"), `cannot build the Types for resource "test_resource"`),
 			},
 		},
 		"References": {
@@ -361,6 +362,7 @@ func TestBuild(t *testing.T) {
 		"Invalid_Schema_Type": {
 			args: args{
 				cfg: &config.Resource{
+					Name: "test_resource",
 					TerraformResource: &schema.Resource{
 						Schema: map[string]*schema.Schema{
 							"name": {
@@ -372,7 +374,7 @@ func TestBuild(t *testing.T) {
 				},
 			},
 			want: want{
-				err: errors.Wrapf(errors.Wrapf(errors.Errorf("invalid schema type %s", "TypeInvalid"), "cannot infer type from schema of field %s", "name"), "cannot build the Types"),
+				err: errors.Wrapf(errors.Wrapf(errors.Errorf("invalid schema type %s", "TypeInvalid"), "cannot infer type from schema of field %s", "name"), `cannot build the Types for resource "test_resource"`),
 			},
 		},
 		"Validation_Rules_With_Keywords": {
