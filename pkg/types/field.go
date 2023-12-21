@@ -351,11 +351,11 @@ func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames, add
 			f.TFTag = strings.TrimSuffix(f.TFTag, ",omitempty")
 		}
 		r.addParameterField(f, field)
-		r.addInitField(f, field, g.Package)
+		r.addInitField(f, field, g, typeNames.InitTypeName)
 	}
 
 	if f.Reference != nil {
-		r.addReferenceFields(g, typeNames.ParameterTypeName, f)
+		r.addReferenceFields(g, typeNames.ParameterTypeName, f, false)
 	}
 
 	// Note(lsviben): All fields are optional because observation fields are
@@ -401,7 +401,7 @@ func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames, add
 // an earlier step, so they cannot be included as well. Plus probably they
 // should also not change for Create and Update steps.
 func (f *Field) isInit() bool {
-	return !f.Identifier && f.Reference == nil && (f.TFTag != "-" || f.Injected)
+	return !f.Identifier && f.TFTag != "-"
 }
 
 func getDescription(s string) string {
