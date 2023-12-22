@@ -487,6 +487,8 @@ func (n *noForkExternal) Observe(ctx context.Context, mg xpresource.Managed) (ma
 		stateValueMap = jsonMap
 		newState.RawPlan = stateValue
 		diffState = newState
+	} else if diffState != nil {
+		diffState.Attributes = nil
 	}
 	instanceDiff, err := n.getResourceDataDiff(mg.(resource.Terraformed), ctx, diffState, resourceExists)
 	if err != nil {
