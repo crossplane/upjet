@@ -17,7 +17,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/hashicorp/go-cty/cty"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
+	tfdiag "github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	tf "github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 	"github.com/pkg/errors"
@@ -104,8 +104,8 @@ func getJSONMap(mg xpresource.Managed) (map[string]any, error) {
 }
 
 type Resource interface {
-	Apply(ctx context.Context, s *tf.InstanceState, d *tf.InstanceDiff, meta interface{}) (*tf.InstanceState, diag.Diagnostics)
-	RefreshWithoutUpgrade(ctx context.Context, s *tf.InstanceState, meta interface{}) (*tf.InstanceState, diag.Diagnostics)
+	Apply(ctx context.Context, s *tf.InstanceState, d *tf.InstanceDiff, meta interface{}) (*tf.InstanceState, tfdiag.Diagnostics)
+	RefreshWithoutUpgrade(ctx context.Context, s *tf.InstanceState, meta interface{}) (*tf.InstanceState, tfdiag.Diagnostics)
 }
 
 type noForkExternal struct {
@@ -474,10 +474,21 @@ func (n *noForkExternal) Observe(ctx context.Context, mg xpresource.Managed) (ma
 	if diag != nil && diag.HasError() {
 		return managed.ExternalObservation{}, errors.Errorf("failed to observe the resource: %v", diag)
 	}
+	diffState := n.opTracker.GetTfState()
 	n.opTracker.SetTfState(newState) // TODO: missing RawConfig & RawPlan here...
-
 	resourceExists := newState != nil && newState.ID != ""
-	instanceDiff, err := n.getResourceDataDiff(mg.(resource.Terraformed), ctx, newState, resourceExists)
+
+	var stateValueMap map[string]any
+	if resourceExists {
+		jsonMap, stateValue, err := n.fromInstanceStateToJSONMap(newState)
+		if err != nil {
+			return managed.ExternalObservation{}, errors.Wrap(err, "cannot convert instance state to JSON map")
+		}
+		stateValueMap = jsonMap
+		newState.RawPlan = stateValue
+		diffState = newState
+	}
+	instanceDiff, err := n.getResourceDataDiff(mg.(resource.Terraformed), ctx, diffState, resourceExists)
 	if err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot compute the instance diff")
 	}
@@ -496,10 +507,6 @@ func (n *noForkExternal) Observe(ctx context.Context, mg xpresource.Managed) (ma
 			addTTR(mg)
 		}
 		mg.SetConditions(xpv1.Available())
-		stateValueMap, err := n.fromInstanceStateToJSONMap(newState)
-		if err != nil {
-			return managed.ExternalObservation{}, errors.Wrap(err, "cannot convert instance state to JSON map")
-		}
 
 		buff, err := json.TFParser.Marshal(stateValueMap)
 		if err != nil {
@@ -601,12 +608,12 @@ func (n *noForkExternal) Create(ctx context.Context, mg xpresource.Managed) (man
 	}
 	n.opTracker.SetTfState(newState)
 
-	stateValueMap, err := n.fromInstanceStateToJSONMap(newState)
+	stateValueMap, _, err := n.fromInstanceStateToJSONMap(newState)
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, "failed to convert instance state to map")
 	}
 	if _, err := n.setExternalName(mg, stateValueMap); err != nil {
-		return managed.ExternalCreation{}, errors.Wrapf(err, "failed to set the external-name of the managed resource during create")
+		return managed.ExternalCreation{}, errors.Wrap(err, "failed to set the external-name of the managed resource during create")
 	}
 	err = mg.(resource.Terraformed).SetObservation(stateValueMap)
 	if err != nil {
@@ -655,7 +662,7 @@ func (n *noForkExternal) Update(ctx context.Context, mg xpresource.Managed) (man
 	}
 	n.opTracker.SetTfState(newState)
 
-	stateValueMap, err := n.fromInstanceStateToJSONMap(newState)
+	stateValueMap, _, err := n.fromInstanceStateToJSONMap(newState)
 	if err != nil {
 		return managed.ExternalUpdate{}, err
 	}
@@ -686,15 +693,15 @@ func (n *noForkExternal) Delete(ctx context.Context, _ xpresource.Managed) error
 	return nil
 }
 
-func (n *noForkExternal) fromInstanceStateToJSONMap(newState *tf.InstanceState) (map[string]interface{}, error) {
+func (n *noForkExternal) fromInstanceStateToJSONMap(newState *tf.InstanceState) (map[string]interface{}, cty.Value, error) {
 	impliedType := n.config.TerraformResource.CoreConfigSchema().ImpliedType()
 	attrsAsCtyValue, err := newState.AttrsAsObjectValue(impliedType)
 	if err != nil {
-		return nil, errors.Wrap(err, "could not convert attrs to cty value")
+		return nil, cty.NilVal, errors.Wrap(err, "could not convert attrs to cty value")
 	}
 	stateValueMap, err := schema.StateValueToJSONMap(attrsAsCtyValue, impliedType)
 	if err != nil {
-		return nil, errors.Wrap(err, "could not convert instance state value to JSON")
+		return nil, cty.NilVal, errors.Wrap(err, "could not convert instance state value to JSON")
 	}
-	return stateValueMap, nil
+	return stateValueMap, attrsAsCtyValue, nil
 }
