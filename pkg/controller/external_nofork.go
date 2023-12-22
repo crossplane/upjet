@@ -526,7 +526,7 @@ func (n *noForkExternal) Observe(ctx context.Context, mg xpresource.Managed) (ma
 			resource.SetUpToDateCondition(mg, noDiff)
 		}
 		// check for an external-name change
-		if nameChanged, err := n.setExternalName(mg, newState); err != nil {
+		if nameChanged, err := n.setExternalName(mg, stateValueMap); err != nil {
 			return managed.ExternalObservation{}, errors.Wrapf(err, "failed to set the external-name of the managed resource during observe")
 		} else {
 			specUpdateRequired = specUpdateRequired || nameChanged
@@ -543,15 +543,14 @@ func (n *noForkExternal) Observe(ctx context.Context, mg xpresource.Managed) (ma
 
 // sets the external-name on the MR. Returns `true`
 // if the external-name of the MR has changed.
-func (n *noForkExternal) setExternalName(mg xpresource.Managed, newState *tf.InstanceState) (bool, error) {
-	if newState.ID == "" {
+func (n *noForkExternal) setExternalName(mg xpresource.Managed, stateValueMap map[string]interface{}) (bool, error) {
+	id, ok := stateValueMap["id"]
+	if !ok || id.(string) == "" {
 		return false, nil
 	}
-	newName, err := n.config.ExternalName.GetExternalNameFn(map[string]any{
-		"id": newState.ID,
-	})
+	newName, err := n.config.ExternalName.GetExternalNameFn(stateValueMap)
 	if err != nil {
-		return false, errors.Wrapf(err, "failed to get the external-name from ID: %s", newState.ID)
+		return false, errors.Wrapf(err, "failed to compute the external-name from the state map of the resource with the ID %s", id)
 	}
 	oldName := meta.GetExternalName(mg)
 	// we have to make sure the newly set external-name is recorded
@@ -602,12 +601,12 @@ func (n *noForkExternal) Create(ctx context.Context, mg xpresource.Managed) (man
 	}
 	n.opTracker.SetTfState(newState)
 
-	if _, err := n.setExternalName(mg, newState); err != nil {
-		return managed.ExternalCreation{}, errors.Wrapf(err, "failed to set the external-name of the managed resource during create")
-	}
 	stateValueMap, err := n.fromInstanceStateToJSONMap(newState)
 	if err != nil {
-		return managed.ExternalCreation{}, err
+		return managed.ExternalCreation{}, errors.Wrap(err, "failed to convert instance state to map")
+	}
+	if _, err := n.setExternalName(mg, stateValueMap); err != nil {
+		return managed.ExternalCreation{}, errors.Wrapf(err, "failed to set the external-name of the managed resource during create")
 	}
 	err = mg.(resource.Terraformed).SetObservation(stateValueMap)
 	if err != nil {
