@@ -474,10 +474,21 @@ func (n *noForkExternal) Observe(ctx context.Context, mg xpresource.Managed) (ma
 	if diag != nil && diag.HasError() {
 		return managed.ExternalObservation{}, errors.Errorf("failed to observe the resource: %v", diag)
 	}
+	diffState := n.opTracker.GetTfState()
 	n.opTracker.SetTfState(newState) // TODO: missing RawConfig & RawPlan here...
-
 	resourceExists := newState != nil && newState.ID != ""
-	instanceDiff, err := n.getResourceDataDiff(mg.(resource.Terraformed), ctx, newState, resourceExists)
+
+	var stateValueMap map[string]any
+	if resourceExists {
+		jsonMap, stateValue, err := n.fromInstanceStateToJSONMap(newState)
+		if err != nil {
+			return managed.ExternalObservation{}, errors.Wrap(err, "cannot convert instance state to JSON map")
+		}
+		stateValueMap = jsonMap
+		newState.RawPlan = stateValue
+		diffState = newState
+	}
+	instanceDiff, err := n.getResourceDataDiff(mg.(resource.Terraformed), ctx, diffState, resourceExists)
 	if err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot compute the instance diff")
 	}
@@ -496,10 +507,6 @@ func (n *noForkExternal) Observe(ctx context.Context, mg xpresource.Managed) (ma
 			addTTR(mg)
 		}
 		mg.SetConditions(xpv1.Available())
-		stateValueMap, _, err := n.fromInstanceStateToJSONMap(newState)
-		if err != nil {
-			return managed.ExternalObservation{}, errors.Wrap(err, "cannot convert instance state to JSON map")
-		}
 
 		buff, err := json.TFParser.Marshal(stateValueMap)
 		if err != nil {
