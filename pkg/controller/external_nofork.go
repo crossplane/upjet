@@ -545,12 +545,12 @@ func (n *noForkExternal) Observe(ctx context.Context, mg xpresource.Managed) (ma
 // if the external-name of the MR has changed.
 func (n *noForkExternal) setExternalName(mg xpresource.Managed, stateValueMap map[string]interface{}) (bool, error) {
 	id, ok := stateValueMap["id"]
-	if !ok {
+	if !ok || id.(string) == "" {
 		return false, nil
 	}
 	newName, err := n.config.ExternalName.GetExternalNameFn(stateValueMap)
 	if err != nil {
-		return false, errors.Wrapf(err, "failed to get the external-name from ID: %s", id)
+		return false, errors.Wrapf(err, "failed to compute the external-name from the state map of the resource with the ID %s", id)
 	}
 	oldName := meta.GetExternalName(mg)
 	// we have to make sure the newly set external-name is recorded
@@ -602,11 +602,11 @@ func (n *noForkExternal) Create(ctx context.Context, mg xpresource.Managed) (man
 	n.opTracker.SetTfState(newState)
 
 	stateValueMap, err := n.fromInstanceStateToJSONMap(newState)
+	if err != nil {
+		return managed.ExternalCreation{}, errors.Wrap(err, "failed to convert instance state to map")
+	}
 	if _, err := n.setExternalName(mg, stateValueMap); err != nil {
 		return managed.ExternalCreation{}, errors.Wrapf(err, "failed to set the external-name of the managed resource during create")
-	}
-	if err != nil {
-		return managed.ExternalCreation{}, err
 	}
 	err = mg.(resource.Terraformed).SetObservation(stateValueMap)
 	if err != nil {
