@@ -401,7 +401,7 @@ func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames, add
 // an earlier step, so they cannot be included as well. Plus probably they
 // should also not change for Create and Update steps.
 func (f *Field) isInit() bool {
-	return !f.Identifier && f.TFTag != "-"
+	return !f.Identifier && (f.TFTag != "-" || f.Injected)
 }
 
 func getDescription(s string) string {
