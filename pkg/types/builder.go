@@ -274,7 +274,7 @@ func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, r 
 				if paramType.Underlying().String() != emptyStruct {
 					field := types.NewField(token.NoPos, g.Package, f.Name.Camel, types.NewSlice(paramType), false)
 					r.addParameterField(f, field)
-					r.addInitField(f, field, g.Package)
+					r.addInitField(f, field, g, nil)
 				}
 			default:
 				if paramType == nil {
@@ -400,7 +400,7 @@ func (r *resource) addParameterField(f *Field, field *types.Var) {
 	r.paramFields = append(r.paramFields, field)
 }
 
-func (r *resource) addInitField(f *Field, field *types.Var, pkg *types.Package) {
+func (r *resource) addInitField(f *Field, field *types.Var, g *Builder, typeNames *types.TypeName) {
 	// If the field is not an init field, we don't add it.
 	if !f.isInit() {
 		return
@@ -410,10 +410,14 @@ func (r *resource) addInitField(f *Field, field *types.Var, pkg *types.Package) 
 
 	// If the field is a nested type, we need to add it as the init type.
 	if f.InitType != nil {
-		field = types.NewField(token.NoPos, pkg, f.Name.Camel, f.InitType, false)
+		field = types.NewField(token.NoPos, g.Package, f.Name.Camel, f.InitType, false)
 	}
 
 	r.initFields = append(r.initFields, field)
+
+	if f.Reference != nil {
+		r.addReferenceFields(g, typeNames, f, true)
+	}
 }
 
 func (r *resource) addObservationField(f *Field, field *types.Var) {
@@ -429,10 +433,15 @@ func (r *resource) addObservationField(f *Field, field *types.Var) {
 	r.obsTags = append(r.obsTags, fmt.Sprintf(`json:"%s" tf:"%s"`, f.JSONTag, f.TFTag))
 }
 
-func (r *resource) addReferenceFields(g *Builder, paramName *types.TypeName, field *Field) {
+func (r *resource) addReferenceFields(g *Builder, paramName *types.TypeName, field *Field, isInit bool) {
 	refFields, refTags := g.generateReferenceFields(paramName, field)
-	r.paramTags = append(r.paramTags, refTags...)
-	r.paramFields = append(r.paramFields, refFields...)
+	if isInit {
+		r.initTags = append(r.initTags, refTags...)
+		r.initFields = append(r.initFields, refFields...)
+	} else {
+		r.paramTags = append(r.paramTags, refTags...)
+		r.paramFields = append(r.paramFields, refFields...)
+	}
 }
 
 // generateTypeName generates a unique name for the type if its original name
