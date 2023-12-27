@@ -486,6 +486,7 @@ func (n *noForkExternal) Observe(ctx context.Context, mg xpresource.Managed) (ma
 		}
 		stateValueMap = jsonMap
 		newState.RawPlan = stateValue
+		newState.RawConfig = n.rawConfig
 		diffState = newState
 	} else if diffState != nil {
 		diffState.Attributes = nil
