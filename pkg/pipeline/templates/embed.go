@@ -36,3 +36,15 @@ var RegisterTemplate string
 //
 //go:embed setup.go.tmpl
 var SetupTemplate string
+
+// ConversionHubTemplate is populated with the CRD API versions
+// conversion.Hub implementation template string.
+//
+//go:embed conversion_hub.go.tmpl
+var ConversionHubTemplate string
+
+// ConversionConvertibleTemplate is populated with the CRD API versions
+// conversion.Convertible implementation template string.
+//
+//go:embed conversion_convertible.go.tmpl
+var ConversionConvertibleTemplate string

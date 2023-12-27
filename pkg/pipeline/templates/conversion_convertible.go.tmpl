@@ -1,0 +1,25 @@
+// SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+//
+// SPDX-License-Identifier: Apache-2.0
+
+{{ .Header }}
+
+{{ .GenStatement }}
+
+package {{ .APIVersion }}
+
+import (
+	"sigs.k8s.io/controller-runtime/pkg/conversion"
+)
+
+{{ range .Resources }}
+    // ConvertTo converts this {{ .CRD.Kind }} to the hub type.
+    func (tr *{{ .CRD.Kind }}) ConvertTo(dstRaw conversion.Hub) error {
+      return nil
+    }
+
+    // ConvertFrom converts from the hub type to the {{ .CRD.Kind }} type.
+    func (tr *{{ .CRD.Kind }}) ConvertFrom(srcRaw conversion.Hub) error {
+      return nil
+    }
+{{ end }}

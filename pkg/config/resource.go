@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/crossplane/upjet/pkg/config/conversion"
+
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
@@ -445,6 +447,8 @@ type Resource struct {
 	// a Terraform configuration argument path such as a.b.c, without any
 	// index notation (i.e., array/map components do not need indices).
 	ServerSideApplyMergeStrategies ServerSideApplyMergeStrategies
+
+	Conversions []conversion.Conversion
 
 	// useNoForkClient indicates that a no-fork external client should
 	// be generated instead of the Terraform CLI-forking client.
