@@ -42,7 +42,7 @@ func Setup(mgr ctrl.Manager, o tjcontroller.Options) error {
 		cps = append(cps, connection.NewDetailsManager(mgr.GetClient(), *o.SecretStoreConfigGVK, connection.WithTLSConfig(o.ESSOptions.TLSConfig)))
 	}
 	eventHandler := handler.NewEventHandler(handler.WithLogger(o.Logger.WithValues("gvk", {{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind)))
-	{{- if .UseAsync }}
+	{{- if and .UseAsync (not .UseTerraformPluginFrameworkClient) }}
 	ac := tjcontroller.NewAPICallbacks(mgr, xpresource.ManagedKind({{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind), tjcontroller.WithEventHandler(eventHandler){{ if .UseNoForkClient }}, tjcontroller.WithStatusUpdates(false){{ end }})
 	{{- end}}
 	opts := []managed.ReconcilerOption{
@@ -67,12 +67,20 @@ func Setup(mgr ctrl.Manager, o tjcontroller.Options) error {
 				{{- end -}}
 				)
 			  {{- end -}}
+			{{- else if .UseTerraformPluginFrameworkClient -}}
+			  tjcontroller.NewTerraformPluginFrameworkConnector(mgr.GetClient(), o.SetupFn, o.Provider.Resources["{{ .ResourceType }}"], o.OperationTrackerStore, o.Provider.TerraformPluginFrameworkProvider,
+				tjcontroller.WithTerraformPluginFrameworkLogger(o.Logger),
+				tjcontroller.WithTerraformPluginFrameworkMetricRecorder(metrics.NewMetricRecorder({{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind, mgr, o.PollInterval)),
+				{{if .FeaturesPackageAlias -}}
+				  tjcontroller.WithTerraformPluginFrameworkManagementPolicies(o.Features.Enabled({{ .FeaturesPackageAlias }}EnableBetaManagementPolicies))
+				{{- end -}}
+			  )
 			{{- else -}}
-			tjcontroller.NewConnector(mgr.GetClient(), o.WorkspaceStore, o.SetupFn, o.Provider.Resources["{{ .ResourceType }}"], tjcontroller.WithLogger(o.Logger), tjcontroller.WithConnectorEventHandler(eventHandler),
+			  tjcontroller.NewConnector(mgr.GetClient(), o.WorkspaceStore, o.SetupFn, o.Provider.Resources["{{ .ResourceType }}"], tjcontroller.WithLogger(o.Logger), tjcontroller.WithConnectorEventHandler(eventHandler),
 				{{- if .UseAsync }}
 				tjcontroller.WithCallbackProvider(ac),
 				{{- end }}
-			)
+			  )
 			{{- end -}}
 		),
 		managed.WithLogger(o.Logger.WithValues("controller", name)),

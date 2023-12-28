@@ -13,6 +13,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
+	fwresource "github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 	"github.com/pkg/errors"
@@ -379,6 +380,8 @@ type Resource struct {
 	// TerraformResource is the Terraform representation of the resource.
 	TerraformResource *schema.Resource
 
+	TerraformPluginFrameworkResource *fwresource.Resource
+
 	// ShortGroup is the short name of the API group of this CRD. The full
 	// CRD API group is calculated by adding the group suffix of the provider.
 	// For example, ShortGroup could be `ec2` where group suffix of the
@@ -453,6 +456,11 @@ type Resource struct {
 	// be generated instead of the Terraform CLI-forking client.
 	useNoForkClient bool
 
+	// useTerraformPluginFrameworkClient indicates that a Terraform
+	// Plugin Framework external client should be generated instead of
+	// the Terraform Plugin SDKv2 client.
+	useTerraformPluginFrameworkClient bool
+
 	// OverrideFieldNames allows to manually override the relevant field name to
 	// avoid possible Go struct name conflicts that may occur after Multiversion
 	// CRDs support. During field generation, there may be fields with the same
@@ -482,6 +490,10 @@ type Resource struct {
 
 func (r *Resource) ShouldUseNoForkClient() bool {
 	return r.useNoForkClient
+}
+
+func (r *Resource) ShouldUseTerraformPluginFrameworkClient() bool {
+	return r.useTerraformPluginFrameworkClient
 }
 
 // CustomDiff customizes the computed Terraform InstanceDiff. This can be used

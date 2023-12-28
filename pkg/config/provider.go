@@ -5,10 +5,13 @@
 package config
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 
 	tfjson "github.com/hashicorp/terraform-json"
+	fwprovider "github.com/hashicorp/terraform-plugin-framework/provider"
+	fwresource "github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/pkg/errors"
 
@@ -124,12 +127,16 @@ type Provider struct {
 	// Defaults to []string{".+"} which would include all resources.
 	NoForkIncludeList []string
 
+	TerraformPluginFrameworkIncludeList []string
+
 	// Resources is a map holding resource configurations where key is Terraform
 	// resource name.
 	Resources map[string]*Resource
 
 	// TerraformProvider is the Terraform schema of the provider.
 	TerraformProvider *schema.Provider
+
+	TerraformPluginFrameworkProvider *fwprovider.Provider
 
 	// refInjectors is an ordered list of `ReferenceInjector`s for
 	// injecting references across this Provider's resources.
@@ -177,10 +184,22 @@ func WithNoForkIncludeList(l []string) ProviderOption {
 	}
 }
 
+func WithTerraformPluginFrameworkIncludeList(l []string) ProviderOption {
+	return func(p *Provider) {
+		p.TerraformPluginFrameworkIncludeList = l
+	}
+}
+
 // WithTerraformProvider configures the TerraformProvider for this Provider.
 func WithTerraformProvider(tp *schema.Provider) ProviderOption {
 	return func(p *Provider) {
 		p.TerraformProvider = tp
+	}
+}
+
+func WithTerraformPluginFrameworkProvider(tp *fwprovider.Provider) ProviderOption {
+	return func(p *Provider) {
+		p.TerraformPluginFrameworkProvider = tp
 	}
 }
 
@@ -231,7 +250,7 @@ func WithMainTemplate(template string) ProviderOption {
 // NewProvider builds and returns a new Provider from provider
 // tfjson schema, that is generated using Terraform CLI with:
 // `terraform providers schema --json`
-func NewProvider(schema []byte, prefix string, modulePath string, metadata []byte, opts ...ProviderOption) *Provider { //nolint:gocyclo
+func NewProvider(ctx context.Context, schema []byte, prefix string, modulePath string, metadata []byte, opts ...ProviderOption) *Provider { //nolint:gocyclo
 	ps := tfjson.ProviderSchemas{}
 	if err := ps.UnmarshalJSON(schema); err != nil {
 		panic(err)
@@ -276,7 +295,8 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadata []byt
 		}
 		// if in both of the include lists, the new behavior prevails
 		isNoFork := matches(name, p.NoForkIncludeList)
-		if len(terraformResource.Schema) == 0 || matches(name, p.SkipList) || (!matches(name, p.IncludeList) && !isNoFork) {
+		isPluginFrameworkResource := matches(name, p.TerraformPluginFrameworkIncludeList)
+		if len(terraformResource.Schema) == 0 || matches(name, p.SkipList) || (!matches(name, p.IncludeList) && !isNoFork && !isPluginFrameworkResource) {
 			p.skippedResourceNames = append(p.skippedResourceNames, name)
 			continue
 		}
@@ -295,8 +315,36 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadata []byt
 				terraformResource.Schema = terraformResource.SchemaFunc()
 			}
 		}
-		p.Resources[name] = DefaultResource(name, terraformResource, providerMetadata.Resources[name], p.DefaultResourceOptions...)
+
+		terraformPluginFrameworkResource := (*fwresource.Resource)(nil)
+		if isPluginFrameworkResource {
+			// TODO: Consider whether to replace the commented out conditional in the next line with an equivalent conditional for plugin framework.
+			if p.TerraformPluginFrameworkProvider == nil /*|| p.TerraformProvider.ResourcesMap[name] == nil */ {
+				panic(errors.Errorf("resource %q is configured to be reconciled without the Terraform CLI"+
+					"but either config.Provider.TerraformProvider is not configured or the Go schema does not exist for the resource", name))
+			}
+
+			// TODO(cem): Consider creating a new context here, rather than getting one as input to this function.
+			// TODO(cem): Currently, terraformPluginFrameworkResourceFunctions is calculated for each plugin framework resource. Doing so is wasteful, because the result is independent of the resource. It should be called once, outside the loop.
+			terraformPluginFrameworkResourceFunctions := (*p.TerraformPluginFrameworkProvider).Resources(ctx)
+			for _, resourceFunc := range terraformPluginFrameworkResourceFunctions {
+				resource := resourceFunc()
+
+				resourceTypeNameReq := fwresource.MetadataRequest{
+					ProviderTypeName: name,
+				}
+				resourceTypeNameResp := fwresource.MetadataResponse{}
+				resource.Metadata(ctx, resourceTypeNameReq, &resourceTypeNameResp)
+				if resourceTypeNameResp.TypeName == name {
+					terraformPluginFrameworkResource = &resource
+					break
+				}
+			}
+		}
+
+		p.Resources[name] = DefaultResource(name, terraformResource, terraformPluginFrameworkResource, providerMetadata.Resources[name], p.DefaultResourceOptions...)
 		p.Resources[name].useNoForkClient = isNoFork
+		p.Resources[name].useTerraformPluginFrameworkClient = isPluginFrameworkResource
 	}
 	for i, refInjector := range p.refInjectors {
 		if err := refInjector.InjectReferences(p.Resources); err != nil {
