@@ -223,6 +223,12 @@ func (c *TerraformPluginFrameworkConnector) Connect(ctx context.Context, mg xpre
 		opTracker.SetTfState(s)
 	}
 
+	server := providerserver.NewProtocol5(*c.terraformPluginFrameworkProvider)()
+	_, err = server.ConfigureProvider(ctx, nil)
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot configure provider server")
+	}
+
 	return &terraformPluginFrameworkExternalClient{
 		ts:             ts,
 		config:         c.config,
@@ -230,7 +236,7 @@ func (c *TerraformPluginFrameworkConnector) Connect(ctx context.Context, mg xpre
 		metricRecorder: c.metricRecorder,
 		opTracker:      opTracker,
 		resource:       c.config.TerraformPluginFrameworkResource,
-		server:         providerserver.NewProtocol5(*c.terraformPluginFrameworkProvider)(),
+		server:         server,
 		params:         params,
 		// rawConfig:      rawConfig,
 	}, nil
