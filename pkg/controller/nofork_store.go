@@ -10,6 +10,7 @@ import (
 
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
+	"github.com/hashicorp/terraform-plugin-go/tfprotov5"
 	tfsdk "github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -22,6 +23,7 @@ type AsyncTracker struct {
 	logger        logging.Logger
 	mu            *sync.Mutex
 	tfState       *tfsdk.InstanceState
+	fwState       *tfprotov5.DynamicValue
 	// lifecycle of certain external resources are bound to a parent resource's
 	// lifecycle, and they cannot be deleted without actually deleting
 	// the owning external resource (e.g.,  a database resource as the parent
@@ -91,6 +93,33 @@ func (a *AsyncTracker) IsDeleted() bool {
 // the associated external resource.
 func (a *AsyncTracker) SetDeleted(deleted bool) {
 	a.isDeleted.Store(deleted)
+}
+
+func (a *AsyncTracker) GetFwState() *tfprotov5.DynamicValue {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.fwState
+}
+
+func (a *AsyncTracker) HasFwState() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.fwState != nil
+}
+
+func (a *AsyncTracker) SetFwState(state *tfprotov5.DynamicValue) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.fwState = state
+}
+
+func (a *AsyncTracker) GetFwID() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.fwState == nil {
+		return ""
+	}
+	return "TBD"
 }
 
 type OperationTrackerStore struct {

@@ -316,7 +316,8 @@ func NewProvider(ctx context.Context, schema []byte, prefix string, modulePath s
 			}
 		}
 
-		terraformPluginFrameworkResource := (*fwresource.Resource)(nil)
+		var terraformPluginFrameworkResource *fwresource.Resource
+
 		if isPluginFrameworkResource {
 			// TODO: Consider whether to replace the commented out conditional in the next line with an equivalent conditional for plugin framework.
 			if p.TerraformPluginFrameworkProvider == nil /*|| p.TerraformProvider.ResourcesMap[name] == nil */ {
