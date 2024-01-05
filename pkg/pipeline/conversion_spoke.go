@@ -22,9 +22,9 @@ var (
 	regexTypeFile = regexp.MustCompile(`zz_(.+)_types.go`)
 )
 
-// NewConversionConvertibleGenerator returns a new ConversionConvertibleGenerator.
-func NewConversionConvertibleGenerator(pkg *types.Package, rootDir, group, version string) *ConversionConvertibleGenerator {
-	return &ConversionConvertibleGenerator{
+// NewConversionSpokeGenerator returns a new ConversionSpokeGenerator.
+func NewConversionSpokeGenerator(pkg *types.Package, rootDir, group, version string) *ConversionSpokeGenerator {
+	return &ConversionSpokeGenerator{
 		LocalDirectoryPath: filepath.Join(rootDir, "apis", strings.ToLower(strings.Split(group, ".")[0])),
 		LicenseHeaderPath:  filepath.Join(rootDir, "hack", "boilerplate.go.txt"),
 		SpokeVersionsMap:   make(map[string][]string),
@@ -33,9 +33,9 @@ func NewConversionConvertibleGenerator(pkg *types.Package, rootDir, group, versi
 	}
 }
 
-// ConversionConvertibleGenerator generates conversion methods implementing the
+// ConversionSpokeGenerator generates conversion methods implementing the
 // conversion.Convertible interface on the CRD structs.
-type ConversionConvertibleGenerator struct {
+type ConversionSpokeGenerator struct {
 	LocalDirectoryPath string
 	LicenseHeaderPath  string
 	SpokeVersionsMap   map[string][]string
@@ -45,7 +45,7 @@ type ConversionConvertibleGenerator struct {
 }
 
 // Generate writes generated conversion.Convertible interface functions
-func (cg *ConversionConvertibleGenerator) Generate(cfgs []*terraformedInput) error {
+func (cg *ConversionSpokeGenerator) Generate(cfgs []*terraformedInput) error {
 	entries, err := os.ReadDir(cg.LocalDirectoryPath)
 	if err != nil {
 		return errors.Wrapf(err, "cannot list the directory entries for the source folder %s while generating the conversion.Convertible interface functions", cg.LocalDirectoryPath)
@@ -57,7 +57,7 @@ func (cg *ConversionConvertibleGenerator) Generate(cfgs []*terraformedInput) err
 			// the current CRD version is the hub version.
 			continue
 		}
-		trFile := wrapper.NewFile(cg.pkg.Path(), cg.pkg.Name(), templates.ConversionConvertibleTemplate,
+		trFile := wrapper.NewFile(cg.pkg.Path(), cg.pkg.Name(), templates.ConversionSpokeTemplate,
 			wrapper.WithGenStatement(GenStatement),
 			wrapper.WithHeaderPath(cg.LicenseHeaderPath),
 		)
