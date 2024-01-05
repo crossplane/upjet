@@ -95,25 +95,25 @@ func (a *AsyncTracker) SetDeleted(deleted bool) {
 	a.isDeleted.Store(deleted)
 }
 
-func (a *AsyncTracker) GetFwState() *tfprotov5.DynamicValue {
+func (a *AsyncTracker) GetFrameworkTFState() *tfprotov5.DynamicValue {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return a.fwState
 }
 
-func (a *AsyncTracker) HasFwState() bool {
+func (a *AsyncTracker) HasFrameworkTFState() bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return a.fwState != nil
 }
 
-func (a *AsyncTracker) SetFwState(state *tfprotov5.DynamicValue) {
+func (a *AsyncTracker) SetFrameworkTFState(state *tfprotov5.DynamicValue) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.fwState = state
 }
 
-func (a *AsyncTracker) GetFwID() string {
+func (a *AsyncTracker) GetFrameworkTFID() string {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.fwState == nil {

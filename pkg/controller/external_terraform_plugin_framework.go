@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+// SPDX-FileCopyrightText: 2024 The Crossplane Authors <https://crossplane.io>
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -7,31 +7,32 @@ package controller
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
-	corev1 "k8s.io/api/core/v1"
 	"math/big"
+	"strings"
 	"time"
 
+	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
-	"github.com/crossplane/upjet/pkg/config"
-	"github.com/crossplane/upjet/pkg/resource"
-	upjson "github.com/crossplane/upjet/pkg/resource/json"
+
 	fwprovider "github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	fwresource "github.com/hashicorp/terraform-plugin-framework/resource"
-	resschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	rschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	_ "github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov5"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 	"github.com/pkg/errors"
-
-	"github.com/crossplane/upjet/pkg/metrics"
-	"github.com/crossplane/upjet/pkg/terraform"
+	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/crossplane/upjet/pkg/config"
+	"github.com/crossplane/upjet/pkg/metrics"
+	"github.com/crossplane/upjet/pkg/resource"
+	upjson "github.com/crossplane/upjet/pkg/resource/json"
+	"github.com/crossplane/upjet/pkg/terraform"
 )
 
 type TerraformPluginFrameworkConnector struct {
@@ -94,86 +95,9 @@ type terraformPluginFrameworkExternalClient struct {
 	resource       *fwresource.Resource
 	server         tfprotov5.ProviderServer
 	params         map[string]any
-	fwDiff         *tfprotov5.DynamicValue
-	resourceSchema resschema.Schema
+	plannedState   *tfprotov5.DynamicValue
+	resourceSchema rschema.Schema
 }
-
-/*
-func processParamsWithStateFunc(schemaMap map[string]*schema.Schema, params map[string]any) map[string]any {
-	if params == nil {
-		return params
-	}
-	for key, param := range params {
-		if sc, ok := schemaMap[key]; ok {
-			params[key] = applyStateFuncToParam(sc, param)
-		} else {
-			params[key] = param
-		}
-	}
-	return params
-}
-
-func applyStateFuncToParam(sc *schema.Schema, param any) any { //nolint:gocyclo
-	if param == nil {
-		return param
-	}
-	switch sc.Type {
-	case schema.TypeMap:
-		if sc.Elem == nil {
-			return param
-		}
-		pmap, okParam := param.(map[string]any)
-		// TypeMap only supports schema in Elem
-		if mapSchema, ok := sc.Elem.(*schema.Schema); ok && okParam {
-			for pk, pv := range pmap {
-				pmap[pk] = applyStateFuncToParam(mapSchema, pv)
-			}
-			return pmap
-		}
-	case schema.TypeSet, schema.TypeList:
-		if sc.Elem == nil {
-			return param
-		}
-		pArray, okParam := param.([]any)
-		if setSchema, ok := sc.Elem.(*schema.Schema); ok && okParam {
-			for i, p := range pArray {
-				pArray[i] = applyStateFuncToParam(setSchema, p)
-			}
-			return pArray
-		} else if setResource, ok := sc.Elem.(*schema.Resource); ok {
-			for i, p := range pArray {
-				if resParam, okRParam := p.(map[string]any); okRParam {
-					pArray[i] = processParamsWithStateFunc(setResource.Schema, resParam)
-				}
-			}
-		}
-	case schema.TypeString:
-		// For String types check if it is an HCL string and process
-		if isHCLSnippetPattern.MatchString(param.(string)) {
-			hclProccessedParam, err := processHCLParam(param.(string))
-			if err != nil {
-				// c.logger.Debug("could not process param, returning original", "param", sc.GoString())
-			} else {
-				param = hclProccessedParam
-			}
-		}
-		if sc.StateFunc != nil {
-			return sc.StateFunc(param)
-		}
-		return param
-	case schema.TypeBool, schema.TypeInt, schema.TypeFloat:
-		if sc.StateFunc != nil {
-			return sc.StateFunc(param)
-		}
-		return param
-	case schema.TypeInvalid:
-		return param
-	default:
-		return param
-	}
-	return param
-}
-*/
 
 func (c *TerraformPluginFrameworkConnector) Connect(ctx context.Context, mg xpresource.Managed) (managed.ExternalClient, error) {
 	c.metricRecorder.ObserveReconcileDelay(mg.GetObjectKind().GroupVersionKind(), mg.GetName())
@@ -186,7 +110,6 @@ func (c *TerraformPluginFrameworkConnector) Connect(ctx context.Context, mg xpre
 		return nil, errors.Wrap(err, errGetTerraformSetup)
 	}
 
-	// To Compute the ResourceDiff: n.resourceSchema.Diff(...)
 	tr := mg.(resource.Terraformed)
 	opTracker := c.operationTrackerStore.Tracker(tr)
 	externalName := meta.GetExternalName(tr)
@@ -195,10 +118,7 @@ func (c *TerraformPluginFrameworkConnector) Connect(ctx context.Context, mg xpre
 		return nil, errors.Wrapf(err, "failed to get the extended parameters for resource %q", mg.GetName())
 	}
 
-	// TODO(cem): Check if we need to perform an equivalent functionality for framework resources.
-	// params = processParamsWithStateFunc(c.config.TerraformResource.Schema, params)
-
-	if !opTracker.HasFwState() {
+	if !opTracker.HasFrameworkTFState() {
 		logger.Debug("Instance state not found in cache, reconstructing...")
 		tfState, err := tr.GetObservation()
 		if err != nil {
@@ -219,7 +139,7 @@ func (c *TerraformPluginFrameworkConnector) Connect(ctx context.Context, mg xpre
 			return nil, errors.Wrap(err, "could not marshal TF state map")
 		}
 
-		opTracker.SetFwState(&tfprotov5.DynamicValue{
+		opTracker.SetFrameworkTFState(&tfprotov5.DynamicValue{
 			JSON: tfStateJsonBytes,
 		})
 
@@ -248,12 +168,12 @@ func (c *TerraformPluginFrameworkConnector) Connect(ctx context.Context, mg xpre
 	}, nil
 }
 
-func (c *TerraformPluginFrameworkConnector) getResourceSchema(ctx context.Context) (resschema.Schema, error) {
+func (c *TerraformPluginFrameworkConnector) getResourceSchema(ctx context.Context) (rschema.Schema, error) {
 	res := *c.config.TerraformPluginFrameworkResource
 	schemaResp := &fwresource.SchemaResponse{}
 	res.Schema(ctx, fwresource.SchemaRequest{}, schemaResp)
 	if schemaResp.Diagnostics.HasError() {
-		return resschema.Schema{}, errors.Errorf("could not retrieve resource schema: %v", schemaResp.Diagnostics)
+		return rschema.Schema{}, errors.Errorf("could not retrieve resource schema: %v", schemaResp.Diagnostics)
 	}
 
 	return schemaResp.Schema, nil
@@ -272,7 +192,6 @@ func (c *TerraformPluginFrameworkConnector) configureProvider(ctx context.Contex
 		},
 	}
 	providerResp, err := providerServer.ConfigureProvider(ctx, configureProviderReq)
-	fmt.Printf("%p", providerResp)
 	if err != nil {
 		return nil, err
 	}
@@ -281,29 +200,6 @@ func (c *TerraformPluginFrameworkConnector) configureProvider(ctx context.Contex
 		return nil, errors.Errorf("provider configure request returned fatal diagnostics")
 	}
 	return providerServer, nil
-}
-
-func (n *terraformPluginFrameworkExternalClient) configureProviderOLD(ctx context.Context) error {
-	tsBytes, err := json.Marshal(n.ts.Configuration)
-	if err != nil {
-		return errors.Wrap(err, "cannot marshal ts config")
-	}
-	configureProviderReq := &tfprotov5.ConfigureProviderRequest{
-		TerraformVersion: "crossTF000",
-		Config: &tfprotov5.DynamicValue{
-			JSON: tsBytes,
-		},
-	}
-	providerResp, err := n.server.ConfigureProvider(ctx, configureProviderReq)
-	fmt.Printf("%p", providerResp)
-	if err != nil {
-		return err
-	}
-	// TODO(erhan): improve diag reporting
-	if hasFatalDiag := hasFatalDiagnostics(providerResp.Diagnostics); hasFatalDiag {
-		return errors.Errorf("provider configure request returned fatal diagnostics")
-	}
-	return nil
 }
 
 func (n *terraformPluginFrameworkExternalClient) getDiffPlan(ctx context.Context,
@@ -334,6 +230,7 @@ func (n *terraformPluginFrameworkExternalClient) getDiffPlan(ctx context.Context
 	if err != nil {
 		return &tfprotov5.DynamicValue{}, false, err
 	}
+
 	// process diffs
 	processedDiffs := diffs[:0]
 	for _, diff := range diffs {
@@ -346,44 +243,28 @@ func (n *terraformPluginFrameworkExternalClient) getDiffPlan(ctx context.Context
 		return nil, false, nil
 	}
 
-	var proposedNewState tfprotov5.DynamicValue
-
-	// calculate proposed state when we have a prior state
-	if !tfStateValue.IsNull() {
-		proposedNewStateValue := tfStateValue.Copy()
-		for _, pdiff := range processedDiffs {
-			proposedNewStateValue, err = tftypes.Transform(proposedNewStateValue, func(path *tftypes.AttributePath, value tftypes.Value) (tftypes.Value, error) {
-				if path.Equal(pdiff.Path) {
-					return *pdiff.Value2, nil
-				}
-				return value, nil
-			})
-			if err != nil {
-				return nil, false, err
-			}
-		}
-		if proposedNewState, err = tfprotov5.NewDynamicValue(valueTerraformType, proposedNewStateValue); err != nil {
-			return nil, false, err
-		}
-	} else {
-		// resource does not exist - config becomes the proposed state
-		if proposedNewState, err = tfprotov5.NewDynamicValue(valueTerraformType, tfConfigValue.Copy()); err != nil {
-			return nil, false, err
-		}
-	}
-	fmt.Printf("%p\n", proposedNewState)
-	prcr := &tfprotov5.PlanResourceChangeRequest{
+	prcReq := &tfprotov5.PlanResourceChangeRequest{
 		TypeName:         n.config.Name,
 		Config:           &tfConfig,
 		ProposedNewState: &tfPlannedState,
 	}
-	planResponse, err := n.server.PlanResourceChange(ctx, prcr)
+	planResponse, err := n.server.PlanResourceChange(ctx, prcReq)
 	if err != nil {
 		return &tfprotov5.DynamicValue{}, false, errors.Wrap(err, "cannot plan change")
 	}
 	// TODO: improve diag reporting
 	if isFatal := hasFatalDiagnostics(planResponse.Diagnostics); isFatal {
 		return &tfprotov5.DynamicValue{}, false, errors.New("plan resource change has fatal diags")
+	}
+
+	if len(planResponse.RequiresReplace) > 0 {
+		var sb strings.Builder
+		sb.WriteString("diff contains fields that require resource replacement: ")
+		for _, attrPath := range planResponse.RequiresReplace {
+			sb.WriteString(attrPath.String())
+			sb.WriteString(", ")
+		}
+		return nil, false, errors.New(sb.String())
 	}
 
 	return planResponse.PlannedState, len(processedDiffs) > 0, nil
@@ -401,7 +282,7 @@ func (n *terraformPluginFrameworkExternalClient) Observe(ctx context.Context, mg
 
 	readRequest := &tfprotov5.ReadResourceRequest{
 		TypeName:     n.config.Name,
-		CurrentState: n.opTracker.GetFwState(),
+		CurrentState: n.opTracker.GetFrameworkTFState(),
 	}
 	readResponse, err := n.server.ReadResource(ctx, readRequest)
 
@@ -419,7 +300,7 @@ func (n *terraformPluginFrameworkExternalClient) Observe(ctx context.Context, mg
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot unmarshal state value")
 	}
 
-	n.opTracker.SetFwState(readResponse.NewState)
+	n.opTracker.SetFrameworkTFState(readResponse.NewState)
 	resourceExists := !tfStateValue.IsNull()
 
 	var stateValueMap map[string]any
@@ -436,7 +317,7 @@ func (n *terraformPluginFrameworkExternalClient) Observe(ctx context.Context, mg
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot calculate diff")
 	}
 
-	n.fwDiff = plannedState
+	n.plannedState = plannedState
 
 	var connDetails managed.ConnectionDetails
 	if !resourceExists && mg.GetDeletionTimestamp() != nil {
@@ -498,8 +379,8 @@ func (n *terraformPluginFrameworkExternalClient) Create(ctx context.Context, mg 
 
 	applyRequest := &tfprotov5.ApplyResourceChangeRequest{
 		TypeName:     n.config.Name,
-		PriorState:   n.opTracker.GetFwState(),
-		PlannedState: n.fwDiff,
+		PriorState:   n.opTracker.GetFrameworkTFState(),
+		PlannedState: n.plannedState,
 		Config: &tfprotov5.DynamicValue{
 			JSON: configJsonBytes,
 		},
@@ -538,14 +419,7 @@ func (n *terraformPluginFrameworkExternalClient) Create(ctx context.Context, mg 
 		stateValueMap = goval.(map[string]any)
 	}
 
-	/*
-		if tfValErr := newStateAfterApplyVal.As(stateValueMap); tfValErr != nil {
-			return managed.ExternalCreation{}, errors.Wrap(err, "cannot convert to state map")
-		}
-	*/
-
-	// TODO(erhan): set to opTracker
-	n.opTracker.SetFwState(applyResponse.NewState)
+	n.opTracker.SetFrameworkTFState(applyResponse.NewState)
 
 	if _, err := n.setExternalName(mg, stateValueMap); err != nil {
 		return managed.ExternalCreation{}, errors.Wrapf(err, "failed to set the external-name of the managed resource during create")
@@ -556,8 +430,6 @@ func (n *terraformPluginFrameworkExternalClient) Create(ctx context.Context, mg 
 		return managed.ExternalCreation{}, errors.Errorf("could not set observation: %v", err)
 	}
 
-	// TODO(cem): Obviously, remove the following definition of conn, after it is defined correctly above.
-	// conn := managed.ConnectionDetails{}
 	// TODO(erhan): check config.Sensitive
 	conn, err := resource.GetConnectionDetails(stateValueMap, mg.(resource.Terraformed), n.config)
 	if err != nil {
@@ -570,11 +442,6 @@ func (n *terraformPluginFrameworkExternalClient) Create(ctx context.Context, mg 
 func (n *terraformPluginFrameworkExternalClient) Update(ctx context.Context, mg xpresource.Managed) (managed.ExternalUpdate, error) {
 	n.logger.Debug("Updating the external resource")
 
-	// TODO: check framework equivalent for forcenew
-	// if err := n.assertNoForceNew(); err != nil {
-	// 	return managed.ExternalUpdate{}, errors.Wrap(err, "refuse to update the external resource")
-	// }
-
 	configJsonBytes, err := json.Marshal(n.params)
 	if err != nil {
 		return managed.ExternalUpdate{}, errors.Wrap(err, "cannot convert params to json bytes")
@@ -582,8 +449,8 @@ func (n *terraformPluginFrameworkExternalClient) Update(ctx context.Context, mg 
 
 	applyRequest := &tfprotov5.ApplyResourceChangeRequest{
 		TypeName:     n.config.Name,
-		PriorState:   n.opTracker.GetFwState(),
-		PlannedState: n.fwDiff,
+		PriorState:   n.opTracker.GetFrameworkTFState(),
+		PlannedState: n.plannedState,
 		Config: &tfprotov5.DynamicValue{
 			JSON: configJsonBytes,
 		},
@@ -597,7 +464,7 @@ func (n *terraformPluginFrameworkExternalClient) Update(ctx context.Context, mg 
 	if fatal := hasFatalDiagnostics(applyResponse.Diagnostics); fatal {
 		return managed.ExternalUpdate{}, errors.Errorf("failed to create the resource:")
 	}
-	n.opTracker.SetFwState(applyResponse.NewState)
+	n.opTracker.SetFrameworkTFState(applyResponse.NewState)
 
 	newStateAfterApplyVal, err := applyResponse.NewState.Unmarshal(n.resourceSchema.Type().TerraformType(ctx))
 	if err != nil {
@@ -639,7 +506,7 @@ func (n *terraformPluginFrameworkExternalClient) Delete(ctx context.Context, _ x
 
 	applyRequest := &tfprotov5.ApplyResourceChangeRequest{
 		TypeName:     n.config.Name,
-		PriorState:   n.opTracker.GetFwState(),
+		PriorState:   n.opTracker.GetFrameworkTFState(),
 		PlannedState: &plannedState,
 		Config: &tfprotov5.DynamicValue{
 			JSON: configJsonBytes,
@@ -655,13 +522,13 @@ func (n *terraformPluginFrameworkExternalClient) Delete(ctx context.Context, _ x
 	if fatal := hasFatalDiagnostics(applyResponse.Diagnostics); fatal {
 		return errors.Errorf("failed to delete the resource with diags")
 	}
-	n.opTracker.SetFwState(applyResponse.NewState)
+	n.opTracker.SetFrameworkTFState(applyResponse.NewState)
 
 	newStateAfterApplyVal, err := applyResponse.NewState.Unmarshal(schemaType)
 	if err != nil {
 		return errors.Wrap(err, "cannot unmarshal updated state")
 	}
-	n.opTracker.SetFwState(applyResponse.NewState)
+	n.opTracker.SetFrameworkTFState(applyResponse.NewState)
 	// mark the resource as logically deleted if the TF call clears the state
 	n.opTracker.SetDeleted(newStateAfterApplyVal.IsNull())
 
@@ -736,6 +603,7 @@ func valueToGo(input tftypes.Value) (any, error) {
 		}
 		return x, nil
 	} else if valType.Is(tftypes.DynamicPseudoType) {
+		// TODO: check if we need to handle DynamicPseudoType
 		return nil, nil
 	} else {
 		return nil, nil
