@@ -45,7 +45,7 @@ type ConversionSpokeGenerator struct {
 }
 
 // Generate writes generated conversion.Convertible interface functions
-func (cg *ConversionSpokeGenerator) Generate(cfgs []*terraformedInput) error {
+func (cg *ConversionSpokeGenerator) Generate(cfgs []*terraformedInput) error { //nolint:gocyclo
 	entries, err := os.ReadDir(cg.LocalDirectoryPath)
 	if err != nil {
 		return errors.Wrapf(err, "cannot list the directory entries for the source folder %s while generating the conversion.Convertible interface functions", cg.LocalDirectoryPath)
@@ -91,7 +91,8 @@ func (cg *ConversionSpokeGenerator) Generate(cfgs []*terraformedInput) error {
 					"Kind": c.Kind,
 				},
 			})
-			cg.SpokeVersionsMap[fmt.Sprintf("%s.%s", c.ShortGroup, c.Kind)] = append(cg.SpokeVersionsMap[c.Kind], filepath.Base(versionDir))
+			sk := fmt.Sprintf("%s.%s", c.ShortGroup, c.Kind)
+			cg.SpokeVersionsMap[sk] = append(cg.SpokeVersionsMap[sk], filepath.Base(versionDir))
 		}
 
 		vars["Resources"] = resources
@@ -104,7 +105,7 @@ func (cg *ConversionSpokeGenerator) Generate(cfgs []*terraformedInput) error {
 
 func findKindTerraformedInput(cfgs []*terraformedInput, name string) *terraformedInput {
 	for _, c := range cfgs {
-		if name == strings.ToLower(c.Kind) {
+		if strings.EqualFold(name, c.Kind) {
 			return c
 		}
 	}

@@ -10,14 +10,13 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/crossplane/upjet/pkg/config/conversion"
-
 	"github.com/crossplane/upjet/pkg/resource"
 )
 
 // RoundTrip round-trips from `src` to `dst` via an unstructured map[string]any
 // representation of the `src` object and applies the registered webhook
 // conversion functions.
-func RoundTrip(dst, src resource.Terraformed) error {
+func RoundTrip(dst, src resource.Terraformed) error { //nolint:gocyclo // considered breaking this according to the converters and I did not like it
 	srcMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(src)
 	if err != nil {
 		return errors.Wrap(err, "cannot convert the conversion source object into the map[string]any representation")
