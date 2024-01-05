@@ -262,7 +262,7 @@ further examples under `config/<group>/config.go` in their repositories.
 
 _Please see [this figure] to understand why we really need 3 different functions
 to configure external names and, it visualizes which is used how:_
-![Alt text](../images/upjet-externalname.png) _Note that, initially, GetIDFn
+![Alt text](../docs/images/upjet-externalname.png) _Note that, initially, GetIDFn
 will use the external-name annotation to set the terraform.tfstate id and, after
 that, it uses the terraform.tfstate id to update the external-name annotation.
 For cases where both values are different, both GetIDFn and GetExternalNameFn
@@ -899,7 +899,7 @@ initializers for a resource.
 [Computed]: https://github.com/hashicorp/terraform-plugin-sdk/blob/e3325b095ef501cf551f7935254ce942c44c1af0/helper/schema/schema.go#L139
 [tags_all for jet AWS resources]: https://github.com/upbound/provider-aws/blob/main/config/overrides.go#L62
 [AWS region]: https://github.com/upbound/provider-aws/blob/main/config/overrides.go#L32
-[this figure]: ../images/upjet-externalname.png
+[this figure]: ../docs/images/upjet-externalname.png
 [Initializers]: #initializers
 [InitializerFns]: https://github.com/crossplane/upjet/blob/main/pkg/config/resource.go#L297
 [NewInitializerFn]: https://github.com/crossplane/upjet/blob/main/pkg/config/resource.go#L210
