@@ -8,29 +8,32 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/pkg/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 const (
 	AllVersions = "*"
 )
 
-const (
-	pathObjectMeta = "ObjectMeta"
-)
-
 type Conversion interface {
-	GetSourceVersion() string
-	GetTargetVersion() string
+	Applicable(src, dst runtime.Object) bool
 }
 
 type PavedConversion interface {
 	Conversion
-	ConvertPaved(src, target fieldpath.Paved) error
+	// ConvertPaved converts from the `src` paved object to the `dst`
+	// paved object and returns `true` if the conversion has been done,
+	// `false` otherwise, together with any errors encountered.
+	ConvertPaved(src, target *fieldpath.Paved) (bool, error)
 }
 
-type ManagedConversion interface {
+type TerraformedConversion interface {
 	Conversion
-	ConvertTerraformed(src, target resource.Managed)
+	// ConvertTerraformed converts from the `src` managed resource to the `dst`
+	// managed resource and returns `true` if the conversion has been done,
+	// `false` otherwise, together with any errors encountered.
+	ConvertTerraformed(src, target resource.Managed) (bool, error)
 }
 
 type baseConversion struct {
@@ -45,12 +48,9 @@ func newBaseConversion(sourceVersion, targetVersion string) baseConversion {
 	}
 }
 
-func (c *baseConversion) GetSourceVersion() string {
-	return c.sourceVersion
-}
-
-func (c *baseConversion) GetTargetVersion() string {
-	return c.targetVersion
+func (c *baseConversion) Applicable(src, dst runtime.Object) bool {
+	return (c.sourceVersion == AllVersions || c.sourceVersion == src.GetObjectKind().GroupVersionKind().Version) &&
+		(c.targetVersion == AllVersions || c.targetVersion == dst.GetObjectKind().GroupVersionKind().Version)
 }
 
 type fieldCopy struct {
@@ -59,20 +59,22 @@ type fieldCopy struct {
 	targetField string
 }
 
-func (f *fieldCopy) ConvertPaved(src, target fieldpath.Paved) error {
+func (f *fieldCopy) ConvertPaved(src, target *fieldpath.Paved) (bool, error) {
+	if !f.Applicable(&unstructured.Unstructured{Object: src.UnstructuredContent()},
+		&unstructured.Unstructured{Object: target.UnstructuredContent()}) {
+		return false, nil
+	}
 	v, err := src.GetValue(f.sourceField)
+	// TODO: the field might actually exist in the schema and
+	// missing in the object. Or, it may not exist in the schema.
+	// For a field that does not exist in the schema, we had better error.
+	if fieldpath.IsNotFound(err) {
+		return false, nil
+	}
 	if err != nil {
-		return errors.Wrapf(err, "failed to get the field %q from the conversion source object", f.sourceField)
+		return false, errors.Wrapf(err, "failed to get the field %q from the conversion source object", f.sourceField)
 	}
-	return errors.Wrapf(target.SetValue(f.targetField, v), "failed to set the field %q of the conversion target object", f.targetField)
-}
-
-func NewObjectMetaConversion() Conversion {
-	return &fieldCopy{
-		baseConversion: newBaseConversion(AllVersions, AllVersions),
-		sourceField:    pathObjectMeta,
-		targetField:    pathObjectMeta,
-	}
+	return true, errors.Wrapf(target.SetValue(f.targetField, v), "failed to set the field %q of the conversion target object", f.targetField)
 }
 
 func NewFieldRenameConversion(sourceVersion, sourceField, targetVersion, targetField string) Conversion {
