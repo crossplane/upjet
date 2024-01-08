@@ -528,7 +528,6 @@ func (n *terraformPluginFrameworkExternalClient) Delete(ctx context.Context, _ x
 	if err != nil {
 		return errors.Wrap(err, "cannot unmarshal updated state")
 	}
-	n.opTracker.SetFrameworkTFState(applyResponse.NewState)
 	// mark the resource as logically deleted if the TF call clears the state
 	n.opTracker.SetDeleted(newStateAfterApplyVal.IsNull())
 

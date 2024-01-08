@@ -134,11 +134,11 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Create(_ context.Context, 
 	go func() {
 		defer cancel()
 
-		n.opTracker.logger.Debug("Async create starting...", "tfID", n.opTracker.GetFrameworkTFID())
+		n.opTracker.logger.Debug("Async create starting...")
 		_, err := n.terraformPluginFrameworkExternalClient.Create(ctx, mg)
 		err = tferrors.NewAsyncCreateFailed(err)
 		n.opTracker.LastOperation.SetError(err)
-		n.opTracker.logger.Debug("Async create ended.", "error", err, "tfID", n.opTracker.GetFrameworkTFID())
+		n.opTracker.logger.Debug("Async create ended.", "error", err)
 
 		n.opTracker.LastOperation.MarkEnd()
 		if cErr := n.callback.Create(mg.GetName())(err, ctx); cErr != nil {
@@ -158,11 +158,11 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Update(_ context.Context, 
 	go func() {
 		defer cancel()
 
-		n.opTracker.logger.Debug("Async update starting...", "tfID", n.opTracker.GetFrameworkTFID())
+		n.opTracker.logger.Debug("Async update starting...")
 		_, err := n.terraformPluginFrameworkExternalClient.Update(ctx, mg)
 		err = tferrors.NewAsyncUpdateFailed(err)
 		n.opTracker.LastOperation.SetError(err)
-		n.opTracker.logger.Debug("Async update ended.", "error", err, "tfID", n.opTracker.GetFrameworkTFID())
+		n.opTracker.logger.Debug("Async update ended.", "error", err)
 
 		n.opTracker.LastOperation.MarkEnd()
 		if cErr := n.callback.Update(mg.GetName())(err, ctx); cErr != nil {
@@ -176,7 +176,7 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Update(_ context.Context, 
 func (n *terraformPluginFrameworkAsyncExternalClient) Delete(_ context.Context, mg xpresource.Managed) error {
 	switch {
 	case n.opTracker.LastOperation.Type == "delete":
-		n.opTracker.logger.Debug("The previous delete operation is still ongoing", "tfID", n.opTracker.GetFrameworkTFID())
+		n.opTracker.logger.Debug("The previous delete operation is still ongoing")
 		return nil
 	case !n.opTracker.LastOperation.MarkStart("delete"):
 		return errors.Errorf("%s operation that started at %s is still running", n.opTracker.LastOperation.Type, n.opTracker.LastOperation.StartTime().String())
@@ -186,10 +186,10 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Delete(_ context.Context, 
 	go func() {
 		defer cancel()
 
-		n.opTracker.logger.Debug("Async delete starting...", "tfID", n.opTracker.GetFrameworkTFID())
+		n.opTracker.logger.Debug("Async delete starting...")
 		err := tferrors.NewAsyncDeleteFailed(n.terraformPluginFrameworkExternalClient.Delete(ctx, mg))
 		n.opTracker.LastOperation.SetError(err)
-		n.opTracker.logger.Debug("Async delete ended.", "error", err, "tfID", n.opTracker.GetFrameworkTFID())
+		n.opTracker.logger.Debug("Async delete ended.", "error", err)
 
 		n.opTracker.LastOperation.MarkEnd()
 		if cErr := n.callback.Destroy(mg.GetName())(err, ctx); cErr != nil {

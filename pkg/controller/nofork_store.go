@@ -143,7 +143,7 @@ func (ops *OperationTrackerStore) Tracker(tr resource.Terraformed) *AsyncTracker
 	defer ops.mu.Unlock()
 	tracker, ok := ops.store[tr.GetUID()]
 	if !ok {
-		l := ops.logger.WithValues("trackerUID", tr.GetUID(), "resourceName", tr.GetName())
+		l := ops.logger.WithValues("trackerUID", tr.GetUID(), "resourceName", tr.GetName(), "gvk", tr.GetObjectKind().GroupVersionKind().String())
 		ops.store[tr.GetUID()] = NewAsyncTracker(WithAsyncTrackerLogger(l))
 		tracker = ops.store[tr.GetUID()]
 	}
