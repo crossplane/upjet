@@ -495,6 +495,9 @@ func (n *noForkExternal) Observe(ctx context.Context, mg xpresource.Managed) (ma
 	if err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot compute the instance diff")
 	}
+	if instanceDiff == nil {
+		instanceDiff = tf.NewInstanceDiff()
+	}
 	n.instanceDiff = instanceDiff
 	noDiff := instanceDiff.Empty()
 
