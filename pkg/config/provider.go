@@ -286,11 +286,13 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadata []byt
 					"but either config.Provider.TerraformProvider is not configured or the Go schema does not exist for the resource", name))
 			}
 			terraformResource = p.TerraformProvider.ResourcesMap[name]
-			// TODO: we will need to bump the terraform-plugin-sdk dependency to handle
-			// schema.Resource.SchemaFunc
 			if terraformResource.Schema == nil {
-				p.skippedResourceNames = append(p.skippedResourceNames, name)
-				continue
+				if terraformResource.SchemaFunc == nil {
+					p.skippedResourceNames = append(p.skippedResourceNames, name)
+					fmt.Printf("Skipping resource %s because it has no schema and no schema function\n", name)
+					continue
+				}
+				terraformResource.Schema = terraformResource.SchemaFunc()
 			}
 		}
 		p.Resources[name] = DefaultResource(name, terraformResource, providerMetadata.Resources[name], p.DefaultResourceOptions...)
