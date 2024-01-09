@@ -35,7 +35,7 @@ func NewTerraformPluginFrameworkAsyncConnector(kube client.Client,
 	ots *OperationTrackerStore,
 	sf terraform.SetupFn,
 	cfg *config.Resource,
-	provider *provider.Provider,
+	provider provider.Provider,
 	opts ...TerraformPluginFrameworkAsyncOption) *TerraformPluginFrameworkAsyncConnector {
 	nfac := &TerraformPluginFrameworkAsyncConnector{
 		TerraformPluginFrameworkConnector: NewTerraformPluginFrameworkConnector(kube, sf, cfg, ots, provider),

@@ -19,6 +19,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
+	fwprovider "github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/mitchellh/go-ps"
 	"github.com/pkg/errors"
 	"github.com/spf13/afero"
@@ -122,6 +123,8 @@ type Setup struct {
 	Scheduler ProviderScheduler
 
 	Meta any
+
+	FrameworkProvider fwprovider.Provider
 }
 
 // Map returns the Setup object in map form. The initial reason was so that

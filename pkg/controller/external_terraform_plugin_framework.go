@@ -43,7 +43,7 @@ type TerraformPluginFrameworkConnector struct {
 	metricRecorder                   *metrics.MetricRecorder
 	operationTrackerStore            *OperationTrackerStore
 	isManagementPoliciesEnabled      bool
-	terraformPluginFrameworkProvider *fwprovider.Provider
+	terraformPluginFrameworkProvider fwprovider.Provider
 }
 
 // TerraformPluginFrameworkConnectorOption allows you to configure TerraformPluginFrameworkConnector.
@@ -72,7 +72,7 @@ func WithTerraformPluginFrameworkManagementPolicies(isManagementPoliciesEnabled 
 	}
 }
 
-func NewTerraformPluginFrameworkConnector(kube client.Client, sf terraform.SetupFn, cfg *config.Resource, ots *OperationTrackerStore, terraformPluginFrameworkProvider *fwprovider.Provider, opts ...TerraformPluginFrameworkConnectorOption) *TerraformPluginFrameworkConnector {
+func NewTerraformPluginFrameworkConnector(kube client.Client, sf terraform.SetupFn, cfg *config.Resource, ots *OperationTrackerStore, terraformPluginFrameworkProvider fwprovider.Provider, opts ...TerraformPluginFrameworkConnectorOption) *TerraformPluginFrameworkConnector {
 	connector := &TerraformPluginFrameworkConnector{
 		getTerraformSetup:                sf,
 		kube:                             kube,
@@ -118,7 +118,17 @@ func (c *TerraformPluginFrameworkConnector) Connect(ctx context.Context, mg xpre
 		return nil, errors.Wrapf(err, "failed to get the extended parameters for resource %q", mg.GetName())
 	}
 
-	if !opTracker.HasFrameworkTFState() {
+	resourceSchema, err := c.getResourceSchema(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not retrieve resource schema")
+	}
+	hasState := false
+	if opTracker.HasFrameworkTFState() {
+		tfStateValue, err := opTracker.GetFrameworkTFState().Unmarshal(resourceSchema.Type().TerraformType(ctx))
+		hasState = err == nil && !tfStateValue.IsNull()
+	}
+
+	if !hasState {
 		logger.Debug("Instance state not found in cache, reconstructing...")
 		tfState, err := tr.GetObservation()
 		if err != nil {
@@ -150,11 +160,6 @@ func (c *TerraformPluginFrameworkConnector) Connect(ctx context.Context, mg xpre
 		return nil, errors.Wrap(err, "could not configure provider server")
 	}
 
-	resourceSchema, err := c.getResourceSchema(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not retrieve resource schema")
-	}
-
 	return &terraformPluginFrameworkExternalClient{
 		ts:             ts,
 		config:         c.config,
@@ -180,7 +185,7 @@ func (c *TerraformPluginFrameworkConnector) getResourceSchema(ctx context.Contex
 }
 
 func (c *TerraformPluginFrameworkConnector) configureProvider(ctx context.Context, ts terraform.Setup) (tfprotov5.ProviderServer, error) {
-	providerServer := providerserver.NewProtocol5(*c.terraformPluginFrameworkProvider)()
+	providerServer := providerserver.NewProtocol5(ts.FrameworkProvider)()
 	tsBytes, err := json.Marshal(ts.Configuration)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot marshal ts config")
@@ -245,6 +250,7 @@ func (n *terraformPluginFrameworkExternalClient) getDiffPlan(ctx context.Context
 
 	prcReq := &tfprotov5.PlanResourceChangeRequest{
 		TypeName:         n.config.Name,
+		PriorState:       n.opTracker.GetFrameworkTFState(),
 		Config:           &tfConfig,
 		ProposedNewState: &tfPlannedState,
 	}

@@ -136,7 +136,7 @@ type Provider struct {
 	// TerraformProvider is the Terraform schema of the provider.
 	TerraformProvider *schema.Provider
 
-	TerraformPluginFrameworkProvider *fwprovider.Provider
+	TerraformPluginFrameworkProvider fwprovider.Provider
 
 	// refInjectors is an ordered list of `ReferenceInjector`s for
 	// injecting references across this Provider's resources.
@@ -197,7 +197,7 @@ func WithTerraformProvider(tp *schema.Provider) ProviderOption {
 	}
 }
 
-func WithTerraformPluginFrameworkProvider(tp *fwprovider.Provider) ProviderOption {
+func WithTerraformPluginFrameworkProvider(tp fwprovider.Provider) ProviderOption {
 	return func(p *Provider) {
 		p.TerraformPluginFrameworkProvider = tp
 	}
@@ -327,7 +327,7 @@ func NewProvider(ctx context.Context, schema []byte, prefix string, modulePath s
 
 			// TODO(cem): Consider creating a new context here, rather than getting one as input to this function.
 			// TODO(cem): Currently, terraformPluginFrameworkResourceFunctions is calculated for each plugin framework resource. Doing so is wasteful, because the result is independent of the resource. It should be called once, outside the loop.
-			terraformPluginFrameworkResourceFunctions := (*p.TerraformPluginFrameworkProvider).Resources(ctx)
+			terraformPluginFrameworkResourceFunctions := p.TerraformPluginFrameworkProvider.Resources(ctx)
 			for _, resourceFunc := range terraformPluginFrameworkResourceFunctions {
 				resource := resourceFunc()
 
