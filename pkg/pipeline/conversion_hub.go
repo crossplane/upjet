@@ -40,7 +40,7 @@ func (cg *ConversionHubGenerator) Generate(cfgs []*terraformedInput, apiVersion 
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath(cg.LicenseHeaderPath),
 	)
-	filePath := filepath.Join(cg.LocalDirectoryPath, "zz_generated.conversion.go")
+	filePath := filepath.Join(cg.LocalDirectoryPath, "zz_generated.conversion_hubs.go")
 	vars := map[string]any{
 		"APIVersion": apiVersion,
 	}
@@ -55,6 +55,9 @@ func (cg *ConversionHubGenerator) Generate(cfgs []*terraformedInput, apiVersion 
 		index++
 	}
 	vars["Resources"] = resources
+	if len(resources) == 0 {
+		return nil
+	}
 	return errors.Wrapf(
 		trFile.Write(filePath, vars, os.ModePerm),
 		"cannot write the generated conversion Hub functions file %s", filePath,

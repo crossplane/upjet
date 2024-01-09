@@ -61,7 +61,7 @@ func (cg *ConversionSpokeGenerator) Generate(cfgs []*terraformedInput) error { /
 			wrapper.WithGenStatement(GenStatement),
 			wrapper.WithHeaderPath(cg.LicenseHeaderPath),
 		)
-		filePath := filepath.Join(cg.LocalDirectoryPath, e.Name(), "zz_generated.conversion.go")
+		filePath := filepath.Join(cg.LocalDirectoryPath, e.Name(), "zz_generated.conversion_spokes.go")
 		vars := map[string]any{
 			"APIVersion": e.Name(),
 		}
@@ -96,6 +96,9 @@ func (cg *ConversionSpokeGenerator) Generate(cfgs []*terraformedInput) error { /
 		}
 
 		vars["Resources"] = resources
+		if len(resources) == 0 {
+			continue
+		}
 		if err := trFile.Write(filePath, vars, os.ModePerm); err != nil {
 			return errors.Wrapf(err, "cannot write the generated conversion Hub functions file %s", filePath)
 		}
