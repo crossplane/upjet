@@ -72,13 +72,12 @@ func WithTerraformPluginFrameworkManagementPolicies(isManagementPoliciesEnabled 
 	}
 }
 
-func NewTerraformPluginFrameworkConnector(kube client.Client, sf terraform.SetupFn, cfg *config.Resource, ots *OperationTrackerStore, terraformPluginFrameworkProvider fwprovider.Provider, opts ...TerraformPluginFrameworkConnectorOption) *TerraformPluginFrameworkConnector {
+func NewTerraformPluginFrameworkConnector(kube client.Client, sf terraform.SetupFn, cfg *config.Resource, ots *OperationTrackerStore, opts ...TerraformPluginFrameworkConnectorOption) *TerraformPluginFrameworkConnector {
 	connector := &TerraformPluginFrameworkConnector{
-		getTerraformSetup:                sf,
-		kube:                             kube,
-		config:                           cfg,
-		operationTrackerStore:            ots,
-		terraformPluginFrameworkProvider: terraformPluginFrameworkProvider,
+		getTerraformSetup:     sf,
+		kube:                  kube,
+		config:                cfg,
+		operationTrackerStore: ots,
 	}
 	for _, f := range opts {
 		f(connector)

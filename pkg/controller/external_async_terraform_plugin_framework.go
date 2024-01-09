@@ -11,7 +11,6 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
-	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/pkg/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -35,10 +34,9 @@ func NewTerraformPluginFrameworkAsyncConnector(kube client.Client,
 	ots *OperationTrackerStore,
 	sf terraform.SetupFn,
 	cfg *config.Resource,
-	provider provider.Provider,
 	opts ...TerraformPluginFrameworkAsyncOption) *TerraformPluginFrameworkAsyncConnector {
 	nfac := &TerraformPluginFrameworkAsyncConnector{
-		TerraformPluginFrameworkConnector: NewTerraformPluginFrameworkConnector(kube, sf, cfg, ots, provider),
+		TerraformPluginFrameworkConnector: NewTerraformPluginFrameworkConnector(kube, sf, cfg, ots),
 	}
 	for _, f := range opts {
 		f(nfac)

@@ -288,6 +288,7 @@ func NewProvider(ctx context.Context, schema []byte, prefix string, modulePath s
 	}
 
 	p.skippedResourceNames = make([]string, 0, len(resourceMap))
+	terraformPluginFrameworkResourceFunctions := p.TerraformPluginFrameworkProvider.Resources(ctx)
 	for name, terraformResource := range resourceMap {
 		if len(terraformResource.Schema) == 0 {
 			// There are resources with no schema, that we will address later.
@@ -325,9 +326,6 @@ func NewProvider(ctx context.Context, schema []byte, prefix string, modulePath s
 					"but either config.Provider.TerraformProvider is not configured or the Go schema does not exist for the resource", name))
 			}
 
-			// TODO(cem): Consider creating a new context here, rather than getting one as input to this function.
-			// TODO(cem): Currently, terraformPluginFrameworkResourceFunctions is calculated for each plugin framework resource. Doing so is wasteful, because the result is independent of the resource. It should be called once, outside the loop.
-			terraformPluginFrameworkResourceFunctions := p.TerraformPluginFrameworkProvider.Resources(ctx)
 			for _, resourceFunc := range terraformPluginFrameworkResourceFunctions {
 				resource := resourceFunc()
 
