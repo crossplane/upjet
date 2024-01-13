@@ -186,7 +186,7 @@ mentioned in the next parts.
   resources, but if you want to see the value of conditions in your tests in
   your local environment (during manual tests) you need to add this condition
   manually. For the goal and details of this status condition please see this
-  PR: https://github.com/upbound/crossplane/pull/23
+  PR: https://github.com/crossplane/upjet/pull/23
 
 > [!NOTE]
 > The resources that are tried to be created may have dependencies. For example,
