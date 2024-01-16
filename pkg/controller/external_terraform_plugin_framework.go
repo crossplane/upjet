@@ -550,10 +550,10 @@ func tfValueToMap(input tftypes.Value) (any, error) { //nolint:gocyclo
 		return dest, nil
 	case valType.Is(tftypes.Set{}), valType.Is(tftypes.List{}), valType.Is(tftypes.Tuple{}):
 		destInterim := make([]tftypes.Value, 0)
-		dest := make([]any, 0)
 		if err := input.As(&destInterim); err != nil {
 			return nil, err
 		}
+		dest := make([]any, len(destInterim))
 		for i, v := range destInterim {
 			if res, err := tfValueToMap(v); err != nil {
 				return nil, err
