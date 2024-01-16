@@ -18,12 +18,10 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
-
 	fwprovider "github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	fwresource "github.com/hashicorp/terraform-plugin-framework/resource"
 	rschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	_ "github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov5"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 	"github.com/pkg/errors"
@@ -38,14 +36,13 @@ import (
 )
 
 type TerraformPluginFrameworkConnector struct {
-	getTerraformSetup                terraform.SetupFn
-	kube                             client.Client
-	config                           *config.Resource
-	logger                           logging.Logger
-	metricRecorder                   *metrics.MetricRecorder
-	operationTrackerStore            *OperationTrackerStore
-	isManagementPoliciesEnabled      bool
-	terraformPluginFrameworkProvider fwprovider.Provider
+	getTerraformSetup           terraform.SetupFn
+	kube                        client.Client
+	config                      *config.Resource
+	logger                      logging.Logger
+	metricRecorder              *metrics.MetricRecorder
+	operationTrackerStore       *OperationTrackerStore
+	isManagementPoliciesEnabled bool
 }
 
 // TerraformPluginFrameworkConnectorOption allows you to configure TerraformPluginFrameworkConnector.
@@ -100,7 +97,7 @@ type terraformPluginFrameworkExternalClient struct {
 	resourceSchema rschema.Schema
 }
 
-func (c *TerraformPluginFrameworkConnector) Connect(ctx context.Context, mg xpresource.Managed) (managed.ExternalClient, error) {
+func (c *TerraformPluginFrameworkConnector) Connect(ctx context.Context, mg xpresource.Managed) (managed.ExternalClient, error) { //nolint:gocyclo
 	c.metricRecorder.ObserveReconcileDelay(mg.GetObjectKind().GroupVersionKind(), mg.GetName())
 	logger := c.logger.WithValues("uid", mg.GetUID(), "name", mg.GetName(), "gvk", mg.GetObjectKind().GroupVersionKind().String())
 	logger.Debug("Connecting to the service provider")
@@ -189,7 +186,7 @@ func (c *TerraformPluginFrameworkConnector) configureProvider(ctx context.Contex
 		for _, tfdiag := range schemaResp.Diagnostics.Errors() {
 			diagErrors = append(diagErrors, fmt.Sprintf("%s: %s", tfdiag.Summary(), tfdiag.Detail()))
 		}
-		return nil, fmt.Errorf("cannot retrieve provider schema")
+		return nil, fmt.Errorf("cannot retrieve provider schema: %s", strings.Join(diagErrors, "\n"))
 	}
 	providerServer := providerserver.NewProtocol5(ts.FrameworkProvider)()
 
@@ -528,7 +525,7 @@ func (n *terraformPluginFrameworkExternalClient) setExternalName(mg xpresource.M
 	return oldName != newName, nil
 }
 
-func tfValueToMap(input tftypes.Value) (any, error) {
+func tfValueToMap(input tftypes.Value) (any, error) { //nolint:gocyclo
 	if !input.IsKnown() {
 		return nil, fmt.Errorf("cannot convert unknown value")
 	}
@@ -580,7 +577,7 @@ func tfValueToMap(input tftypes.Value) (any, error) {
 		if valBigF.IsInt() {
 			intVal, accuracy := valBigF.Int64()
 			if accuracy != 0 {
-				return nil, fmt.Errorf("value %s cannot be represented as a 64-bit integer", valBigF)
+				return nil, fmt.Errorf("value %v cannot be represented as a 64-bit integer", valBigF)
 			}
 			return intVal, nil
 		} else {
@@ -588,13 +585,13 @@ func tfValueToMap(input tftypes.Value) (any, error) {
 			// Underflow
 			// Reference: https://pkg.go.dev/math/big#Float.Float64
 			if xf == 0 && accuracy != big.Exact {
-				return nil, fmt.Errorf("value %s cannot be represented as a 64-bit floating point", valBigF)
+				return nil, fmt.Errorf("value %v cannot be represented as a 64-bit floating point", valBigF)
 			}
 
 			// Overflow
 			// Reference: https://pkg.go.dev/math/big#Float.Float64
 			if math.IsInf(xf, 0) {
-				return nil, fmt.Errorf("value %s cannot be represented as a 64-bit floating point", valBigF)
+				return nil, fmt.Errorf("value %v cannot be represented as a 64-bit floating point", valBigF)
 			}
 			return xf, nil
 		}
