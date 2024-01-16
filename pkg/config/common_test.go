@@ -127,6 +127,7 @@ func TestDefaultResource(t *testing.T) {
 		cmpopts.IgnoreFields(LateInitializer{}, "ignoredCanonicalFieldPaths"),
 		cmpopts.IgnoreFields(ExternalName{}, "SetIdentifierArgumentFn", "GetExternalNameFn", "GetIDFn"),
 		cmpopts.IgnoreFields(Resource{}, "useNoForkClient"),
+		cmpopts.IgnoreFields(Resource{}, "useTerraformPluginFrameworkClient"),
 	}
 
 	for name, tc := range cases {
