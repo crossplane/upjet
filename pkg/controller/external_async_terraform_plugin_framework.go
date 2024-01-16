@@ -47,7 +47,7 @@ func NewTerraformPluginFrameworkAsyncConnector(kube client.Client,
 func (c *TerraformPluginFrameworkAsyncConnector) Connect(ctx context.Context, mg xpresource.Managed) (managed.ExternalClient, error) {
 	ec, err := c.TerraformPluginFrameworkConnector.Connect(ctx, mg)
 	if err != nil {
-		return nil, errors.Wrap(err, "cannot initialize the no-fork async external client")
+		return nil, errors.Wrap(err, "cannot initialize the Terraform Plugin Framework async external client")
 	}
 
 	return &terraformPluginFrameworkAsyncExternalClient{
@@ -58,7 +58,7 @@ func (c *TerraformPluginFrameworkAsyncConnector) Connect(ctx context.Context, mg
 }
 
 // WithTerraformPluginFrameworkAsyncConnectorEventHandler configures the EventHandler so that
-// the no-fork external clients can requeue reconciliation requests.
+// the Terraform Plugin Framework external clients can requeue reconciliation requests.
 func WithTerraformPluginFrameworkAsyncConnectorEventHandler(e *handler.EventHandler) TerraformPluginFrameworkAsyncOption {
 	return func(c *TerraformPluginFrameworkAsyncConnector) {
 		c.eventHandler = e

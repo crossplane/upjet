@@ -440,7 +440,7 @@ func (n *terraformPluginFrameworkExternalClient) Update(ctx context.Context, mg 
 		return managed.ExternalUpdate{}, errors.Wrap(err, "cannot update resource")
 	}
 	if fatalDiags := getFatalDiagnostics(applyResponse.Diagnostics); fatalDiags != nil {
-		return managed.ExternalUpdate{}, errors.Errorf("resource update failed")
+		return managed.ExternalUpdate{}, errors.Wrap(fatalDiags, "resource update failed")
 	}
 	n.opTracker.SetFrameworkTFState(applyResponse.NewState)
 
@@ -480,7 +480,7 @@ func (n *terraformPluginFrameworkExternalClient) Delete(ctx context.Context, _ x
 	// set an empty planned state, this corresponds to deleting
 	plannedState, err := tfprotov5.NewDynamicValue(schemaType, tftypes.NewValue(schemaType, nil))
 	if err != nil {
-		return errors.Wrap(err, "cannot set the planned state")
+		return errors.Wrap(err, "cannot set the planned state for deletion")
 	}
 
 	applyRequest := &tfprotov5.ApplyResourceChangeRequest{
@@ -502,7 +502,7 @@ func (n *terraformPluginFrameworkExternalClient) Delete(ctx context.Context, _ x
 
 	newStateAfterApplyVal, err := applyResponse.NewState.Unmarshal(schemaType)
 	if err != nil {
-		return errors.Wrap(err, "cannot unmarshal updated state")
+		return errors.Wrap(err, "cannot unmarshal state after deletion")
 	}
 	// mark the resource as logically deleted if the TF call clears the state
 	n.opTracker.SetDeleted(newStateAfterApplyVal.IsNull())
