@@ -196,9 +196,9 @@ variables in the `Makefile`:
     +   "github.com/myorg/provider-github/config/repository"
      )
 
-     func GetProvider() *tjconfig.Provider {
+     func GetProvider() *ujconfig.Provider {
         ...
-        for _, configure := range []func(provider *tjconfig.Provider){
+        for _, configure := range []func(provider *ujconfig.Provider){
                 // add custom config functions
     -           null.Configure,
     +           repository.Configure,
