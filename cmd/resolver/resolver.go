@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"go/ast"
 	"go/format"
-	"go/parser"
 	"go/token"
 	"os"
 	"path/filepath"
@@ -321,7 +320,7 @@ func transformResolverFile(fset *token.FileSet, node *ast.File, filePath, apiGro
 	}
 
 	// dump the transformed resolver file
-	adjustFunctionDocs(fset, node)
+	adjustFunctionDocs(node)
 	outFile, err := os.Create(filepath.Clean(filePath))
 	if err != nil {
 		return errors.Wrap(err, "failed to open the resolver file for writing the transformed AST")
@@ -332,7 +331,7 @@ func transformResolverFile(fset *token.FileSet, node *ast.File, filePath, apiGro
 	return errors.Wrap(format.Node(outFile, fset, node), "failed to dump the transformed AST back into the resolver file")
 }
 
-func adjustFunctionDocs(fset *token.FileSet, node *ast.File) {
+func adjustFunctionDocs(node *ast.File) {
 	node.Decls[1].(*ast.FuncDecl).Doc.List[0].Slash = node.Decls[1].(*ast.FuncDecl).Name.Pos()
 }
 
@@ -351,41 +350,34 @@ func insertStatements(stmts []ast.Stmt, block *ast.BlockStmt, assign *ast.Assign
 }
 
 func addMRVariableDeclarations(f *ast.File) (map[string]string, error) { //nolint:gocyclo
-	varSrc := `package main
-
-import (
-	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
-)
-
-// reference resolver source objects
-var m xpresource.Managed
-var l xpresource.ManagedList
-`
-	fset := token.NewFileSet()
-	varFile, err := parser.ParseFile(fset, "", varSrc, parser.ParseComments)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to parse the managed resource variables file")
+	// prepare the first variable declaration:
+	// `var m xpresource.Managed`
+	varDecl1 := &ast.GenDecl{
+		Tok: token.VAR,
+		Specs: []ast.Spec{
+			&ast.ValueSpec{
+				Names: []*ast.Ident{ast.NewIdent("m")},
+				Type: &ast.SelectorExpr{
+					X:   ast.NewIdent("xpresource"),
+					Sel: ast.NewIdent("Managed"),
+				},
+			},
+		},
 	}
-	var varDecls []ast.Stmt
-	importMap := make(map[string]string, 0)
-	for _, decl := range varFile.Decls {
-		if genDecl, ok := decl.(*ast.GenDecl); ok {
-			switch genDecl.Tok { //nolint:exhaustive
-			case token.VAR:
-				varDecls = append(varDecls, &ast.DeclStmt{Decl: genDecl})
 
-			case token.IMPORT:
-				for _, spec := range genDecl.Specs {
-					if importSpec, ok := spec.(*ast.ImportSpec); ok {
-						name := ""
-						if importSpec.Name != nil {
-							name = importSpec.Name.Name
-						}
-						importMap[importSpec.Path.Value] = name
-					}
-				}
-			}
-		}
+	// prepare the second variable declaration:
+	// `var l xpresource.ManagedList`
+	varDecl2 := &ast.GenDecl{
+		Tok: token.VAR,
+		Specs: []ast.Spec{
+			&ast.ValueSpec{
+				Names: []*ast.Ident{ast.NewIdent("l")},
+				Type: &ast.SelectorExpr{
+					X:   ast.NewIdent("xpresource"),
+					Sel: ast.NewIdent("ManagedList"),
+				},
+			},
+		},
 	}
 
 	ast.Inspect(f, func(n ast.Node) bool {
@@ -395,57 +387,76 @@ var l xpresource.ManagedList
 		}
 
 		if fn.Name.Name == "ResolveReferences" && len(fn.Recv.List) > 0 {
-			fn.Body.List = append(varDecls, fn.Body.List...)
+			fn.Body.List = append([]ast.Stmt{
+				&ast.DeclStmt{Decl: varDecl1},
+				&ast.DeclStmt{Decl: varDecl2},
+			}, fn.Body.List...)
 		}
-
 		return true
 	})
-
-	return importMap, nil
+	return map[string]string{
+		`"github.com/crossplane/crossplane-runtime/pkg/resource"`: "xpresource",
+	}, nil
 }
 
 func getManagedResourceStatements(group, version, kind, listKind string) (map[string]string, []ast.Stmt) {
-	stmtSrc := `package main
-
-import (
-	apisresolver "github.com/upbound/provider-aws/internal/apis"
-)
-
-func f() {
-	m, l, err = apisresolver.GetManagedResource("%s", "%s", "%s", "%s")
-	if err != nil {
-		return errors.Wrap(err, "failed to get the reference target managed resource and its list for reference resolution")
+	// prepare the assignment statement:
+	// `m, l, err = apisresolver.GetManagedResource("group", "version", "kind", "listKind")`
+	assignStmt := &ast.AssignStmt{
+		Lhs: []ast.Expr{
+			ast.NewIdent("m"),
+			ast.NewIdent("l"),
+			ast.NewIdent("err"),
+		},
+		Tok: token.ASSIGN,
+		Rhs: []ast.Expr{
+			&ast.CallExpr{
+				Fun: &ast.SelectorExpr{
+					X:   ast.NewIdent("apisresolver"),
+					Sel: ast.NewIdent("GetManagedResource"),
+				},
+				Args: []ast.Expr{
+					&ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf(`"%s"`, group)},
+					&ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf(`"%s"`, version)},
+					&ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf(`"%s"`, kind)},
+					&ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf(`"%s"`, listKind)},
+				},
+			},
+		},
 	}
-}
-`
-	stmtSrc = fmt.Sprintf(stmtSrc, group, version, kind, listKind)
 
-	fset := token.NewFileSet()
-	stmtFile, err := parser.ParseFile(fset, "", stmtSrc, parser.ParseComments)
-	if err != nil {
-		panic(err)
+	// prepare the if statement:
+	// ```
+	// if err != nil {
+	//   return errors.Wrap(err, "failed to get the reference target managed resource and its list for reference resolution")
+	// }
+	// ```
+	ifStmt := &ast.IfStmt{
+		Cond: &ast.BinaryExpr{
+			X:  ast.NewIdent("err"),
+			Op: token.NEQ,
+			Y:  &ast.Ident{Name: "nil"},
+		},
+		Body: &ast.BlockStmt{
+			List: []ast.Stmt{
+				&ast.ReturnStmt{
+					Results: []ast.Expr{
+						&ast.CallExpr{
+							Fun: &ast.SelectorExpr{
+								X:   ast.NewIdent("errors"),
+								Sel: ast.NewIdent("Wrap"),
+							},
+							Args: []ast.Expr{
+								ast.NewIdent("err"),
+								&ast.BasicLit{Kind: token.STRING, Value: `"failed to get the reference target managed resource and its list for reference resolution"`},
+							},
+						},
+					},
+				},
+			},
+		},
 	}
-	importMap := make(map[string]string, 0)
-	var stmts []ast.Stmt
-	for _, decl := range stmtFile.Decls {
-		switch x := decl.(type) {
-		case *ast.GenDecl:
-			if x.Tok == token.IMPORT {
-				for _, spec := range x.Specs {
-					if importSpec, ok := spec.(*ast.ImportSpec); ok {
-						name := ""
-						if importSpec.Name != nil {
-							name = importSpec.Name.Name
-						}
-						importMap[importSpec.Path.Value] = name
-					}
-				}
-			}
-
-		case *ast.FuncDecl:
-			stmts = x.Body.List
-		}
-
-	}
-	return importMap, stmts
+	return map[string]string{
+		`"github.com/upbound/provider-aws/internal/apis"`: "apisresolver",
+	}, []ast.Stmt{assignStmt, ifStmt}
 }
