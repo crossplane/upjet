@@ -22,6 +22,7 @@ import (
 const (
 	varManagedResource     = "m"
 	varManagedResourceList = "l"
+	commentFileTransformed = "// Code transformed by upjet. DO NOT EDIT."
 )
 
 func transformPackages(apiGroupSuffix, resolverFilePattern string, ignorePackageLoadErrors bool, patterns ...string) error {
@@ -66,7 +67,43 @@ type importUsage struct {
 	used bool
 }
 
+func addTransformedComment(fset *token.FileSet, node *ast.File) bool {
+	cMap := ast.NewCommentMap(fset, node, node.Comments)
+	cgl := cMap[node]
+	for _, cg := range cgl {
+		for _, c := range cg.List {
+			if c != nil && c.Text == commentFileTransformed {
+				return false
+			}
+		}
+	}
+	switch {
+	case len(cgl) == 0:
+		cgl = []*ast.CommentGroup{
+			{
+				List: []*ast.Comment{
+					{
+						Text:  commentFileTransformed,
+						Slash: node.FileStart,
+					},
+				},
+			},
+		}
+
+	default:
+		cgl[0].List = append(cgl[0].List, &ast.Comment{
+			Text:  commentFileTransformed,
+			Slash: cgl[0].End(),
+		})
+	}
+	cMap[node] = cgl
+	return true
+}
+
 func transformResolverFile(fset *token.FileSet, node *ast.File, filePath, apiGroupSuffix string) error { //nolint:gocyclo // Arguably, easier to follow
+	if !addTransformedComment(fset, node) {
+		return nil
+	}
 	importMap, err := addMRVariableDeclarations(node)
 	if err != nil {
 		return errors.Wrapf(err, "failed to add the managed resource variable declarations to the file %s", filePath)
@@ -284,14 +321,19 @@ func transformResolverFile(fset *token.FileSet, node *ast.File, filePath, apiGro
 	}
 
 	// dump the transformed resolver file
+	adjustFunctionDocs(fset, node)
 	outFile, err := os.Create(filepath.Clean(filePath))
 	if err != nil {
 		return errors.Wrap(err, "failed to open the resolver file for writing the transformed AST")
 	}
-	defer outFile.Close() //nolint:errcheck
+	defer func() { _ = outFile.Close() }()
 
 	// write the modified AST back to the resolver file
 	return errors.Wrap(format.Node(outFile, fset, node), "failed to dump the transformed AST back into the resolver file")
+}
+
+func adjustFunctionDocs(fset *token.FileSet, node *ast.File) {
+	node.Decls[1].(*ast.FuncDecl).Doc.List[0].Slash = node.Decls[1].(*ast.FuncDecl).Name.Pos()
 }
 
 func insertStatements(stmts []ast.Stmt, block *ast.BlockStmt, assign *ast.AssignStmt) bool {
