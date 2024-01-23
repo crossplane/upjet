@@ -5,6 +5,7 @@
 package pipeline
 
 import (
+	"fmt"
 	"go/types"
 	"os"
 	"path/filepath"
@@ -36,38 +37,34 @@ type TerraformedGenerator struct {
 
 // Generate writes generated Terraformed interface functions
 func (tg *TerraformedGenerator) Generate(cfgs []*terraformedInput, apiVersion string) error {
-	trFile := wrapper.NewFile(tg.pkg.Path(), tg.pkg.Name(), templates.TerraformedTemplate,
-		wrapper.WithGenStatement(GenStatement),
-		wrapper.WithHeaderPath(tg.LicenseHeaderPath),
-	)
-	filePath := filepath.Join(tg.LocalDirectoryPath, "zz_generated_terraformed.go")
-	vars := map[string]any{
-		"APIVersion": apiVersion,
-	}
-	resources := make([]map[string]any, len(cfgs))
-	index := 0
 	for _, cfg := range cfgs {
-		resources[index] = map[string]any{
-			"CRD": map[string]string{
-				"Kind":               cfg.Kind,
-				"ParametersTypeName": cfg.ParametersTypeName,
-			},
-			"Terraform": map[string]any{
-				"ResourceType":  cfg.Name,
-				"SchemaVersion": cfg.TerraformResource.SchemaVersion,
-			},
-			"Sensitive": map[string]any{
-				"Fields": cfg.Sensitive.GetFieldPaths(),
-			},
-			"LateInitializer": map[string]any{
-				"IgnoredFields": cfg.LateInitializer.GetIgnoredCanonicalFields(),
-			},
+		trFile := wrapper.NewFile(tg.pkg.Path(), tg.pkg.Name(), templates.TerraformedTemplate,
+			wrapper.WithGenStatement(GenStatement),
+			wrapper.WithHeaderPath(tg.LicenseHeaderPath),
+		)
+		filePath := filepath.Join(tg.LocalDirectoryPath, fmt.Sprintf("zz_%s_terraformed.go", strings.ToLower(cfg.Kind)))
+
+		vars := map[string]any{
+			"APIVersion": apiVersion,
 		}
-		index++
+		vars["CRD"] = map[string]string{
+			"Kind":               cfg.Kind,
+			"ParametersTypeName": cfg.ParametersTypeName,
+		}
+		vars["Terraform"] = map[string]any{
+			"ResourceType":  cfg.Name,
+			"SchemaVersion": cfg.TerraformResource.SchemaVersion,
+		}
+		vars["Sensitive"] = map[string]any{
+			"Fields": cfg.Sensitive.GetFieldPaths(),
+		}
+		vars["LateInitializer"] = map[string]any{
+			"IgnoredFields": cfg.LateInitializer.GetIgnoredCanonicalFields(),
+		}
+
+		if err := trFile.Write(filePath, vars, os.ModePerm); err != nil {
+			return errors.Wrapf(err, "cannot write the Terraformed interface implementation file %s", filePath)
+		}
 	}
-	vars["Resources"] = resources
-	return errors.Wrap(
-		trFile.Write(filePath, vars, os.ModePerm),
-		"cannot write terraformed conversion methods file",
-	)
+	return nil
 }
