@@ -45,6 +45,10 @@ type Options struct {
 	// PollJitter adds the specified jitter to the configured reconcile period
 	// of the up-to-date resources in managed.Reconciler.
 	PollJitter time.Duration
+
+	// StartWebhooks enables starting of the conversion webhooks by the
+	// provider's controllerruntime.Manager.
+	StartWebhooks bool
 }
 
 // ESSOptions for External Secret Stores.

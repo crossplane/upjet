@@ -99,10 +99,13 @@ func Setup(mgr ctrl.Manager, o tjcontroller.Options) error {
 	{{- end}}
 
 	// register webhooks for the kind {{ .TypePackageAlias }}{{ .CRD.Kind }}
-	if err := ctrl.NewWebhookManagedBy(mgr).
+	// if they're enabled.
+	if o.StartWebhooks {
+		if err := ctrl.NewWebhookManagedBy(mgr).
 			For(&{{ .TypePackageAlias }}{{ .CRD.Kind }}{}).
 			Complete(); err != nil {
-				return errors.Wrap(err, "cannot register webhook for the kind {{ .TypePackageAlias }}{{ .CRD.Kind }}")
+			return errors.Wrap(err, "cannot register webhook for the kind {{ .TypePackageAlias }}{{ .CRD.Kind }}")
+		}
 	}
 
 	r := managed.NewReconciler(mgr, xpresource.ManagedKind({{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind), opts...)
