@@ -11,6 +11,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -305,10 +306,16 @@ func transformResolverFile(fset *token.FileSet, node *ast.File, filePath, apiGro
 			}
 			gd.Specs = newSpecs
 
-			for path, name := range importMap {
+			newImportKeys := make([]string, 0, len(importMap))
+			for k := range importMap {
+				newImportKeys = append(newImportKeys, k)
+			}
+			slices.Sort(newImportKeys)
+
+			for _, path := range newImportKeys {
 				gd.Specs = append(gd.Specs, &ast.ImportSpec{
 					Name: &ast.Ident{
-						Name: name,
+						Name: importMap[path],
 					},
 					Path: &ast.BasicLit{
 						Kind:  token.STRING,
