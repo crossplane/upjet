@@ -1,20 +1,21 @@
-// SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+// SPDX-FileCopyrightText: 2024 The Crossplane Authors <https://crossplane.io>
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package main
+package transformers
 
 import (
 	"fmt"
 	"go/ast"
 	"go/format"
 	"go/token"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 
+	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	"github.com/pkg/errors"
+	"github.com/spf13/afero"
 	"golang.org/x/tools/go/ast/astutil"
 	"golang.org/x/tools/go/packages"
 )
@@ -23,25 +24,149 @@ const (
 	varManagedResource     = "m"
 	varManagedResourceList = "l"
 	commentFileTransformed = "// Code transformed by upjet. DO NOT EDIT."
+
+	defaultLoadMode = packages.NeedName | packages.NeedFiles | packages.NeedImports | packages.NeedDeps | packages.NeedTypes | packages.NeedSyntax
 )
 
-func transformPackages(apiGroupSuffix, resolverFilePattern string, ignorePackageLoadErrors bool, patterns ...string) error {
-	pkgs, err := packages.Load(&packages.Config{
-		Mode: packages.NeedName | packages.NeedFiles | packages.NeedImports | packages.NeedDeps | packages.NeedTypes | packages.NeedSyntax,
-	}, patterns...)
+// Resolver transforms the source resolver implementations so that
+// the resolution source managed resources are no longer statically typed
+// and thus, the implementations no longer need to import the corresponding
+// API packages. This transformer is helpful in preventing the import cycles
+// described in https://github.com/crossplane/upjet/issues/96
+// and elsewhere. Please see TransformPackages for the details of the
+// transformation applied.
+type Resolver struct {
+	// the FS implementation used for storing the transformed output
+	fs afero.Fs
+	// the API group suffix to be used for the resolution source
+	// managed resources, such as aws.upbound.io. Then a sample
+	// API group for a resource is ec2.aws.upbound.io.
+	apiGroupSuffix string
+	// When set, any errors encountered while loading the source packages is
+	// silently ignored if a logger is not configured,
+	// or logged via the configured logger.
+	// We need to set this when, for example, loading resolver implementations
+	// with import cycles, or when transforming just one package and not loading
+	// the referenced typed.
+	ignorePackageLoadErrors bool
+	logger                  logging.Logger
+	config                  *packages.Config
+}
+
+// NewResolver initializes a new Resolver with the specified configuration.
+func NewResolver(fs afero.Fs, apiGroupSuffix string, ignorePackageLoadErrors bool, logger logging.Logger, opts ...ResolverOption) *Resolver {
+	if logger == nil {
+		logger = logging.NewNopLogger()
+	}
+	r := &Resolver{
+		fs:                      fs,
+		apiGroupSuffix:          apiGroupSuffix,
+		ignorePackageLoadErrors: ignorePackageLoadErrors,
+		logger:                  logger,
+		config: &packages.Config{
+			Mode: defaultLoadMode,
+		},
+	}
+	for _, o := range opts {
+		o(r)
+	}
+	return r
+}
+
+// ResolverOption is an option used to configure the Resolver.
+type ResolverOption func(resolver *Resolver)
+
+// WithLoaderConfig configures the package loader config for a Resolver.
+func WithLoaderConfig(c *packages.Config) ResolverOption {
+	return func(r *Resolver) {
+		r.config = c
+	}
+}
+
+// TransformPackages applies the dynamic resolver transformation to
+// the resolver modules loaded from the specified patterns and
+// implemented in the specified resolver files. If `r.ignorePackageLoadErrors`
+// is set, any errors encountered while loading the source packages are
+// ignored. This may be required when the transformation source files have
+// compile errors, such as import cycles. The transformed resolver
+// implementations will use the specified API group suffix, such as,
+// "aws.upbound.io" when determining the API groups of the resolution
+// source managed resources.
+// A sample transformation implemented by this transformer is from:
+// ```
+//
+//	func (mg *Subnet) ResolveReferences(ctx context.Context, c client.Reader) error {
+//	  r := reference.NewAPIResolver(c, mg)
+//
+//	  var rsp reference.ResolutionResponse
+//	  var err error
+//
+//	  rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
+//	    CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.VPCID),
+//	    Extract:      reference.ExternalName(),
+//	    Reference:    mg.Spec.ForProvider.VPCIDRef,
+//	    Selector:     mg.Spec.ForProvider.VPCIDSelector,
+//	    To: reference.To{
+//	      List:    &VPCList{},
+//	      Managed: &VPC{},
+//	    },
+//	  })
+//	  if err != nil {
+//	    return errors.Wrap(err, "mg.Spec.ForProvider.VPCID")
+//	  }
+//	  mg.Spec.ForProvider.VPCID = reference.ToPtrValue(rsp.ResolvedValue)
+//	  mg.Spec.ForProvider.VPCIDRef = rsp.ResolvedReference
+//
+// ```
+// to the following:
+// ```
+//
+//	func (mg *Subnet) ResolveReferences(ctx context.Context, c client.Reader) error {
+//	  var m xpresource.Managed
+//	  var l xpresource.ManagedList
+//	  r := reference.NewAPIResolver(c, mg)
+//
+//	  var rsp reference.ResolutionResponse
+//	  var err error
+//	  {
+//	    m, l, err = apisresolver.GetManagedResource("ec2.aws.upbound.io", "v1beta1", "VPC", "VPCList")
+//	    if err != nil {
+//	      return errors.Wrap(err, "failed to get the reference target managed resource and its list for reference resolution")
+//	    }
+//
+//	    rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
+//	      CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.VPCID),
+//	      Extract:      reference.ExternalName(),
+//	      Reference:    mg.Spec.ForProvider.VPCIDRef,
+//	      Selector:     mg.Spec.ForProvider.VPCIDSelector,
+//	      To:           reference.To{List: l, Managed: m},
+//	    })
+//	  }
+//	  if err != nil {
+//	    return errors.Wrap(err, "mg.Spec.ForProvider.VPCID")
+//	  }
+//	  mg.Spec.ForProvider.VPCID = reference.ToPtrValue(rsp.ResolvedValue)
+//	  mg.Spec.ForProvider.VPCIDRef = rsp.ResolvedReference
+//
+// ```
+func (r *Resolver) TransformPackages(resolverFilePattern string, patterns ...string) error {
+	pkgs, err := packages.Load(r.config, patterns...)
 	if err != nil {
 		return errors.Wrapf(err, "failed to load the packages using the patterns %q", strings.Join(patterns, ","))
 	}
 
 	for _, p := range pkgs {
-		if err := toError(p); err != nil && !ignorePackageLoadErrors {
-			return errors.Wrapf(err, "failed to load the package %q", p.Name)
+		if err := toError(p); err != nil {
+			if !r.ignorePackageLoadErrors {
+				return errors.Wrapf(err, "failed to load the package %q", p.Name)
+			}
+			r.logger.Info("Encounter the following issues when loading a package", "package", p.Name, "issues", err.Error())
 		}
 		for i, f := range p.GoFiles {
 			if filepath.Base(f) != resolverFilePattern {
 				continue
 			}
-			if err := transformResolverFile(p.Fset, p.Syntax[i], f, strings.Trim(apiGroupSuffix, ".")); err != nil {
+			if err := r.transformResolverFile(p.Fset, p.Syntax[i], f, strings.Trim(r.apiGroupSuffix, ".")); err != nil {
 				return errors.Wrapf(err, "failed to transform the resolver file %s", f)
 			}
 		}
@@ -100,15 +225,13 @@ func addTransformedComment(fset *token.FileSet, node *ast.File) bool {
 	return true
 }
 
-func transformResolverFile(fset *token.FileSet, node *ast.File, filePath, apiGroupSuffix string) error { //nolint:gocyclo // Arguably, easier to follow
+func (r *Resolver) transformResolverFile(fset *token.FileSet, node *ast.File, filePath, apiGroupSuffix string) error { //nolint:gocyclo // Arguably, easier to follow
 	if !addTransformedComment(fset, node) {
 		return nil
 	}
-	importMap, err := addMRVariableDeclarations(node)
-	if err != nil {
-		return errors.Wrapf(err, "failed to add the managed resource variable declarations to the file %s", filePath)
-	}
-
+	// add resolution source variable declarations to the `ResolveReferences`
+	// function bodies.
+	importMap := addMRVariableDeclarations(node)
 	// Map to track imports used in reference.To structs
 	importsUsed := make(map[string]importUsage)
 	// assign is the assignment statement that assigns the values returned from
@@ -325,10 +448,13 @@ func transformResolverFile(fset *token.FileSet, node *ast.File, filePath, apiGro
 			}
 		}
 	}
+	return r.dumpTransformed(fset, node, filePath)
+}
 
+func (r *Resolver) dumpTransformed(fset *token.FileSet, node *ast.File, filePath string) error {
 	// dump the transformed resolver file
 	adjustFunctionDocs(node)
-	outFile, err := os.Create(filepath.Clean(filePath))
+	outFile, err := r.fs.Create(filepath.Clean(filePath))
 	if err != nil {
 		return errors.Wrap(err, "failed to open the resolver file for writing the transformed AST")
 	}
@@ -356,7 +482,7 @@ func insertStatements(stmts []ast.Stmt, block *ast.BlockStmt, assign *ast.Assign
 	return true
 }
 
-func addMRVariableDeclarations(f *ast.File) (map[string]string, error) { //nolint:gocyclo
+func addMRVariableDeclarations(f *ast.File) map[string]string {
 	// prepare the first variable declaration:
 	// `var m xpresource.Managed`
 	varDecl1 := &ast.GenDecl{
@@ -403,7 +529,7 @@ func addMRVariableDeclarations(f *ast.File) (map[string]string, error) { //nolin
 	})
 	return map[string]string{
 		`"github.com/crossplane/crossplane-runtime/pkg/resource"`: "xpresource",
-	}, nil
+	}
 }
 
 func getManagedResourceStatements(group, version, kind, listKind string) (map[string]string, []ast.Stmt) {

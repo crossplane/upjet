@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+// SPDX-FileCopyrightText: 2024 The Crossplane Authors <https://crossplane.io>
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -8,7 +8,12 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/crossplane/crossplane-runtime/pkg/logging"
+	"github.com/spf13/afero"
 	"gopkg.in/alecthomas/kingpin.v2"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+
+	"github.com/crossplane/upjet/pkg/transformers"
 )
 
 func main() {
@@ -20,5 +25,7 @@ func main() {
 		ignorePackageLoadErrors = app.Flag("ignoreLoadErrors", "Ignore errors encountered while loading the packages.").Short('s').Bool()
 	)
 	kingpin.MustParse(app.Parse(os.Args[1:]))
-	kingpin.FatalIfError(transformPackages(*apiGroupSuffix, *resolverFilePattern, *ignorePackageLoadErrors, *pattern...), "Failed to transform the resolver files in the specified packages.")
+	logger := logging.NewLogrLogger(zap.New().WithName("transformer-resolver"))
+	r := transformers.NewResolver(afero.NewOsFs(), *apiGroupSuffix, *ignorePackageLoadErrors, logger)
+	kingpin.FatalIfError(r.TransformPackages(*resolverFilePattern, *pattern...), "Failed to transform the resolver files in the specified packages.")
 }
