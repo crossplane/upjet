@@ -122,3 +122,33 @@ func (t *Terraformed) DeepCopyObject() runtime.Object {
 	_ = json.Unmarshal(j, out)
 	return out
 }
+
+// Option is an option to modify the properties of a Terraformed object.
+type Option func(terraformed *Terraformed)
+
+// WithParameters sets the parameters of a Terraformed.
+func WithParameters(params map[string]any) Option {
+	return func(tr *Terraformed) {
+		tr.Parameters = params
+	}
+}
+
+// NewTerraformed initializes a new Terraformed with the given options.
+func NewTerraformed(opts ...Option) *Terraformed {
+	tr := &Terraformed{}
+	for _, o := range opts {
+		o(tr)
+	}
+	return tr
+}
+
+// NewMap prepares a map from the supplied key value parameters.
+// The parameters slice must be a sequence of key, value pairs and must have
+// an even length. The function will panic otherwise.
+func NewMap(keyValue ...string) map[string]any {
+	m := make(map[string]any, len(keyValue)/2)
+	for i := 0; i < len(keyValue)-1; i += 2 {
+		m[keyValue[i]] = keyValue[i+1]
+	}
+	return m
+}

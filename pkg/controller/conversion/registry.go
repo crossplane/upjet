@@ -24,23 +24,37 @@ type registry struct {
 }
 
 // RegisterConversions registers the API version conversions from the specified
+// provider configuration with this registry.
+func (r *registry) RegisterConversions(provider *config.Provider) error {
+	if r.provider != nil {
+		return errors.New(errAlreadyRegistered)
+	}
+	r.provider = provider
+	return nil
+}
+
+// GetConversions returns the conversion.Conversions registered in this
+// registry for the specified Terraformed resource.
+func (r *registry) GetConversions(tr resource.Terraformed) []conversion.Conversion {
+	t := tr.GetTerraformResourceType()
+	if r == nil || r.provider == nil || r.provider.Resources[t] == nil {
+		return nil
+	}
+	return r.provider.Resources[t].Conversions
+}
+
+// GetConversions returns the conversion.Conversions registered for the
+// specified Terraformed resource.
+func GetConversions(tr resource.Terraformed) []conversion.Conversion {
+	return instance.GetConversions(tr)
+}
+
+// RegisterConversions registers the API version conversions from the specified
 // provider configuration.
 func RegisterConversions(provider *config.Provider) error {
 	if instance != nil {
 		return errors.New(errAlreadyRegistered)
 	}
-	instance = &registry{
-		provider: provider,
-	}
-	return nil
-}
-
-// GetConversions returns the conversion.Conversions registered for the
-// Terraformed resource.
-func GetConversions(tr resource.Terraformed) []conversion.Conversion {
-	t := tr.GetTerraformResourceType()
-	if instance == nil || instance.provider == nil || instance.provider.Resources[t] == nil {
-		return nil
-	}
-	return instance.provider.Resources[t].Conversions
+	instance = &registry{}
+	return instance.RegisterConversions(provider)
 }

@@ -49,18 +49,18 @@ type PavedConversion interface {
 	ConvertPaved(src, target *fieldpath.Paved) (bool, error)
 }
 
-// TerraformedConversion defines a Conversion from a specific source
-// resource.Terraformed type to a target one. Generic Conversion
+// ManagedConversion defines a Conversion from a specific source
+// resource.Managed type to a target one. Generic Conversion
 // implementations may prefer to implement the PavedConversion interface.
-// Implementations of TerraformedConversion can do type assertions to
-// specific source and target types and so they are expected to be
+// Implementations of ManagedConversion can do type assertions to
+// specific source and target types, and so, they are expected to be
 // strongly typed.
-type TerraformedConversion interface {
+type ManagedConversion interface {
 	Conversion
-	// ConvertTerraformed converts from the `src` managed resource to the `dst`
+	// ConvertManaged converts from the `src` managed resource to the `dst`
 	// managed resource and returns `true` if the conversion has been done,
 	// `false` otherwise, together with any errors encountered.
-	ConvertTerraformed(src, target resource.Managed) (bool, error)
+	ConvertManaged(src, target resource.Managed) (bool, error)
 }
 
 type baseConversion struct {
@@ -124,16 +124,17 @@ type customConversion struct {
 	customConverter customConverter
 }
 
-func (cc *customConversion) ConvertTerraformed(src, target resource.Managed) (bool, error) {
-	if !cc.Applicable(src, target) {
+func (cc *customConversion) ConvertManaged(src, target resource.Managed) (bool, error) {
+	if !cc.Applicable(src, target) || cc.customConverter == nil {
 		return false, nil
 	}
-	if err := cc.customConverter(src, target); err != nil {
-		return false, err
-	}
-	return true, nil
+	return true, errors.Wrap(cc.customConverter(src, target), "failed to apply the converter function")
 }
 
+// NewCustomConverter returns a new Conversion from the specified
+// `sourceVersion` of an API to the specified `targetVersion` and invokes
+// the specified converter function to perform the conversion on the
+// managed resources.
 func NewCustomConverter(sourceVersion, targetVersion string, converter func(src, target resource.Managed) error) Conversion {
 	return &customConversion{
 		baseConversion:  newBaseConversion(sourceVersion, targetVersion),
