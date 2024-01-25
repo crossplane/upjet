@@ -116,3 +116,27 @@ func NewFieldRenameConversion(sourceVersion, sourceField, targetVersion, targetF
 		targetField:    targetField,
 	}
 }
+
+type customConverter func(src, target resource.Managed) error
+
+type customConversion struct {
+	baseConversion
+	customConverter customConverter
+}
+
+func (cc *customConversion) ConvertTerraformed(src, target resource.Managed) (bool, error) {
+	if !cc.Applicable(src, target) {
+		return false, nil
+	}
+	if err := cc.customConverter(src, target); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func NewCustomConverter(sourceVersion, targetVersion string, converter func(src, target resource.Managed) error) Conversion {
+	return &customConversion{
+		baseConversion:  newBaseConversion(sourceVersion, targetVersion),
+		customConverter: converter,
+	}
+}
