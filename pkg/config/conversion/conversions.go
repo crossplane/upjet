@@ -13,13 +13,34 @@ import (
 )
 
 const (
+	// AllVersions denotes that a Conversion is applicable for all versions
+	// of an API with which the Conversion is registered. It can be used for
+	// both the conversion source or target API versions.
 	AllVersions = "*"
 )
 
+// Conversion is the interface for the API version converters.
+// Conversion implementations registered for a source, target
+// pair are called in chain so Conversion implementations can be modular, e.g.,
+// a Conversion implementation registered for a specific source and target
+// versions does not have to contain all the needed API conversions between
+// these two versions.
 type Conversion interface {
+	// Applicable should return true if this Conversion is applicable while
+	// converting the API of the `src` object to the API of the `dst` object.
 	Applicable(src, dst runtime.Object) bool
 }
 
+// PavedConversion is an optimized Conversion between two fieldpath.Paved
+// objects. PavedConversion implementations for a specific source and target
+// version pair are chained together and the source and the destination objects
+// are paved once at the beginning of the chained PavedConversion.ConvertPaved
+// calls. The target fieldpath.Paved object is then converted into the original
+// resource.Terraformed object at the end of the chained calls. This prevents
+// the intermediate conversions between fieldpath.Paved and
+// the resource.Terraformed representations of the same object, and the
+// fieldpath.Paved representation is convenient for writing generic
+// Conversion implementations not bound to a specific type.
 type PavedConversion interface {
 	Conversion
 	// ConvertPaved converts from the `src` paved object to the `dst`
@@ -28,6 +49,12 @@ type PavedConversion interface {
 	ConvertPaved(src, target *fieldpath.Paved) (bool, error)
 }
 
+// TerraformedConversion defines a Conversion from a specific source
+// resource.Terraformed type to a target one. Generic Conversion
+// implementations may prefer to implement the PavedConversion interface.
+// Implementations of TerraformedConversion can do type assertions to
+// specific source and target types and so they are expected to be
+// strongly typed.
 type TerraformedConversion interface {
 	Conversion
 	// ConvertTerraformed converts from the `src` managed resource to the `dst`
@@ -77,6 +104,11 @@ func (f *fieldCopy) ConvertPaved(src, target *fieldpath.Paved) (bool, error) {
 	return true, errors.Wrapf(target.SetValue(f.targetField, v), "failed to set the field %q of the conversion target object", f.targetField)
 }
 
+// NewFieldRenameConversion returns a new Conversion that implements a
+// field renaming conversion from the specified `sourceVersion` to the specified
+// `targetVersion` of an API. The field's name in the `sourceVersion` is given
+// with the `sourceField` parameter and its name in the `targetVersion` is
+// given with `targetField` parameter.
 func NewFieldRenameConversion(sourceVersion, sourceField, targetVersion, targetField string) Conversion {
 	return &fieldCopy{
 		baseConversion: newBaseConversion(sourceVersion, targetVersion),
