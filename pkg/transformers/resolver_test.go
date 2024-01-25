@@ -10,6 +10,7 @@ import (
 
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
 	"github.com/spf13/afero"
 	"golang.org/x/tools/go/packages/packagestest"
 )
@@ -26,7 +27,8 @@ func TestTransformPackages(t *testing.T) {
 
 	// want struct to define the expected outcome for each test case
 	type want struct {
-		err             error
+		// errFunc receives the transformed resolver file's path
+		errFunc         func(string) error
 		transformedPath string
 	}
 
@@ -43,12 +45,12 @@ func TestTransformPackages(t *testing.T) {
 			args: args{
 				apiGroupSuffix:          "aws.upbound.io",
 				resolverFilePattern:     "zz_generated.resolvers.go",
-				inputFilePath:           "testdata/SuccessfulTransformation.go.txt",
+				inputFilePath:           "testdata/apigatewayv2.resolvers.go.txt",
 				ignorePackageLoadErrors: true,
 				patterns:                []string{"./testdata"},
 			},
 			want: want{
-				transformedPath: "testdata/SuccessfulTransformation.transformed.go.txt",
+				transformedPath: "testdata/apigatewayv2.resolvers.transformed.go.txt",
 			},
 		},
 		"TransformationIdempotency": {
@@ -56,15 +58,33 @@ func TestTransformPackages(t *testing.T) {
 			args: args{
 				apiGroupSuffix:          "aws.upbound.io",
 				resolverFilePattern:     "zz_generated.resolvers.go",
-				inputFilePath:           "testdata/SuccessfulTransformation.transformed.go.txt",
+				inputFilePath:           "testdata/apigatewayv2.resolvers.transformed.go.txt",
 				ignorePackageLoadErrors: true,
 				patterns:                []string{"./testdata"},
 			},
 			want: want{
-				transformedPath: "testdata/SuccessfulTransformation.transformed.go.txt",
+				transformedPath: "testdata/apigatewayv2.resolvers.transformed.go.txt",
 			},
 		},
-		// Other test cases
+		"TransformationFailure": {
+			reason: "The transformation source is not a valid angryjet-generated resolver file: List type is missing for a resolution source.",
+			args: args{
+				apiGroupSuffix:          "aws.upbound.io",
+				resolverFilePattern:     "zz_generated.resolvers.go",
+				inputFilePath:           "testdata/missing_list_type.resolvers.go.txt",
+				ignorePackageLoadErrors: true,
+				patterns:                []string{"./testdata"},
+			},
+			want: want{
+				errFunc: func(transformedPath string) error {
+					return errors.Wrapf(
+						errors.Wrap(
+							errors.New(`failed to extract the GVKs for the reference targets. Group: "fake.aws.upbound.io", Version: "testdata", Kind: "Project", List Kind: ""`),
+							"failed to inspect the resolver file for transformation"),
+						"failed to transform the resolver file %s", transformedPath)
+				},
+			},
+		},
 	}
 
 	for name, tc := range cases {
@@ -83,10 +103,14 @@ func TestTransformPackages(t *testing.T) {
 
 			r := NewResolver(memFS, tc.args.apiGroupSuffix, tc.args.ignorePackageLoadErrors, nil, WithLoaderConfig(exported.Config))
 			err := r.TransformPackages("zz_generated.resolvers.go", tc.args.patterns...)
-			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
+			var wantErr error
+			if tc.want.errFunc != nil {
+				wantErr = tc.want.errFunc(transformedFilePath)
+			}
+			if diff := cmp.Diff(wantErr, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nResolver.TransformPackages(...): -wantErr, +gotErr:\n%s", tc.reason, diff)
 			}
-			if tc.want.err != nil {
+			if wantErr != nil {
 				return
 			}
 			if diff := cmp.Diff(readFile(t, afero.NewOsFs(), tc.want.transformedPath, tc.reason),
