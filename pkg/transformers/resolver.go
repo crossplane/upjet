@@ -42,6 +42,21 @@ type Resolver struct {
 	// managed resources, such as aws.upbound.io. Then a sample
 	// API group for a resource is ec2.aws.upbound.io.
 	apiGroupSuffix string
+	// API group overrides for the provider. Certain providers need
+	// to rename the short API group names they use, breaking the
+	// convention that the short group name matches the package name.
+	// An example is upbound/provider-azure, where the ResourceGroup.azure
+	// resource's short API group is the empty string. This map allows such
+	// providers to control the names of the generated API group names by this
+	// Resolver transformer.
+	apiGroupOverrides map[string]string
+	// the API resolver package that contains the
+	// `GetManagedResource("group", "version", "kind", "listKind")`
+	// function. This function is used to initialize a managed resource and
+	// its list type, owned by the provider, with the given API group, version,
+	// kind and list kind. Signature of the resolver function is as follows:
+	// func GetManagedResource(group, version, kind, listKind string) (xpresource.Managed, xpresource.ManagedList, error)
+	apiResolverPackage string
 	// When set, any errors encountered while loading the source packages is
 	// silently ignored if a logger is not configured,
 	// or logged via the configured logger.
@@ -54,13 +69,14 @@ type Resolver struct {
 }
 
 // NewResolver initializes a new Resolver with the specified configuration.
-func NewResolver(fs afero.Fs, apiGroupSuffix string, ignorePackageLoadErrors bool, logger logging.Logger, opts ...ResolverOption) *Resolver {
+func NewResolver(fs afero.Fs, apiGroupSuffix, apiResolverPackage string, ignorePackageLoadErrors bool, logger logging.Logger, opts ...ResolverOption) *Resolver {
 	if logger == nil {
 		logger = logging.NewNopLogger()
 	}
 	r := &Resolver{
 		fs:                      fs,
 		apiGroupSuffix:          apiGroupSuffix,
+		apiResolverPackage:      apiResolverPackage,
 		ignorePackageLoadErrors: ignorePackageLoadErrors,
 		logger:                  logger,
 		config: &packages.Config{
@@ -80,6 +96,17 @@ type ResolverOption func(resolver *Resolver)
 func WithLoaderConfig(c *packages.Config) ResolverOption {
 	return func(r *Resolver) {
 		r.config = c
+	}
+}
+
+// WithAPIGroupOverrides configures the API group overrides for a Resolver.
+// Certain providers need to rename the short API group names they use,
+// breaking the convention that the short group name matches the package name.
+// An example is upbound/provider-azure, where the ResourceGroup.azure
+// resource's short API group is the empty string.
+func WithAPIGroupOverrides(overrides map[string]string) ResolverOption {
+	return func(r *Resolver) {
+		r.apiGroupOverrides = overrides
 	}
 }
 
@@ -324,6 +351,8 @@ func (r *Resolver) transformResolverFile(fset *token.FileSet, node *ast.File, fi
 											version = tokens[len(tokens)-1]
 											// e.g., ec2.aws.upbound.io
 											group = fmt.Sprintf("%s.%s", tokens[len(tokens)-2], apiGroupSuffix)
+											// apply any configured group name overrides
+											group = r.overrideGroupName(group)
 											// extract the kind and list kind names from the field
 											// selector.
 											if sexpr.Sel != nil {
@@ -346,6 +375,8 @@ func (r *Resolver) transformResolverFile(fset *token.FileSet, node *ast.File, fi
 										version = tokens[len(tokens)-2]
 										// e.g., cur.aws.upbound.io
 										group = fmt.Sprintf("%s.%s", tokens[len(tokens)-3], apiGroupSuffix)
+										// apply any configured group name overrides
+										group = r.overrideGroupName(group)
 										if ident, ok := cl.Type.(*ast.Ident); ok {
 											if key == "List" {
 												listKind = ident.Name
@@ -389,7 +420,7 @@ func (r *Resolver) transformResolverFile(fset *token.FileSet, node *ast.File, fi
 
 					// get the statements including the import statements we need to make
 					// calls to the type registry.
-					mrImports, stmts := getManagedResourceStatements(group, version, kind, listKind)
+					mrImports, stmts := getManagedResourceStatements(group, version, kind, listKind, r.apiResolverPackage)
 					// insert the statements that implement type registry lookups
 					if !insertStatements(stmts, block, assign) {
 						inspectErr = errors.Errorf("failed to insert the type registry lookup statements for Group: %q, Version: %q, Kind: %q, List Kind: %q", group, version, kind, listKind)
@@ -532,7 +563,7 @@ func addMRVariableDeclarations(f *ast.File) map[string]string {
 	}
 }
 
-func getManagedResourceStatements(group, version, kind, listKind string) (map[string]string, []ast.Stmt) {
+func getManagedResourceStatements(group, version, kind, listKind, apiResolverPackage string) (map[string]string, []ast.Stmt) {
 	// prepare the assignment statement:
 	// `m, l, err = apisresolver.GetManagedResource("group", "version", "kind", "listKind")`
 	assignStmt := &ast.AssignStmt{
@@ -590,6 +621,18 @@ func getManagedResourceStatements(group, version, kind, listKind string) (map[st
 		},
 	}
 	return map[string]string{
-		`"github.com/upbound/provider-aws/internal/apis"`: "apisresolver",
+		// TODO: we may need to parameterize the import alias in the future, if
+		// any provider that uses the transformer has an import alias collision
+		// which is not very likely.
+		fmt.Sprintf(`"%s"`, apiResolverPackage): "apisresolver",
 	}, []ast.Stmt{assignStmt, ifStmt}
+}
+
+func (r *Resolver) overrideGroupName(group string) string {
+	g, ok := r.apiGroupOverrides[group]
+	// we need to allow overrides with an empty string
+	if !ok {
+		return group
+	}
+	return g
 }
