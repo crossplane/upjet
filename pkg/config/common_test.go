@@ -19,7 +19,7 @@ func TestDefaultResource(t *testing.T) {
 	type args struct {
 		name              string
 		sch               *schema.Resource
-		frameworkResource *fwresource.Resource
+		frameworkResource fwresource.Resource
 		reg               *registry.Resource
 		opts              []ResourceOption
 	}

@@ -90,7 +90,7 @@ type terraformPluginFrameworkExternalClient struct {
 	logger         logging.Logger
 	metricRecorder *metrics.MetricRecorder
 	opTracker      *AsyncTracker
-	resource       *fwresource.Resource
+	resource       fwresource.Resource
 	server         tfprotov5.ProviderServer
 	params         map[string]any
 	plannedState   *tfprotov5.DynamicValue
@@ -168,7 +168,7 @@ func (c *TerraformPluginFrameworkConnector) Connect(ctx context.Context, mg xpre
 }
 
 func (c *TerraformPluginFrameworkConnector) getResourceSchema(ctx context.Context) (rschema.Schema, error) {
-	res := *c.config.TerraformPluginFrameworkResource
+	res := c.config.TerraformPluginFrameworkResource
 	schemaResp := &fwresource.SchemaResponse{}
 	res.Schema(ctx, fwresource.SchemaRequest{}, schemaResp)
 	if schemaResp.Diagnostics.HasError() {

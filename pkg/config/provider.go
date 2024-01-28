@@ -118,24 +118,34 @@ type Provider struct {
 	// Defaults to []string{".+"} which would include all resources.
 	IncludeList []string
 
-	// NoForkIncludeList  is a list of regex for the Terraform resources to be
-	// included and reconciled in the no-fork architecture (without the
-	// Terraform CLI).
+	// NoForkIncludeList is a list of regex for the Terraform resources
+	// implemented with Terraform Plugin SDKv2 to be included and reconciled
+	// in the no-fork architecture (without the Terraform CLI).
 	// For example, to include "aws_shield_protection_group" into
 	// the generated resources, one can add "aws_shield_protection_group$".
 	// To include whole aws waf group, one can add "aws_waf.*" to the list.
 	// Defaults to []string{".+"} which would include all resources.
 	NoForkIncludeList []string
 
+	// TerraformPluginFrameworkIncludeList is a list of regex for the Terraform
+	// resources implemented with Terraform Plugin Framework  to be included and
+	// reconciled in the no-fork architecture (without the Terraform CLI).
+	// For example, to include "aws_shield_protection_group" into
+	// the generated resources, one can add "aws_shield_protection_group$".
+	// To include whole aws waf group, one can add "aws_waf.*" to the list.
+	// Defaults to []string{".+"} which would include all resources.
 	TerraformPluginFrameworkIncludeList []string
 
 	// Resources is a map holding resource configurations where key is Terraform
 	// resource name.
 	Resources map[string]*Resource
 
-	// TerraformProvider is the Terraform schema of the provider.
+	// TerraformProvider is the Terraform provider in Terraform Plugin SDKv2
+	// compatible format
 	TerraformProvider *schema.Provider
 
+	// TerraformPluginFrameworkProvider is the Terraform provider reference
+	// in Terraform Plugin Framework compatible format
 	TerraformPluginFrameworkProvider fwprovider.Provider
 
 	// refInjectors is an ordered list of `ReferenceInjector`s for
@@ -177,13 +187,17 @@ func WithIncludeList(l []string) ProviderOption {
 	}
 }
 
-// WithNoForkIncludeList configures IncludeList for this Provider.
+// WithNoForkIncludeList configures the NoForkIncludeList for this Provider,
+// with the given Terraform Plugin SDKv2-based resource name list
 func WithNoForkIncludeList(l []string) ProviderOption {
 	return func(p *Provider) {
 		p.NoForkIncludeList = l
 	}
 }
 
+// WithTerraformPluginFrameworkIncludeList configures the
+// TerraformPluginFrameworkIncludeList for this Provider, with the given
+// Terraform Plugin Framework-based resource name list
 func WithTerraformPluginFrameworkIncludeList(l []string) ProviderOption {
 	return func(p *Provider) {
 		p.TerraformPluginFrameworkIncludeList = l
@@ -197,6 +211,8 @@ func WithTerraformProvider(tp *schema.Provider) ProviderOption {
 	}
 }
 
+// WithTerraformPluginFrameworkProvider configures the
+// TerraformPluginFrameworkProvider for this Provider.
 func WithTerraformPluginFrameworkProvider(tp fwprovider.Provider) ProviderOption {
 	return func(p *Provider) {
 		p.TerraformPluginFrameworkProvider = tp
@@ -317,7 +333,7 @@ func NewProvider(ctx context.Context, schema []byte, prefix string, modulePath s
 			}
 		}
 
-		var terraformPluginFrameworkResource *fwresource.Resource
+		var terraformPluginFrameworkResource fwresource.Resource
 
 		if isPluginFrameworkResource {
 			// TODO: Consider whether to replace the commented out conditional in the next line with an equivalent conditional for plugin framework.
@@ -335,7 +351,7 @@ func NewProvider(ctx context.Context, schema []byte, prefix string, modulePath s
 				resourceTypeNameResp := fwresource.MetadataResponse{}
 				resource.Metadata(ctx, resourceTypeNameReq, &resourceTypeNameResp)
 				if resourceTypeNameResp.TypeName == name {
-					terraformPluginFrameworkResource = &resource
+					terraformPluginFrameworkResource = resource
 					break
 				}
 			}

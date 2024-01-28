@@ -377,10 +377,13 @@ type Resource struct {
 	// e.g. aws_rds_cluster.
 	Name string
 
-	// TerraformResource is the Terraform representation of the resource.
+	// TerraformResource is the Terraform representation of the
+	// Terraform Plugin SDKv2 based resource.
 	TerraformResource *schema.Resource
 
-	TerraformPluginFrameworkResource *fwresource.Resource
+	// TerraformPluginFrameworkResource is the Terraform representation
+	// of the TF Plugin Framework based resource
+	TerraformPluginFrameworkResource fwresource.Resource
 
 	// ShortGroup is the short name of the API group of this CRD. The full
 	// CRD API group is calculated by adding the group suffix of the provider.
@@ -488,10 +491,16 @@ type Resource struct {
 	OverrideFieldNames map[string]string
 }
 
+// ShouldUseNoForkClient returns whether to generate a SDKv2-based no-fork
+// external client for this Resource, instead of the Terraform CLI-forking
+// external client
 func (r *Resource) ShouldUseNoForkClient() bool {
 	return r.useNoForkClient
 }
 
+// ShouldUseTerraformPluginFrameworkClient returns whether to generate a
+// Terraform Plugin Framework-based no-fork external client for this Resource
+// instead of a Terraform Plugin SDKv2-based external client
 func (r *Resource) ShouldUseTerraformPluginFrameworkClient() bool {
 	return r.useTerraformPluginFrameworkClient
 }
