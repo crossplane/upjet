@@ -21,6 +21,7 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/crossplane/upjet/pkg/config/conversion"
 	"github.com/crossplane/upjet/pkg/registry"
 )
 
@@ -445,6 +446,8 @@ type Resource struct {
 	// a Terraform configuration argument path such as a.b.c, without any
 	// index notation (i.e., array/map components do not need indices).
 	ServerSideApplyMergeStrategies ServerSideApplyMergeStrategies
+
+	Conversions []conversion.Conversion
 
 	// useNoForkClient indicates that a no-fork external client should
 	// be generated instead of the Terraform CLI-forking client.
