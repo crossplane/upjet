@@ -452,6 +452,32 @@ type Resource struct {
 	// useNoForkClient indicates that a no-fork external client should
 	// be generated instead of the Terraform CLI-forking client.
 	useNoForkClient bool
+
+	// OverrideFieldNames allows to manually override the relevant field name to
+	// avoid possible Go struct name conflicts that may occur after Multiversion
+	// CRDs support. During field generation, there may be fields with the same
+	// struct name calculated in the same group. For example, let X and Y
+	// resources in the same API group have a field named Tag. This field is an
+	// object type and the name calculated for the struct to be generated is
+	// TagParameters (for spec) for both resources. To avoid this conflict, upjet
+	// looks at all previously created structs in the package during generation
+	// and if there is a conflict, it puts the Kind name of the related resource
+	// in front of the next one: YTagParameters.
+	// With Multiversion CRDs support, the above conflict scenario cannot be
+	// solved in the generator when the old API group is preserved and not
+	// regenerated, because the generator does not know the object names in the
+	// old version. For example, a new API version is generated for resource X. In
+	// this case, no generation is done for the old version of X and when Y is
+	// generated, the generator is not aware of the TagParameters in X and
+	// generates TagParameters instead of YTagParameters. Thus, two object types
+	// with the same name are generated in the same package. This can be overcome
+	// by using this configuration API.
+	// The key of the map indicates the name of the field that is generated and
+	// causes the conflict, while the value indicates the name used to avoid the
+	// conflict. By convention, also used in upjet, the field name is preceded by
+	// the value of the generated Kind, for example:
+	// "TagParameters": "ClusterTagParameters"
+	OverrideFieldNames map[string]string
 }
 
 func (r *Resource) ShouldUseNoForkClient() bool {
