@@ -626,8 +626,9 @@ func getFatalDiagnostics(diags []*tfprotov5.Diagnostic) error {
 }
 
 func frameworkDiagnosticsToString(fwdiags fwdiag.Diagnostics) string {
-	var diagErrors []string
-	for _, tfdiag := range fwdiags.Errors() {
+	frameworkErrorDiags := fwdiags.Errors()
+	diagErrors := make([]string, 0, len(frameworkErrorDiags))
+	for _, tfdiag := range frameworkErrorDiags {
 		diagErrors = append(diagErrors, fmt.Sprintf("%s: %s", tfdiag.Summary(), tfdiag.Detail()))
 	}
 	return strings.Join(diagErrors, "\n")
