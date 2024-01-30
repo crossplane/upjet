@@ -18,6 +18,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
+	fwdiag "github.com/hashicorp/terraform-plugin-framework/diag"
 	fwprovider "github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	fwresource "github.com/hashicorp/terraform-plugin-framework/resource"
@@ -100,6 +101,8 @@ type terraformPluginFrameworkExternalClient struct {
 	params         map[string]any
 	plannedState   *tfprotov5.DynamicValue
 	resourceSchema rschema.Schema
+	// the terraform value type associated with the resource schema
+	resourceValueTerraformType tftypes.Type
 }
 
 // Connect makes sure the underlying client is ready to issue requests to the
@@ -127,9 +130,13 @@ func (c *TerraformPluginFrameworkConnector) Connect(ctx context.Context, mg xpre
 	if err != nil {
 		return nil, errors.Wrap(err, "could not retrieve resource schema")
 	}
+	resourceTfValueType := resourceSchema.Type().TerraformType(ctx)
 	hasState := false
 	if opTracker.HasFrameworkTFState() {
-		tfStateValue, err := opTracker.GetFrameworkTFState().Unmarshal(resourceSchema.Type().TerraformType(ctx))
+		tfStateValue, err := opTracker.GetFrameworkTFState().Unmarshal(resourceTfValueType)
+		if err != nil {
+			return nil, errors.Wrap(err, "cannot unmarshal TF state dynamic value during state existence check")
+		}
 		hasState = err == nil && !tfStateValue.IsNull()
 	}
 
@@ -149,7 +156,7 @@ func (c *TerraformPluginFrameworkConnector) Connect(ctx context.Context, mg xpre
 			tfState = copyParameters(tfState, params)
 		}
 
-		tfStateDynamicValue, err := protov5DynamicValueFromMap(tfState, resourceSchema.Type().TerraformType(ctx))
+		tfStateDynamicValue, err := protov5DynamicValueFromMap(tfState, resourceTfValueType)
 		if err != nil {
 			return nil, errors.Wrap(err, "cannot construct dynamic value for TF state")
 		}
@@ -162,15 +169,16 @@ func (c *TerraformPluginFrameworkConnector) Connect(ctx context.Context, mg xpre
 	}
 
 	return &terraformPluginFrameworkExternalClient{
-		ts:             ts,
-		config:         c.config,
-		logger:         logger,
-		metricRecorder: c.metricRecorder,
-		opTracker:      opTracker,
-		resource:       c.config.TerraformPluginFrameworkResource,
-		server:         configuredProviderServer,
-		params:         params,
-		resourceSchema: resourceSchema,
+		ts:                         ts,
+		config:                     c.config,
+		logger:                     logger,
+		metricRecorder:             c.metricRecorder,
+		opTracker:                  opTracker,
+		resource:                   c.config.TerraformPluginFrameworkResource,
+		server:                     configuredProviderServer,
+		params:                     params,
+		resourceSchema:             resourceSchema,
+		resourceValueTerraformType: resourceTfValueType,
 	}, nil
 }
 
@@ -179,7 +187,8 @@ func (c *TerraformPluginFrameworkConnector) getResourceSchema(ctx context.Contex
 	schemaResp := &fwresource.SchemaResponse{}
 	res.Schema(ctx, fwresource.SchemaRequest{}, schemaResp)
 	if schemaResp.Diagnostics.HasError() {
-		return rschema.Schema{}, errors.Errorf("could not retrieve resource schema: %v", schemaResp.Diagnostics)
+		fwErrors := frameworkDiagnosticsToString(schemaResp.Diagnostics)
+		return rschema.Schema{}, errors.Errorf("could not retrieve resource schema: %s", fwErrors)
 	}
 
 	return schemaResp.Schema, nil
@@ -189,11 +198,8 @@ func (c *TerraformPluginFrameworkConnector) configureProvider(ctx context.Contex
 	var schemaResp fwprovider.SchemaResponse
 	ts.FrameworkProvider.Schema(ctx, fwprovider.SchemaRequest{}, &schemaResp)
 	if schemaResp.Diagnostics.HasError() {
-		var diagErrors []string
-		for _, tfdiag := range schemaResp.Diagnostics.Errors() {
-			diagErrors = append(diagErrors, fmt.Sprintf("%s: %s", tfdiag.Summary(), tfdiag.Detail()))
-		}
-		return nil, fmt.Errorf("cannot retrieve provider schema: %s", strings.Join(diagErrors, "\n"))
+		fwDiags := frameworkDiagnosticsToString(schemaResp.Diagnostics)
+		return nil, fmt.Errorf("cannot retrieve provider schema: %s", fwDiags)
 	}
 	providerServer := providerserver.NewProtocol5(ts.FrameworkProvider)()
 
@@ -208,7 +214,7 @@ func (c *TerraformPluginFrameworkConnector) configureProvider(ctx context.Contex
 	}
 	providerResp, err := providerServer.ConfigureProvider(ctx, configureProviderReq)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "cannot configure framework provider")
 	}
 	if fatalDiags := getFatalDiagnostics(providerResp.Diagnostics); fatalDiags != nil {
 		return nil, errors.Wrap(fatalDiags, "provider configure request failed")
@@ -218,16 +224,13 @@ func (c *TerraformPluginFrameworkConnector) configureProvider(ctx context.Contex
 
 func (n *terraformPluginFrameworkExternalClient) getDiffPlan(ctx context.Context,
 	tfStateValue tftypes.Value) (*tfprotov5.DynamicValue, bool, error) {
-
-	valueTerraformType := n.resourceSchema.Type().TerraformType(ctx)
-
-	tfConfigDynamicVal, err := protov5DynamicValueFromMap(n.params, valueTerraformType)
+	tfConfigDynamicVal, err := protov5DynamicValueFromMap(n.params, n.resourceValueTerraformType)
 	if err != nil {
 		return &tfprotov5.DynamicValue{}, false, errors.Wrap(err, "cannot construct dynamic value for TF Config")
 	}
 
 	//
-	tfPlannedStateDynamicVal, err := protov5DynamicValueFromMap(n.params, valueTerraformType)
+	tfPlannedStateDynamicVal, err := protov5DynamicValueFromMap(n.params, n.resourceValueTerraformType)
 	if err != nil {
 		return &tfprotov5.DynamicValue{}, false, errors.Wrap(err, "cannot construct dynamic value for TF Planned State")
 	}
@@ -256,7 +259,7 @@ func (n *terraformPluginFrameworkExternalClient) getDiffPlan(ctx context.Context
 		return nil, false, errors.New(sb.String())
 	}
 
-	plannedStateValue, err := planResponse.PlannedState.Unmarshal(n.resourceSchema.Type().TerraformType(ctx))
+	plannedStateValue, err := planResponse.PlannedState.Unmarshal(n.resourceValueTerraformType)
 	if err != nil {
 		return nil, false, errors.Wrap(err, "cannot unmarshal planned state")
 	}
@@ -267,7 +270,6 @@ func (n *terraformPluginFrameworkExternalClient) getDiffPlan(ctx context.Context
 	}
 
 	return planResponse.PlannedState, len(diffso) > 0, nil
-
 }
 
 func (n *terraformPluginFrameworkExternalClient) Observe(ctx context.Context, mg xpresource.Managed) (managed.ExternalObservation, error) { //nolint:gocyclo
@@ -293,7 +295,7 @@ func (n *terraformPluginFrameworkExternalClient) Observe(ctx context.Context, mg
 		return managed.ExternalObservation{}, errors.Wrap(fatalDiags, "read resource request failed")
 	}
 
-	tfStateValue, err := readResponse.NewState.Unmarshal(n.resourceSchema.Type().TerraformType(ctx))
+	tfStateValue, err := readResponse.NewState.Unmarshal(n.resourceValueTerraformType)
 	if err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot unmarshal state value")
 	}
@@ -370,7 +372,7 @@ func (n *terraformPluginFrameworkExternalClient) Observe(ctx context.Context, mg
 func (n *terraformPluginFrameworkExternalClient) Create(ctx context.Context, mg xpresource.Managed) (managed.ExternalCreation, error) {
 	n.logger.Debug("Creating the external resource")
 
-	tfConfigDynamicVal, err := protov5DynamicValueFromMap(n.params, n.resourceSchema.Type().TerraformType(ctx))
+	tfConfigDynamicVal, err := protov5DynamicValueFromMap(n.params, n.resourceValueTerraformType)
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, "cannot construct dynamic value for TF Config")
 	}
@@ -383,15 +385,15 @@ func (n *terraformPluginFrameworkExternalClient) Create(ctx context.Context, mg 
 	}
 	start := time.Now()
 	applyResponse, err := n.server.ApplyResourceChange(ctx, applyRequest)
-	metrics.ExternalAPITime.WithLabelValues("create").Observe(time.Since(start).Seconds())
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, "cannot create resource")
 	}
+	metrics.ExternalAPITime.WithLabelValues("create").Observe(time.Since(start).Seconds())
 	if fatalDiags := getFatalDiagnostics(applyResponse.Diagnostics); fatalDiags != nil {
-		return managed.ExternalCreation{}, errors.Wrap(fatalDiags, "resource creation failed with diags")
+		return managed.ExternalCreation{}, errors.Wrap(fatalDiags, "resource creation call returned error diags")
 	}
 
-	newStateAfterApplyVal, err := applyResponse.NewState.Unmarshal(n.resourceSchema.Type().TerraformType(ctx))
+	newStateAfterApplyVal, err := applyResponse.NewState.Unmarshal(n.resourceValueTerraformType)
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, "cannot unmarshal planned state")
 	}
@@ -429,7 +431,7 @@ func (n *terraformPluginFrameworkExternalClient) Create(ctx context.Context, mg 
 func (n *terraformPluginFrameworkExternalClient) Update(ctx context.Context, mg xpresource.Managed) (managed.ExternalUpdate, error) {
 	n.logger.Debug("Updating the external resource")
 
-	tfConfigDynamicVal, err := protov5DynamicValueFromMap(n.params, n.resourceSchema.Type().TerraformType(ctx))
+	tfConfigDynamicVal, err := protov5DynamicValueFromMap(n.params, n.resourceValueTerraformType)
 	if err != nil {
 		return managed.ExternalUpdate{}, errors.Wrap(err, "cannot construct dynamic value for TF Config")
 	}
@@ -442,16 +444,16 @@ func (n *terraformPluginFrameworkExternalClient) Update(ctx context.Context, mg 
 	}
 	start := time.Now()
 	applyResponse, err := n.server.ApplyResourceChange(ctx, applyRequest)
-	metrics.ExternalAPITime.WithLabelValues("update").Observe(time.Since(start).Seconds())
 	if err != nil {
 		return managed.ExternalUpdate{}, errors.Wrap(err, "cannot update resource")
 	}
+	metrics.ExternalAPITime.WithLabelValues("update").Observe(time.Since(start).Seconds())
 	if fatalDiags := getFatalDiagnostics(applyResponse.Diagnostics); fatalDiags != nil {
-		return managed.ExternalUpdate{}, errors.Wrap(fatalDiags, "resource update failed")
+		return managed.ExternalUpdate{}, errors.Wrap(fatalDiags, "resource update call returned error diags")
 	}
 	n.opTracker.SetFrameworkTFState(applyResponse.NewState)
 
-	newStateAfterApplyVal, err := applyResponse.NewState.Unmarshal(n.resourceSchema.Type().TerraformType(ctx))
+	newStateAfterApplyVal, err := applyResponse.NewState.Unmarshal(n.resourceValueTerraformType)
 	if err != nil {
 		return managed.ExternalUpdate{}, errors.Wrap(err, "cannot unmarshal updated state")
 	}
@@ -478,14 +480,12 @@ func (n *terraformPluginFrameworkExternalClient) Update(ctx context.Context, mg 
 func (n *terraformPluginFrameworkExternalClient) Delete(ctx context.Context, _ xpresource.Managed) error {
 	n.logger.Debug("Deleting the external resource")
 
-	tfConfigDynamicVal, err := protov5DynamicValueFromMap(n.params, n.resourceSchema.Type().TerraformType(ctx))
+	tfConfigDynamicVal, err := protov5DynamicValueFromMap(n.params, n.resourceValueTerraformType)
 	if err != nil {
 		return errors.Wrap(err, "cannot construct dynamic value for TF Config")
 	}
-
-	schemaType := n.resourceSchema.Type().TerraformType(ctx)
 	// set an empty planned state, this corresponds to deleting
-	plannedState, err := tfprotov5.NewDynamicValue(schemaType, tftypes.NewValue(schemaType, nil))
+	plannedState, err := tfprotov5.NewDynamicValue(n.resourceValueTerraformType, tftypes.NewValue(n.resourceValueTerraformType, nil))
 	if err != nil {
 		return errors.Wrap(err, "cannot set the planned state for deletion")
 	}
@@ -498,16 +498,16 @@ func (n *terraformPluginFrameworkExternalClient) Delete(ctx context.Context, _ x
 	}
 	start := time.Now()
 	applyResponse, err := n.server.ApplyResourceChange(ctx, applyRequest)
-	metrics.ExternalAPITime.WithLabelValues("delete").Observe(time.Since(start).Seconds())
 	if err != nil {
 		return errors.Wrap(err, "cannot delete resource")
 	}
+	metrics.ExternalAPITime.WithLabelValues("delete").Observe(time.Since(start).Seconds())
 	if fatalDiags := getFatalDiagnostics(applyResponse.Diagnostics); fatalDiags != nil {
-		return errors.Wrap(fatalDiags, "resource deletion failed with diags")
+		return errors.Wrap(fatalDiags, "resource deletion call returned error diags")
 	}
 	n.opTracker.SetFrameworkTFState(applyResponse.NewState)
 
-	newStateAfterApplyVal, err := applyResponse.NewState.Unmarshal(schemaType)
+	newStateAfterApplyVal, err := applyResponse.NewState.Unmarshal(n.resourceValueTerraformType)
 	if err != nil {
 		return errors.Wrap(err, "cannot unmarshal state after deletion")
 	}
@@ -548,11 +548,12 @@ func tfValueToMap(input tftypes.Value) (any, error) { //nolint:gocyclo
 			return nil, err
 		}
 		for k, v := range destInterim {
-			if res, err := tfValueToMap(v); err != nil {
+			res, err := tfValueToMap(v)
+			if err != nil {
 				return nil, err
-			} else {
-				dest[k] = res
 			}
+			dest[k] = res
+
 		}
 		return dest, nil
 	case valType.Is(tftypes.Set{}), valType.Is(tftypes.List{}), valType.Is(tftypes.Tuple{}):
@@ -562,19 +563,16 @@ func tfValueToMap(input tftypes.Value) (any, error) { //nolint:gocyclo
 		}
 		dest := make([]any, len(destInterim))
 		for i, v := range destInterim {
-			if res, err := tfValueToMap(v); err != nil {
+			res, err := tfValueToMap(v)
+			if err != nil {
 				return nil, err
-			} else {
-				dest[i] = res
 			}
+			dest[i] = res
 		}
 		return dest, nil
 	case valType.Is(tftypes.Bool):
 		var x bool
-		if err := input.As(&x); err != nil {
-			return nil, err
-		}
-		return x, nil
+		return x, input.As(&x)
 	case valType.Is(tftypes.Number):
 		var valBigF big.Float
 		if err := input.As(&valBigF); err != nil {
@@ -587,27 +585,25 @@ func tfValueToMap(input tftypes.Value) (any, error) { //nolint:gocyclo
 				return nil, fmt.Errorf("value %v cannot be represented as a 64-bit integer", valBigF)
 			}
 			return intVal, nil
-		} else {
-			xf, accuracy := valBigF.Float64()
-			// Underflow
-			// Reference: https://pkg.go.dev/math/big#Float.Float64
-			if xf == 0 && accuracy != big.Exact {
-				return nil, fmt.Errorf("value %v cannot be represented as a 64-bit floating point", valBigF)
-			}
-
-			// Overflow
-			// Reference: https://pkg.go.dev/math/big#Float.Float64
-			if math.IsInf(xf, 0) {
-				return nil, fmt.Errorf("value %v cannot be represented as a 64-bit floating point", valBigF)
-			}
-			return xf, nil
 		}
+		// try to parse as float64
+		xf, accuracy := valBigF.Float64()
+		// Underflow
+		// Reference: https://pkg.go.dev/math/big#Float.Float64
+		if xf == 0 && accuracy != big.Exact {
+			return nil, fmt.Errorf("value %v cannot be represented as a 64-bit floating point", valBigF)
+		}
+
+		// Overflow
+		// Reference: https://pkg.go.dev/math/big#Float.Float64
+		if math.IsInf(xf, 0) {
+			return nil, fmt.Errorf("value %v cannot be represented as a 64-bit floating point", valBigF)
+		}
+		return xf, nil
+
 	case valType.Is(tftypes.String):
 		var x string
-		if err := input.As(&x); err != nil {
-			return nil, err
-		}
-		return x, nil
+		return x, input.As(&x)
 	case valType.Is(tftypes.DynamicPseudoType):
 		return nil, errors.New("DynamicPseudoType conversion is not supported")
 	default:
@@ -627,6 +623,14 @@ func getFatalDiagnostics(diags []*tfprotov5.Diagnostic) error {
 		errs = errors.New(strings.Join(diagErrors, "\n"))
 	}
 	return errs
+}
+
+func frameworkDiagnosticsToString(fwdiags fwdiag.Diagnostics) string {
+	var diagErrors []string
+	for _, tfdiag := range fwdiags.Errors() {
+		diagErrors = append(diagErrors, fmt.Sprintf("%s: %s", tfdiag.Summary(), tfdiag.Detail()))
+	}
+	return strings.Join(diagErrors, "\n")
 }
 
 func protov5DynamicValueFromMap(data map[string]any, terraformType tftypes.Type) (*tfprotov5.DynamicValue, error) {
