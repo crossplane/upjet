@@ -182,6 +182,7 @@ func (c *TerraformPluginFrameworkConnector) Connect(ctx context.Context, mg xpre
 	}, nil
 }
 
+// getResourceSchema returns the Terraform Plugin Framework-style resource schema for the configured framework resource on the connector
 func (c *TerraformPluginFrameworkConnector) getResourceSchema(ctx context.Context) (rschema.Schema, error) {
 	res := c.config.TerraformPluginFrameworkResource
 	schemaResp := &fwresource.SchemaResponse{}
@@ -194,6 +195,11 @@ func (c *TerraformPluginFrameworkConnector) getResourceSchema(ctx context.Contex
 	return schemaResp.Schema, nil
 }
 
+// configureProvider returns a configured Terraform protocol v5 provider server
+// with the preconfigured provider instance in the terraform setup.
+// The provider instance used should be already preconfigured
+// at the terraform setup layer with the relevant provider meta if needed
+// by the provider implementation.
 func (c *TerraformPluginFrameworkConnector) configureProvider(ctx context.Context, ts terraform.Setup) (tfprotov5.ProviderServer, error) {
 	var schemaResp fwprovider.SchemaResponse
 	ts.FrameworkProvider.Schema(ctx, fwprovider.SchemaRequest{}, &schemaResp)
@@ -222,6 +228,11 @@ func (c *TerraformPluginFrameworkConnector) configureProvider(ctx context.Contex
 	return providerServer, nil
 }
 
+// getDiffPlan calls the underlying native TF provider's PlanResourceChange RPC,
+// and returns the planned state and whether a diff exists.
+// If plan response contains non-empty RequiresReplace (i.e. the resource needs
+// to be recreated) an error is returned as Crossplane Resource Model (XRM)
+// prohibits resource re-creations and rejects this plan.
 func (n *terraformPluginFrameworkExternalClient) getDiffPlan(ctx context.Context,
 	tfStateValue tftypes.Value) (*tfprotov5.DynamicValue, bool, error) {
 	tfConfigDynamicVal, err := protov5DynamicValueFromMap(n.params, n.resourceValueTerraformType)
@@ -305,7 +316,7 @@ func (n *terraformPluginFrameworkExternalClient) Observe(ctx context.Context, mg
 
 	var stateValueMap map[string]any
 	if resourceExists {
-		if conv, err := tfValueToMap(tfStateValue); err != nil {
+		if conv, err := tfValueToGoValue(tfStateValue); err != nil {
 			return managed.ExternalObservation{}, errors.Wrap(err, "cannot convert instance state to JSON map")
 		} else {
 			stateValueMap = conv.(map[string]any)
@@ -403,7 +414,7 @@ func (n *terraformPluginFrameworkExternalClient) Create(ctx context.Context, mg 
 	}
 
 	var stateValueMap map[string]any
-	if goval, err := tfValueToMap(newStateAfterApplyVal); err != nil {
+	if goval, err := tfValueToGoValue(newStateAfterApplyVal); err != nil {
 		return managed.ExternalCreation{}, errors.New("cannot convert native state to go map")
 	} else {
 		stateValueMap = goval.(map[string]any)
@@ -463,7 +474,7 @@ func (n *terraformPluginFrameworkExternalClient) Update(ctx context.Context, mg 
 	}
 
 	var stateValueMap map[string]any
-	if goval, err := tfValueToMap(newStateAfterApplyVal); err != nil {
+	if goval, err := tfValueToGoValue(newStateAfterApplyVal); err != nil {
 		return managed.ExternalUpdate{}, errors.New("cannot convert native state to go map")
 	} else {
 		stateValueMap = goval.(map[string]any)
@@ -532,7 +543,18 @@ func (n *terraformPluginFrameworkExternalClient) setExternalName(mg xpresource.M
 	return oldName != newName, nil
 }
 
-func tfValueToMap(input tftypes.Value) (any, error) { //nolint:gocyclo
+// tfValueToGoValue converts a given tftypes.Value to Go-native any type.
+// Useful for converting terraform values of state to JSON or for setting
+// observations at the MR.
+// Nested values are recursively converted.
+// Supported conversions:
+// tftypes.Object, tftypes.Map => map[string]any
+// tftypes.Set, tftypes.List, tftypes.Tuple => []string
+// tftypes.Bool => bool
+// tftypes.Number => int64, float64
+// tftypes.String => string
+// tftypes.DynamicPseudoType => conversion not supported and returns an error
+func tfValueToGoValue(input tftypes.Value) (any, error) { //nolint:gocyclo
 	if !input.IsKnown() {
 		return nil, fmt.Errorf("cannot convert unknown value")
 	}
@@ -548,7 +570,7 @@ func tfValueToMap(input tftypes.Value) (any, error) { //nolint:gocyclo
 			return nil, err
 		}
 		for k, v := range destInterim {
-			res, err := tfValueToMap(v)
+			res, err := tfValueToGoValue(v)
 			if err != nil {
 				return nil, err
 			}
@@ -563,7 +585,7 @@ func tfValueToMap(input tftypes.Value) (any, error) { //nolint:gocyclo
 		}
 		dest := make([]any, len(destInterim))
 		for i, v := range destInterim {
-			res, err := tfValueToMap(v)
+			res, err := tfValueToGoValue(v)
 			if err != nil {
 				return nil, err
 			}
@@ -611,6 +633,8 @@ func tfValueToMap(input tftypes.Value) (any, error) { //nolint:gocyclo
 	}
 }
 
+// getFatalDiagnostics traverses the given Terraform protov5 diagnostics type
+// and constructs a Go error. If the provided diag slice is empty, returns nil.
 func getFatalDiagnostics(diags []*tfprotov5.Diagnostic) error {
 	var errs error
 	var diagErrors []string
@@ -625,6 +649,9 @@ func getFatalDiagnostics(diags []*tfprotov5.Diagnostic) error {
 	return errs
 }
 
+// frameworkDiagnosticsToString constructs an error string from the provided
+// Plugin Framework diagnostics instance. Only Error severity diagnostics are
+// included.
 func frameworkDiagnosticsToString(fwdiags fwdiag.Diagnostics) string {
 	frameworkErrorDiags := fwdiags.Errors()
 	diagErrors := make([]string, 0, len(frameworkErrorDiags))
@@ -634,6 +661,8 @@ func frameworkDiagnosticsToString(fwdiags fwdiag.Diagnostics) string {
 	return strings.Join(diagErrors, "\n")
 }
 
+// protov5DynamicValueFromMap constructs a protov5 DynamicValue given the
+// map[string]any using the terraform type as reference.
 func protov5DynamicValueFromMap(data map[string]any, terraformType tftypes.Type) (*tfprotov5.DynamicValue, error) {
 	jsonBytes, err := json.Marshal(data)
 	if err != nil {
