@@ -266,7 +266,7 @@ func WithMainTemplate(template string) ProviderOption {
 // NewProvider builds and returns a new Provider from provider
 // tfjson schema, that is generated using Terraform CLI with:
 // `terraform providers schema --json`
-func NewProvider(ctx context.Context, schema []byte, prefix string, modulePath string, metadata []byte, opts ...ProviderOption) *Provider { //nolint:gocyclo
+func NewProvider(schema []byte, prefix string, modulePath string, metadata []byte, opts ...ProviderOption) *Provider { //nolint:gocyclo
 	ps := tfjson.ProviderSchemas{}
 	if err := ps.UnmarshalJSON(schema); err != nil {
 		panic(err)
@@ -304,7 +304,7 @@ func NewProvider(ctx context.Context, schema []byte, prefix string, modulePath s
 	}
 
 	p.skippedResourceNames = make([]string, 0, len(resourceMap))
-	terraformPluginFrameworkResourceFunctions := p.TerraformPluginFrameworkProvider.Resources(ctx)
+	terraformPluginFrameworkResourceFunctionsMap := terraformPluginFrameworkResourceFunctionsMap(p.TerraformPluginFrameworkProvider)
 	for name, terraformResource := range resourceMap {
 		if len(terraformResource.Schema) == 0 {
 			// There are resources with no schema, that we will address later.
@@ -334,27 +334,14 @@ func NewProvider(ctx context.Context, schema []byte, prefix string, modulePath s
 		}
 
 		var terraformPluginFrameworkResource fwresource.Resource
-
 		if isPluginFrameworkResource {
-			// TODO: Consider whether to replace the commented out conditional in the next line with an equivalent conditional for plugin framework.
-			if p.TerraformPluginFrameworkProvider == nil /*|| p.TerraformProvider.ResourcesMap[name] == nil */ {
-				panic(errors.Errorf("resource %q is configured to be reconciled without the Terraform CLI"+
-					"but either config.Provider.TerraformProvider is not configured or the Go schema does not exist for the resource", name))
+			resourceFunc := terraformPluginFrameworkResourceFunctionsMap[name]
+			if p.TerraformPluginFrameworkProvider == nil || resourceFunc == nil {
+				panic(errors.Errorf("resource %q is configured to be reconciled with Terraform Plugin Framework"+
+					"but either config.Provider.TerraformPluginFrameworkProvider is not configured or the provider doesn't have the resource.", name))
 			}
 
-			for _, resourceFunc := range terraformPluginFrameworkResourceFunctions {
-				resource := resourceFunc()
-
-				resourceTypeNameReq := fwresource.MetadataRequest{
-					ProviderTypeName: name,
-				}
-				resourceTypeNameResp := fwresource.MetadataResponse{}
-				resource.Metadata(ctx, resourceTypeNameReq, &resourceTypeNameResp)
-				if resourceTypeNameResp.TypeName == name {
-					terraformPluginFrameworkResource = resource
-					break
-				}
-			}
+			terraformPluginFrameworkResource = resourceFunc()
 		}
 
 		p.Resources[name] = DefaultResource(name, terraformResource, terraformPluginFrameworkResource, providerMetadata.Resources[name], p.DefaultResourceOptions...)
@@ -413,4 +400,31 @@ func matches(name string, regexList []string) bool {
 		}
 	}
 	return false
+}
+
+func terraformPluginFrameworkResourceFunctionsMap(provider fwprovider.Provider) map[string]func() fwresource.Resource {
+	if provider == nil {
+		return make(map[string]func() fwresource.Resource, 0)
+	}
+
+	ctx := context.TODO()
+	resourceFunctions := provider.Resources(ctx)
+	resourceFunctionsMap := make(map[string]func() fwresource.Resource, len(resourceFunctions))
+
+	providerMetadata := fwprovider.MetadataResponse{}
+	provider.Metadata(ctx, fwprovider.MetadataRequest{}, &providerMetadata)
+
+	for _, resourceFunction := range resourceFunctions {
+		resource := resourceFunction()
+
+		resourceTypeNameReq := fwresource.MetadataRequest{
+			ProviderTypeName: providerMetadata.TypeName,
+		}
+		resourceTypeNameResp := fwresource.MetadataResponse{}
+		resource.Metadata(ctx, resourceTypeNameReq, &resourceTypeNameResp)
+
+		resourceFunctionsMap[resourceTypeNameResp.TypeName] = resourceFunction
+	}
+
+	return resourceFunctionsMap
 }
