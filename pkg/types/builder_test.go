@@ -23,6 +23,8 @@ func TestBuilder_generateTypeName(t *testing.T) {
 		existing []string
 		suffix   string
 		names    []string
+
+		overrideFieldNames map[string]string
 	}
 	type want struct {
 		out string
@@ -169,6 +171,22 @@ func TestBuilder_generateTypeName(t *testing.T) {
 				err: nil,
 			},
 		},
+		"OverrideFieldNames": {
+			args: args{
+				suffix: "Parameters",
+				names: []string{
+					"Cluster",
+					"Tag",
+				},
+				overrideFieldNames: map[string]string{
+					"TagParameters": "ClusterTagParameters",
+				},
+			},
+			want: want{
+				out: "ClusterTagParameters",
+				err: nil,
+			},
+		},
 	}
 	for n, tc := range cases {
 		t.Run(n, func(t *testing.T) {
@@ -180,7 +198,7 @@ func TestBuilder_generateTypeName(t *testing.T) {
 			g := &Builder{
 				Package: p,
 			}
-			got, gotErr := generateTypeName(tc.args.suffix, g.Package, tc.args.names...)
+			got, gotErr := generateTypeName(tc.args.suffix, g.Package, tc.args.overrideFieldNames, tc.args.names...)
 			if diff := cmp.Diff(tc.want.err, gotErr, test.EquateErrors()); diff != "" {
 				t.Fatalf("generateTypeName(...): -want error, +got error: %s", diff)
 			}

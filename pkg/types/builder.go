@@ -131,7 +131,7 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 	// we need to process all fields in the same order all the time.
 	keys := sortedKeys(res.Schema)
 
-	typeNames, err := NewTypeNames(names, g.Package)
+	typeNames, err := NewTypeNames(names, g.Package, cfg.OverrideFieldNames)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -319,20 +319,20 @@ type TypeNames struct {
 }
 
 // NewTypeNames returns a new TypeNames object.
-func NewTypeNames(fieldPaths []string, pkg *types.Package) (*TypeNames, error) {
-	paramTypeName, err := generateTypeName("Parameters", pkg, fieldPaths...)
+func NewTypeNames(fieldPaths []string, pkg *types.Package, overrideFieldNames map[string]string) (*TypeNames, error) {
+	paramTypeName, err := generateTypeName("Parameters", pkg, overrideFieldNames, fieldPaths...)
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot generate parameters type name of %s", fieldPath(fieldPaths))
 	}
 	paramName := types.NewTypeName(token.NoPos, pkg, paramTypeName, nil)
 
-	initTypeName, err := generateTypeName("InitParameters", pkg, fieldPaths...)
+	initTypeName, err := generateTypeName("InitParameters", pkg, overrideFieldNames, fieldPaths...)
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot generate init parameters type name of %s", fieldPath(fieldPaths))
 	}
 	initName := types.NewTypeName(token.NoPos, pkg, initTypeName, nil)
 
-	obsTypeName, err := generateTypeName("Observation", pkg, fieldPaths...)
+	obsTypeName, err := generateTypeName("Observation", pkg, overrideFieldNames, fieldPaths...)
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot generate observation type name of %s", fieldPath(fieldPaths))
 	}
@@ -447,23 +447,31 @@ func (r *resource) addReferenceFields(g *Builder, paramName *types.TypeName, fie
 // generateTypeName generates a unique name for the type if its original name
 // is used by another one. It adds the former field names recursively until it
 // finds a unique name.
-func generateTypeName(suffix string, pkg *types.Package, names ...string) (string, error) {
+func generateTypeName(suffix string, pkg *types.Package, overrideFieldNames map[string]string, names ...string) (calculated string, _ error) {
+	defer func() {
+		if v, ok := overrideFieldNames[calculated]; ok {
+			calculated = v
+		}
+	}()
 	n := names[len(names)-1] + suffix
 	for i := len(names) - 2; i >= 0; i-- {
 		if pkg.Scope().Lookup(n) == nil {
-			return n, nil
+			calculated = n
+			return
 		}
 		n = names[i] + n
 	}
 	if pkg.Scope().Lookup(n) == nil {
-		return n, nil
+		calculated = n
+		return
 	}
 	// start from 2 considering the 1st of this type is the one without an
 	// index.
 	for i := 2; i < 10; i++ {
 		nn := fmt.Sprintf("%s_%d", n, i)
 		if pkg.Scope().Lookup(nn) == nil {
-			return nn, nil
+			calculated = nn
+			return
 		}
 	}
 	return "", errors.Errorf("could not generate a unique name for %s", n)
