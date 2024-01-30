@@ -35,6 +35,9 @@ import (
 	"github.com/crossplane/upjet/pkg/terraform"
 )
 
+// TerraformPluginFrameworkConnector is an external client, with credentials and
+// other configuration parameters, for Terraform Plugin Framework resources. You
+// can use NewTerraformPluginFrameworkConnector to construct.
 type TerraformPluginFrameworkConnector struct {
 	getTerraformSetup           terraform.SetupFn
 	kube                        client.Client
@@ -71,6 +74,8 @@ func WithTerraformPluginFrameworkManagementPolicies(isManagementPoliciesEnabled 
 	}
 }
 
+// NewTerraformPluginFrameworkConnector creates a new
+// TerraformPluginFrameworkConnector with given options.
 func NewTerraformPluginFrameworkConnector(kube client.Client, sf terraform.SetupFn, cfg *config.Resource, ots *OperationTrackerStore, opts ...TerraformPluginFrameworkConnectorOption) *TerraformPluginFrameworkConnector {
 	connector := &TerraformPluginFrameworkConnector{
 		getTerraformSetup:     sf,
@@ -97,6 +102,8 @@ type terraformPluginFrameworkExternalClient struct {
 	resourceSchema rschema.Schema
 }
 
+// Connect makes sure the underlying client is ready to issue requests to the
+// provider API.
 func (c *TerraformPluginFrameworkConnector) Connect(ctx context.Context, mg xpresource.Managed) (managed.ExternalClient, error) { //nolint:gocyclo
 	c.metricRecorder.ObserveReconcileDelay(mg.GetObjectKind().GroupVersionKind(), mg.GetName())
 	logger := c.logger.WithValues("uid", mg.GetUID(), "name", mg.GetName(), "gvk", mg.GetObjectKind().GroupVersionKind().String())
