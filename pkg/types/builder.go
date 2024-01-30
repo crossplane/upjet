@@ -447,26 +447,31 @@ func (r *resource) addReferenceFields(g *Builder, paramName *types.TypeName, fie
 // generateTypeName generates a unique name for the type if its original name
 // is used by another one. It adds the former field names recursively until it
 // finds a unique name.
-func generateTypeName(suffix string, pkg *types.Package, overrideFieldNames map[string]string, names ...string) (string, error) {
+func generateTypeName(suffix string, pkg *types.Package, overrideFieldNames map[string]string, names ...string) (calculated string, _ error) {
+	defer func() {
+		if v, ok := overrideFieldNames[calculated]; ok {
+			calculated = v
+		}
+	}()
 	n := names[len(names)-1] + suffix
-	if v, ok := overrideFieldNames[n]; ok {
-		return v, nil
-	}
 	for i := len(names) - 2; i >= 0; i-- {
 		if pkg.Scope().Lookup(n) == nil {
-			return n, nil
+			calculated = n
+			return
 		}
 		n = names[i] + n
 	}
 	if pkg.Scope().Lookup(n) == nil {
-		return n, nil
+		calculated = n
+		return
 	}
 	// start from 2 considering the 1st of this type is the one without an
 	// index.
 	for i := 2; i < 10; i++ {
 		nn := fmt.Sprintf("%s_%d", n, i)
 		if pkg.Scope().Lookup(nn) == nil {
-			return nn, nil
+			calculated = nn
+			return
 		}
 	}
 	return "", errors.Errorf("could not generate a unique name for %s", n)
