@@ -476,8 +476,8 @@ func (n *noForkExternal) Observe(ctx context.Context, mg xpresource.Managed) (ma
 	if diag != nil && diag.HasError() {
 		return managed.ExternalObservation{}, errors.Errorf("failed to observe the resource: %v", diag)
 	}
-	diffState := n.opTracker.GetTfState()
 	n.opTracker.SetTfState(newState) // TODO: missing RawConfig & RawPlan here...
+	diffState := n.opTracker.GetTfState()
 	resourceExists := newState != nil && newState.ID != ""
 
 	var stateValueMap map[string]any
