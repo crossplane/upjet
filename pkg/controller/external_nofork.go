@@ -146,8 +146,10 @@ func getExtendedParameters(ctx context.Context, tr resource.Terraformed, externa
 	// not all providers may have this attribute
 	// TODO: tags-tags_all implementation is AWS specific.
 	// Consider making this logic independent of provider.
-	if _, ok := config.TerraformResource.CoreConfigSchema().Attributes["tags_all"]; ok {
-		params["tags_all"] = params["tags"]
+	if config.TerraformResource != nil {
+		if _, ok := config.TerraformResource.CoreConfigSchema().Attributes["tags_all"]; ok {
+			params["tags_all"] = params["tags"]
+		}
 	}
 	return params, nil
 }

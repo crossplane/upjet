@@ -47,12 +47,13 @@ func (cg *ControllerGenerator) Generate(cfg *config.Resource, typesPkgPath strin
 		"CRD": map[string]string{
 			"Kind": cfg.Kind,
 		},
-		"DisableNameInitializer": cfg.ExternalName.DisableNameInitializer,
-		"TypePackageAlias":       ctrlFile.Imports.UsePackage(typesPkgPath),
-		"UseAsync":               cfg.UseAsync,
-		"UseNoForkClient":        cfg.ShouldUseNoForkClient(),
-		"ResourceType":           cfg.Name,
-		"Initializers":           cfg.InitializerFns,
+		"DisableNameInitializer":            cfg.ExternalName.DisableNameInitializer,
+		"TypePackageAlias":                  ctrlFile.Imports.UsePackage(typesPkgPath),
+		"UseAsync":                          cfg.UseAsync,
+		"UseNoForkClient":                   cfg.ShouldUseNoForkClient(),
+		"UseTerraformPluginFrameworkClient": cfg.ShouldUseTerraformPluginFrameworkClient(),
+		"ResourceType":                      cfg.Name,
+		"Initializers":                      cfg.InitializerFns,
 	}
 
 	// If the provider has a features package, add it to the controller template.

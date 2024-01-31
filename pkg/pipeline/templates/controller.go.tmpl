@@ -43,7 +43,7 @@ func Setup(mgr ctrl.Manager, o tjcontroller.Options) error {
 	}
 	eventHandler := handler.NewEventHandler(handler.WithLogger(o.Logger.WithValues("gvk", {{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind)))
 	{{- if .UseAsync }}
-	ac := tjcontroller.NewAPICallbacks(mgr, xpresource.ManagedKind({{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind), tjcontroller.WithEventHandler(eventHandler){{ if .UseNoForkClient }}, tjcontroller.WithStatusUpdates(false){{ end }})
+	ac := tjcontroller.NewAPICallbacks(mgr, xpresource.ManagedKind({{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind), tjcontroller.WithEventHandler(eventHandler){{ if or .UseNoForkClient .UseTerraformPluginFrameworkClient }}, tjcontroller.WithStatusUpdates(false){{ end }})
 	{{- end}}
 	opts := []managed.ReconcilerOption{
 		managed.WithExternalConnecter(
@@ -67,12 +67,32 @@ func Setup(mgr ctrl.Manager, o tjcontroller.Options) error {
 				{{- end -}}
 				)
 			  {{- end -}}
+			{{- else if .UseTerraformPluginFrameworkClient -}}
+			  {{- if .UseAsync }}
+          tjcontroller.NewTerraformPluginFrameworkAsyncConnector(mgr.GetClient(), o.OperationTrackerStore, o.SetupFn, o.Provider.Resources["{{ .ResourceType }}"],
+          tjcontroller.WithTerraformPluginFrameworkAsyncLogger(o.Logger),
+          tjcontroller.WithTerraformPluginFrameworkAsyncConnectorEventHandler(eventHandler),
+          tjcontroller.WithTerraformPluginFrameworkAsyncCallbackProvider(ac),
+          tjcontroller.WithTerraformPluginFrameworkAsyncMetricRecorder(metrics.NewMetricRecorder({{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind, mgr, o.PollInterval)),
+          {{if .FeaturesPackageAlias -}}
+            tjcontroller.WithTerraformPluginFrameworkAsyncManagementPolicies(o.Features.Enabled({{ .FeaturesPackageAlias }}EnableBetaManagementPolicies))
+          {{- end -}}
+          )
+			  {{- else }}
+			  tjcontroller.NewTerraformPluginFrameworkConnector(mgr.GetClient(), o.SetupFn, o.Provider.Resources["{{ .ResourceType }}"], o.OperationTrackerStore,
+				tjcontroller.WithTerraformPluginFrameworkLogger(o.Logger),
+				tjcontroller.WithTerraformPluginFrameworkMetricRecorder(metrics.NewMetricRecorder({{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind, mgr, o.PollInterval)),
+				{{if .FeaturesPackageAlias -}}
+				  tjcontroller.WithTerraformPluginFrameworkManagementPolicies(o.Features.Enabled({{ .FeaturesPackageAlias }}EnableBetaManagementPolicies))
+				{{- end -}}
+			  )
+			  {{- end }}
 			{{- else -}}
-			tjcontroller.NewConnector(mgr.GetClient(), o.WorkspaceStore, o.SetupFn, o.Provider.Resources["{{ .ResourceType }}"], tjcontroller.WithLogger(o.Logger), tjcontroller.WithConnectorEventHandler(eventHandler),
+			  tjcontroller.NewConnector(mgr.GetClient(), o.WorkspaceStore, o.SetupFn, o.Provider.Resources["{{ .ResourceType }}"], tjcontroller.WithLogger(o.Logger), tjcontroller.WithConnectorEventHandler(eventHandler),
 				{{- if .UseAsync }}
 				tjcontroller.WithCallbackProvider(ac),
 				{{- end }}
-			)
+			  )
 			{{- end -}}
 		),
 		managed.WithLogger(o.Logger.WithValues("controller", name)),

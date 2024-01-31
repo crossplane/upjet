@@ -5,10 +5,13 @@
 package config
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 
 	tfjson "github.com/hashicorp/terraform-json"
+	fwprovider "github.com/hashicorp/terraform-plugin-framework/provider"
+	fwresource "github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/pkg/errors"
 
@@ -115,21 +118,35 @@ type Provider struct {
 	// Defaults to []string{".+"} which would include all resources.
 	IncludeList []string
 
-	// NoForkIncludeList  is a list of regex for the Terraform resources to be
-	// included and reconciled in the no-fork architecture (without the
-	// Terraform CLI).
+	// NoForkIncludeList is a list of regex for the Terraform resources
+	// implemented with Terraform Plugin SDKv2 to be included and reconciled
+	// in the no-fork architecture (without the Terraform CLI).
 	// For example, to include "aws_shield_protection_group" into
 	// the generated resources, one can add "aws_shield_protection_group$".
 	// To include whole aws waf group, one can add "aws_waf.*" to the list.
 	// Defaults to []string{".+"} which would include all resources.
 	NoForkIncludeList []string
 
+	// TerraformPluginFrameworkIncludeList is a list of regex for the Terraform
+	// resources implemented with Terraform Plugin Framework  to be included and
+	// reconciled in the no-fork architecture (without the Terraform CLI).
+	// For example, to include "aws_shield_protection_group" into
+	// the generated resources, one can add "aws_shield_protection_group$".
+	// To include whole aws waf group, one can add "aws_waf.*" to the list.
+	// Defaults to []string{".+"} which would include all resources.
+	TerraformPluginFrameworkIncludeList []string
+
 	// Resources is a map holding resource configurations where key is Terraform
 	// resource name.
 	Resources map[string]*Resource
 
-	// TerraformProvider is the Terraform schema of the provider.
+	// TerraformProvider is the Terraform provider in Terraform Plugin SDKv2
+	// compatible format
 	TerraformProvider *schema.Provider
+
+	// TerraformPluginFrameworkProvider is the Terraform provider reference
+	// in Terraform Plugin Framework compatible format
+	TerraformPluginFrameworkProvider fwprovider.Provider
 
 	// refInjectors is an ordered list of `ReferenceInjector`s for
 	// injecting references across this Provider's resources.
@@ -170,10 +187,20 @@ func WithIncludeList(l []string) ProviderOption {
 	}
 }
 
-// WithNoForkIncludeList configures IncludeList for this Provider.
+// WithNoForkIncludeList configures the NoForkIncludeList for this Provider,
+// with the given Terraform Plugin SDKv2-based resource name list
 func WithNoForkIncludeList(l []string) ProviderOption {
 	return func(p *Provider) {
 		p.NoForkIncludeList = l
+	}
+}
+
+// WithTerraformPluginFrameworkIncludeList configures the
+// TerraformPluginFrameworkIncludeList for this Provider, with the given
+// Terraform Plugin Framework-based resource name list
+func WithTerraformPluginFrameworkIncludeList(l []string) ProviderOption {
+	return func(p *Provider) {
+		p.TerraformPluginFrameworkIncludeList = l
 	}
 }
 
@@ -181,6 +208,14 @@ func WithNoForkIncludeList(l []string) ProviderOption {
 func WithTerraformProvider(tp *schema.Provider) ProviderOption {
 	return func(p *Provider) {
 		p.TerraformProvider = tp
+	}
+}
+
+// WithTerraformPluginFrameworkProvider configures the
+// TerraformPluginFrameworkProvider for this Provider.
+func WithTerraformPluginFrameworkProvider(tp fwprovider.Provider) ProviderOption {
+	return func(p *Provider) {
+		p.TerraformPluginFrameworkProvider = tp
 	}
 }
 
@@ -269,6 +304,7 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadata []byt
 	}
 
 	p.skippedResourceNames = make([]string, 0, len(resourceMap))
+	terraformPluginFrameworkResourceFunctionsMap := terraformPluginFrameworkResourceFunctionsMap(p.TerraformPluginFrameworkProvider)
 	for name, terraformResource := range resourceMap {
 		if len(terraformResource.Schema) == 0 {
 			// There are resources with no schema, that we will address later.
@@ -276,7 +312,8 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadata []byt
 		}
 		// if in both of the include lists, the new behavior prevails
 		isNoFork := matches(name, p.NoForkIncludeList)
-		if len(terraformResource.Schema) == 0 || matches(name, p.SkipList) || (!matches(name, p.IncludeList) && !isNoFork) {
+		isPluginFrameworkResource := matches(name, p.TerraformPluginFrameworkIncludeList)
+		if len(terraformResource.Schema) == 0 || matches(name, p.SkipList) || (!matches(name, p.IncludeList) && !isNoFork && !isPluginFrameworkResource) {
 			p.skippedResourceNames = append(p.skippedResourceNames, name)
 			continue
 		}
@@ -295,8 +332,21 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadata []byt
 				terraformResource.Schema = terraformResource.SchemaFunc()
 			}
 		}
-		p.Resources[name] = DefaultResource(name, terraformResource, providerMetadata.Resources[name], p.DefaultResourceOptions...)
+
+		var terraformPluginFrameworkResource fwresource.Resource
+		if isPluginFrameworkResource {
+			resourceFunc := terraformPluginFrameworkResourceFunctionsMap[name]
+			if p.TerraformPluginFrameworkProvider == nil || resourceFunc == nil {
+				panic(errors.Errorf("resource %q is configured to be reconciled with Terraform Plugin Framework"+
+					"but either config.Provider.TerraformPluginFrameworkProvider is not configured or the provider doesn't have the resource.", name))
+			}
+
+			terraformPluginFrameworkResource = resourceFunc()
+		}
+
+		p.Resources[name] = DefaultResource(name, terraformResource, terraformPluginFrameworkResource, providerMetadata.Resources[name], p.DefaultResourceOptions...)
 		p.Resources[name].useNoForkClient = isNoFork
+		p.Resources[name].useTerraformPluginFrameworkClient = isPluginFrameworkResource
 	}
 	for i, refInjector := range p.refInjectors {
 		if err := refInjector.InjectReferences(p.Resources); err != nil {
@@ -350,4 +400,31 @@ func matches(name string, regexList []string) bool {
 		}
 	}
 	return false
+}
+
+func terraformPluginFrameworkResourceFunctionsMap(provider fwprovider.Provider) map[string]func() fwresource.Resource {
+	if provider == nil {
+		return make(map[string]func() fwresource.Resource, 0)
+	}
+
+	ctx := context.TODO()
+	resourceFunctions := provider.Resources(ctx)
+	resourceFunctionsMap := make(map[string]func() fwresource.Resource, len(resourceFunctions))
+
+	providerMetadata := fwprovider.MetadataResponse{}
+	provider.Metadata(ctx, fwprovider.MetadataRequest{}, &providerMetadata)
+
+	for _, resourceFunction := range resourceFunctions {
+		resource := resourceFunction()
+
+		resourceTypeNameReq := fwresource.MetadataRequest{
+			ProviderTypeName: providerMetadata.TypeName,
+		}
+		resourceTypeNameResp := fwresource.MetadataResponse{}
+		resource.Metadata(ctx, resourceTypeNameReq, &resourceTypeNameResp)
+
+		resourceFunctionsMap[resourceTypeNameResp.TypeName] = resourceFunction
+	}
+
+	return resourceFunctionsMap
 }

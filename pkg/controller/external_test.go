@@ -592,7 +592,7 @@ func TestObserve(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			e := &external{workspace: tc.w, config: config.DefaultResource("upjet_resource", nil, nil), kube: tc.args.client, logger: logging.NewNopLogger()}
+			e := &external{workspace: tc.w, config: config.DefaultResource("upjet_resource", nil, nil, nil), kube: tc.args.client, logger: logging.NewNopLogger()}
 			observation, err := e.Observe(context.TODO(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.obs, observation); diff != "" {
 				t.Errorf("\n%s\nObserve(...): -want observation, +got observation:\n%s", tc.reason, diff)

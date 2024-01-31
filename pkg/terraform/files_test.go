@@ -67,7 +67,7 @@ func TestEnsureTFState(t *testing.T) {
 						"obs": "obsval",
 					}},
 				},
-				cfg: config.DefaultResource("upjet_resource", nil, nil),
+				cfg: config.DefaultResource("upjet_resource", nil, nil, nil),
 				fs: func() afero.Afero {
 					return afero.Afero{Fs: afero.NewMemMapFs()}
 				},
@@ -95,7 +95,7 @@ func TestEnsureTFState(t *testing.T) {
 						"obs": "obsval",
 					}},
 				},
-				cfg: config.DefaultResource("upjet_resource", nil, nil, func(r *config.Resource) {
+				cfg: config.DefaultResource("upjet_resource", nil, nil, nil, func(r *config.Resource) {
 					r.OperationTimeouts.Read = 2 * time.Minute
 				}),
 				fs: func() afero.Afero {
@@ -126,7 +126,7 @@ func TestEnsureTFState(t *testing.T) {
 						"obs": "obsval",
 					}},
 				},
-				cfg: config.DefaultResource("upjet_resource", nil, nil),
+				cfg: config.DefaultResource("upjet_resource", nil, nil, nil),
 				fs: func() afero.Afero {
 					fss := afero.Afero{Fs: afero.NewMemMapFs()}
 					_ = fss.WriteFile(filepath.Join(dir, "terraform.tfstate"), []byte(empty), 0600)
@@ -278,7 +278,7 @@ func TestIsStateEmpty(t *testing.T) {
 					Parameterizable: fake.Parameterizable{Parameters: map[string]any{}},
 				},
 				Setup{},
-				config.DefaultResource("upjet_resource", nil, nil), WithFileSystem(tc.args.fs()),
+				config.DefaultResource("upjet_resource", nil, nil, nil), WithFileSystem(tc.args.fs()),
 			)
 			empty, err := fp.isStateEmpty()
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
@@ -326,7 +326,7 @@ func TestWriteMainTF(t *testing.T) {
 						"obs": "obsval",
 					}},
 				},
-				cfg: config.DefaultResource("upjet_resource", nil, nil, func(r *config.Resource) {
+				cfg: config.DefaultResource("upjet_resource", nil, nil, nil, func(r *config.Resource) {
 					r.OperationTimeouts = config.OperationTimeouts{
 						Read:   30 * time.Second,
 						Update: 2 * time.Minute,
@@ -363,7 +363,7 @@ func TestWriteMainTF(t *testing.T) {
 						"obs": "obsval",
 					}},
 				},
-				cfg: config.DefaultResource("upjet_resource", nil, nil),
+				cfg: config.DefaultResource("upjet_resource", nil, nil, nil),
 				s: Setup{
 					Requirement: ProviderRequirement{
 						Source:  "hashicorp/provider-test",
@@ -395,7 +395,7 @@ func TestWriteMainTF(t *testing.T) {
 						"obs": "obsval",
 					}},
 				},
-				cfg: config.DefaultResource("upjet_resource", nil, nil),
+				cfg: config.DefaultResource("upjet_resource", nil, nil, nil),
 				s: Setup{
 					Requirement: ProviderRequirement{
 						Source:  "my-company/namespace/provider-test",
@@ -449,7 +449,7 @@ func TestWriteMainTF(t *testing.T) {
 						"obs": "obsval",
 					}},
 				},
-				cfg: config.DefaultResource("upjet_resource", nil, nil),
+				cfg: config.DefaultResource("upjet_resource", nil, nil, nil),
 				s: Setup{
 					Requirement: ProviderRequirement{
 						Source:  "hashicorp/provider-test",
