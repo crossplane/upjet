@@ -30,47 +30,72 @@ import (
 	"github.com/crossplane/upjet/pkg/terraform"
 )
 
-var baseSchema = rschema.Schema{
-	Attributes: map[string]rschema.Attribute{
-		"name": rschema.StringAttribute{
-			Required: true,
-			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseStateForUnknown(),
+func newBaseObject() *fake.Terraformed {
+	return &fake.Terraformed{
+		Parameterizable: fake.Parameterizable{
+			Parameters: map[string]any{
+				"name": "example",
+				"map": map[string]any{
+					"key": "value",
+				},
+				"list": []any{"elem1", "elem2"},
 			},
 		},
-		"id": rschema.StringAttribute{
-			Computed: true,
-			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseStateForUnknown(),
+		Observable: fake.Observable{
+			Observation: map[string]any{},
+		},
+	}
+}
+
+func newBaseSchema() rschema.Schema {
+	return rschema.Schema{
+		Attributes: map[string]rschema.Attribute{
+			"name": rschema.StringAttribute{
+				Required: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"id": rschema.StringAttribute{
+				Computed: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"map": rschema.MapAttribute{
+				Required:    true,
+				ElementType: types.StringType,
+			},
+			"list": rschema.ListAttribute{
+				Required:    true,
+				ElementType: types.StringType,
 			},
 		},
-		"map": rschema.MapAttribute{
-			Required:    true,
-			ElementType: types.StringType,
-		},
-		"list": rschema.ListAttribute{
-			Required:    true,
-			ElementType: types.StringType,
-		},
-	},
+	}
 }
-var baseResource = &mockTPFResource{
-	SchemaMethod: func(ctx context.Context, request resource.SchemaRequest, response *resource.SchemaResponse) {
-		response.Schema = baseSchema
-	},
-	ReadMethod: func(ctx context.Context, request resource.ReadRequest, response *resource.ReadResponse) {
-		response.State = tfsdk.State{
-			Raw:    tftypes.Value{},
-			Schema: nil,
-		}
-	},
+
+func newMockBaseTPFResource() *mockTPFResource {
+	return &mockTPFResource{
+		SchemaMethod: func(ctx context.Context, request resource.SchemaRequest, response *resource.SchemaResponse) {
+			response.Schema = newBaseSchema()
+		},
+		ReadMethod: func(ctx context.Context, request resource.ReadRequest, response *resource.ReadResponse) {
+			response.State = tfsdk.State{
+				Raw:    tftypes.Value{},
+				Schema: nil,
+			}
+		},
+	}
 }
-var baseConfig = &config.Resource{
-	TerraformPluginFrameworkResource: baseResource,
-	ExternalName:                     config.IdentifierFromProvider,
-	Sensitive: config.Sensitive{AdditionalConnectionDetailsFn: func(attr map[string]any) (map[string][]byte, error) {
-		return nil, nil
-	}},
+
+func newBaseUpjetConfig() *config.Resource {
+	return &config.Resource{
+		TerraformPluginFrameworkResource: newMockBaseTPFResource(),
+		ExternalName:                     config.IdentifierFromProvider,
+		Sensitive: config.Sensitive{AdditionalConnectionDetailsFn: func(attr map[string]any) (map[string][]byte, error) {
+			return nil, nil
+		}},
+	}
 }
 
 type testConfiguration struct {
@@ -167,8 +192,8 @@ func TestTPFConnect(t *testing.T) {
 						FrameworkProvider: &mockTPFProvider{},
 					}, nil
 				},
-				cfg: baseConfig,
-				obj: obj,
+				cfg: newBaseUpjetConfig(),
+				obj: newBaseObject(),
 				ots: ots,
 			},
 		},
@@ -196,8 +221,8 @@ func TestTPFObserve(t *testing.T) {
 	}{
 		"NotExists": {
 			testConfiguration: testConfiguration{
-				r:               baseResource,
-				cfg:             baseConfig,
+				r:               newMockBaseTPFResource(),
+				cfg:             newBaseUpjetConfig(),
 				obj:             obj,
 				currentStateMap: nil,
 				plannedStateMap: map[string]any{
@@ -220,9 +245,9 @@ func TestTPFObserve(t *testing.T) {
 
 		"UpToDate": {
 			testConfiguration: testConfiguration{
-				r:   baseResource,
-				cfg: baseConfig,
-				obj: obj,
+				r:   newMockBaseTPFResource(),
+				cfg: newBaseUpjetConfig(),
+				obj: newBaseObject(),
 				params: map[string]any{
 					"id":   "example-id",
 					"name": "example",
@@ -249,8 +274,8 @@ func TestTPFObserve(t *testing.T) {
 
 		"LateInitialize": {
 			testConfiguration: testConfiguration{
-				r:   baseResource,
-				cfg: baseConfig,
+				r:   newMockBaseTPFResource(),
+				cfg: newBaseUpjetConfig(),
 				obj: &fake.Terraformed{
 					Parameterizable: fake.Parameterizable{
 						Parameters: map[string]any{
@@ -316,8 +341,8 @@ func TestTPFCreate(t *testing.T) {
 	}{
 		"Successful": {
 			testConfiguration: testConfiguration{
-				r:               baseResource,
-				cfg:             baseConfig,
+				r:               newMockBaseTPFResource(),
+				cfg:             newBaseUpjetConfig(),
 				obj:             obj,
 				currentStateMap: nil,
 				plannedStateMap: map[string]any{
@@ -334,8 +359,8 @@ func TestTPFCreate(t *testing.T) {
 		},
 		"EmptyStateAfterCreation": {
 			testConfiguration: testConfiguration{
-				r:               baseResource,
-				cfg:             baseConfig,
+				r:               newMockBaseTPFResource(),
+				cfg:             newBaseUpjetConfig(),
 				obj:             obj,
 				currentStateMap: nil,
 				plannedStateMap: map[string]any{
@@ -352,8 +377,8 @@ func TestTPFCreate(t *testing.T) {
 		},
 		"ApplyWithError": {
 			testConfiguration: testConfiguration{
-				r:               baseResource,
-				cfg:             baseConfig,
+				r:               newMockBaseTPFResource(),
+				cfg:             newBaseUpjetConfig(),
 				obj:             obj,
 				currentStateMap: nil,
 				plannedStateMap: map[string]any{
@@ -371,8 +396,8 @@ func TestTPFCreate(t *testing.T) {
 		},
 		"ApplyWithDiags": {
 			testConfiguration: testConfiguration{
-				r:               baseResource,
-				cfg:             baseConfig,
+				r:               newMockBaseTPFResource(),
+				cfg:             newBaseUpjetConfig(),
 				obj:             obj,
 				currentStateMap: nil,
 				plannedStateMap: map[string]any{
@@ -416,9 +441,9 @@ func TestTPFUpdate(t *testing.T) {
 	}{
 		"Successful": {
 			testConfiguration: testConfiguration{
-				r:   baseResource,
-				cfg: baseConfig,
-				obj: obj,
+				r:   newMockBaseTPFResource(),
+				cfg: newBaseUpjetConfig(),
+				obj: newBaseObject(),
 				currentStateMap: map[string]any{
 					"name": "example",
 					"id":   "example-id",
@@ -459,9 +484,9 @@ func TestTPFDelete(t *testing.T) {
 	}{
 		"Successful": {
 			testConfiguration: testConfiguration{
-				r:   baseResource,
-				cfg: baseConfig,
-				obj: obj,
+				r:   newMockBaseTPFResource(),
+				cfg: newBaseUpjetConfig(),
+				obj: newBaseObject(),
 				currentStateMap: map[string]any{
 					"name": "example",
 					"id":   "example-id",
@@ -508,37 +533,37 @@ type mockTPFProviderServer struct {
 }
 
 func (m *mockTPFProviderServer) GetMetadata(ctx context.Context, request *tfprotov5.GetMetadataRequest) (*tfprotov5.GetMetadataResponse, error) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
 func (m *mockTPFProviderServer) GetProviderSchema(ctx context.Context, request *tfprotov5.GetProviderSchemaRequest) (*tfprotov5.GetProviderSchemaResponse, error) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
 func (m *mockTPFProviderServer) PrepareProviderConfig(ctx context.Context, request *tfprotov5.PrepareProviderConfigRequest) (*tfprotov5.PrepareProviderConfigResponse, error) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
 func (m *mockTPFProviderServer) ConfigureProvider(ctx context.Context, request *tfprotov5.ConfigureProviderRequest) (*tfprotov5.ConfigureProviderResponse, error) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
 func (m *mockTPFProviderServer) StopProvider(ctx context.Context, request *tfprotov5.StopProviderRequest) (*tfprotov5.StopProviderResponse, error) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
 func (m *mockTPFProviderServer) ValidateResourceTypeConfig(ctx context.Context, request *tfprotov5.ValidateResourceTypeConfigRequest) (*tfprotov5.ValidateResourceTypeConfigResponse, error) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
 func (m *mockTPFProviderServer) UpgradeResourceState(ctx context.Context, request *tfprotov5.UpgradeResourceStateRequest) (*tfprotov5.UpgradeResourceStateResponse, error) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
@@ -564,17 +589,17 @@ func (m *mockTPFProviderServer) ApplyResourceChange(ctx context.Context, request
 }
 
 func (m *mockTPFProviderServer) ImportResourceState(ctx context.Context, request *tfprotov5.ImportResourceStateRequest) (*tfprotov5.ImportResourceStateResponse, error) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
 func (m *mockTPFProviderServer) ValidateDataSourceConfig(ctx context.Context, request *tfprotov5.ValidateDataSourceConfigRequest) (*tfprotov5.ValidateDataSourceConfigResponse, error) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
 func (m *mockTPFProviderServer) ReadDataSource(ctx context.Context, request *tfprotov5.ReadDataSourceRequest) (*tfprotov5.ReadDataSourceResponse, error) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
