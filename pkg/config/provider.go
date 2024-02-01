@@ -313,13 +313,17 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadata []byt
 		// if in both of the include lists, the new behavior prevails
 		isTerraformPluginSDK := matches(name, p.TerraformPluginSDKIncludeList)
 		isPluginFrameworkResource := matches(name, p.TerraformPluginFrameworkIncludeList)
+		isCLIResource := matches(name, p.IncludeList)
+		if (isTerraformPluginSDK && isPluginFrameworkResource) || (isTerraformPluginSDK && isCLIResource) || (isPluginFrameworkResource && isCLIResource) {
+			panic(errors.Errorf(`resource %q is specified in more than one include list. It should appear in at most one of the lists "IncludeList", "TerraformPluginSDKIncludeList" or "TerraformPluginFrameworkIncludeList"`, name))
+		}
 		if len(terraformResource.Schema) == 0 || matches(name, p.SkipList) || (!matches(name, p.IncludeList) && !isTerraformPluginSDK && !isPluginFrameworkResource) {
 			p.skippedResourceNames = append(p.skippedResourceNames, name)
 			continue
 		}
 		if isTerraformPluginSDK {
 			if p.TerraformProvider == nil || p.TerraformProvider.ResourcesMap[name] == nil {
-				panic(errors.Errorf("resource %q is configured to be reconciled without the Terraform CLI"+
+				panic(errors.Errorf("resource %q is configured to be reconciled with Terraform Plugin SDK"+
 					"but either config.Provider.TerraformProvider is not configured or the Go schema does not exist for the resource", name))
 			}
 			terraformResource = p.TerraformProvider.ResourcesMap[name]

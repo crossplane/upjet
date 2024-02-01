@@ -53,7 +53,7 @@ func NewTerraformPluginSDKAsyncConnector(kube client.Client, ots *OperationTrack
 func (c *TerraformPluginSDKAsyncConnector) Connect(ctx context.Context, mg xpresource.Managed) (managed.ExternalClient, error) {
 	ec, err := c.TerraformPluginSDKConnector.Connect(ctx, mg)
 	if err != nil {
-		return nil, errors.Wrap(err, "cannot initialize the no-fork async external client")
+		return nil, errors.Wrap(err, "cannot initialize the Terraform plugin SDK async external client")
 	}
 
 	return &terraformPluginSDKAsyncExternal{
@@ -64,7 +64,7 @@ func (c *TerraformPluginSDKAsyncConnector) Connect(ctx context.Context, mg xpres
 }
 
 // WithTerraformPluginSDKAsyncConnectorEventHandler configures the
-// EventHandler so that the no-fork external clients can requeue
+// EventHandler so that the Terraform plugin SDK external clients can requeue
 // reconciliation requests.
 func WithTerraformPluginSDKAsyncConnectorEventHandler(e *handler.EventHandler) TerraformPluginSDKAsyncOption {
 	return func(c *TerraformPluginSDKAsyncConnector) {

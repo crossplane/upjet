@@ -97,13 +97,11 @@ func Setup(mgr ctrl.Manager, o tjcontroller.Options) error {
 		),
 		managed.WithLogger(o.Logger.WithValues("controller", name)),
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
-		{{- if .UseTerraformPluginSDKClient }}
-		{{- if .UseAsync }}
-		managed.WithFinalizer(tjcontroller.NewTerraformPluginSDKFinalizer(o.OperationTrackerStore, xpresource.NewAPIFinalizer(mgr.GetClient(), managed.FinalizerName))),
-		{{- end }}
-        {{- else }}
-        managed.WithFinalizer(terraform.NewWorkspaceFinalizer(o.WorkspaceStore, xpresource.NewAPIFinalizer(mgr.GetClient(), managed.FinalizerName))),
-        {{- end }}
+		{{- if or .UseTerraformPluginSDKClient .UseTerraformPluginFrameworkClient }}
+		managed.WithFinalizer(tjcontroller.NewOperationTrackerFinalizer(o.OperationTrackerStore, xpresource.NewAPIFinalizer(mgr.GetClient(), managed.FinalizerName))),
+    {{- else }}
+    managed.WithFinalizer(terraform.NewWorkspaceFinalizer(o.WorkspaceStore, xpresource.NewAPIFinalizer(mgr.GetClient(), managed.FinalizerName))),
+    {{- end }}
 		managed.WithTimeout(3*time.Minute),
 		managed.WithInitializers(initializers),
 		managed.WithConnectionPublishers(cps...),

@@ -15,34 +15,35 @@ const (
 	errRemoveTracker = "cannot remove tracker from the store"
 )
 
-// TrackerCleaner is the interface that the no-fork finalizer needs to work with.
+// TrackerCleaner is the interface for the common finalizer of both Terraform
+// plugin SDK and framework managed resources.
 type TrackerCleaner interface {
 	RemoveTracker(obj xpresource.Object) error
 }
 
-// NewTerraformPluginSDKFinalizer returns a new TerraformPluginSDKFinalizer.
-func NewTerraformPluginSDKFinalizer(tc TrackerCleaner, af xpresource.Finalizer) *TerraformPluginSDKFinalizer {
-	return &TerraformPluginSDKFinalizer{
+// NewOperationTrackerFinalizer returns a new OperationTrackerFinalizer.
+func NewOperationTrackerFinalizer(tc TrackerCleaner, af xpresource.Finalizer) *OperationTrackerFinalizer {
+	return &OperationTrackerFinalizer{
 		Finalizer:      af,
 		OperationStore: tc,
 	}
 }
 
-// TerraformPluginSDKFinalizer removes the operation tracker from the workspace store and only
+// OperationTrackerFinalizer removes the operation tracker from the workspace store and only
 // then calls RemoveFinalizer of the underlying Finalizer.
-type TerraformPluginSDKFinalizer struct {
+type OperationTrackerFinalizer struct {
 	xpresource.Finalizer
 	OperationStore TrackerCleaner
 }
 
 // AddFinalizer to the supplied Managed resource.
-func (nf *TerraformPluginSDKFinalizer) AddFinalizer(ctx context.Context, obj xpresource.Object) error {
+func (nf *OperationTrackerFinalizer) AddFinalizer(ctx context.Context, obj xpresource.Object) error {
 	return nf.Finalizer.AddFinalizer(ctx, obj)
 }
 
 // RemoveFinalizer removes the workspace from workspace store before removing
 // the finalizer.
-func (nf *TerraformPluginSDKFinalizer) RemoveFinalizer(ctx context.Context, obj xpresource.Object) error {
+func (nf *OperationTrackerFinalizer) RemoveFinalizer(ctx context.Context, obj xpresource.Object) error {
 	if err := nf.OperationStore.RemoveTracker(obj); err != nil {
 		return errors.Wrap(err, errRemoveTracker)
 	}
