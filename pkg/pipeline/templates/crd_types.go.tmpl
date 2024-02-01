@@ -42,6 +42,7 @@ type {{ .CRD.Kind }}Status struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:storageversion
 
 // {{ .CRD.Kind }} is the Schema for the {{ .CRD.Kind }}s API. {{ .CRD.Description }}
 // +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
