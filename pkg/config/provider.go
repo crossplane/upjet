@@ -118,14 +118,14 @@ type Provider struct {
 	// Defaults to []string{".+"} which would include all resources.
 	IncludeList []string
 
-	// NoForkIncludeList is a list of regex for the Terraform resources
+	// TerraformPluginSDKIncludeList is a list of regex for the Terraform resources
 	// implemented with Terraform Plugin SDKv2 to be included and reconciled
 	// in the no-fork architecture (without the Terraform CLI).
 	// For example, to include "aws_shield_protection_group" into
 	// the generated resources, one can add "aws_shield_protection_group$".
 	// To include whole aws waf group, one can add "aws_waf.*" to the list.
 	// Defaults to []string{".+"} which would include all resources.
-	NoForkIncludeList []string
+	TerraformPluginSDKIncludeList []string
 
 	// TerraformPluginFrameworkIncludeList is a list of regex for the Terraform
 	// resources implemented with Terraform Plugin Framework  to be included and
@@ -187,11 +187,11 @@ func WithIncludeList(l []string) ProviderOption {
 	}
 }
 
-// WithNoForkIncludeList configures the NoForkIncludeList for this Provider,
+// WithTerraformPluginSDKIncludeList configures the TerraformPluginSDKIncludeList for this Provider,
 // with the given Terraform Plugin SDKv2-based resource name list
-func WithNoForkIncludeList(l []string) ProviderOption {
+func WithTerraformPluginSDKIncludeList(l []string) ProviderOption {
 	return func(p *Provider) {
-		p.NoForkIncludeList = l
+		p.TerraformPluginSDKIncludeList = l
 	}
 }
 
@@ -311,13 +311,13 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadata []byt
 			fmt.Printf("Skipping resource %s because it has no schema\n", name)
 		}
 		// if in both of the include lists, the new behavior prevails
-		isNoFork := matches(name, p.NoForkIncludeList)
+		isTerraformPluginSDK := matches(name, p.TerraformPluginSDKIncludeList)
 		isPluginFrameworkResource := matches(name, p.TerraformPluginFrameworkIncludeList)
-		if len(terraformResource.Schema) == 0 || matches(name, p.SkipList) || (!matches(name, p.IncludeList) && !isNoFork && !isPluginFrameworkResource) {
+		if len(terraformResource.Schema) == 0 || matches(name, p.SkipList) || (!matches(name, p.IncludeList) && !isTerraformPluginSDK && !isPluginFrameworkResource) {
 			p.skippedResourceNames = append(p.skippedResourceNames, name)
 			continue
 		}
-		if isNoFork {
+		if isTerraformPluginSDK {
 			if p.TerraformProvider == nil || p.TerraformProvider.ResourcesMap[name] == nil {
 				panic(errors.Errorf("resource %q is configured to be reconciled without the Terraform CLI"+
 					"but either config.Provider.TerraformProvider is not configured or the Go schema does not exist for the resource", name))
@@ -345,7 +345,7 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadata []byt
 		}
 
 		p.Resources[name] = DefaultResource(name, terraformResource, terraformPluginFrameworkResource, providerMetadata.Resources[name], p.DefaultResourceOptions...)
-		p.Resources[name].useNoForkClient = isNoFork
+		p.Resources[name].useTerraformPluginSDKClient = isTerraformPluginSDK
 		p.Resources[name].useTerraformPluginFrameworkClient = isPluginFrameworkResource
 	}
 	for i, refInjector := range p.refInjectors {

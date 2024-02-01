@@ -43,27 +43,27 @@ func Setup(mgr ctrl.Manager, o tjcontroller.Options) error {
 	}
 	eventHandler := handler.NewEventHandler(handler.WithLogger(o.Logger.WithValues("gvk", {{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind)))
 	{{- if .UseAsync }}
-	ac := tjcontroller.NewAPICallbacks(mgr, xpresource.ManagedKind({{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind), tjcontroller.WithEventHandler(eventHandler){{ if or .UseNoForkClient .UseTerraformPluginFrameworkClient }}, tjcontroller.WithStatusUpdates(false){{ end }})
+	ac := tjcontroller.NewAPICallbacks(mgr, xpresource.ManagedKind({{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind), tjcontroller.WithEventHandler(eventHandler){{ if or .UseTerraformPluginSDKClient .UseTerraformPluginFrameworkClient }}, tjcontroller.WithStatusUpdates(false){{ end }})
 	{{- end}}
 	opts := []managed.ReconcilerOption{
 		managed.WithExternalConnecter(
-			{{- if .UseNoForkClient -}}
+			{{- if .UseTerraformPluginSDKClient -}}
               {{- if .UseAsync }}
-              tjcontroller.NewNoForkAsyncConnector(mgr.GetClient(), o.OperationTrackerStore, o.SetupFn, o.Provider.Resources["{{ .ResourceType }}"],
-                tjcontroller.WithNoForkAsyncLogger(o.Logger),
-                tjcontroller.WithNoForkAsyncConnectorEventHandler(eventHandler),
-                tjcontroller.WithNoForkAsyncCallbackProvider(ac),
-                tjcontroller.WithNoForkAsyncMetricRecorder(metrics.NewMetricRecorder({{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind, mgr, o.PollInterval)),
+              tjcontroller.NewTerraformPluginSDKAsyncConnector(mgr.GetClient(), o.OperationTrackerStore, o.SetupFn, o.Provider.Resources["{{ .ResourceType }}"],
+                tjcontroller.WithTerraformPluginSDKAsyncLogger(o.Logger),
+                tjcontroller.WithTerraformPluginSDKAsyncConnectorEventHandler(eventHandler),
+                tjcontroller.WithTerraformPluginSDKAsyncCallbackProvider(ac),
+                tjcontroller.WithTerraformPluginSDKAsyncMetricRecorder(metrics.NewMetricRecorder({{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind, mgr, o.PollInterval)),
                 {{if .FeaturesPackageAlias -}}
-                  tjcontroller.WithNoForkAsyncManagementPolicies(o.Features.Enabled({{ .FeaturesPackageAlias }}EnableBetaManagementPolicies))
+                  tjcontroller.WithTerraformPluginSDKAsyncManagementPolicies(o.Features.Enabled({{ .FeaturesPackageAlias }}EnableBetaManagementPolicies))
                 {{- end -}}
                 )
               {{- else -}}
-			  tjcontroller.NewNoForkConnector(mgr.GetClient(), o.SetupFn, o.Provider.Resources["{{ .ResourceType }}"], o.OperationTrackerStore,
-				tjcontroller.WithNoForkLogger(o.Logger),
-				tjcontroller.WithNoForkMetricRecorder(metrics.NewMetricRecorder({{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind, mgr, o.PollInterval)),
+			  tjcontroller.NewTerraformPluginSDKConnector(mgr.GetClient(), o.SetupFn, o.Provider.Resources["{{ .ResourceType }}"], o.OperationTrackerStore,
+				tjcontroller.WithTerraformPluginSDKLogger(o.Logger),
+				tjcontroller.WithTerraformPluginSDKMetricRecorder(metrics.NewMetricRecorder({{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind, mgr, o.PollInterval)),
 				{{if .FeaturesPackageAlias -}}
-				  tjcontroller.WithNoForkManagementPolicies(o.Features.Enabled({{ .FeaturesPackageAlias }}EnableBetaManagementPolicies))
+				  tjcontroller.WithTerraformPluginSDKManagementPolicies(o.Features.Enabled({{ .FeaturesPackageAlias }}EnableBetaManagementPolicies))
 				{{- end -}}
 				)
 			  {{- end -}}
@@ -97,9 +97,9 @@ func Setup(mgr ctrl.Manager, o tjcontroller.Options) error {
 		),
 		managed.WithLogger(o.Logger.WithValues("controller", name)),
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
-		{{- if .UseNoForkClient }}
+		{{- if .UseTerraformPluginSDKClient }}
 		{{- if .UseAsync }}
-		managed.WithFinalizer(tjcontroller.NewNoForkFinalizer(o.OperationTrackerStore, xpresource.NewAPIFinalizer(mgr.GetClient(), managed.FinalizerName))),
+		managed.WithFinalizer(tjcontroller.NewTerraformPluginSDKFinalizer(o.OperationTrackerStore, xpresource.NewAPIFinalizer(mgr.GetClient(), managed.FinalizerName))),
 		{{- end }}
         {{- else }}
         managed.WithFinalizer(terraform.NewWorkspaceFinalizer(o.WorkspaceStore, xpresource.NewAPIFinalizer(mgr.GetClient(), managed.FinalizerName))),

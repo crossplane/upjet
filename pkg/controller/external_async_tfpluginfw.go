@@ -22,12 +22,17 @@ import (
 	tferrors "github.com/crossplane/upjet/pkg/terraform/errors"
 )
 
+// TerraformPluginFrameworkAsyncConnector is a managed reconciler Connecter
+// implementation for reconciling Terraform plugin framework based
+// resources.
 type TerraformPluginFrameworkAsyncConnector struct {
 	*TerraformPluginFrameworkConnector
 	callback     CallbackProvider
 	eventHandler *handler.EventHandler
 }
 
+// TerraformPluginFrameworkAsyncOption represents a configuration option for
+// a TerraformPluginFrameworkAsyncConnector object.
 type TerraformPluginFrameworkAsyncOption func(connector *TerraformPluginFrameworkAsyncConnector)
 
 func NewTerraformPluginFrameworkAsyncConnector(kube client.Client,

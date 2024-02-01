@@ -76,14 +76,14 @@ var (
 	}
 )
 
-func prepareNoForkAsyncExternal(r Resource, cfg *config.Resource, fns CallbackFns) *noForkAsyncExternal {
+func prepareTerraformPluginSDKAsyncExternal(r Resource, cfg *config.Resource, fns CallbackFns) *terraformPluginSDKAsyncExternal {
 	schemaBlock := cfg.TerraformResource.CoreConfigSchema()
 	rawConfig, err := schema.JSONMapToStateValue(map[string]any{"name": "example"}, schemaBlock)
 	if err != nil {
 		panic(err)
 	}
-	return &noForkAsyncExternal{
-		noForkExternal: &noForkExternal{
+	return &terraformPluginSDKAsyncExternal{
+		terraformPluginSDKExternal: &terraformPluginSDKExternal{
 			ts:             terraform.Setup{},
 			resourceSchema: r,
 			config:         cfg,
@@ -98,7 +98,7 @@ func prepareNoForkAsyncExternal(r Resource, cfg *config.Resource, fns CallbackFn
 	}
 }
 
-func TestAsyncNoForkConnect(t *testing.T) {
+func TestAsyncTerraformPluginSDKConnect(t *testing.T) {
 	type args struct {
 		setupFn terraform.SetupFn
 		cfg     *config.Resource
@@ -125,7 +125,7 @@ func TestAsyncNoForkConnect(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			c := NewNoForkAsyncConnector(nil, tc.args.ots, tc.args.setupFn, tc.args.cfg, WithNoForkAsyncLogger(logTest))
+			c := NewTerraformPluginSDKAsyncConnector(nil, tc.args.ots, tc.args.setupFn, tc.args.cfg, WithTerraformPluginSDKAsyncLogger(logTest))
 			_, err := c.Connect(context.TODO(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nConnect(...): -want error, +got error:\n", diff)
@@ -134,7 +134,7 @@ func TestAsyncNoForkConnect(t *testing.T) {
 	}
 }
 
-func TestAsyncNoForkObserve(t *testing.T) {
+func TestAsyncTerraformPluginSDKObserve(t *testing.T) {
 	type args struct {
 		r   Resource
 		cfg *config.Resource
@@ -191,8 +191,8 @@ func TestAsyncNoForkObserve(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			noForkAsyncExternal := prepareNoForkAsyncExternal(tc.args.r, tc.args.cfg, CallbackFns{})
-			observation, err := noForkAsyncExternal.Observe(context.TODO(), tc.args.obj)
+			terraformPluginSDKAsyncExternal := prepareTerraformPluginSDKAsyncExternal(tc.args.r, tc.args.cfg, CallbackFns{})
+			observation, err := terraformPluginSDKAsyncExternal.Observe(context.TODO(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.obs, observation); diff != "" {
 				t.Errorf("\n%s\nObserve(...): -want observation, +got observation:\n", diff)
 			}
@@ -203,7 +203,7 @@ func TestAsyncNoForkObserve(t *testing.T) {
 	}
 }
 
-func TestAsyncNoForkCreate(t *testing.T) {
+func TestAsyncTerraformPluginSDKCreate(t *testing.T) {
 	type args struct {
 		r   Resource
 		cfg *config.Resource
@@ -238,8 +238,8 @@ func TestAsyncNoForkCreate(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			noForkAsyncExternal := prepareNoForkAsyncExternal(tc.args.r, tc.args.cfg, tc.args.fns)
-			_, err := noForkAsyncExternal.Create(context.TODO(), tc.args.obj)
+			terraformPluginSDKAsyncExternal := prepareTerraformPluginSDKAsyncExternal(tc.args.r, tc.args.cfg, tc.args.fns)
+			_, err := terraformPluginSDKAsyncExternal.Create(context.TODO(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nConnect(...): -want error, +got error:\n", diff)
 			}
@@ -247,7 +247,7 @@ func TestAsyncNoForkCreate(t *testing.T) {
 	}
 }
 
-func TestAsyncNoForkUpdate(t *testing.T) {
+func TestAsyncTerraformPluginSDKUpdate(t *testing.T) {
 	type args struct {
 		r   Resource
 		cfg *config.Resource
@@ -282,8 +282,8 @@ func TestAsyncNoForkUpdate(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			noForkAsyncExternal := prepareNoForkAsyncExternal(tc.args.r, tc.args.cfg, tc.args.fns)
-			_, err := noForkAsyncExternal.Update(context.TODO(), tc.args.obj)
+			terraformPluginSDKAsyncExternal := prepareTerraformPluginSDKAsyncExternal(tc.args.r, tc.args.cfg, tc.args.fns)
+			_, err := terraformPluginSDKAsyncExternal.Update(context.TODO(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nConnect(...): -want error, +got error:\n", diff)
 			}
@@ -291,7 +291,7 @@ func TestAsyncNoForkUpdate(t *testing.T) {
 	}
 }
 
-func TestAsyncNoForkDelete(t *testing.T) {
+func TestAsyncTerraformPluginSDKDelete(t *testing.T) {
 	type args struct {
 		r   Resource
 		cfg *config.Resource
@@ -326,8 +326,8 @@ func TestAsyncNoForkDelete(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			noForkAsyncExternal := prepareNoForkAsyncExternal(tc.args.r, tc.args.cfg, tc.args.fns)
-			err := noForkAsyncExternal.Delete(context.TODO(), tc.args.obj)
+			terraformPluginSDKAsyncExternal := prepareTerraformPluginSDKAsyncExternal(tc.args.r, tc.args.cfg, tc.args.fns)
+			err := terraformPluginSDKAsyncExternal.Delete(context.TODO(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nConnect(...): -want error, +got error:\n", diff)
 			}
