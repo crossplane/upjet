@@ -661,7 +661,7 @@ func (n *terraformPluginSDKExternal) Update(ctx context.Context, mg xpresource.M
 	n.logger.Debug("Updating the external resource")
 
 	if err := n.assertNoForceNew(); err != nil {
-		return managed.ExternalUpdate{}, errors.Wrap(err, "refuse to update the external resource")
+		return managed.ExternalUpdate{}, errors.Wrap(err, "refuse to update the external resource because the following update requires replacing it")
 	}
 
 	start := time.Now()
