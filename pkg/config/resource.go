@@ -455,9 +455,9 @@ type Resource struct {
 
 	Conversions []conversion.Conversion
 
-	// useNoForkClient indicates that a no-fork external client should
+	// useTerraformPluginSDKClient indicates that a plugin SDK external client should
 	// be generated instead of the Terraform CLI-forking client.
-	useNoForkClient bool
+	useTerraformPluginSDKClient bool
 
 	// useTerraformPluginFrameworkClient indicates that a Terraform
 	// Plugin Framework external client should be generated instead of
@@ -491,16 +491,14 @@ type Resource struct {
 	OverrideFieldNames map[string]string
 }
 
-// ShouldUseNoForkClient returns whether to generate a SDKv2-based no-fork
-// external client for this Resource, instead of the Terraform CLI-forking
-// external client
-func (r *Resource) ShouldUseNoForkClient() bool {
-	return r.useNoForkClient
+// ShouldUseTerraformPluginSDKClient returns whether to generate an SDKv2-based
+// external client for this Resource.
+func (r *Resource) ShouldUseTerraformPluginSDKClient() bool {
+	return r.useTerraformPluginSDKClient
 }
 
 // ShouldUseTerraformPluginFrameworkClient returns whether to generate a
-// Terraform Plugin Framework-based no-fork external client for this Resource
-// instead of a Terraform Plugin SDKv2-based external client
+// Terraform Plugin Framework-based external client for this Resource.
 func (r *Resource) ShouldUseTerraformPluginFrameworkClient() bool {
 	return r.useTerraformPluginFrameworkClient
 }

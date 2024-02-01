@@ -50,7 +50,7 @@ func (cg *ControllerGenerator) Generate(cfg *config.Resource, typesPkgPath strin
 		"DisableNameInitializer":            cfg.ExternalName.DisableNameInitializer,
 		"TypePackageAlias":                  ctrlFile.Imports.UsePackage(typesPkgPath),
 		"UseAsync":                          cfg.UseAsync,
-		"UseNoForkClient":                   cfg.ShouldUseNoForkClient(),
+		"UseTerraformPluginSDKClient":       cfg.ShouldUseTerraformPluginSDKClient(),
 		"UseTerraformPluginFrameworkClient": cfg.ShouldUseTerraformPluginFrameworkClient(),
 		"ResourceType":                      cfg.Name,
 		"Initializers":                      cfg.InitializerFns,

@@ -25,17 +25,24 @@ import (
 
 var defaultAsyncTimeout = 1 * time.Hour
 
-type NoForkAsyncConnector struct {
-	*NoForkConnector
+// TerraformPluginSDKAsyncConnector is a managed reconciler Connecter
+// implementation for reconciling Terraform plugin SDK v2 based
+// resources.
+type TerraformPluginSDKAsyncConnector struct {
+	*TerraformPluginSDKConnector
 	callback     CallbackProvider
 	eventHandler *handler.EventHandler
 }
 
-type NoForkAsyncOption func(connector *NoForkAsyncConnector)
+// TerraformPluginSDKAsyncOption represents a configuration option for
+// a TerraformPluginSDKAsyncConnector object.
+type TerraformPluginSDKAsyncOption func(connector *TerraformPluginSDKAsyncConnector)
 
-func NewNoForkAsyncConnector(kube client.Client, ots *OperationTrackerStore, sf terraform.SetupFn, cfg *config.Resource, opts ...NoForkAsyncOption) *NoForkAsyncConnector {
-	nfac := &NoForkAsyncConnector{
-		NoForkConnector: NewNoForkConnector(kube, sf, cfg, ots),
+// NewTerraformPluginSDKAsyncConnector initializes a new
+// TerraformPluginSDKAsyncConnector.
+func NewTerraformPluginSDKAsyncConnector(kube client.Client, ots *OperationTrackerStore, sf terraform.SetupFn, cfg *config.Resource, opts ...TerraformPluginSDKAsyncOption) *TerraformPluginSDKAsyncConnector {
+	nfac := &TerraformPluginSDKAsyncConnector{
+		TerraformPluginSDKConnector: NewTerraformPluginSDKConnector(kube, sf, cfg, ots),
 	}
 	for _, f := range opts {
 		f(nfac)
@@ -43,68 +50,70 @@ func NewNoForkAsyncConnector(kube client.Client, ots *OperationTrackerStore, sf 
 	return nfac
 }
 
-func (c *NoForkAsyncConnector) Connect(ctx context.Context, mg xpresource.Managed) (managed.ExternalClient, error) {
-	ec, err := c.NoForkConnector.Connect(ctx, mg)
+func (c *TerraformPluginSDKAsyncConnector) Connect(ctx context.Context, mg xpresource.Managed) (managed.ExternalClient, error) {
+	ec, err := c.TerraformPluginSDKConnector.Connect(ctx, mg)
 	if err != nil {
-		return nil, errors.Wrap(err, "cannot initialize the no-fork async external client")
+		return nil, errors.Wrap(err, "cannot initialize the Terraform plugin SDK async external client")
 	}
 
-	return &noForkAsyncExternal{
-		noForkExternal: ec.(*noForkExternal),
-		callback:       c.callback,
-		eventHandler:   c.eventHandler,
+	return &terraformPluginSDKAsyncExternal{
+		terraformPluginSDKExternal: ec.(*terraformPluginSDKExternal),
+		callback:                   c.callback,
+		eventHandler:               c.eventHandler,
 	}, nil
 }
 
-// WithNoForkAsyncConnectorEventHandler configures the EventHandler so that
-// the no-fork external clients can requeue reconciliation requests.
-func WithNoForkAsyncConnectorEventHandler(e *handler.EventHandler) NoForkAsyncOption {
-	return func(c *NoForkAsyncConnector) {
+// WithTerraformPluginSDKAsyncConnectorEventHandler configures the
+// EventHandler so that the Terraform plugin SDK external clients can requeue
+// reconciliation requests.
+func WithTerraformPluginSDKAsyncConnectorEventHandler(e *handler.EventHandler) TerraformPluginSDKAsyncOption {
+	return func(c *TerraformPluginSDKAsyncConnector) {
 		c.eventHandler = e
 	}
 }
 
-// WithNoForkAsyncCallbackProvider configures the controller to use async variant of the functions
-// of the Terraform client and run given callbacks once those operations are
-// completed.
-func WithNoForkAsyncCallbackProvider(ac CallbackProvider) NoForkAsyncOption {
-	return func(c *NoForkAsyncConnector) {
+// WithTerraformPluginSDKAsyncCallbackProvider configures the controller to use
+// async variant of the functions of the Terraform client and run given
+// callbacks once those operations are completed.
+func WithTerraformPluginSDKAsyncCallbackProvider(ac CallbackProvider) TerraformPluginSDKAsyncOption {
+	return func(c *TerraformPluginSDKAsyncConnector) {
 		c.callback = ac
 	}
 }
 
-// WithNoForkAsyncLogger configures a logger for the NoForkAsyncConnector.
-func WithNoForkAsyncLogger(l logging.Logger) NoForkAsyncOption {
-	return func(c *NoForkAsyncConnector) {
+// WithTerraformPluginSDKAsyncLogger configures a logger for the
+// TerraformPluginSDKAsyncConnector.
+func WithTerraformPluginSDKAsyncLogger(l logging.Logger) TerraformPluginSDKAsyncOption {
+	return func(c *TerraformPluginSDKAsyncConnector) {
 		c.logger = l
 	}
 }
 
-// WithNoForkAsyncMetricRecorder configures a metrics.MetricRecorder for the
-// NoForkAsyncConnector.
-func WithNoForkAsyncMetricRecorder(r *metrics.MetricRecorder) NoForkAsyncOption {
-	return func(c *NoForkAsyncConnector) {
+// WithTerraformPluginSDKAsyncMetricRecorder configures a
+// metrics.MetricRecorder for the TerraformPluginSDKAsyncConnector.
+func WithTerraformPluginSDKAsyncMetricRecorder(r *metrics.MetricRecorder) TerraformPluginSDKAsyncOption {
+	return func(c *TerraformPluginSDKAsyncConnector) {
 		c.metricRecorder = r
 	}
 }
 
-// WithNoForkAsyncManagementPolicies configures whether the client should
-// handle management policies.
-func WithNoForkAsyncManagementPolicies(isManagementPoliciesEnabled bool) NoForkAsyncOption {
-	return func(c *NoForkAsyncConnector) {
+// WithTerraformPluginSDKAsyncManagementPolicies configures whether the client
+// should handle management policies.
+func WithTerraformPluginSDKAsyncManagementPolicies(isManagementPoliciesEnabled bool) TerraformPluginSDKAsyncOption {
+	return func(c *TerraformPluginSDKAsyncConnector) {
 		c.isManagementPoliciesEnabled = isManagementPoliciesEnabled
 	}
 }
 
-type noForkAsyncExternal struct {
-	*noForkExternal
+type terraformPluginSDKAsyncExternal struct {
+	*terraformPluginSDKExternal
 	callback     CallbackProvider
 	eventHandler *handler.EventHandler
 }
 
 type CallbackFn func(error, context.Context) error
 
-func (n *noForkAsyncExternal) Observe(ctx context.Context, mg xpresource.Managed) (managed.ExternalObservation, error) {
+func (n *terraformPluginSDKAsyncExternal) Observe(ctx context.Context, mg xpresource.Managed) (managed.ExternalObservation, error) {
 	if n.opTracker.LastOperation.IsRunning() {
 		n.logger.WithValues("opType", n.opTracker.LastOperation.Type).Debug("ongoing async operation")
 		return managed.ExternalObservation{
@@ -114,7 +123,7 @@ func (n *noForkAsyncExternal) Observe(ctx context.Context, mg xpresource.Managed
 	}
 	n.opTracker.LastOperation.Flush()
 
-	o, err := n.noForkExternal.Observe(ctx, mg)
+	o, err := n.terraformPluginSDKExternal.Observe(ctx, mg)
 	// clear any previously reported LastAsyncOperation error condition here,
 	// because there are no pending updates on the existing resource and it's
 	// not scheduled to be deleted.
@@ -124,7 +133,7 @@ func (n *noForkAsyncExternal) Observe(ctx context.Context, mg xpresource.Managed
 	return o, err
 }
 
-func (n *noForkAsyncExternal) Create(_ context.Context, mg xpresource.Managed) (managed.ExternalCreation, error) {
+func (n *terraformPluginSDKAsyncExternal) Create(_ context.Context, mg xpresource.Managed) (managed.ExternalCreation, error) {
 	if !n.opTracker.LastOperation.MarkStart("create") {
 		return managed.ExternalCreation{}, errors.Errorf("%s operation that started at %s is still running", n.opTracker.LastOperation.Type, n.opTracker.LastOperation.StartTime().String())
 	}
@@ -134,7 +143,7 @@ func (n *noForkAsyncExternal) Create(_ context.Context, mg xpresource.Managed) (
 		defer cancel()
 
 		n.opTracker.logger.Debug("Async create starting...", "tfID", n.opTracker.GetTfID())
-		_, err := n.noForkExternal.Create(ctx, mg)
+		_, err := n.terraformPluginSDKExternal.Create(ctx, mg)
 		err = tferrors.NewAsyncCreateFailed(err)
 		n.opTracker.LastOperation.SetError(err)
 		n.opTracker.logger.Debug("Async create ended.", "error", err, "tfID", n.opTracker.GetTfID())
@@ -148,7 +157,7 @@ func (n *noForkAsyncExternal) Create(_ context.Context, mg xpresource.Managed) (
 	return managed.ExternalCreation{}, nil
 }
 
-func (n *noForkAsyncExternal) Update(_ context.Context, mg xpresource.Managed) (managed.ExternalUpdate, error) {
+func (n *terraformPluginSDKAsyncExternal) Update(_ context.Context, mg xpresource.Managed) (managed.ExternalUpdate, error) {
 	if !n.opTracker.LastOperation.MarkStart("update") {
 		return managed.ExternalUpdate{}, errors.Errorf("%s operation that started at %s is still running", n.opTracker.LastOperation.Type, n.opTracker.LastOperation.StartTime().String())
 	}
@@ -158,7 +167,7 @@ func (n *noForkAsyncExternal) Update(_ context.Context, mg xpresource.Managed) (
 		defer cancel()
 
 		n.opTracker.logger.Debug("Async update starting...", "tfID", n.opTracker.GetTfID())
-		_, err := n.noForkExternal.Update(ctx, mg)
+		_, err := n.terraformPluginSDKExternal.Update(ctx, mg)
 		err = tferrors.NewAsyncUpdateFailed(err)
 		n.opTracker.LastOperation.SetError(err)
 		n.opTracker.logger.Debug("Async update ended.", "error", err, "tfID", n.opTracker.GetTfID())
@@ -172,7 +181,7 @@ func (n *noForkAsyncExternal) Update(_ context.Context, mg xpresource.Managed) (
 	return managed.ExternalUpdate{}, nil
 }
 
-func (n *noForkAsyncExternal) Delete(_ context.Context, mg xpresource.Managed) error {
+func (n *terraformPluginSDKAsyncExternal) Delete(_ context.Context, mg xpresource.Managed) error {
 	switch {
 	case n.opTracker.LastOperation.Type == "delete":
 		n.opTracker.logger.Debug("The previous delete operation is still ongoing", "tfID", n.opTracker.GetTfID())
@@ -186,7 +195,7 @@ func (n *noForkAsyncExternal) Delete(_ context.Context, mg xpresource.Managed) e
 		defer cancel()
 
 		n.opTracker.logger.Debug("Async delete starting...", "tfID", n.opTracker.GetTfID())
-		err := tferrors.NewAsyncDeleteFailed(n.noForkExternal.Delete(ctx, mg))
+		err := tferrors.NewAsyncDeleteFailed(n.terraformPluginSDKExternal.Delete(ctx, mg))
 		n.opTracker.LastOperation.SetError(err)
 		n.opTracker.logger.Debug("Async delete ended.", "error", err, "tfID", n.opTracker.GetTfID())
 

@@ -68,7 +68,7 @@ var (
 			return nil, nil
 		}},
 	}
-	obj = &fake.Terraformed{
+	obj = fake.Terraformed{
 		Parameterizable: fake.Parameterizable{
 			Parameters: map[string]any{
 				"name": "example",
@@ -84,13 +84,13 @@ var (
 	}
 )
 
-func prepareNoForkExternal(r Resource, cfg *config.Resource) *noForkExternal {
+func prepareTerraformPluginSDKExternal(r Resource, cfg *config.Resource) *terraformPluginSDKExternal {
 	schemaBlock := cfg.TerraformResource.CoreConfigSchema()
 	rawConfig, err := schema.JSONMapToStateValue(map[string]any{"name": "example"}, schemaBlock)
 	if err != nil {
 		panic(err)
 	}
-	return &noForkExternal{
+	return &terraformPluginSDKExternal{
 		ts:             terraform.Setup{},
 		resourceSchema: r,
 		config:         cfg,
@@ -116,12 +116,12 @@ func (m mockResource) RefreshWithoutUpgrade(ctx context.Context, s *tf.InstanceS
 	return m.RefreshWithoutUpgradeFn(ctx, s, meta)
 }
 
-func TestNoForkConnect(t *testing.T) {
+func TestTerraformPluginSDKConnect(t *testing.T) {
 	type args struct {
 		setupFn terraform.SetupFn
 		cfg     *config.Resource
 		ots     *OperationTrackerStore
-		obj     xpresource.Managed
+		obj     fake.Terraformed
 	}
 	type want struct {
 		err error
@@ -146,7 +146,7 @@ func TestNoForkConnect(t *testing.T) {
 					return terraform.Setup{}, nil
 				},
 				cfg: cfg,
-				obj: &fake.Terraformed{
+				obj: fake.Terraformed{
 					Parameterizable: fake.Parameterizable{
 						Parameters: map[string]any{
 							"name": "      ${jsonencode({\n          type = \"object\"\n        })}",
@@ -167,8 +167,8 @@ func TestNoForkConnect(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			c := NewNoForkConnector(nil, tc.args.setupFn, tc.args.cfg, tc.args.ots, WithNoForkLogger(logTest))
-			_, err := c.Connect(context.TODO(), tc.args.obj)
+			c := NewTerraformPluginSDKConnector(nil, tc.args.setupFn, tc.args.cfg, tc.args.ots, WithTerraformPluginSDKLogger(logTest))
+			_, err := c.Connect(context.TODO(), &tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nConnect(...): -want error, +got error:\n", diff)
 			}
@@ -176,11 +176,11 @@ func TestNoForkConnect(t *testing.T) {
 	}
 }
 
-func TestNoForkObserve(t *testing.T) {
+func TestTerraformPluginSDKObserve(t *testing.T) {
 	type args struct {
 		r   Resource
 		cfg *config.Resource
-		obj xpresource.Managed
+		obj fake.Terraformed
 	}
 	type want struct {
 		obs managed.ExternalObservation
@@ -238,7 +238,7 @@ func TestNoForkObserve(t *testing.T) {
 					},
 				},
 				cfg: cfg,
-				obj: &fake.Terraformed{
+				obj: fake.Terraformed{
 					Parameterizable: fake.Parameterizable{
 						Parameters: map[string]any{
 							"name": "example",
@@ -270,8 +270,8 @@ func TestNoForkObserve(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			noForkExternal := prepareNoForkExternal(tc.args.r, tc.args.cfg)
-			observation, err := noForkExternal.Observe(context.TODO(), tc.args.obj)
+			terraformPluginSDKExternal := prepareTerraformPluginSDKExternal(tc.args.r, tc.args.cfg)
+			observation, err := terraformPluginSDKExternal.Observe(context.TODO(), &tc.args.obj)
 			if diff := cmp.Diff(tc.want.obs, observation); diff != "" {
 				t.Errorf("\n%s\nObserve(...): -want observation, +got observation:\n", diff)
 			}
@@ -282,11 +282,11 @@ func TestNoForkObserve(t *testing.T) {
 	}
 }
 
-func TestNoForkCreate(t *testing.T) {
+func TestTerraformPluginSDKCreate(t *testing.T) {
 	type args struct {
 		r   Resource
 		cfg *config.Resource
-		obj xpresource.Managed
+		obj fake.Terraformed
 	}
 	type want struct {
 		err error
@@ -323,8 +323,8 @@ func TestNoForkCreate(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			noForkExternal := prepareNoForkExternal(tc.args.r, tc.args.cfg)
-			_, err := noForkExternal.Create(context.TODO(), tc.args.obj)
+			terraformPluginSDKExternal := prepareTerraformPluginSDKExternal(tc.args.r, tc.args.cfg)
+			_, err := terraformPluginSDKExternal.Create(context.TODO(), &tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nConnect(...): -want error, +got error:\n", diff)
 			}
@@ -332,11 +332,11 @@ func TestNoForkCreate(t *testing.T) {
 	}
 }
 
-func TestNoForkUpdate(t *testing.T) {
+func TestTerraformPluginSDKUpdate(t *testing.T) {
 	type args struct {
 		r   Resource
 		cfg *config.Resource
-		obj xpresource.Managed
+		obj fake.Terraformed
 	}
 	type want struct {
 		err error
@@ -359,8 +359,8 @@ func TestNoForkUpdate(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			noForkExternal := prepareNoForkExternal(tc.args.r, tc.args.cfg)
-			_, err := noForkExternal.Update(context.TODO(), tc.args.obj)
+			terraformPluginSDKExternal := prepareTerraformPluginSDKExternal(tc.args.r, tc.args.cfg)
+			_, err := terraformPluginSDKExternal.Update(context.TODO(), &tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nConnect(...): -want error, +got error:\n", diff)
 			}
@@ -368,11 +368,11 @@ func TestNoForkUpdate(t *testing.T) {
 	}
 }
 
-func TestNoForkDelete(t *testing.T) {
+func TestTerraformPluginSDKDelete(t *testing.T) {
 	type args struct {
 		r   Resource
 		cfg *config.Resource
-		obj xpresource.Managed
+		obj fake.Terraformed
 	}
 	type want struct {
 		err error
@@ -395,8 +395,8 @@ func TestNoForkDelete(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			noForkExternal := prepareNoForkExternal(tc.args.r, tc.args.cfg)
-			err := noForkExternal.Delete(context.TODO(), tc.args.obj)
+			terraformPluginSDKExternal := prepareTerraformPluginSDKExternal(tc.args.r, tc.args.cfg)
+			err := terraformPluginSDKExternal.Delete(context.TODO(), &tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nConnect(...): -want error, +got error:\n", diff)
 			}

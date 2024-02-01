@@ -30,8 +30,8 @@ import (
 	"github.com/crossplane/upjet/pkg/terraform"
 )
 
-func newBaseObject() *fake.Terraformed {
-	return &fake.Terraformed{
+func newBaseObject() fake.Terraformed {
+	return fake.Terraformed{
 		Parameterizable: fake.Parameterizable{
 			Parameters: map[string]any{
 				"name": "example",
@@ -101,7 +101,7 @@ func newBaseUpjetConfig() *config.Resource {
 type testConfiguration struct {
 	r               resource.Resource
 	cfg             *config.Resource
-	obj             xpresource.Managed
+	obj             fake.Terraformed
 	params          map[string]any
 	currentStateMap map[string]any
 	plannedStateMap map[string]any
@@ -176,7 +176,7 @@ func TestTPFConnect(t *testing.T) {
 		setupFn terraform.SetupFn
 		cfg     *config.Resource
 		ots     *OperationTrackerStore
-		obj     xpresource.Managed
+		obj     fake.Terraformed
 	}
 	type want struct {
 		err error
@@ -202,7 +202,7 @@ func TestTPFConnect(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			c := NewTerraformPluginFrameworkConnector(nil, tc.args.setupFn, tc.args.cfg, tc.args.ots, WithTerraformPluginFrameworkLogger(logTest))
-			_, err := c.Connect(context.TODO(), tc.args.obj)
+			_, err := c.Connect(context.TODO(), &tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nConnect(...): -want error, +got error:\n", diff)
 			}
@@ -276,7 +276,7 @@ func TestTPFObserve(t *testing.T) {
 			testConfiguration: testConfiguration{
 				r:   newMockBaseTPFResource(),
 				cfg: newBaseUpjetConfig(),
-				obj: &fake.Terraformed{
+				obj: fake.Terraformed{
 					Parameterizable: fake.Parameterizable{
 						Parameters: map[string]any{
 							"name": "example",
@@ -320,7 +320,7 @@ func TestTPFObserve(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			tpfExternal := prepareTPFExternalWithTestConfig(tc.testConfiguration)
-			observation, err := tpfExternal.Observe(context.TODO(), tc.testConfiguration.obj)
+			observation, err := tpfExternal.Observe(context.TODO(), &tc.testConfiguration.obj)
 			if diff := cmp.Diff(tc.want.obs, observation); diff != "" {
 				t.Errorf("\n%s\nObserve(...): -want observation, +got observation:\n", diff)
 			}
@@ -423,7 +423,7 @@ func TestTPFCreate(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			tpfExternal := prepareTPFExternalWithTestConfig(tc.testConfiguration)
-			_, err := tpfExternal.Create(context.TODO(), tc.testConfiguration.obj)
+			_, err := tpfExternal.Create(context.TODO(), &tc.testConfiguration.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nConnect(...): -want error, +got error:\n", diff)
 			}
@@ -465,7 +465,7 @@ func TestTPFUpdate(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			tpfExternal := prepareTPFExternalWithTestConfig(tc.testConfiguration)
-			_, err := tpfExternal.Update(context.TODO(), tc.testConfiguration.obj)
+			_, err := tpfExternal.Update(context.TODO(), &tc.testConfiguration.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nConnect(...): -want error, +got error:\n", diff)
 			}
@@ -502,7 +502,7 @@ func TestTPFDelete(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			tpfExternal := prepareTPFExternalWithTestConfig(tc.testConfiguration)
-			err := tpfExternal.Delete(context.TODO(), tc.testConfiguration.obj)
+			err := tpfExternal.Delete(context.TODO(), &tc.testConfiguration.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nConnect(...): -want error, +got error:\n", diff)
 			}
@@ -532,37 +532,37 @@ type mockTPFProviderServer struct {
 	ReadDataSourceFn             func(ctx context.Context, request *tfprotov5.ReadDataSourceRequest) (*tfprotov5.ReadDataSourceResponse, error)
 }
 
-func (m *mockTPFProviderServer) GetMetadata(ctx context.Context, request *tfprotov5.GetMetadataRequest) (*tfprotov5.GetMetadataResponse, error) {
+func (m *mockTPFProviderServer) GetMetadata(_ context.Context, _ *tfprotov5.GetMetadataRequest) (*tfprotov5.GetMetadataResponse, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *mockTPFProviderServer) GetProviderSchema(ctx context.Context, request *tfprotov5.GetProviderSchemaRequest) (*tfprotov5.GetProviderSchemaResponse, error) {
+func (m *mockTPFProviderServer) GetProviderSchema(_ context.Context, _ *tfprotov5.GetProviderSchemaRequest) (*tfprotov5.GetProviderSchemaResponse, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *mockTPFProviderServer) PrepareProviderConfig(ctx context.Context, request *tfprotov5.PrepareProviderConfigRequest) (*tfprotov5.PrepareProviderConfigResponse, error) {
+func (m *mockTPFProviderServer) PrepareProviderConfig(_ context.Context, _ *tfprotov5.PrepareProviderConfigRequest) (*tfprotov5.PrepareProviderConfigResponse, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *mockTPFProviderServer) ConfigureProvider(ctx context.Context, request *tfprotov5.ConfigureProviderRequest) (*tfprotov5.ConfigureProviderResponse, error) {
+func (m *mockTPFProviderServer) ConfigureProvider(_ context.Context, _ *tfprotov5.ConfigureProviderRequest) (*tfprotov5.ConfigureProviderResponse, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *mockTPFProviderServer) StopProvider(ctx context.Context, request *tfprotov5.StopProviderRequest) (*tfprotov5.StopProviderResponse, error) {
+func (m *mockTPFProviderServer) StopProvider(_ context.Context, _ *tfprotov5.StopProviderRequest) (*tfprotov5.StopProviderResponse, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *mockTPFProviderServer) ValidateResourceTypeConfig(ctx context.Context, request *tfprotov5.ValidateResourceTypeConfigRequest) (*tfprotov5.ValidateResourceTypeConfigResponse, error) {
+func (m *mockTPFProviderServer) ValidateResourceTypeConfig(_ context.Context, _ *tfprotov5.ValidateResourceTypeConfigRequest) (*tfprotov5.ValidateResourceTypeConfigResponse, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *mockTPFProviderServer) UpgradeResourceState(ctx context.Context, request *tfprotov5.UpgradeResourceStateRequest) (*tfprotov5.UpgradeResourceStateResponse, error) {
+func (m *mockTPFProviderServer) UpgradeResourceState(_ context.Context, _ *tfprotov5.UpgradeResourceStateRequest) (*tfprotov5.UpgradeResourceStateResponse, error) {
 	// TODO implement me
 	panic("implement me")
 }
@@ -588,17 +588,17 @@ func (m *mockTPFProviderServer) ApplyResourceChange(ctx context.Context, request
 	return m.ApplyResourceChangeFn(ctx, request)
 }
 
-func (m *mockTPFProviderServer) ImportResourceState(ctx context.Context, request *tfprotov5.ImportResourceStateRequest) (*tfprotov5.ImportResourceStateResponse, error) {
+func (m *mockTPFProviderServer) ImportResourceState(_ context.Context, _ *tfprotov5.ImportResourceStateRequest) (*tfprotov5.ImportResourceStateResponse, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *mockTPFProviderServer) ValidateDataSourceConfig(ctx context.Context, request *tfprotov5.ValidateDataSourceConfigRequest) (*tfprotov5.ValidateDataSourceConfigResponse, error) {
+func (m *mockTPFProviderServer) ValidateDataSourceConfig(_ context.Context, _ *tfprotov5.ValidateDataSourceConfigRequest) (*tfprotov5.ValidateDataSourceConfigResponse, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *mockTPFProviderServer) ReadDataSource(ctx context.Context, request *tfprotov5.ReadDataSourceRequest) (*tfprotov5.ReadDataSourceResponse, error) {
+func (m *mockTPFProviderServer) ReadDataSource(_ context.Context, _ *tfprotov5.ReadDataSourceRequest) (*tfprotov5.ReadDataSourceResponse, error) {
 	// TODO implement me
 	panic("implement me")
 }

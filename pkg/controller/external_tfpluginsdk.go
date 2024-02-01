@@ -31,7 +31,7 @@ import (
 	"github.com/crossplane/upjet/pkg/terraform"
 )
 
-type NoForkConnector struct {
+type TerraformPluginSDKConnector struct {
 	getTerraformSetup           terraform.SetupFn
 	kube                        client.Client
 	config                      *config.Resource
@@ -41,34 +41,35 @@ type NoForkConnector struct {
 	isManagementPoliciesEnabled bool
 }
 
-// NoForkOption allows you to configure NoForkConnector.
-type NoForkOption func(connector *NoForkConnector)
+// TerraformPluginSDKOption allows you to configure TerraformPluginSDKConnector.
+type TerraformPluginSDKOption func(connector *TerraformPluginSDKConnector)
 
-// WithNoForkLogger configures a logger for the NoForkConnector.
-func WithNoForkLogger(l logging.Logger) NoForkOption {
-	return func(c *NoForkConnector) {
+// WithTerraformPluginSDKLogger configures a logger for the TerraformPluginSDKConnector.
+func WithTerraformPluginSDKLogger(l logging.Logger) TerraformPluginSDKOption {
+	return func(c *TerraformPluginSDKConnector) {
 		c.logger = l
 	}
 }
 
-// WithNoForkMetricRecorder configures a metrics.MetricRecorder for the
-// NoForkConnector.
-func WithNoForkMetricRecorder(r *metrics.MetricRecorder) NoForkOption {
-	return func(c *NoForkConnector) {
+// WithTerraformPluginSDKMetricRecorder configures a metrics.MetricRecorder for the
+// TerraformPluginSDKConnector.
+func WithTerraformPluginSDKMetricRecorder(r *metrics.MetricRecorder) TerraformPluginSDKOption {
+	return func(c *TerraformPluginSDKConnector) {
 		c.metricRecorder = r
 	}
 }
 
-// WithNoForkManagementPolicies configures whether the client should
+// WithTerraformPluginSDKManagementPolicies configures whether the client should
 // handle management policies.
-func WithNoForkManagementPolicies(isManagementPoliciesEnabled bool) NoForkOption {
-	return func(c *NoForkConnector) {
+func WithTerraformPluginSDKManagementPolicies(isManagementPoliciesEnabled bool) TerraformPluginSDKOption {
+	return func(c *TerraformPluginSDKConnector) {
 		c.isManagementPoliciesEnabled = isManagementPoliciesEnabled
 	}
 }
 
-func NewNoForkConnector(kube client.Client, sf terraform.SetupFn, cfg *config.Resource, ots *OperationTrackerStore, opts ...NoForkOption) *NoForkConnector {
-	nfc := &NoForkConnector{
+// NewTerraformPluginSDKConnector initializes a new TerraformPluginSDKConnector
+func NewTerraformPluginSDKConnector(kube client.Client, sf terraform.SetupFn, cfg *config.Resource, ots *OperationTrackerStore, opts ...TerraformPluginSDKOption) *TerraformPluginSDKConnector {
+	nfc := &TerraformPluginSDKConnector{
 		kube:                  kube,
 		getTerraformSetup:     sf,
 		config:                cfg,
@@ -108,7 +109,7 @@ type Resource interface {
 	RefreshWithoutUpgrade(ctx context.Context, s *tf.InstanceState, meta interface{}) (*tf.InstanceState, tfdiag.Diagnostics)
 }
 
-type noForkExternal struct {
+type terraformPluginSDKExternal struct {
 	ts             terraform.Setup
 	resourceSchema Resource
 	config         *config.Resource
@@ -154,7 +155,7 @@ func getExtendedParameters(ctx context.Context, tr resource.Terraformed, externa
 	return params, nil
 }
 
-func (c *NoForkConnector) processParamsWithStateFunc(schemaMap map[string]*schema.Schema, params map[string]any) map[string]any {
+func (c *TerraformPluginSDKConnector) processParamsWithStateFunc(schemaMap map[string]*schema.Schema, params map[string]any) map[string]any {
 	if params == nil {
 		return params
 	}
@@ -168,7 +169,7 @@ func (c *NoForkConnector) processParamsWithStateFunc(schemaMap map[string]*schem
 	return params
 }
 
-func (c *NoForkConnector) applyStateFuncToParam(sc *schema.Schema, param any) any { //nolint:gocyclo
+func (c *TerraformPluginSDKConnector) applyStateFuncToParam(sc *schema.Schema, param any) any { //nolint:gocyclo
 	if param == nil {
 		return param
 	}
@@ -229,7 +230,7 @@ func (c *NoForkConnector) applyStateFuncToParam(sc *schema.Schema, param any) an
 	return param
 }
 
-func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (managed.ExternalClient, error) { //nolint:gocyclo
+func (c *TerraformPluginSDKConnector) Connect(ctx context.Context, mg xpresource.Managed) (managed.ExternalClient, error) { //nolint:gocyclo
 	c.metricRecorder.ObserveReconcileDelay(mg.GetObjectKind().GroupVersionKind(), mg.GetName())
 	logger := c.logger.WithValues("uid", mg.GetUID(), "name", mg.GetName(), "gvk", mg.GetObjectKind().GroupVersionKind().String())
 	logger.Debug("Connecting to the service provider")
@@ -295,7 +296,7 @@ func (c *NoForkConnector) Connect(ctx context.Context, mg xpresource.Managed) (m
 		opTracker.SetTfState(s)
 	}
 
-	return &noForkExternal{
+	return &terraformPluginSDKExternal{
 		ts:             ts,
 		resourceSchema: c.config.TerraformResource,
 		config:         c.config,
@@ -416,7 +417,7 @@ func getTimeoutParameters(config *config.Resource) map[string]any { //nolint:goc
 	return timeouts
 }
 
-func (n *noForkExternal) getResourceDataDiff(tr resource.Terraformed, ctx context.Context, s *tf.InstanceState, resourceExists bool) (*tf.InstanceDiff, error) { //nolint:gocyclo
+func (n *terraformPluginSDKExternal) getResourceDataDiff(tr resource.Terraformed, ctx context.Context, s *tf.InstanceState, resourceExists bool) (*tf.InstanceDiff, error) { //nolint:gocyclo
 	resourceConfig := tf.NewResourceConfigRaw(n.params)
 	instanceDiff, err := schema.InternalMap(n.config.TerraformResource.Schema).Diff(ctx, s, resourceConfig, n.config.TerraformResource.CustomizeDiff, n.ts.Meta, false)
 	if err != nil {
@@ -461,7 +462,7 @@ func (n *noForkExternal) getResourceDataDiff(tr resource.Terraformed, ctx contex
 	return instanceDiff, nil
 }
 
-func (n *noForkExternal) Observe(ctx context.Context, mg xpresource.Managed) (managed.ExternalObservation, error) { //nolint:gocyclo
+func (n *terraformPluginSDKExternal) Observe(ctx context.Context, mg xpresource.Managed) (managed.ExternalObservation, error) { //nolint:gocyclo
 	n.logger.Debug("Observing the external resource")
 
 	if meta.WasDeleted(mg) && n.opTracker.IsDeleted() {
@@ -559,7 +560,7 @@ func (n *noForkExternal) Observe(ctx context.Context, mg xpresource.Managed) (ma
 
 // sets the external-name on the MR. Returns `true`
 // if the external-name of the MR has changed.
-func (n *noForkExternal) setExternalName(mg xpresource.Managed, stateValueMap map[string]interface{}) (bool, error) {
+func (n *terraformPluginSDKExternal) setExternalName(mg xpresource.Managed, stateValueMap map[string]interface{}) (bool, error) {
 	id, ok := stateValueMap["id"]
 	if !ok || id.(string) == "" {
 		return false, nil
@@ -574,7 +575,7 @@ func (n *noForkExternal) setExternalName(mg xpresource.Managed, stateValueMap ma
 	return oldName != newName, nil
 }
 
-func (n *noForkExternal) Create(ctx context.Context, mg xpresource.Managed) (managed.ExternalCreation, error) {
+func (n *terraformPluginSDKExternal) Create(ctx context.Context, mg xpresource.Managed) (managed.ExternalCreation, error) {
 	n.logger.Debug("Creating the external resource")
 	start := time.Now()
 	newState, diag := n.resourceSchema.Apply(ctx, n.opTracker.GetTfState(), n.instanceDiff, n.ts.Meta)
@@ -636,7 +637,7 @@ func (n *noForkExternal) Create(ctx context.Context, mg xpresource.Managed) (man
 	return managed.ExternalCreation{ConnectionDetails: conn}, nil
 }
 
-func (n *noForkExternal) assertNoForceNew() error {
+func (n *terraformPluginSDKExternal) assertNoForceNew() error {
 	if n.instanceDiff == nil {
 		return nil
 	}
@@ -656,11 +657,11 @@ func (n *noForkExternal) assertNoForceNew() error {
 	return nil
 }
 
-func (n *noForkExternal) Update(ctx context.Context, mg xpresource.Managed) (managed.ExternalUpdate, error) {
+func (n *terraformPluginSDKExternal) Update(ctx context.Context, mg xpresource.Managed) (managed.ExternalUpdate, error) {
 	n.logger.Debug("Updating the external resource")
 
 	if err := n.assertNoForceNew(); err != nil {
-		return managed.ExternalUpdate{}, errors.Wrap(err, "refuse to update the external resource")
+		return managed.ExternalUpdate{}, errors.Wrap(err, "refuse to update the external resource because the following update requires replacing it")
 	}
 
 	start := time.Now()
@@ -683,7 +684,7 @@ func (n *noForkExternal) Update(ctx context.Context, mg xpresource.Managed) (man
 	return managed.ExternalUpdate{}, nil
 }
 
-func (n *noForkExternal) Delete(ctx context.Context, _ xpresource.Managed) error {
+func (n *terraformPluginSDKExternal) Delete(ctx context.Context, _ xpresource.Managed) error {
 	n.logger.Debug("Deleting the external resource")
 	if n.instanceDiff == nil {
 		n.instanceDiff = tf.NewInstanceDiff()
@@ -702,7 +703,7 @@ func (n *noForkExternal) Delete(ctx context.Context, _ xpresource.Managed) error
 	return nil
 }
 
-func (n *noForkExternal) fromInstanceStateToJSONMap(newState *tf.InstanceState) (map[string]interface{}, cty.Value, error) {
+func (n *terraformPluginSDKExternal) fromInstanceStateToJSONMap(newState *tf.InstanceState) (map[string]interface{}, cty.Value, error) {
 	impliedType := n.config.TerraformResource.CoreConfigSchema().ImpliedType()
 	attrsAsCtyValue, err := newState.AttrsAsObjectValue(impliedType)
 	if err != nil {
