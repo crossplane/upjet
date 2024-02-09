@@ -99,7 +99,7 @@ type terraformPluginFrameworkExternalClient struct {
 	resource       fwresource.Resource
 	server         tfprotov5.ProviderServer
 	params         map[string]any
-	plannedState   *tfprotov5.DynamicValue
+	planResponse   *tfprotov5.PlanResourceChangeResponse
 	resourceSchema rschema.Schema
 	// the terraform value type associated with the resource schema
 	resourceValueTerraformType tftypes.Type
@@ -228,22 +228,22 @@ func (c *TerraformPluginFrameworkConnector) configureProvider(ctx context.Contex
 	return providerServer, nil
 }
 
-// getDiffPlan calls the underlying native TF provider's PlanResourceChange RPC,
+// getDiffPlanResponse calls the underlying native TF provider's PlanResourceChange RPC,
 // and returns the planned state and whether a diff exists.
 // If plan response contains non-empty RequiresReplace (i.e. the resource needs
 // to be recreated) an error is returned as Crossplane Resource Model (XRM)
 // prohibits resource re-creations and rejects this plan.
-func (n *terraformPluginFrameworkExternalClient) getDiffPlan(ctx context.Context,
-	tfStateValue tftypes.Value) (*tfprotov5.DynamicValue, bool, error) {
+func (n *terraformPluginFrameworkExternalClient) getDiffPlanResponse(ctx context.Context,
+	tfStateValue tftypes.Value) (*tfprotov5.PlanResourceChangeResponse, bool, error) {
 	tfConfigDynamicVal, err := protov5DynamicValueFromMap(n.params, n.resourceValueTerraformType)
 	if err != nil {
-		return &tfprotov5.DynamicValue{}, false, errors.Wrap(err, "cannot construct dynamic value for TF Config")
+		return nil, false, errors.Wrap(err, "cannot construct dynamic value for TF Config")
 	}
 
 	//
 	tfPlannedStateDynamicVal, err := protov5DynamicValueFromMap(n.params, n.resourceValueTerraformType)
 	if err != nil {
-		return &tfprotov5.DynamicValue{}, false, errors.Wrap(err, "cannot construct dynamic value for TF Planned State")
+		return nil, false, errors.Wrap(err, "cannot construct dynamic value for TF Planned State")
 	}
 
 	prcReq := &tfprotov5.PlanResourceChangeRequest{
@@ -254,20 +254,10 @@ func (n *terraformPluginFrameworkExternalClient) getDiffPlan(ctx context.Context
 	}
 	planResponse, err := n.server.PlanResourceChange(ctx, prcReq)
 	if err != nil {
-		return &tfprotov5.DynamicValue{}, false, errors.Wrap(err, "cannot plan change")
+		return nil, false, errors.Wrap(err, "cannot plan change")
 	}
 	if fatalDiags := getFatalDiagnostics(planResponse.Diagnostics); fatalDiags != nil {
-		return &tfprotov5.DynamicValue{}, false, errors.Wrap(fatalDiags, "plan resource change request failed")
-	}
-
-	if len(planResponse.RequiresReplace) > 0 {
-		var sb strings.Builder
-		sb.WriteString("diff contains fields that require resource replacement: ")
-		for _, attrPath := range planResponse.RequiresReplace {
-			sb.WriteString(attrPath.String())
-			sb.WriteString(", ")
-		}
-		return nil, false, errors.New(sb.String())
+		return nil, false, errors.Wrap(fatalDiags, "plan resource change request failed")
 	}
 
 	plannedStateValue, err := planResponse.PlannedState.Unmarshal(n.resourceValueTerraformType)
@@ -275,12 +265,23 @@ func (n *terraformPluginFrameworkExternalClient) getDiffPlan(ctx context.Context
 		return nil, false, errors.Wrap(err, "cannot unmarshal planned state")
 	}
 
-	diffso, err := plannedStateValue.Diff(tfStateValue)
+	rawDiff, err := plannedStateValue.Diff(tfStateValue)
 	if err != nil {
 		return nil, false, errors.Wrap(err, "cannot compare prior state and plan")
 	}
 
-	return planResponse.PlannedState, len(diffso) > 0, nil
+	// filter diffs that has unknown plan value which corresponds to
+	// computed values. These cause unnecessary diff detection when only computed
+	// attribute diffs exist in the raw diff and no actual diff exists in the
+	// parametrizable attributes
+	filteredDiff := make([]tftypes.ValueDiff, 0)
+	for _, diff := range rawDiff {
+		if diff.Value1.IsKnown() {
+			filteredDiff = append(filteredDiff, diff)
+		}
+	}
+
+	return planResponse, len(filteredDiff) > 0, nil
 }
 
 func (n *terraformPluginFrameworkExternalClient) Observe(ctx context.Context, mg xpresource.Managed) (managed.ExternalObservation, error) { //nolint:gocyclo
@@ -323,12 +324,12 @@ func (n *terraformPluginFrameworkExternalClient) Observe(ctx context.Context, mg
 		}
 	}
 
-	plannedState, hasDiff, err := n.getDiffPlan(ctx, tfStateValue)
+	planResponse, hasDiff, err := n.getDiffPlanResponse(ctx, tfStateValue)
 	if err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot calculate diff")
 	}
 
-	n.plannedState = plannedState
+	n.planResponse = planResponse
 
 	var connDetails managed.ConnectionDetails
 	if !resourceExists && mg.GetDeletionTimestamp() != nil {
@@ -391,7 +392,7 @@ func (n *terraformPluginFrameworkExternalClient) Create(ctx context.Context, mg 
 	applyRequest := &tfprotov5.ApplyResourceChangeRequest{
 		TypeName:     n.config.Name,
 		PriorState:   n.opTracker.GetFrameworkTFState(),
-		PlannedState: n.plannedState,
+		PlannedState: n.planResponse.PlannedState,
 		Config:       tfConfigDynamicVal,
 	}
 	start := time.Now()
@@ -439,8 +440,27 @@ func (n *terraformPluginFrameworkExternalClient) Create(ctx context.Context, mg 
 	return managed.ExternalCreation{ConnectionDetails: conn}, nil
 }
 
+func (n *terraformPluginFrameworkExternalClient) planRequiresReplace() (bool, string) {
+	if n.planResponse == nil || len(n.planResponse.RequiresReplace) == 0 {
+		return false, ""
+	}
+
+	var sb strings.Builder
+	sb.WriteString("diff contains fields that require resource replacement: ")
+	for _, attrPath := range n.planResponse.RequiresReplace {
+		sb.WriteString(attrPath.String())
+		sb.WriteString(", ")
+	}
+	return true, sb.String()
+
+}
+
 func (n *terraformPluginFrameworkExternalClient) Update(ctx context.Context, mg xpresource.Managed) (managed.ExternalUpdate, error) {
 	n.logger.Debug("Updating the external resource")
+	// refuse plans that require replace for XRM compliance
+	if isReplace, fields := n.planRequiresReplace(); isReplace {
+		return managed.ExternalUpdate{}, errors.Errorf("diff contains fields that require resource replacement: %s", fields)
+	}
 
 	tfConfigDynamicVal, err := protov5DynamicValueFromMap(n.params, n.resourceValueTerraformType)
 	if err != nil {
@@ -450,7 +470,7 @@ func (n *terraformPluginFrameworkExternalClient) Update(ctx context.Context, mg 
 	applyRequest := &tfprotov5.ApplyResourceChangeRequest{
 		TypeName:     n.config.Name,
 		PriorState:   n.opTracker.GetFrameworkTFState(),
-		PlannedState: n.plannedState,
+		PlannedState: n.planResponse.PlannedState,
 		Config:       tfConfigDynamicVal,
 	}
 	start := time.Now()
