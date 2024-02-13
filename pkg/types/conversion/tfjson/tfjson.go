@@ -94,7 +94,7 @@ func tfJSONBlockTypeToV2Schema(nb *tfjson.SchemaBlockType) *schemav2.Schema { //
 		v2sch.Computed = true
 	}
 
-	switch nb.NestingMode {
+	switch nb.NestingMode { //nolint:exhaustive
 	case tfjson.SchemaNestingModeSet:
 		v2sch.Type = schemav2.TypeSet
 	case tfjson.SchemaNestingModeList:
