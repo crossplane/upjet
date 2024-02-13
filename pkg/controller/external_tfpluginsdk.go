@@ -22,6 +22,7 @@ import (
 	tf "github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/crossplane/upjet/pkg/config"
@@ -522,9 +523,14 @@ func (n *terraformPluginSDKExternal) Observe(ctx context.Context, mg xpresource.
 		if err != nil {
 			return managed.ExternalObservation{}, errors.Wrap(err, "cannot marshal the attributes of the new state for late-initialization")
 		}
-		specUpdateRequired, err = mg.(resource.Terraformed).LateInitialize(buff)
-		if err != nil {
-			return managed.ExternalObservation{}, errors.Wrap(err, "cannot late-initialize the managed resource")
+
+		policySet := sets.New[xpv1.ManagementAction](mg.(resource.Terraformed).GetManagementPolicies()...)
+		policyHasLateInit := policySet.HasAny(xpv1.ManagementActionLateInitialize, xpv1.ManagementActionAll)
+		if policyHasLateInit {
+			specUpdateRequired, err = mg.(resource.Terraformed).LateInitialize(buff)
+			if err != nil {
+				return managed.ExternalObservation{}, errors.Wrap(err, "cannot late-initialize the managed resource")
+			}
 		}
 
 		err = mg.(resource.Terraformed).SetObservation(stateValueMap)
