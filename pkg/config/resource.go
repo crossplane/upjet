@@ -512,7 +512,7 @@ type CustomDiff func(diff *terraform.InstanceDiff, state *terraform.InstanceStat
 // values from the specified managed resource into the specified configuration
 // map. jsonMap is the map obtained by converting the `spec.forProvider` using
 // the JSON tags and tfMap is obtained by using the TF tags.
-type ConfigurationInjector func(jsonMap map[string]any, tfMap map[string]any)
+type ConfigurationInjector func(jsonMap map[string]any, tfMap map[string]any) error
 
 // SchemaElementOptions represents schema element options for the
 // schema elements of a Resource.
