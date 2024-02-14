@@ -24,10 +24,10 @@ var (
 // to return a canonical form of it, along with any errors encountered during
 // the process.
 func Canonicalize(json string) (string, error) {
-	var m map[string]any
-	if err := cJSON.Unmarshal([]byte(json), &m); err != nil {
+	var d any
+	if err := cJSON.Unmarshal([]byte(json), &d); err != nil {
 		return "", errors.Wrapf(err, errFmtJSONUnmarshal, json)
 	}
-	buff, err := cJSON.Marshal(m)
-	return string(buff), errors.Wrapf(err, errFmtJSONMarshal, m)
+	buff, err := cJSON.Marshal(d)
+	return string(buff), errors.Wrapf(err, errFmtJSONMarshal, d)
 }

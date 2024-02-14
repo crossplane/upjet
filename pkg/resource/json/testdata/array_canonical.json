@@ -1,0 +1,4 @@
+// SPDX-FileCopyrightText: 2024 The Crossplane Authors <https://crossplane.io>
+//
+// SPDX-License-Identifier: Apache-2.0
+[{"Principal":["arn:aws:iam::153891904029:user/official-provider-testing"],"Rules":[{"Permission":["aoss:*"],"Resource":["index/example-collection/*"],"ResourceType":"index"},{"Permission":["aoss:*"],"Resource":["collection/example-collection"],"ResourceType":"collection"}]}]
