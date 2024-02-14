@@ -154,7 +154,7 @@ func NewField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema,
 		}
 	}
 
-	fieldType, initType, err := g.buildSchema(f, cfg, names, r)
+	fieldType, initType, err := g.buildSchema(f, cfg, names, fieldPath(append(tfPath, snakeFieldName)), r)
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot infer type from schema of field %s", f.Name.Snake)
 	}

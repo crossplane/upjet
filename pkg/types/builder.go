@@ -206,7 +206,7 @@ func (g *Builder) AddToBuilder(typeNames *TypeNames, r *resource) (*types.Named,
 	return paramType, obsType, initType
 }
 
-func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, r *resource) (types.Type, types.Type, error) { //nolint:gocyclo
+func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, cpath string, r *resource) (types.Type, types.Type, error) { //nolint:gocyclo
 	switch f.Schema.Type {
 	case schema.TypeBool:
 		return types.NewPointer(types.Universe.Lookup("bool").Type()), nil, nil
@@ -272,9 +272,16 @@ func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, r 
 				// that can go under spec. This check prevents the elimination of fields in parameter type, by checking
 				// whether the schema in observation type has nested parameter (spec) fields.
 				if paramType.Underlying().String() != emptyStruct {
-					field := types.NewField(token.NoPos, g.Package, f.Name.Camel, types.NewSlice(paramType), false)
-					r.addParameterField(f, field)
-					r.addInitField(f, field, g, nil)
+					var tParam, tInit types.Type
+					if cfg.SchemaElementOptions.EmbeddedObject(cpath) {
+						tParam = types.NewPointer(paramType)
+						tInit = types.NewPointer(initType)
+					} else {
+						tParam = types.NewSlice(paramType)
+						tInit = types.NewSlice(initType)
+					}
+					r.addParameterField(f, types.NewField(token.NoPos, g.Package, f.Name.Camel, tParam, false))
+					r.addInitField(f, types.NewField(token.NoPos, g.Package, f.Name.Camel, tInit, false), g, nil)
 				}
 			default:
 				if paramType == nil {
@@ -285,7 +292,13 @@ func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, r 
 				// This check prevents the elimination of fields in observation type, by checking whether the schema in
 				// parameter type has nested observation (status) fields.
 				if obsType.Underlying().String() != emptyStruct {
-					field := types.NewField(token.NoPos, g.Package, f.Name.Camel, types.NewSlice(obsType), false)
+					var t types.Type
+					if cfg.SchemaElementOptions.EmbeddedObject(cpath) {
+						t = types.NewPointer(obsType)
+					} else {
+						t = types.NewSlice(obsType)
+					}
+					field := types.NewField(token.NoPos, g.Package, f.Name.Camel, t, false)
 					r.addObservationField(f, field)
 				}
 			}
@@ -298,6 +311,10 @@ func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, r 
 			return nil, nil, errors.Errorf("element type of %s should be either schema.Resource or schema.Schema", fieldPath(names))
 		}
 
+		// if the singleton list is to be replaced by an embedded object
+		if cfg.SchemaElementOptions.EmbeddedObject(cpath) {
+			return types.NewPointer(elemType), types.NewPointer(initElemType), nil
+		}
 		// NOTE(muvaf): Maps and slices are already pointers, so we don't need to
 		// wrap them even if they are optional.
 		if f.Schema.Type == schema.TypeMap {

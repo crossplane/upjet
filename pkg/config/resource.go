@@ -532,10 +532,28 @@ func (m SchemaElementOptions) AddToObservation(el string) bool {
 	return m[el] != nil && m[el].AddToObservation
 }
 
+// SetEmbeddedObject sets the EmbeddedObject for the specified key.
+func (m SchemaElementOptions) SetEmbeddedObject(el string) {
+	if m[el] == nil {
+		m[el] = &SchemaElementOption{}
+	}
+	m[el].EmbeddedObject = true
+}
+
+// EmbeddedObject returns true if the schema element at the specified path
+// should be generated as an embedded object.
+func (m SchemaElementOptions) EmbeddedObject(el string) bool {
+	return m[el] != nil && m[el].EmbeddedObject
+}
+
 // SchemaElementOption represents configuration options on a schema element.
 type SchemaElementOption struct {
 	// AddToObservation is set to true if the field represented by
 	// a schema element is to be added to the generated CRD type's
 	// Observation type.
 	AddToObservation bool
+	// EmbeddedObject  is set to true if the field represented by
+	// a schema element is to be embedded into its parent instead of being
+	// generated as a single element list.
+	EmbeddedObject bool
 }

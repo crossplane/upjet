@@ -45,12 +45,11 @@ func v2ResourceFromTFJSONSchema(s *tfjson.Schema) *schemav2.Resource {
 		toSchemaMap[k] = tfJSONAttributeToV2Schema(v)
 	}
 	for k, v := range s.Block.NestedBlocks {
-		// Note(turkenh): We see resource timeouts here as NestingModeSingle.
-		// However, in plugin SDK resource timeouts is not part of resource
-		// schema map but set as a separate field. So, we just need to ignore
-		// here.
-		// https://github.com/hashicorp/terraform-plugin-sdk/blob/6461ac6e9044a44157c4e2c8aec0f1ab7efc2055/helper/schema/core_schema.go#L315
-		if v.NestingMode == tfjson.SchemaNestingModeSingle {
+		// CRUD timeouts are not part of the generated MR API,
+		// they cannot be dynamically configured and they are determined by either
+		// the underlying Terraform resource configuration or the upjet resource
+		// configuration. Please also see config.Resource.OperationTimeouts.
+		if k == schemav2.TimeoutsConfigKey {
 			continue
 		}
 		toSchemaMap[k] = tfJSONBlockTypeToV2Schema(v)
@@ -95,17 +94,24 @@ func tfJSONBlockTypeToV2Schema(nb *tfjson.SchemaBlockType) *schemav2.Schema { //
 		v2sch.Computed = true
 	}
 
-	switch nb.NestingMode {
+	switch nb.NestingMode { //nolint:exhaustive
 	case tfjson.SchemaNestingModeSet:
 		v2sch.Type = schemav2.TypeSet
 	case tfjson.SchemaNestingModeList:
 		v2sch.Type = schemav2.TypeList
 	case tfjson.SchemaNestingModeMap:
 		v2sch.Type = schemav2.TypeMap
-	case tfjson.SchemaNestingModeSingle, tfjson.SchemaNestingModeGroup:
-		panic("unexpected nesting mode: " + nb.NestingMode)
+	case tfjson.SchemaNestingModeSingle:
+		v2sch.Type = schemav2.TypeList
+		v2sch.MinItems = 0
+		v2sch.Required = hasRequiredChild(nb)
+		v2sch.Optional = !v2sch.Required
+		if v2sch.Required {
+			v2sch.MinItems = 1
+		}
+		v2sch.MaxItems = 1
 	default:
-		panic("unknown nesting mode: " + nb.NestingMode)
+		panic("unhandled nesting mode: " + nb.NestingMode)
 	}
 
 	if nb.Block == nil {
@@ -121,18 +127,41 @@ func tfJSONBlockTypeToV2Schema(nb *tfjson.SchemaBlockType) *schemav2.Schema { //
 		res.Schema[key] = tfJSONAttributeToV2Schema(attr)
 	}
 	for key, block := range nb.Block.NestedBlocks {
-		// Note(turkenh): We see resource timeouts here as NestingModeSingle.
-		// However, in plugin SDK resource timeouts is not part of resource
-		// schema map but set as a separate field. So, we just need to ignore
-		// here.
-		// https://github.com/hashicorp/terraform-plugin-sdk/blob/6461ac6e9044a44157c4e2c8aec0f1ab7efc2055/helper/schema/core_schema.go#L315
-		if block.NestingMode == tfjson.SchemaNestingModeSingle {
-			continue
-		}
+		// Please note that unlike the resource-level CRUD timeout configuration
+		// blocks (as mentioned above), we will generate the timeouts parameters
+		// for any nested configuration blocks, *if they exist*.
+		// We can prevent them here, but they are different than the resource's
+		// top-level CRUD timeouts, so we have opted to generate them.
 		res.Schema[key] = tfJSONBlockTypeToV2Schema(block)
 	}
 	v2sch.Elem = res
 	return v2sch
+}
+
+// checks whether the given tfjson.SchemaBlockType has any required children.
+// Children which are themselves blocks (nested blocks) are
+// checked recursively.
+func hasRequiredChild(nb *tfjson.SchemaBlockType) bool {
+	if nb.Block == nil {
+		return false
+	}
+	for _, a := range nb.Block.Attributes {
+		if a == nil {
+			continue
+		}
+		if a.Required {
+			return true
+		}
+	}
+	for _, b := range nb.Block.NestedBlocks {
+		if b == nil {
+			continue
+		}
+		if hasRequiredChild(b) {
+			return true
+		}
+	}
+	return false
 }
 
 func schemaV2TypeFromCtyType(typ cty.Type, schema *schemav2.Schema) error { //nolint:gocyclo
