@@ -136,7 +136,9 @@ func getExtendedParameters(ctx context.Context, tr resource.Terraformed, externa
 		if err != nil {
 			return nil, errors.Wrap(err, "cannot get JSON map for the managed resource's spec.forProvider value")
 		}
-		config.TerraformConfigurationInjector(m, params)
+		if err := config.TerraformConfigurationInjector(m, params); err != nil {
+			return nil, errors.Wrap(err, "cannot invoke the configured TerraformConfigurationInjector")
+		}
 	}
 
 	tfID, err := config.ExternalName.GetIDFn(ctx, externalName, params, ts.Map())
