@@ -21,9 +21,13 @@ func TestCanonicalize(t *testing.T) {
 		expectedFile string
 		err          error
 	}{
-		"SuccessfulConversion": {
+		"SuccessfulObjectConversion": {
 			inputFile:    "policy.json",
 			expectedFile: "policy_canonical.json",
+		},
+		"SuccessfulArrayConversion": {
+			inputFile:    "array.json",
+			expectedFile: "array_canonical.json",
 		},
 		"NoopConversion": {
 			inputFile:    "policy_canonical.json",
