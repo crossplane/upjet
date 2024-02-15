@@ -165,7 +165,7 @@ func prepareTPFExternalWithTestConfig(testConfig testConfiguration) *terraformPl
 			},
 		},
 		params:                     testConfig.params,
-		plannedState:               plannedStateVal,
+		planResponse:               &tfprotov5.PlanResourceChangeResponse{PlannedState: plannedStateVal},
 		resourceSchema:             schemaResp.Schema,
 		resourceValueTerraformType: tfValueType,
 	}
