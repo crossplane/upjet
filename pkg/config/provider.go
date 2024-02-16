@@ -328,12 +328,9 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadata []byt
 			}
 			terraformResource = p.TerraformProvider.ResourcesMap[name]
 			if terraformResource.Schema == nil {
-				if terraformResource.SchemaFunc == nil {
-					p.skippedResourceNames = append(p.skippedResourceNames, name)
-					fmt.Printf("Skipping resource %s because it has no schema and no schema function\n", name)
-					continue
-				}
-				terraformResource.Schema = terraformResource.SchemaFunc()
+				p.skippedResourceNames = append(p.skippedResourceNames, name)
+				fmt.Printf("Skipping resource %s because it has no schema\n", name)
+				continue
 			}
 		}
 
