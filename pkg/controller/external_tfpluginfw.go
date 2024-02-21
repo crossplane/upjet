@@ -27,6 +27,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/crossplane/upjet/pkg/config"
@@ -270,13 +271,15 @@ func (n *terraformPluginFrameworkExternalClient) getDiffPlanResponse(ctx context
 		return nil, false, errors.Wrap(err, "cannot compare prior state and plan")
 	}
 
-	// filter diffs that has unknown plan value which corresponds to
-	// computed values. These cause unnecessary diff detection when only computed
-	// attribute diffs exist in the raw diff and no actual diff exists in the
-	// parametrizable attributes
+	// Filter diffs that have unknown plan values, which correspond to
+	// computed fields, and null plan values, which correspond to
+	// not-specified fields. Such cases cause unnecessary diff detection
+	// when only computed attributes or not-specified argument diffs
+	// exist in the raw diff and no actual diff exists in the
+	// parametrizable attributes.
 	filteredDiff := make([]tftypes.ValueDiff, 0)
 	for _, diff := range rawDiff {
-		if diff.Value1.IsKnown() {
+		if diff.Value1.IsKnown() && !diff.Value1.IsNull() {
 			filteredDiff = append(filteredDiff, diff)
 		}
 	}
@@ -348,10 +351,16 @@ func (n *terraformPluginFrameworkExternalClient) Observe(ctx context.Context, mg
 		if err != nil {
 			return managed.ExternalObservation{}, errors.Wrap(err, "cannot marshal the attributes of the new state for late-initialization")
 		}
-		specUpdateRequired, err = mg.(resource.Terraformed).LateInitialize(buff)
-		if err != nil {
-			return managed.ExternalObservation{}, errors.Wrap(err, "cannot late-initialize the managed resource")
+
+		policySet := sets.New[xpv1.ManagementAction](mg.(resource.Terraformed).GetManagementPolicies()...)
+		policyHasLateInit := policySet.HasAny(xpv1.ManagementActionLateInitialize, xpv1.ManagementActionAll)
+		if policyHasLateInit {
+			specUpdateRequired, err = mg.(resource.Terraformed).LateInitialize(buff)
+			if err != nil {
+				return managed.ExternalObservation{}, errors.Wrap(err, "cannot late-initialize the managed resource")
+			}
 		}
+
 		err = mg.(resource.Terraformed).SetObservation(stateValueMap)
 		if err != nil {
 			return managed.ExternalObservation{}, errors.Errorf("could not set observation: %v", err)
