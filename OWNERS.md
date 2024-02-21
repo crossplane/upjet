@@ -15,5 +15,7 @@ repository maintainers in their own `OWNERS.md` file.
 * Alper Ulucinar <alper@upbound.com> ([ulucinar](https://github.com/ulucinar))
 * Sergen Yalcin <sergen@upbound.com> ([sergenyalcin](https://github.com/sergenyalcin))
 * Jean du Plessis <jean@upbound.com> ([jeanduplessis](https://github.com/jeanduplessis))
+* Erhan Cagirici <erhan@upbound.com> ([erhancagirici](https://github.com/erhancagirici))
+* Cem Mergenci <cem@upbound.com> ([mergenci](https://github.com/mergenci))
 
 See [CODEOWNERS](./CODEOWNERS) for automatic PR assignment.
