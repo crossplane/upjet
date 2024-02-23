@@ -52,10 +52,10 @@ func TestCanonicalize(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Failed to read expected the output file: %v", err)
 				}
-				expectedOutput = strings.Join(strings.Split(strings.TrimSpace(string(output)), "\n")[3:], "\n")
+				expectedOutput = strings.TrimSpace(string(output))
 			}
 
-			inputJSON := strings.Join(strings.Split(strings.TrimSpace(string(input)), "\n")[3:], "\n")
+			inputJSON := strings.TrimSpace(string(input))
 			canonicalJSON, err := Canonicalize(inputJSON)
 			if err != nil {
 				if diff := cmp.Diff(tc.err, err, test.EquateErrors()); diff != "" {
