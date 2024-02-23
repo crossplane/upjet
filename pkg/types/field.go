@@ -268,7 +268,13 @@ func NewSensitiveField(g *Builder, cfg *config.Resource, r *resource, sch *schem
 		return nil, true, nil
 	}
 	sfx := "SecretRef"
-	cfg.Sensitive.AddFieldPath(fieldPathWithWildcard(f.TerraformPaths), "spec.forProvider."+fieldPathWithWildcard(f.CRDPaths)+sfx)
+	switch f.FieldType.String() {
+	case "string", "*string", "map[string]string", "map[string]*string":
+		cfg.Sensitive.AddFieldPath(fieldPathWithWildcard(f.TerraformPaths), "spec.forProvider."+fieldPathWithWildcard(f.CRDPaths)+sfx)
+	case "[]string", "[]*string":
+		f.CRDPaths[len(f.CRDPaths)-2] = f.CRDPaths[len(f.CRDPaths)-2] + sfx
+		cfg.Sensitive.AddFieldPath(fieldPathWithWildcard(f.TerraformPaths), "spec.forProvider."+fieldPathWithWildcard(f.CRDPaths))
+	}
 	// todo(turkenh): do we need to support other field types as sensitive?
 	if f.FieldType.String() != "string" && f.FieldType.String() != "*string" && f.FieldType.String() != "[]string" &&
 		f.FieldType.String() != "[]*string" && f.FieldType.String() != "map[string]string" && f.FieldType.String() != "map[string]*string" {
