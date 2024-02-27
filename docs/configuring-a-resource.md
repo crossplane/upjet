@@ -316,6 +316,11 @@ type Reference struct {
     // Type is the type name of the CRD if it is in the same package or
     // <package-path>.<type-name> if it is in a different package.
     Type string
+    // TerraformName is the name of the Terraform resource
+    // which will be referenced. The supplied resource name is
+    // converted to a type name of the corresponding CRD using
+    // the configured TerraformTypeMapper.
+    TerraformName string
     // Extractor is the function to be used to extract value from the
     // referenced type. Defaults to getting external name.
     // Optional
@@ -372,9 +377,7 @@ Cross Resource Referencing is one of the key concepts of the resource
 configuration. As a very common case, cloud services depend on other cloud
 services. For example, AWS Subnet resource needs an AWS VPC for creation. So,
 for creating a Subnet successfully, before you have to create a VPC resource.
-Please see the [Dependencies] documentation for more details. And also, for
-resource configuration-related parts of cross-resource referencing, please see
-[this part] of [Configuring a Resource] documentation.
+Please see the [Managed Resources] documentation for more details.
 
 These documentations focus on the general concepts and manual configurations
 of Cross Resource References. However, the main topic of this documentation is
@@ -403,7 +406,7 @@ Resource manifest, and we can use this manifest in our test efforts.
 
 This is an example from Terraform Registry AWS Ebs Volume resource:
 
-```go
+```hcl
 resource "aws_ebs_volume" "example" {
   availability_zone = "us-west-2a"
   size              = 40
@@ -485,10 +488,10 @@ reference generator. However, there are two cases where we miss generating the
 references.
 
 The first one is related to some bugs or improvement points in the generator.
-This means that the generator can handle many references in the scraped
-examples and generate correctly them. But we cannot say that the ratio is %100.
-For some cases, the generator cannot generate references although, they are in
-the scraped example manifests.
+This means that the generator can handle many references in the scraped examples
+and correctly generate them. But we cannot say that the ratio is 100%. For some
+cases, the generator cannot generate references, even though they are in the
+scraped example manifests.
 
 The second one is related to the scraped example itself. As I mentioned above,
 the source of the generator is the scraped example manifest. So, it checks the
@@ -508,7 +511,7 @@ example manifest, this reference field will only be defined over Y. In this
 case, since the reference pool of the relevant field will be narrowed, it would
 be more appropriate to delete this reference. For example,
 
-```go
+```hcl
 resource "aws_route53_record" "www" {
   zone_id = aws_route53_zone.primary.zone_id
   name    = "example.com"
@@ -524,14 +527,14 @@ resource "aws_route53_record" "www" {
 
 Route53 Record resource’s alias.name field has a reference. In the example, this
 reference is shown by using the `aws_elb` resource. However, when we check the
-field documentation, we see that this field can also be used for reference
-for other resources:
+field documentation, we see that this field can also be referenced by other
+resources:
 
 ```text
 Alias
 Alias records support the following:
 
-name - (Required) DNS domain name for a CloudFront distribution, S3 bucket, ELB, 
+name - (Required) DNS domain name for a CloudFront distribution, S3 bucket, ELB,
 or another resource record set in this hosted zone.
 ```
 
@@ -541,9 +544,7 @@ As a result, mentioned scraper and example&reference generators are very useful
 for making easy the test efforts. But using these functionalities, we must be
 careful to avoid undesired states.
 
-[Dependencies]: https://crossplane.io/docs/v1.7/concepts/managed-resources.html#dependencies
-[this part]: https://github.com/crossplane/upjet/blob/main/docs/configuring-a-resource.md#cross-resource-referencing
-[Configuring a Resource]: https://github.com/crossplane/upjet/blob/main/docs/configuring-a-resource.md
+[Managed Resources]: https://docs.crossplane.io/latest/concepts/managed-resources/#referencing-other-resources
 
 ## Additional Sensitive Fields and Custom Connection Details
 
