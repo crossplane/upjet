@@ -875,7 +875,7 @@ initializers for a resource.
 [import section of aws_vpc]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc#import
 [arguments list]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc#argument-reference
 [example usages]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc#example-usage
-[IdentifierFromProvider]: https://github.com/crossplane/upjet/blob/main/config/externalname.go#L42
+[IdentifierFromProvider]: https://github.com/crossplane/upjet/blob/main/pkg/config/externalname.go#L42
 [a similar identifier]: https://www.terraform.io/docs/glossary#id
 [import section of azurerm_sql_server]: https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/sql_server#import
 [handle dependencies]: https://docs.crossplane.io/master/concepts/managed-resources/#referencing-other-resources
