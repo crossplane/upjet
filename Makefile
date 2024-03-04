@@ -22,14 +22,6 @@ PLATFORMS ?= linux_amd64 linux_arm64
 -include build/makelib/common.mk
 
 # ====================================================================================
-# Setup Images
-
-# even though this repo doesn't build images (note the no-op img.build target below),
-# some of the init is needed for the cross build container, e.g. setting BUILD_REGISTRY
--include build/makelib/image.mk
-img.build:
-
-# ====================================================================================
 # Setup Go
 
 # Set a sane default so that the nprocs calculation below is less noisy on the initial
