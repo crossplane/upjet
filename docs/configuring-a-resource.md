@@ -363,11 +363,11 @@ case, we would need to provide the full path. Referencing to a [kms key] from
 
 ```go
 func Configure(p *config.Provider) {
- p.AddResourceConfigurator("aws_ebs_volume", func(r *config.Resource) {
-  r.References["kms_key_id"] = config.Reference{
-   Type: "github.com/crossplane-contrib/provider-tf-aws/apis/kms/v1alpha1.Key",
-  }
- })
+    p.AddResourceConfigurator("aws_ebs_volume", func(r *config.Resource) {
+        r.References["kms_key_id"] = config.Reference{
+           Type: "github.com/crossplane-contrib/provider-tf-aws/apis/kms/v1alpha1.Key",
+        }
+    })
 }
 ```
 
