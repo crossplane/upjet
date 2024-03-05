@@ -176,7 +176,7 @@ func (c *TerraformPluginSDKConnector) applyHCLParserToParam(sc *schema.Schema, p
 	if param == nil {
 		return param
 	}
-	switch sc.Type {
+	switch sc.Type { //nolint:exhaustive
 	case schema.TypeMap:
 		if sc.Elem == nil {
 			return param
@@ -216,8 +216,6 @@ func (c *TerraformPluginSDKConnector) applyHCLParserToParam(sc *schema.Schema, p
 				param = hclProccessedParam
 			}
 		}
-		return param
-	case schema.TypeBool, schema.TypeInt, schema.TypeFloat, schema.TypeInvalid:
 		return param
 	default:
 		return param
