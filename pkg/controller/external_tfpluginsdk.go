@@ -158,13 +158,13 @@ func getExtendedParameters(ctx context.Context, tr resource.Terraformed, externa
 	return params, nil
 }
 
-func (c *TerraformPluginSDKConnector) processParamsWithStateFunc(schemaMap map[string]*schema.Schema, params map[string]any) map[string]any {
+func (c *TerraformPluginSDKConnector) processParamsWithHCLParser(schemaMap map[string]*schema.Schema, params map[string]any) map[string]any {
 	if params == nil {
 		return params
 	}
 	for key, param := range params {
 		if sc, ok := schemaMap[key]; ok {
-			params[key] = c.applyStateFuncToParam(sc, param)
+			params[key] = c.applyHCLParserToParam(sc, param)
 		} else {
 			params[key] = param
 		}
@@ -172,11 +172,11 @@ func (c *TerraformPluginSDKConnector) processParamsWithStateFunc(schemaMap map[s
 	return params
 }
 
-func (c *TerraformPluginSDKConnector) applyStateFuncToParam(sc *schema.Schema, param any) any { //nolint:gocyclo
+func (c *TerraformPluginSDKConnector) applyHCLParserToParam(sc *schema.Schema, param any) any { //nolint:gocyclo
 	if param == nil {
 		return param
 	}
-	switch sc.Type {
+	switch sc.Type { //nolint:exhaustive
 	case schema.TypeMap:
 		if sc.Elem == nil {
 			return param
@@ -185,7 +185,7 @@ func (c *TerraformPluginSDKConnector) applyStateFuncToParam(sc *schema.Schema, p
 		// TypeMap only supports schema in Elem
 		if mapSchema, ok := sc.Elem.(*schema.Schema); ok && okParam {
 			for pk, pv := range pmap {
-				pmap[pk] = c.applyStateFuncToParam(mapSchema, pv)
+				pmap[pk] = c.applyHCLParserToParam(mapSchema, pv)
 			}
 			return pmap
 		}
@@ -196,13 +196,13 @@ func (c *TerraformPluginSDKConnector) applyStateFuncToParam(sc *schema.Schema, p
 		pArray, okParam := param.([]any)
 		if setSchema, ok := sc.Elem.(*schema.Schema); ok && okParam {
 			for i, p := range pArray {
-				pArray[i] = c.applyStateFuncToParam(setSchema, p)
+				pArray[i] = c.applyHCLParserToParam(setSchema, p)
 			}
 			return pArray
 		} else if setResource, ok := sc.Elem.(*schema.Resource); ok {
 			for i, p := range pArray {
 				if resParam, okRParam := p.(map[string]any); okRParam {
-					pArray[i] = c.processParamsWithStateFunc(setResource.Schema, resParam)
+					pArray[i] = c.processParamsWithHCLParser(setResource.Schema, resParam)
 				}
 			}
 		}
@@ -216,16 +216,6 @@ func (c *TerraformPluginSDKConnector) applyStateFuncToParam(sc *schema.Schema, p
 				param = hclProccessedParam
 			}
 		}
-		if sc.StateFunc != nil {
-			return sc.StateFunc(param)
-		}
-		return param
-	case schema.TypeBool, schema.TypeInt, schema.TypeFloat:
-		if sc.StateFunc != nil {
-			return sc.StateFunc(param)
-		}
-		return param
-	case schema.TypeInvalid:
 		return param
 	default:
 		return param
@@ -252,7 +242,7 @@ func (c *TerraformPluginSDKConnector) Connect(ctx context.Context, mg xpresource
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to get the extended parameters for resource %q", mg.GetName())
 	}
-	params = c.processParamsWithStateFunc(c.config.TerraformResource.Schema, params)
+	params = c.processParamsWithHCLParser(c.config.TerraformResource.Schema, params)
 
 	schemaBlock := c.config.TerraformResource.CoreConfigSchema()
 	rawConfig, err := schema.JSONMapToStateValue(params, schemaBlock)
