@@ -1,0 +1,15 @@
+# Self-Hosted Github Action Runners on Oracle Cloud via Cirun.io
+# Reference: https://docs.cirun.io/reference/yaml
+runners:
+  - name: "oci-cncf-runner"
+    cloud: "oracle"
+    # https://docs.oracle.com/en-us/iaas/Content/Compute/References/computeshapes.htm#vm-standard
+    instance_type: "VM.Standard.E4.Flex"
+    # https://docs.oracle.com/en-us/iaas/images/
+    machine_image: "ocid1.image.oc1.us-sanjose-1.aaaaaaaavslpj7yhhuswzti6cucy2qofpb3vbijj4tw5q53d7j3dwpnxj7ta"
+    # https://docs.oracle.com/en-us/iaas/Content/General/Concepts/regions.htm
+    region: "us-sanjose-1"
+    # Add this label in the "runs-on" param in .github/workflows/<workflow-name>.yml
+    # So that this runner is created for running the workflow
+    labels:
+      - "oci-cncf-runner"

@@ -25,8 +25,8 @@ env:
   AWS_USR: ${{ secrets.AWS_USR }}
 
 jobs:
-  detect-noop:
-    runs-on: ubuntu-20.04
+  detect-noop:    
+    runs-on: "oci-cncf-runner--${{ github.run_id }}"
     outputs:
       noop: ${{ steps.noop.outputs.should_skip }}
     steps:
@@ -40,7 +40,7 @@ jobs:
           concurrent_skipping: false
 
   lint:
-    runs-on: ubuntu-20.04
+    runs-on: "oci-cncf-runner--${{ github.run_id }}"
     needs: detect-noop
     if: needs.detect-noop.outputs.noop != 'true'
 
@@ -89,7 +89,7 @@ jobs:
           version: ${{ env.GOLANGCI_VERSION }}
 
   check-diff:
-    runs-on: ubuntu-20.04
+    runs-on: "oci-cncf-runner--${{ github.run_id }}"
     needs: detect-noop
     if: needs.detect-noop.outputs.noop != 'true'
 
@@ -131,7 +131,7 @@ jobs:
         run: make check-diff
 
   unit-tests:
-    runs-on: ubuntu-20.04
+    runs-on: "oci-cncf-runner--${{ github.run_id }}"
     needs: detect-noop
     if: needs.detect-noop.outputs.noop != 'true'
 
