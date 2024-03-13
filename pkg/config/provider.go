@@ -351,6 +351,7 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadata []byt
 		p.Resources[name] = DefaultResource(name, terraformResource, terraformPluginFrameworkResource, providerMetadata.Resources[name], p.DefaultResourceOptions...)
 		p.Resources[name].useTerraformPluginSDKClient = isTerraformPluginSDK
 		p.Resources[name].useTerraformPluginFrameworkClient = isPluginFrameworkResource
+		p.injectServerSideApplyDefaults(p.Resources[name], terraformResource, "")
 	}
 	for i, refInjector := range p.refInjectors {
 		if err := refInjector.InjectReferences(p.Resources); err != nil {
@@ -358,6 +359,58 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadata []byt
 		}
 	}
 	return p
+}
+
+func (p *Provider) injectServerSideApplyDefaults(cfg *Resource, res *schema.Resource, basePath string) { //nolint:gocyclo // Easier to follow the logic in a single function
+
+	for k, es := range res.Schema {
+
+		var fieldPath string
+		if basePath == "" {
+			fieldPath = k
+		} else {
+			fieldPath = fmt.Sprintf("%s.%s", basePath, k)
+		}
+
+		if r, ok := es.Elem.(*schema.Resource); ok {
+			if es.Type == schema.TypeList && es.MaxItems == 1 {
+				cfg.ServerSideApplyMergeStrategies[fieldPath] = MergeStrategy{
+					ListMergeStrategy: ListMergeStrategy{
+						MergeStrategy: ListTypeMap,
+						ListMapKeys: ListMapKeys{InjectedKey: InjectedKey{
+							Key:          "ssamergekey",
+							DefaultValue: `"0"`,
+						}},
+					},
+				}
+			}
+			p.injectServerSideApplyDefaults(cfg, r, fieldPath)
+		} else {
+			switch es.Type { //nolint:exhaustive
+			case schema.TypeSet:
+				if el, ok := es.Elem.(*schema.Schema); ok {
+					switch el.Type { //nolint:exhaustive
+					case schema.TypeString, schema.TypeBool, schema.TypeInt, schema.TypeFloat:
+						cfg.ServerSideApplyMergeStrategies[fieldPath] = MergeStrategy{
+							ListMergeStrategy: ListMergeStrategy{
+								MergeStrategy: ListTypeSet,
+							},
+						}
+					}
+				}
+			case schema.TypeMap:
+				if el, ok := es.Elem.(*schema.Schema); ok {
+					switch el.Type { //nolint:exhaustive
+					case schema.TypeString, schema.TypeBool, schema.TypeInt, schema.TypeFloat:
+						// TODO(jono): I think this may be unnecessary since maps appear to default to granular?
+						cfg.ServerSideApplyMergeStrategies[fieldPath] = MergeStrategy{
+							MapMergeStrategy: MapTypeGranular,
+						}
+					}
+				}
+			}
+		}
+	}
 }
 
 // AddResourceConfigurator adds resource specific configurators.

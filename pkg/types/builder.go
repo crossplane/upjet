@@ -115,6 +115,7 @@ func injectServerSideApplyListMergeKeys(cfg *config.Resource) error { //nolint:g
 		el.Schema[s.ListMergeStrategy.ListMapKeys.InjectedKey.Key] = &schema.Schema{
 			Type:        schema.TypeString,
 			Required:    true,
+			Computed:    sch.Computed,
 			Description: descriptionInjectedKey,
 		}
 		if s.ListMergeStrategy.ListMapKeys.InjectedKey.DefaultValue != "" {

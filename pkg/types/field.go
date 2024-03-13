@@ -161,40 +161,7 @@ func NewField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema,
 	f.FieldType = fieldType
 	f.InitType = initType
 
-	AddServerSideApplyMarkers(f)
 	return f, errors.Wrapf(AddServerSideApplyMarkersFromConfig(f, cfg), "cannot add the server-side apply merge strategy markers for the field")
-}
-
-// AddServerSideApplyMarkers adds server-side apply comment markers to indicate
-// that scalar maps and sets can be merged granularly, not replace atomically.
-func AddServerSideApplyMarkers(f *Field) {
-	// for sensitive fields, we generate secret or secret key references
-	if f.Schema.Sensitive {
-		return
-	}
-
-	switch f.Schema.Type { //nolint:exhaustive
-	case schema.TypeMap:
-		// A map should always have an element of type Schema.
-		if es, ok := f.Schema.Elem.(*schema.Schema); ok {
-			switch es.Type { //nolint:exhaustive
-			// We assume scalar types can be granular maps.
-			case schema.TypeString, schema.TypeBool, schema.TypeInt, schema.TypeFloat:
-				f.Comment.ServerSideApplyOptions.MapType = ptr.To[config.MapType](config.MapTypeGranular)
-			}
-		}
-	case schema.TypeSet:
-		if es, ok := f.Schema.Elem.(*schema.Schema); ok {
-			switch es.Type { //nolint:exhaustive
-			// We assume scalar types can be granular sets.
-			case schema.TypeString, schema.TypeBool, schema.TypeInt, schema.TypeFloat:
-				f.Comment.ServerSideApplyOptions.ListType = ptr.To[config.ListType](config.ListTypeSet)
-			}
-		}
-	}
-	// TODO(negz): Can we reliably add SSA markers for lists of objects? Do we
-	// have cases where we're turning a Terraform map of maps into a list of
-	// objects with a well-known key that we could merge on?
 }
 
 func setInjectedField(fp, k string, f *Field, s config.MergeStrategy) bool {
