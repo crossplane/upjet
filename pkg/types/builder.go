@@ -381,6 +381,9 @@ func newTopLevelRequiredParam(path string, includeInit bool) *topLevelRequiredPa
 
 func (r *resource) addParameterField(f *Field, field *types.Var) {
 	requiredBySchema := !f.Schema.Optional
+	if f.Required {
+		requiredBySchema = f.Required
+	}
 	// Note(turkenh): We are collecting the top level required parameters that
 	// are not identifier fields. This is for generating CEL validation rules for
 	// those parameters and not to require them if the management policy is set

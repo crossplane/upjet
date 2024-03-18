@@ -162,6 +162,10 @@ type ExternalName struct {
 	// management policy is including the Observe Only, different from other
 	// (required) fields.
 	IdentifierFields []string
+
+	// RequiredFields are the fields that are marked as required, although
+	// it is not required in the TF schema.
+	RequiredFields []string
 }
 
 // References represents reference resolver configurations for the fields of a

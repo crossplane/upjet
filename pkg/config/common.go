@@ -128,6 +128,7 @@ func MoveToStatus(sch *schema.Resource, fieldpaths ...string) {
 // useful in cases where external name contains an optional parameter that is
 // defaulted by the provider but we need it to exist or to fix plain buggy
 // schemas.
+// Deprecated: Use RequiredFields API instead.
 func MarkAsRequired(sch *schema.Resource, fieldpaths ...string) {
 	for _, fieldpath := range fieldpaths {
 		if s := GetSchema(sch, fieldpath); s != nil {
