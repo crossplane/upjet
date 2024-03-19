@@ -124,11 +124,18 @@ func MoveToStatus(sch *schema.Resource, fieldpaths ...string) {
 	}
 }
 
+// MarkAsRequired marks the given fieldpaths as required without manipulating
+// the native field schema.
+func (r *Resource) MarkAsRequired(fieldpaths ...string) {
+	r.requiredFields = append(r.requiredFields, fieldpaths...)
+}
+
 // MarkAsRequired marks the schema of the given fieldpath as required. It's most
 // useful in cases where external name contains an optional parameter that is
 // defaulted by the provider but we need it to exist or to fix plain buggy
 // schemas.
-// Deprecated: Use RequiredFields API instead.
+// Deprecated: Use Resource.MarkAsRequired instead.
+// This function will be removed in future versions.
 func MarkAsRequired(sch *schema.Resource, fieldpaths ...string) {
 	for _, fieldpath := range fieldpaths {
 		if s := GetSchema(sch, fieldpath); s != nil {
