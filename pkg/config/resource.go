@@ -495,6 +495,7 @@ type Resource struct {
 	requiredFields []string
 }
 
+// RequiredFields returns slice of the marked as required fieldpaths.
 func (r *Resource) RequiredFields() []string {
 	return r.requiredFields
 }
