@@ -162,10 +162,6 @@ type ExternalName struct {
 	// management policy is including the Observe Only, different from other
 	// (required) fields.
 	IdentifierFields []string
-
-	// RequiredFields are the fields that are marked as required, although
-	// it is not required in the TF schema.
-	RequiredFields []string
 }
 
 // References represents reference resolver configurations for the fields of a
@@ -493,6 +489,14 @@ type Resource struct {
 	// the value of the generated Kind, for example:
 	// "TagParameters": "ClusterTagParameters"
 	OverrideFieldNames map[string]string
+
+	// requiredFields are the fields that will be marked as required in the
+	// generated CRD schema, although they are not required in the TF schema.
+	requiredFields []string
+}
+
+func (r *Resource) RequiredFields() []string {
+	return r.requiredFields
 }
 
 // ShouldUseTerraformPluginSDKClient returns whether to generate an SDKv2-based

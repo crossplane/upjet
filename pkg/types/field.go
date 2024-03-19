@@ -121,7 +121,7 @@ func NewField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema,
 		}
 	}
 
-	for _, required := range cfg.ExternalName.RequiredFields {
+	for _, required := range cfg.RequiredFields() {
 		if required == snakeFieldName {
 			f.Required = true
 		}
