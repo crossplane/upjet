@@ -45,6 +45,7 @@ type Field struct {
 	TransformedName                          string
 	SelectorName                             string
 	Identifier                               bool
+	Required                                 bool
 	// Injected is set if this Field is an injected field to the Terraform
 	// schema as an object list map key for server-side apply merges.
 	Injected bool
@@ -117,6 +118,12 @@ func NewField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema,
 		if ident == snakeFieldName {
 			f.Identifier = true
 			break
+		}
+	}
+
+	for _, required := range cfg.RequiredFields() {
+		if required == snakeFieldName {
+			f.Required = true
 		}
 	}
 
