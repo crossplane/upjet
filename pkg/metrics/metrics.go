@@ -44,6 +44,20 @@ var (
 		Buckets:   []float64{1, 5, 10, 15, 30, 60, 120, 300, 600, 1800, 3600},
 	}, []string{"operation"})
 
+	// ExternalAPICalls is a counter metric of the number of external
+	// API calls. "service" and "operation" labels could be used to
+	// classify calls into a two-level hierarchy, in which calls are
+	// "operations" that belong to a "service". Users should beware of
+	// performance implications of high cardinality that could occur
+	// when there are many services and operations. See:
+	// https://prometheus.io/docs/practices/naming/#labels
+	ExternalAPICalls = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: promNSUpjet,
+		Subsystem: promSysResource,
+		Name:      "external_api_calls_total",
+		Help:      "The number of external API calls.",
+	}, []string{"service", "operation"})
+
 	// DeletionTime is the histogram metric for collecting statistics on the
 	// intervals between the deletion timestamp and the moment when
 	// the resource is observed to be missing (actually deleted).
@@ -174,5 +188,5 @@ func (r *MetricRecorder) Start(ctx context.Context) error {
 }
 
 func init() {
-	metrics.Registry.MustRegister(CLITime, CLIExecutions, TFProcesses, TTRMeasurements, ExternalAPITime, DeletionTime, ReconcileDelay)
+	metrics.Registry.MustRegister(CLITime, CLIExecutions, TFProcesses, TTRMeasurements, ExternalAPITime, ExternalAPICalls, DeletionTime, ReconcileDelay)
 }
