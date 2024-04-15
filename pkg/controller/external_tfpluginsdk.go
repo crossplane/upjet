@@ -155,7 +155,7 @@ func getExtendedParameters(ctx context.Context, tr resource.Terraformed, externa
 			params["tags_all"] = params["tags"]
 		}
 	}
-	return params, nil
+	return convert(params, config.ListConversionPaths(), toSingletonList)
 }
 
 func (c *TerraformPluginSDKConnector) processParamsWithHCLParser(schemaMap map[string]*schema.Schema, params map[string]any) map[string]any {
@@ -254,6 +254,10 @@ func (c *TerraformPluginSDKConnector) Connect(ctx context.Context, mg xpresource
 		tfState, err := tr.GetObservation()
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to get the observation")
+		}
+		tfState, err = convert(tfState, c.config.ListConversionPaths(), toSingletonList)
+		if err != nil {
+			return nil, err
 		}
 		copyParams := len(tfState) == 0
 		if err = resource.GetSensitiveParameters(ctx, &APISecretClient{kube: c.kube}, tr, tfState, tr.GetConnectionDetailsMapping()); err != nil {
@@ -511,6 +515,10 @@ func (n *terraformPluginSDKExternal) Observe(ctx context.Context, mg xpresource.
 		}
 		mg.SetConditions(xpv1.Available())
 
+		stateValueMap, err = convert(stateValueMap, n.config.ListConversionPaths(), toEmbeddedObject)
+		if err != nil {
+			return managed.ExternalObservation{}, err
+		}
 		buff, err := json.TFParser.Marshal(stateValueMap)
 		if err != nil {
 			return managed.ExternalObservation{}, errors.Wrap(err, "cannot marshal the attributes of the new state for late-initialization")
@@ -622,6 +630,10 @@ func (n *terraformPluginSDKExternal) Create(ctx context.Context, mg xpresource.M
 	}
 	if _, err := n.setExternalName(mg, stateValueMap); err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, "failed to set the external-name of the managed resource during create")
+	}
+	stateValueMap, err = convert(stateValueMap, n.config.ListConversionPaths(), toEmbeddedObject)
+	if err != nil {
+		return managed.ExternalCreation{}, err
 	}
 	err = mg.(resource.Terraformed).SetObservation(stateValueMap)
 	if err != nil {

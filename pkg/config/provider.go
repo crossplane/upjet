@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"regexp"
 
+	"github.com/crossplane/upjet/pkg/schema/traverser"
+
 	tfjson "github.com/hashicorp/terraform-json"
 	fwprovider "github.com/hashicorp/terraform-plugin-framework/provider"
 	fwresource "github.com/hashicorp/terraform-plugin-framework/resource"
@@ -351,6 +353,13 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadata []byt
 		p.Resources[name] = DefaultResource(name, terraformResource, terraformPluginFrameworkResource, providerMetadata.Resources[name], p.DefaultResourceOptions...)
 		p.Resources[name].useTerraformPluginSDKClient = isTerraformPluginSDK
 		p.Resources[name].useTerraformPluginFrameworkClient = isPluginFrameworkResource
+		// traverse the Terraform resource schema to initialize the upjet Resource
+		// configuration using:
+		// - listEmbedder: This traverser marks lists of length at most 1
+		// (singleton lists) as embedded objects.
+		if err := traverser.Traverse(terraformResource, listEmbedder{r: p.Resources[name]}); err != nil {
+			panic(err)
+		}
 	}
 	for i, refInjector := range p.refInjectors {
 		if err := refInjector.InjectReferences(p.Resources); err != nil {
@@ -431,4 +440,22 @@ func terraformPluginFrameworkResourceFunctionsMap(provider fwprovider.Provider) 
 	}
 
 	return resourceFunctionsMap
+}
+
+type listEmbedder struct {
+	traverser.NoopTraverser
+	r *Resource
+}
+
+func (l listEmbedder) VisitResource(r *traverser.ResourceNode) error {
+	// this visitor only works on sets and lists with the MaxItems constraint
+	// of 1.
+	if r.Schema.Type != schema.TypeList && r.Schema.Type != schema.TypeSet {
+		return nil
+	}
+	if r.Schema.MaxItems != 1 {
+		return nil
+	}
+	l.r.AddSingletonListConversion(traverser.FieldPathWithWildcard(r.TFPath))
+	return nil
 }

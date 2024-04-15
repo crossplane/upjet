@@ -7,6 +7,7 @@ package config
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
@@ -435,6 +436,15 @@ type Resource struct {
 	// SchemaElementOption for configuring options for schema elements.
 	SchemaElementOptions SchemaElementOptions
 
+	// listConversionPaths is the Terraform field paths of embedded objects that
+	// need to be converted into singleton lists (lists of at most one element)
+	// at runtime.
+	// Such fields are lists in the Terraform schema, however upjet generates
+	// them as nested objects, and we need to convert them back to lists
+	// at runtime before passing them to the Terraform stack and lists into
+	// embedded objects after reading the state from the Terraform stack.
+	listConversionPaths []string
+
 	// TerraformConfigurationInjector allows a managed resource to inject
 	// configuration values in the Terraform configuration map obtained by
 	// deserializing its `spec.forProvider` value. Managed resources can
@@ -541,7 +551,38 @@ func (m SchemaElementOptions) AddToObservation(el string) bool {
 	return m[el] != nil && m[el].AddToObservation
 }
 
+// ListConversionPaths returns the Resource's runtime Terraform list
+// conversion paths in fieldpath syntax.
+func (r *Resource) ListConversionPaths() []string {
+	l := make([]string, 0, len(r.listConversionPaths))
+	for _, v := range r.listConversionPaths {
+		l = append(l, v)
+	}
+	return l
+}
+
+// AddSingletonListConversion configures the list at the specified CRD
+// field path and the specified Terraform field path as an embedded object.
+// crdPath is the field path expression for the CRD schema and tfPath is
+// the field path expression for the Terraform schema corresponding to the
+// singleton list to be converted to an embedded object.
+// At runtime, upjet will convert such objects back and forth
+// from/to singleton lists while communicating with the Terraform stack.
+// The specified fieldpath expression must be a wildcard expression such as
+// `conditions[*]` or a 0-indexed expression such as `conditions[0]`. Other
+// index values are not allowed as this function deals with singleton lists.
+func (r *Resource) AddSingletonListConversion(tfPath string) {
+	// SchemaElementOptions.SetEmbeddedObject does not expect the indices and
+	// because we are dealing with singleton lists here, we only expect wildcards
+	// or the zero-index.
+	nPath := strings.ReplaceAll(tfPath, "[*]", "")
+	nPath = strings.ReplaceAll(nPath, "[0]", "")
+	r.SchemaElementOptions.SetEmbeddedObject(nPath)
+	r.listConversionPaths = append(r.listConversionPaths, tfPath)
+}
+
 // SetEmbeddedObject sets the EmbeddedObject for the specified key.
+// The key is a Terraform field path without the wildcard segments.
 func (m SchemaElementOptions) SetEmbeddedObject(el string) {
 	if m[el] == nil {
 		m[el] = &SchemaElementOption{}

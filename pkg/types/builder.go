@@ -11,7 +11,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
+	"github.com/crossplane/upjet/pkg/schema/traverser"
+
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	twtypes "github.com/muvaf/typewriter/pkg/types"
 	"github.com/pkg/errors"
@@ -139,7 +140,7 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 	r := &resource{}
 	for _, snakeFieldName := range keys {
 		var reference *config.Reference
-		cPath := fieldPath(append(tfPath, snakeFieldName))
+		cPath := traverser.FieldPath(append(tfPath, snakeFieldName))
 		ref, ok := cfg.References[cPath]
 		// if a reference is configured and the field does not belong to status
 		if ok && !IsObservation(res.Schema[snakeFieldName]) {
@@ -239,7 +240,7 @@ func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, cp
 			case schema.TypeString:
 				elemType = types.Universe.Lookup("string").Type()
 			case schema.TypeMap, schema.TypeList, schema.TypeSet, schema.TypeInvalid:
-				return nil, nil, errors.Errorf("element type of %s is basic but not one of known basic types", fieldPath(names))
+				return nil, nil, errors.Errorf("element type of %s is basic but not one of known basic types", traverser.FieldPath(names))
 			}
 			initElemType = elemType
 		case *schema.Schema:
@@ -258,14 +259,14 @@ func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, cp
 			}
 			paramType, obsType, initType, err := g.buildResource(et, cfg, f.TerraformPaths, f.CRDPaths, asBlocksMode, names...)
 			if err != nil {
-				return nil, nil, errors.Wrapf(err, "cannot infer type from resource schema of element type of %s", fieldPath(names))
+				return nil, nil, errors.Wrapf(err, "cannot infer type from resource schema of element type of %s", traverser.FieldPath(names))
 			}
 			initElemType = initType
 
 			switch {
 			case IsObservation(f.Schema):
 				if obsType == nil {
-					return nil, nil, errors.Errorf("element type of %s is computed but the underlying schema does not return observation type", fieldPath(names))
+					return nil, nil, errors.Errorf("element type of %s is computed but the underlying schema does not return observation type", traverser.FieldPath(names))
 				}
 				elemType = obsType
 				// There are some types that are computed and not optional (observation field) but also has nested fields
@@ -285,7 +286,7 @@ func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, cp
 				}
 			default:
 				if paramType == nil {
-					return nil, nil, errors.Errorf("element type of %s is configurable but the underlying schema does not return a parameter type", fieldPath(names))
+					return nil, nil, errors.Errorf("element type of %s is configurable but the underlying schema does not return a parameter type", traverser.FieldPath(names))
 				}
 				elemType = paramType
 				// There are some types that are parameter field but also has nested fields that can go under status.
@@ -308,7 +309,7 @@ func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, cp
 			elemType = types.Universe.Lookup("string").Type()
 			initElemType = elemType
 		default:
-			return nil, nil, errors.Errorf("element type of %s should be either schema.Resource or schema.Schema", fieldPath(names))
+			return nil, nil, errors.Errorf("element type of %s should be either schema.Resource or schema.Schema", traverser.FieldPath(names))
 		}
 
 		// if the singleton list is to be replaced by an embedded object
@@ -339,19 +340,19 @@ type TypeNames struct {
 func NewTypeNames(fieldPaths []string, pkg *types.Package, overrideFieldNames map[string]string) (*TypeNames, error) {
 	paramTypeName, err := generateTypeName("Parameters", pkg, overrideFieldNames, fieldPaths...)
 	if err != nil {
-		return nil, errors.Wrapf(err, "cannot generate parameters type name of %s", fieldPath(fieldPaths))
+		return nil, errors.Wrapf(err, "cannot generate parameters type name of %s", traverser.FieldPath(fieldPaths))
 	}
 	paramName := types.NewTypeName(token.NoPos, pkg, paramTypeName, nil)
 
 	initTypeName, err := generateTypeName("InitParameters", pkg, overrideFieldNames, fieldPaths...)
 	if err != nil {
-		return nil, errors.Wrapf(err, "cannot generate init parameters type name of %s", fieldPath(fieldPaths))
+		return nil, errors.Wrapf(err, "cannot generate init parameters type name of %s", traverser.FieldPath(fieldPaths))
 	}
 	initName := types.NewTypeName(token.NoPos, pkg, initTypeName, nil)
 
 	obsTypeName, err := generateTypeName("Observation", pkg, overrideFieldNames, fieldPaths...)
 	if err != nil {
-		return nil, errors.Wrapf(err, "cannot generate observation type name of %s", fieldPath(fieldPaths))
+		return nil, errors.Wrapf(err, "cannot generate observation type name of %s", traverser.FieldPath(fieldPaths))
 	}
 	obsName := types.NewTypeName(token.NoPos, pkg, obsTypeName, nil)
 
@@ -516,25 +517,6 @@ func sortedKeys(m map[string]*schema.Schema) []string {
 	}
 	sort.Strings(keys)
 	return keys
-}
-
-func fieldPath(parts []string) string {
-	seg := make(fieldpath.Segments, len(parts))
-	for i, p := range parts {
-		if p == wildcard {
-			continue
-		}
-		seg[i] = fieldpath.Field(p)
-	}
-	return seg.String()
-}
-
-func fieldPathWithWildcard(parts []string) string {
-	seg := make(fieldpath.Segments, len(parts))
-	for i, p := range parts {
-		seg[i] = fieldpath.Field(p)
-	}
-	return seg.String()
 }
 
 func sanitizePath(p string) string {

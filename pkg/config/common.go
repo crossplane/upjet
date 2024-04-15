@@ -137,8 +137,8 @@ func (r *Resource) MarkAsRequired(fieldpaths ...string) {
 // Deprecated: Use Resource.MarkAsRequired instead.
 // This function will be removed in future versions.
 func MarkAsRequired(sch *schema.Resource, fieldpaths ...string) {
-	for _, fieldpath := range fieldpaths {
-		if s := GetSchema(sch, fieldpath); s != nil {
+	for _, fp := range fieldpaths {
+		if s := GetSchema(sch, fp); s != nil {
 			s.Computed = false
 			s.Optional = false
 		}
