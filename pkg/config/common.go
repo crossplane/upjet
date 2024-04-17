@@ -91,6 +91,7 @@ func DefaultResource(name string, terraformSchema *schema.Resource, terraformPlu
 		UseAsync:                         true,
 		SchemaElementOptions:             make(SchemaElementOptions),
 		ServerSideApplyMergeStrategies:   make(ServerSideApplyMergeStrategies),
+		MarkStorageVersion:               true,
 	}
 	for _, f := range opts {
 		f(r)

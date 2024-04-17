@@ -38,7 +38,9 @@ type {{ .CRD.Kind }}Status struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+{{ if eq .CRD.MarkStorageVersion "true" -}}
 // +kubebuilder:storageversion
+{{ end }}
 
 // {{ .CRD.Kind }} is the Schema for the {{ .CRD.Kind }}s API. {{ .CRD.Description }}
 // +kubebuilder:printcolumn:name="SYNCED",type="string",JSONPath=".status.conditions[?(@.type=='Synced')].status"

@@ -436,6 +436,11 @@ type Resource struct {
 	// SchemaElementOption for configuring options for schema elements.
 	SchemaElementOptions SchemaElementOptions
 
+	// MarkStorageVersion sets the generated CRD API version as
+	// the CRD storage version. The default value is true, i.e., the generated
+	// version is by default the storage version.
+	MarkStorageVersion bool
+
 	// listConversionPaths is the Terraform field paths of embedded objects that
 	// need to be converted into singleton lists (lists of at most one element)
 	// at runtime.
