@@ -64,7 +64,7 @@ func setValue(pv *fieldpath.Paved, v any, fp string) error {
 // an embedded object will be converted into a singleton list or a singleton
 // list will be converted into an embedded object) is determined by the mode
 // parameter.
-func convert(params map[string]any, paths []string, mode conversionMode) (map[string]any, error) {
+func convert(params map[string]any, paths []string, mode conversionMode) (map[string]any, error) { //nolint:gocyclo // easier to follow as a unit
 	switch mode {
 	case toSingletonList:
 		slices.Sort(paths)

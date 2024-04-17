@@ -12,14 +12,13 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/crossplane/upjet/pkg/schema/traverser"
-
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/pkg/errors"
 	"k8s.io/utils/ptr"
 
 	"github.com/crossplane/upjet/pkg"
 	"github.com/crossplane/upjet/pkg/config"
+	"github.com/crossplane/upjet/pkg/schema/traverser"
 	"github.com/crossplane/upjet/pkg/types/comments"
 	"github.com/crossplane/upjet/pkg/types/name"
 )

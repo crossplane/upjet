@@ -19,12 +19,16 @@ const (
 var _ Element = &SchemaNode{}
 var _ Element = &ResourceNode{}
 
-// Traverse traverses the Terraform schema of the given Terraform resource and
-// visits each of the specified visitors on the traversed schema's nodes.
+// Traverse traverses the Terraform schema of the given Terraform resource
+// with the given Terraform resource name and visits each of the specified
+// visitors on the traversed schema's nodes.
 // If any of the visitors in the chain reports an error,
 // it stops the traversal.
-func Traverse(tfResource *schema.Resource, visitors ...SchemaTraverser) error {
-	return traverse(tfResource, Node{}, visitors...)
+func Traverse(tfName string, tfResource *schema.Resource, visitors ...SchemaTraverser) error {
+	if len(visitors) == 0 {
+		return nil
+	}
+	return traverse(tfResource, Node{TFName: tfName}, visitors...)
 }
 
 // SchemaTraverser represents a visitor on the schema.Schema and
@@ -44,6 +48,8 @@ type Element interface {
 
 // Node represents a schema node that's being traversed.
 type Node struct {
+	// TFName is the Terraform resource name
+	TFName string
 	// Schema is the Terraform schema associated with the visited node during a
 	// traversal.
 	Schema *schema.Schema
@@ -77,7 +83,7 @@ func (r *ResourceNode) Accept(v SchemaTraverser) error {
 	return v.VisitResource(r)
 }
 
-func traverse(tfResource *schema.Resource, pNode Node, visitors ...SchemaTraverser) error {
+func traverse(tfResource *schema.Resource, pNode Node, visitors ...SchemaTraverser) error { //nolint:gocyclo // traverse logic is easier to follow in a unit
 	m := tfResource.Schema
 	if m == nil && tfResource.SchemaFunc != nil {
 		m = tfResource.SchemaFunc()
@@ -85,10 +91,10 @@ func traverse(tfResource *schema.Resource, pNode Node, visitors ...SchemaTravers
 	if m == nil {
 		return nil
 	}
-	var node Node
+	node := Node{TFName: pNode.TFName}
 	for k, s := range m {
-		node.CRDPath = append(pNode.CRDPath, name.NewFromSnake(k).LowerCamelComputed)
-		node.TFPath = append(pNode.TFPath, k)
+		node.CRDPath = append(pNode.CRDPath, name.NewFromSnake(k).LowerCamelComputed) //nolint:gocritic // the parent node's path must not be modified
+		node.TFPath = append(pNode.TFPath, k)                                         //nolint:gocritic // the parent node's path must not be modified
 		node.Schema = s
 		switch e := s.Elem.(type) {
 		case *schema.Schema:

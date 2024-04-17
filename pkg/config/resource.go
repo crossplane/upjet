@@ -554,10 +554,8 @@ func (m SchemaElementOptions) AddToObservation(el string) bool {
 // ListConversionPaths returns the Resource's runtime Terraform list
 // conversion paths in fieldpath syntax.
 func (r *Resource) ListConversionPaths() []string {
-	l := make([]string, 0, len(r.listConversionPaths))
-	for _, v := range r.listConversionPaths {
-		l = append(l, v)
-	}
+	l := make([]string, len(r.listConversionPaths))
+	copy(l, r.listConversionPaths)
 	return l
 }
 

@@ -129,6 +129,7 @@ func TestDefaultResource(t *testing.T) {
 		cmpopts.IgnoreFields(Resource{}, "useTerraformPluginSDKClient"),
 		cmpopts.IgnoreFields(Resource{}, "useTerraformPluginFrameworkClient"),
 		cmpopts.IgnoreFields(Resource{}, "requiredFields"),
+		cmpopts.IgnoreFields(Resource{}, "listConversionPaths"),
 	}
 
 	for name, tc := range cases {
