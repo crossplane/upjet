@@ -52,6 +52,6 @@ func (l *SingletonListEmbedder) VisitResource(r *traverser.ResourceNode) error {
 	if r.Schema.MaxItems != 1 {
 		return nil
 	}
-	l.r.AddSingletonListConversion(traverser.FieldPathWithWildcard(r.TFPath))
+	l.r.AddSingletonListConversion(traverser.FieldPathWithWildcard(r.TFPath), traverser.FieldPathWithWildcard(r.CRDPath))
 	return nil
 }

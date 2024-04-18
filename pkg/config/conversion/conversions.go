@@ -5,6 +5,8 @@
 package conversion
 
 import (
+	"fmt"
+
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/pkg/errors"
@@ -17,6 +19,10 @@ const (
 	// of an API with which the Conversion is registered. It can be used for
 	// both the conversion source or target API versions.
 	AllVersions = "*"
+)
+
+const (
+	pathForProvider = "spec.forProvider"
 )
 
 // Conversion is the interface for the API version converters.
@@ -66,6 +72,10 @@ type ManagedConversion interface {
 type baseConversion struct {
 	sourceVersion string
 	targetVersion string
+}
+
+func (c *baseConversion) String() string {
+	return fmt.Sprintf("source API version %q, target API version %q", c.sourceVersion, c.targetVersion)
 }
 
 func newBaseConversion(sourceVersion, targetVersion string) baseConversion {
@@ -140,4 +150,40 @@ func NewCustomConverter(sourceVersion, targetVersion string, converter func(src,
 		baseConversion:  newBaseConversion(sourceVersion, targetVersion),
 		customConverter: converter,
 	}
+}
+
+type singletonListConverter struct {
+	baseConversion
+	crdPaths []string
+	mode     Mode
+}
+
+// NewSingletonListConversion returns a new Conversion from the specified
+// sourceVersion of an API to the specified targetVersion and uses the
+// CRD field paths given in crdPaths to convert between the singleton
+// lists and embedded objects in the given conversion mode.
+func NewSingletonListConversion(sourceVersion, targetVersion string, crdPaths []string, mode Mode) Conversion {
+	return &singletonListConverter{
+		baseConversion: newBaseConversion(sourceVersion, targetVersion),
+		crdPaths:       crdPaths,
+		mode:           mode,
+	}
+}
+
+func (s *singletonListConverter) ConvertPaved(src, target *fieldpath.Paved) (bool, error) {
+	if len(s.crdPaths) == 0 {
+		return false, nil
+	}
+	v, err := src.GetValue(pathForProvider)
+	if err != nil {
+		return true, errors.Wrapf(err, "failed to read the %s value for conversion in mode %q", pathForProvider, s.mode)
+	}
+	m, ok := v.(map[string]any)
+	if !ok {
+		return true, errors.Errorf("value at path %s is not a map[string]any", pathForProvider)
+	}
+	if _, err := Convert(m, s.crdPaths, s.mode); err != nil {
+		return true, errors.Wrapf(err, "failed to convert the source map in mode %q with %s", s.mode, s.baseConversion)
+	}
+	return true, errors.Wrapf(target.SetValue(pathForProvider, m), "failed to set the %s value for conversion in mode %q", pathForProvider, s.mode)
 }

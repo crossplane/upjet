@@ -26,6 +26,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/crossplane/upjet/pkg/config"
+	"github.com/crossplane/upjet/pkg/config/conversion"
 	"github.com/crossplane/upjet/pkg/metrics"
 	"github.com/crossplane/upjet/pkg/resource"
 	"github.com/crossplane/upjet/pkg/resource/json"
@@ -155,7 +156,7 @@ func getExtendedParameters(ctx context.Context, tr resource.Terraformed, externa
 			params["tags_all"] = params["tags"]
 		}
 	}
-	return convert(params, config.ListConversionPaths(), toSingletonList)
+	return conversion.Convert(params, config.TFListConversionPaths(), conversion.ToSingletonList)
 }
 
 func (c *TerraformPluginSDKConnector) processParamsWithHCLParser(schemaMap map[string]*schema.Schema, params map[string]any) map[string]any {
@@ -255,7 +256,7 @@ func (c *TerraformPluginSDKConnector) Connect(ctx context.Context, mg xpresource
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to get the observation")
 		}
-		tfState, err = convert(tfState, c.config.ListConversionPaths(), toSingletonList)
+		tfState, err = conversion.Convert(tfState, c.config.TFListConversionPaths(), conversion.ToSingletonList)
 		if err != nil {
 			return nil, err
 		}
@@ -515,7 +516,7 @@ func (n *terraformPluginSDKExternal) Observe(ctx context.Context, mg xpresource.
 		}
 		mg.SetConditions(xpv1.Available())
 
-		stateValueMap, err = convert(stateValueMap, n.config.ListConversionPaths(), toEmbeddedObject)
+		stateValueMap, err = conversion.Convert(stateValueMap, n.config.TFListConversionPaths(), conversion.ToEmbeddedObject)
 		if err != nil {
 			return managed.ExternalObservation{}, err
 		}
@@ -631,7 +632,7 @@ func (n *terraformPluginSDKExternal) Create(ctx context.Context, mg xpresource.M
 	if _, err := n.setExternalName(mg, stateValueMap); err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, "failed to set the external-name of the managed resource during create")
 	}
-	stateValueMap, err = convert(stateValueMap, n.config.ListConversionPaths(), toEmbeddedObject)
+	stateValueMap, err = conversion.Convert(stateValueMap, n.config.TFListConversionPaths(), conversion.ToEmbeddedObject)
 	if err != nil {
 		return managed.ExternalCreation{}, err
 	}

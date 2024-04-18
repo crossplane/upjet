@@ -1,8 +1,8 @@
-// SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+// SPDX-FileCopyrightText: 2024 The Crossplane Authors <https://crossplane.io>
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package controller
+package conversion
 
 import (
 	"slices"
@@ -13,19 +13,28 @@ import (
 	"github.com/pkg/errors"
 )
 
-type conversionMode int
+// Mode denotes the mode of the runtime API conversion, e.g.,
+// conversion of embedded objects into singleton lists.
+type Mode int
 
 const (
-	toEmbeddedObject conversionMode = iota
-	toSingletonList
+	// ToEmbeddedObject represents a runtime conversion from a singleton list
+	// to an embedded object, i.e., the runtime conversions needed while
+	// reading from the Terraform state and updating the CRD
+	// (for status, late-initialization, etc.)
+	ToEmbeddedObject Mode = iota
+	// ToSingletonList represents a runtime conversion from an embedded object
+	// to a singleton list, i.e., the runtime conversions needed while passing
+	// the configuration data to the underlying Terraform layer.
+	ToSingletonList
 )
 
 // String returns a string representation of the conversion mode.
-func (m conversionMode) String() string {
+func (m Mode) String() string {
 	switch m {
-	case toSingletonList:
+	case ToSingletonList:
 		return "toSingletonList"
-	case toEmbeddedObject:
+	case ToEmbeddedObject:
 		return "toEmbeddedObject"
 	default:
 		return "unknown"
@@ -57,18 +66,18 @@ func setValue(pv *fieldpath.Paved, v any, fp string) error {
 	return nil
 }
 
-// convert performs conversion between singleton lists and embedded objects
+// Convert performs conversion between singleton lists and embedded objects
 // while passing the CRD parameters to the Terraform layer and while reading
 // state from the Terraform layer at runtime. The paths where the conversion
 // will be performed are specified using paths and the conversion mode (whether
 // an embedded object will be converted into a singleton list or a singleton
 // list will be converted into an embedded object) is determined by the mode
 // parameter.
-func convert(params map[string]any, paths []string, mode conversionMode) (map[string]any, error) { //nolint:gocyclo // easier to follow as a unit
+func Convert(params map[string]any, paths []string, mode Mode) (map[string]any, error) { //nolint:gocyclo // easier to follow as a unit
 	switch mode {
-	case toSingletonList:
+	case ToSingletonList:
 		slices.Sort(paths)
-	case toEmbeddedObject:
+	case ToEmbeddedObject:
 		sort.Slice(paths, func(i, j int) bool {
 			return paths[i] > paths[j]
 		})
@@ -89,11 +98,11 @@ func convert(params map[string]any, paths []string, mode conversionMode) (map[st
 				return nil, errors.Wrapf(err, "cannot get the value at the field path %s with the conversion mode set to %q", exp[0], mode)
 			}
 			switch mode {
-			case toSingletonList:
+			case ToSingletonList:
 				if err := setValue(pv, []any{v}, exp[0]); err != nil {
 					return nil, errors.Wrapf(err, "cannot set the singleton list's value at the field path %s", exp[0])
 				}
-			case toEmbeddedObject:
+			case ToEmbeddedObject:
 				s, ok := v.([]any)
 				if !ok || len(s) > 1 {
 					// if len(s) is 0, then it's not a slice
