@@ -8,7 +8,7 @@ go 1.21
 
 require (
 	dario.cat/mergo v1.0.0
-	github.com/alecthomas/kingpin/v2 v2.3.2
+	github.com/alecthomas/kingpin/v2 v2.4.0
 	github.com/antchfx/htmlquery v1.2.4
 	github.com/crossplane/crossplane v1.13.2
 	github.com/crossplane/crossplane-runtime v1.16.0-rc.1.0.20240424114634-8641eb2ba384
