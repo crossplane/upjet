@@ -8,9 +8,9 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/alecthomas/kingpin/v2"
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	"github.com/spf13/afero"
-	"gopkg.in/alecthomas/kingpin.v2"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"github.com/crossplane/upjet/pkg/transformers"
