@@ -45,8 +45,9 @@ func TestRoundTrip(t *testing.T) {
 		"SuccessfulRoundTrip": {
 			reason: "Source object is successfully copied into the target object.",
 			args: args{
-				dst: fake.NewTerraformed(),
-				src: fake.NewTerraformed(fake.WithParameters(fake.NewMap(key1, val1))),
+				dst:         fake.NewTerraformed(),
+				src:         fake.NewTerraformed(fake.WithParameters(fake.NewMap(key1, val1))),
+				conversions: []conversion.Conversion{conversion.NewIdentityConversionExpandPaths(conversion.AllVersions, conversion.AllVersions, nil)},
 			},
 			want: want{
 				dst: fake.NewTerraformed(fake.WithParameters(fake.NewMap(key1, val1))),
@@ -58,6 +59,7 @@ func TestRoundTrip(t *testing.T) {
 				dst: fake.NewTerraformed(),
 				src: fake.NewTerraformed(fake.WithParameters(fake.NewMap(commonKey, commonVal, key1, val1))),
 				conversions: []conversion.Conversion{
+					conversion.NewIdentityConversionExpandPaths(conversion.AllVersions, conversion.AllVersions, nil),
 					// Because the parameters of the fake.Terraformed is an unstructured
 					// map, all the fields of source (including key1) are successfully
 					// copied into dst by registry.RoundTrip.
@@ -72,6 +74,17 @@ func TestRoundTrip(t *testing.T) {
 			},
 			want: want{
 				dst: fake.NewTerraformed(fake.WithParameters(fake.NewMap(commonKey, commonVal, key2, val1))),
+			},
+		},
+		"RoundTripWithExcludedFields": {
+			reason: "Source object is successfully copied into the target object with certain fields excluded.",
+			args: args{
+				dst:         fake.NewTerraformed(),
+				src:         fake.NewTerraformed(fake.WithParameters(fake.NewMap(key1, val1, key2, val2))),
+				conversions: []conversion.Conversion{conversion.NewIdentityConversionExpandPaths(conversion.AllVersions, conversion.AllVersions, []string{"parameterizable.parameters"}, key2)},
+			},
+			want: want{
+				dst: fake.NewTerraformed(fake.WithParameters(fake.NewMap(key1, val1))),
 			},
 		},
 	}

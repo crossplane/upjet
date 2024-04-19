@@ -5,6 +5,7 @@
 package config
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -12,10 +13,13 @@ import (
 	fwresource "github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 
+	"github.com/crossplane/upjet/pkg/config/conversion"
 	"github.com/crossplane/upjet/pkg/registry"
 )
 
 func TestDefaultResource(t *testing.T) {
+	identityConversion := conversion.NewIdentityConversionExpandPaths(conversion.AllVersions, conversion.AllVersions, nil)
+
 	type args struct {
 		name              string
 		sch               *schema.Resource
@@ -45,6 +49,7 @@ func TestDefaultResource(t *testing.T) {
 				UseAsync:                       true,
 				SchemaElementOptions:           SchemaElementOptions{},
 				ServerSideApplyMergeStrategies: ServerSideApplyMergeStrategies{},
+				Conversions:                    []conversion.Conversion{identityConversion},
 			},
 		},
 		"TwoSectionsName": {
@@ -63,6 +68,7 @@ func TestDefaultResource(t *testing.T) {
 				UseAsync:                       true,
 				SchemaElementOptions:           SchemaElementOptions{},
 				ServerSideApplyMergeStrategies: ServerSideApplyMergeStrategies{},
+				Conversions:                    []conversion.Conversion{identityConversion},
 			},
 		},
 		"NameWithPrefixAcronym": {
@@ -81,6 +87,7 @@ func TestDefaultResource(t *testing.T) {
 				UseAsync:                       true,
 				SchemaElementOptions:           SchemaElementOptions{},
 				ServerSideApplyMergeStrategies: ServerSideApplyMergeStrategies{},
+				Conversions:                    []conversion.Conversion{identityConversion},
 			},
 		},
 		"NameWithSuffixAcronym": {
@@ -99,6 +106,7 @@ func TestDefaultResource(t *testing.T) {
 				UseAsync:                       true,
 				SchemaElementOptions:           SchemaElementOptions{},
 				ServerSideApplyMergeStrategies: ServerSideApplyMergeStrategies{},
+				Conversions:                    []conversion.Conversion{identityConversion},
 			},
 		},
 		"NameWithMultipleAcronyms": {
@@ -117,6 +125,7 @@ func TestDefaultResource(t *testing.T) {
 				UseAsync:                       true,
 				SchemaElementOptions:           SchemaElementOptions{},
 				ServerSideApplyMergeStrategies: ServerSideApplyMergeStrategies{},
+				Conversions:                    []conversion.Conversion{identityConversion},
 			},
 		},
 	}
@@ -126,12 +135,8 @@ func TestDefaultResource(t *testing.T) {
 		cmpopts.IgnoreFields(Sensitive{}, "fieldPaths", "AdditionalConnectionDetailsFn"),
 		cmpopts.IgnoreFields(LateInitializer{}, "ignoredCanonicalFieldPaths"),
 		cmpopts.IgnoreFields(ExternalName{}, "SetIdentifierArgumentFn", "GetExternalNameFn", "GetIDFn"),
-		cmpopts.IgnoreFields(Resource{}, "useTerraformPluginSDKClient"),
-		cmpopts.IgnoreFields(Resource{}, "useTerraformPluginFrameworkClient"),
-		cmpopts.IgnoreFields(Resource{}, "requiredFields"),
-		cmpopts.IgnoreFields(Resource{}, "listConversionPaths"),
-		cmpopts.IgnoreFields(Resource{}, "crdStorageVersion"),
-		cmpopts.IgnoreFields(Resource{}, "crdHubVersion"),
+		cmpopts.IgnoreUnexported(Resource{}),
+		cmpopts.IgnoreUnexported(reflect.ValueOf(identityConversion).Elem().Interface()),
 	}
 
 	for name, tc := range cases {

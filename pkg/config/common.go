@@ -10,6 +10,7 @@ import (
 	fwresource "github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 
+	"github.com/crossplane/upjet/pkg/config/conversion"
 	"github.com/crossplane/upjet/pkg/registry"
 	tjname "github.com/crossplane/upjet/pkg/types/name"
 )
@@ -91,6 +92,7 @@ func DefaultResource(name string, terraformSchema *schema.Resource, terraformPlu
 		UseAsync:                         true,
 		SchemaElementOptions:             make(SchemaElementOptions),
 		ServerSideApplyMergeStrategies:   make(ServerSideApplyMergeStrategies),
+		Conversions:                      []conversion.Conversion{conversion.NewIdentityConversionExpandPaths(conversion.AllVersions, conversion.AllVersions, nil)},
 		listConversionPaths:              make(map[string]string),
 	}
 	for _, f := range opts {
