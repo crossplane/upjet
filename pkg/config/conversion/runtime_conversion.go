@@ -103,14 +103,17 @@ func Convert(params map[string]any, paths []string, mode Mode) (map[string]any, 
 					return nil, errors.Wrapf(err, "cannot set the singleton list's value at the field path %s", exp[0])
 				}
 			case ToEmbeddedObject:
-				s, ok := v.([]any)
-				if !ok || len(s) > 1 {
-					// if len(s) is 0, then it's not a slice
-					return nil, errors.Errorf("singleton list, at the field path %s, must have a length of 1 but it has a length of %d", exp[0], len(s))
-				}
-				var newVal any = map[string]any{}
-				if len(s) > 0 {
-					newVal = s[0]
+				var newVal any = nil
+				if v != nil {
+					newVal = map[string]any{}
+					s, ok := v.([]any)
+					if !ok || len(s) > 1 {
+						// if len(s) is 0, then it's not a slice
+						return nil, errors.Errorf("singleton list, at the field path %s, must have a length of at most 1 but it has a length of %d", exp[0], len(s))
+					}
+					if len(s) > 0 {
+						newVal = s[0]
+					}
 				}
 				if err := setValue(pv, newVal, exp[0]); err != nil {
 					return nil, errors.Wrapf(err, "cannot set the embedded object's value at the field path %s", exp[0])

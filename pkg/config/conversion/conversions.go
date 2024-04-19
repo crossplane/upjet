@@ -209,7 +209,7 @@ func (s *singletonListConverter) ConvertPaved(src, target *fieldpath.Paved) (boo
 		return true, errors.Errorf("value at path %s is not a map[string]any", pathForProvider)
 	}
 	if _, err := Convert(m, s.crdPaths, s.mode); err != nil {
-		return true, errors.Wrapf(err, "failed to convert the source map in mode %q with %s", s.mode, s.baseConversion)
+		return true, errors.Wrapf(err, "failed to convert the source map in mode %q with %s", s.mode, s.baseConversion.String())
 	}
 	return true, errors.Wrapf(target.SetValue(pathForProvider, m), "failed to set the %s value for conversion in mode %q", pathForProvider, s.mode)
 }
