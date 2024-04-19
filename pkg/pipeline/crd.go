@@ -89,7 +89,7 @@ func (cg *CRDGenerator) Generate(cfg *config.Resource) (string, error) {
 			"APIVersion":         cfg.Version,
 			"Group":              cg.Group,
 			"Kind":               cfg.Kind,
-			"MarkStorageVersion": strconv.FormatBool(cfg.MarkStorageVersion),
+			"MarkStorageVersion": strconv.FormatBool(cfg.CRDStorageVersion() == cfg.Version),
 			"ForProviderType":    gen.ForProviderType.Obj().Name(),
 			"InitProviderType":   gen.InitProviderType.Obj().Name(),
 			"AtProviderType":     gen.AtProviderType.Obj().Name(),

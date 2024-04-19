@@ -15,6 +15,7 @@ import (
 
 	"github.com/crossplane/upjet/pkg/config"
 	"github.com/crossplane/upjet/pkg/examples"
+	"github.com/crossplane/upjet/pkg/pipeline/templates"
 )
 
 type terraformedInput struct {
@@ -94,8 +95,16 @@ func Run(pc *config.Provider, rootDir string) { //nolint:gocyclo
 			versionGen := NewVersionGenerator(rootDir, pc.ModulePath, group, version)
 			crdGen := NewCRDGenerator(versionGen.Package(), rootDir, pc.ShortName, group, version)
 			tfGen := NewTerraformedGenerator(versionGen.Package(), rootDir, group, version)
-			conversionHubGen := NewConversionHubGenerator(versionGen.Package(), rootDir, group, version)
-			conversionSpokeGen := NewConversionSpokeGenerator(versionGen.Package(), rootDir, group, version)
+			conversionHubGen := NewConversionNodeGenerator(versionGen.Package(), rootDir, group, "zz_generated.conversion_hubs.go", templates.ConversionHubTemplate,
+				func(c *terraformedInput, fileAPIVersion string) bool {
+					// if this is the hub version, then mark it as a hub
+					return c.CRDHubVersion() == fileAPIVersion
+				})
+			conversionSpokeGen := NewConversionNodeGenerator(versionGen.Package(), rootDir, group, "zz_generated.conversion_spokes.go", templates.ConversionSpokeTemplate,
+				func(c *terraformedInput, fileAPIVersion string) bool {
+					// if not the hub version, mark it as a spoke
+					return c.CRDHubVersion() != fileAPIVersion
+				})
 			ctrlGen := NewControllerGenerator(rootDir, pc.ModulePath, group)
 
 			for _, name := range sortedResources(resources) {
@@ -129,7 +138,7 @@ func Run(pc *config.Provider, rootDir string) { //nolint:gocyclo
 				panic(errors.Wrapf(err, "cannot generate terraformed for resource %s", group))
 			}
 
-			if err := conversionHubGen.Generate(tfResources, version); err != nil {
+			if err := conversionHubGen.Generate(tfResources); err != nil {
 				panic(errors.Wrapf(err, "cannot generate the conversion.Hub function for the resource group %q", group))
 			}
 
@@ -144,9 +153,17 @@ func Run(pc *config.Provider, rootDir string) { //nolint:gocyclo
 			apiVersionPkgList = append(apiVersionPkgList, p)
 			for _, r := range resources {
 				// if there are spoke versions for the given group.Kind
-				if spokeVersions := conversionSpokeGen.SpokeVersionsMap[fmt.Sprintf("%s.%s", r.ShortGroup, r.Kind)]; spokeVersions != nil {
+				if spokeVersions := conversionSpokeGen.nodeVersionsMap[fmt.Sprintf("%s.%s", r.ShortGroup, r.Kind)]; spokeVersions != nil {
 					base := filepath.Dir(p)
 					for _, sv := range spokeVersions {
+						apiVersionPkgList = append(apiVersionPkgList, filepath.Join(base, sv))
+					}
+				}
+
+				// if there are hub versions for the given group.Kind
+				if hubVersions := conversionHubGen.nodeVersionsMap[fmt.Sprintf("%s.%s", r.ShortGroup, r.Kind)]; hubVersions != nil {
+					base := filepath.Dir(p)
+					for _, sv := range hubVersions {
 						apiVersionPkgList = append(apiVersionPkgList, filepath.Join(base, sv))
 					}
 				}

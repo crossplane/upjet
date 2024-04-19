@@ -45,7 +45,6 @@ func TestDefaultResource(t *testing.T) {
 				UseAsync:                       true,
 				SchemaElementOptions:           SchemaElementOptions{},
 				ServerSideApplyMergeStrategies: ServerSideApplyMergeStrategies{},
-				MarkStorageVersion:             true,
 			},
 		},
 		"TwoSectionsName": {
@@ -64,7 +63,6 @@ func TestDefaultResource(t *testing.T) {
 				UseAsync:                       true,
 				SchemaElementOptions:           SchemaElementOptions{},
 				ServerSideApplyMergeStrategies: ServerSideApplyMergeStrategies{},
-				MarkStorageVersion:             true,
 			},
 		},
 		"NameWithPrefixAcronym": {
@@ -83,7 +81,6 @@ func TestDefaultResource(t *testing.T) {
 				UseAsync:                       true,
 				SchemaElementOptions:           SchemaElementOptions{},
 				ServerSideApplyMergeStrategies: ServerSideApplyMergeStrategies{},
-				MarkStorageVersion:             true,
 			},
 		},
 		"NameWithSuffixAcronym": {
@@ -102,7 +99,6 @@ func TestDefaultResource(t *testing.T) {
 				UseAsync:                       true,
 				SchemaElementOptions:           SchemaElementOptions{},
 				ServerSideApplyMergeStrategies: ServerSideApplyMergeStrategies{},
-				MarkStorageVersion:             true,
 			},
 		},
 		"NameWithMultipleAcronyms": {
@@ -121,7 +117,6 @@ func TestDefaultResource(t *testing.T) {
 				UseAsync:                       true,
 				SchemaElementOptions:           SchemaElementOptions{},
 				ServerSideApplyMergeStrategies: ServerSideApplyMergeStrategies{},
-				MarkStorageVersion:             true,
 			},
 		},
 	}
@@ -135,6 +130,8 @@ func TestDefaultResource(t *testing.T) {
 		cmpopts.IgnoreFields(Resource{}, "useTerraformPluginFrameworkClient"),
 		cmpopts.IgnoreFields(Resource{}, "requiredFields"),
 		cmpopts.IgnoreFields(Resource{}, "listConversionPaths"),
+		cmpopts.IgnoreFields(Resource{}, "crdStorageVersion"),
+		cmpopts.IgnoreFields(Resource{}, "crdHubVersion"),
 	}
 
 	for name, tc := range cases {
