@@ -93,6 +93,7 @@ func DefaultResource(name string, terraformSchema *schema.Resource, terraformPlu
 		SchemaElementOptions:             make(SchemaElementOptions),
 		ServerSideApplyMergeStrategies:   make(ServerSideApplyMergeStrategies),
 		Conversions:                      []conversion.Conversion{conversion.NewIdentityConversionExpandPaths(conversion.AllVersions, conversion.AllVersions, nil)},
+		OverrideFieldNames:               map[string]string{},
 		listConversionPaths:              make(map[string]string),
 	}
 	for _, f := range opts {

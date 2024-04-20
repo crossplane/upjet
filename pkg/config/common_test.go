@@ -50,6 +50,7 @@ func TestDefaultResource(t *testing.T) {
 				SchemaElementOptions:           SchemaElementOptions{},
 				ServerSideApplyMergeStrategies: ServerSideApplyMergeStrategies{},
 				Conversions:                    []conversion.Conversion{identityConversion},
+				OverrideFieldNames:             map[string]string{},
 			},
 		},
 		"TwoSectionsName": {
@@ -69,6 +70,7 @@ func TestDefaultResource(t *testing.T) {
 				SchemaElementOptions:           SchemaElementOptions{},
 				ServerSideApplyMergeStrategies: ServerSideApplyMergeStrategies{},
 				Conversions:                    []conversion.Conversion{identityConversion},
+				OverrideFieldNames:             map[string]string{},
 			},
 		},
 		"NameWithPrefixAcronym": {
@@ -88,6 +90,7 @@ func TestDefaultResource(t *testing.T) {
 				SchemaElementOptions:           SchemaElementOptions{},
 				ServerSideApplyMergeStrategies: ServerSideApplyMergeStrategies{},
 				Conversions:                    []conversion.Conversion{identityConversion},
+				OverrideFieldNames:             map[string]string{},
 			},
 		},
 		"NameWithSuffixAcronym": {
@@ -107,6 +110,7 @@ func TestDefaultResource(t *testing.T) {
 				SchemaElementOptions:           SchemaElementOptions{},
 				ServerSideApplyMergeStrategies: ServerSideApplyMergeStrategies{},
 				Conversions:                    []conversion.Conversion{identityConversion},
+				OverrideFieldNames:             map[string]string{},
 			},
 		},
 		"NameWithMultipleAcronyms": {
@@ -126,6 +130,7 @@ func TestDefaultResource(t *testing.T) {
 				SchemaElementOptions:           SchemaElementOptions{},
 				ServerSideApplyMergeStrategies: ServerSideApplyMergeStrategies{},
 				Conversions:                    []conversion.Conversion{identityConversion},
+				OverrideFieldNames:             map[string]string{},
 			},
 		},
 	}
