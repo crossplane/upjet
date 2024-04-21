@@ -503,11 +503,12 @@ func (n *terraformPluginSDKExternal) Observe(ctx context.Context, mg xpresource.
 	n.instanceDiff = instanceDiff
 	noDiff := instanceDiff.Empty()
 
-	var connDetails managed.ConnectionDetails
 	if !resourceExists && mg.GetDeletionTimestamp() != nil {
 		gvk := mg.GetObjectKind().GroupVersionKind()
 		metrics.DeletionTime.WithLabelValues(gvk.Group, gvk.Version, gvk.Kind).Observe(time.Since(mg.GetDeletionTimestamp().Time).Seconds())
 	}
+
+	var connDetails managed.ConnectionDetails
 	specUpdateRequired := false
 	if resourceExists {
 		if mg.GetCondition(xpv1.TypeReady).Status == corev1.ConditionUnknown ||
@@ -516,9 +517,17 @@ func (n *terraformPluginSDKExternal) Observe(ctx context.Context, mg xpresource.
 		}
 		mg.SetConditions(xpv1.Available())
 
+		// we get the connection details from the observed state before
+		// the conversion because the sensitive paths assume the native Terraform
+		// schema.
+		connDetails, err = resource.GetConnectionDetails(stateValueMap, mg.(resource.Terraformed), n.config)
+		if err != nil {
+			return managed.ExternalObservation{}, errors.Wrap(err, "cannot get connection details")
+		}
+
 		stateValueMap, err = conversion.Convert(stateValueMap, n.config.TFListConversionPaths(), conversion.ToEmbeddedObject)
 		if err != nil {
-			return managed.ExternalObservation{}, err
+			return managed.ExternalObservation{}, errors.Wrap(err, "cannot convert the singleton lists in the observed state value map into embedded objects")
 		}
 		buff, err := json.TFParser.Marshal(stateValueMap)
 		if err != nil {
@@ -537,10 +546,6 @@ func (n *terraformPluginSDKExternal) Observe(ctx context.Context, mg xpresource.
 		err = mg.(resource.Terraformed).SetObservation(stateValueMap)
 		if err != nil {
 			return managed.ExternalObservation{}, errors.Errorf("could not set observation: %v", err)
-		}
-		connDetails, err = resource.GetConnectionDetails(stateValueMap, mg.(resource.Terraformed), n.config)
-		if err != nil {
-			return managed.ExternalObservation{}, errors.Wrap(err, "cannot get connection details")
 		}
 
 		if noDiff {
@@ -632,17 +637,21 @@ func (n *terraformPluginSDKExternal) Create(ctx context.Context, mg xpresource.M
 	if _, err := n.setExternalName(mg, stateValueMap); err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, "failed to set the external-name of the managed resource during create")
 	}
+	// we get the connection details from the observed state before
+	// the conversion because the sensitive paths assume the native Terraform
+	// schema.
+	conn, err := resource.GetConnectionDetails(stateValueMap, mg.(resource.Terraformed), n.config)
+	if err != nil {
+		return managed.ExternalCreation{}, errors.Wrap(err, "cannot get connection details")
+	}
+
 	stateValueMap, err = conversion.Convert(stateValueMap, n.config.TFListConversionPaths(), conversion.ToEmbeddedObject)
 	if err != nil {
-		return managed.ExternalCreation{}, err
+		return managed.ExternalCreation{}, errors.Wrap(err, "cannot convert the singleton lists in the state value map of the newly created resource into embedded objects")
 	}
 	err = mg.(resource.Terraformed).SetObservation(stateValueMap)
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Errorf("could not set observation: %v", err)
-	}
-	conn, err := resource.GetConnectionDetails(stateValueMap, mg.(resource.Terraformed), n.config)
-	if err != nil {
-		return managed.ExternalCreation{}, errors.Wrap(err, "cannot get connection details")
 	}
 
 	return managed.ExternalCreation{ConnectionDetails: conn}, nil

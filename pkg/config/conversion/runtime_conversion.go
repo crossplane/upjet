@@ -89,18 +89,15 @@ func Convert(params map[string]any, paths []string, mode Mode) (map[string]any, 
 		if err != nil {
 			return nil, errors.Wrapf(err, "cannot expand wildcards for the field path expression %s", fp)
 		}
-		switch len(exp) {
-		case 0:
-			continue
-		case 1:
-			v, err := pv.GetValue(exp[0])
+		for _, e := range exp {
+			v, err := pv.GetValue(e)
 			if err != nil {
-				return nil, errors.Wrapf(err, "cannot get the value at the field path %s with the conversion mode set to %q", exp[0], mode)
+				return nil, errors.Wrapf(err, "cannot get the value at the field path %s with the conversion mode set to %q", e, mode)
 			}
 			switch mode {
 			case ToSingletonList:
-				if err := setValue(pv, []any{v}, exp[0]); err != nil {
-					return nil, errors.Wrapf(err, "cannot set the singleton list's value at the field path %s", exp[0])
+				if err := setValue(pv, []any{v}, e); err != nil {
+					return nil, errors.Wrapf(err, "cannot set the singleton list's value at the field path %s", e)
 				}
 			case ToEmbeddedObject:
 				var newVal any = nil
@@ -109,18 +106,16 @@ func Convert(params map[string]any, paths []string, mode Mode) (map[string]any, 
 					s, ok := v.([]any)
 					if !ok || len(s) > 1 {
 						// if len(s) is 0, then it's not a slice
-						return nil, errors.Errorf("singleton list, at the field path %s, must have a length of at most 1 but it has a length of %d", exp[0], len(s))
+						return nil, errors.Errorf("singleton list, at the field path %s, must have a length of at most 1 but it has a length of %d", e, len(s))
 					}
 					if len(s) > 0 {
 						newVal = s[0]
 					}
 				}
-				if err := setValue(pv, newVal, exp[0]); err != nil {
-					return nil, errors.Wrapf(err, "cannot set the embedded object's value at the field path %s", exp[0])
+				if err := setValue(pv, newVal, e); err != nil {
+					return nil, errors.Wrapf(err, "cannot set the embedded object's value at the field path %s", e)
 				}
 			}
-		default:
-			return nil, errors.Errorf("unexpected number of expansions (%d) for the wildcard field path expression %s", len(exp), fp)
 		}
 	}
 	return params, nil
