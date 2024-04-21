@@ -48,7 +48,7 @@ func (r *registry) RoundTrip(dst, src resource.Terraformed) error { //nolint:goc
 	// convert the map[string]any representation of the conversion target back to
 	// the original type.
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(dstMap, dst); err != nil {
-		return errors.Wrap(err, "cannot convert the map[string]any representation of the conversion target object to the target object")
+		return errors.Wrap(err, "cannot convert the map[string]any representation of the conversion target back to the object itself")
 	}
 
 	// finally at the third stage, run the ManagedConverters

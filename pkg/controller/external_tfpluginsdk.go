@@ -258,7 +258,7 @@ func (c *TerraformPluginSDKConnector) Connect(ctx context.Context, mg xpresource
 		}
 		tfState, err = conversion.Convert(tfState, c.config.TFListConversionPaths(), conversion.ToSingletonList)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "failed to run the API converters on the Terraform state")
 		}
 		copyParams := len(tfState) == 0
 		if err = resource.GetSensitiveParameters(ctx, &APISecretClient{kube: c.kube}, tr, tfState, tr.GetConnectionDetailsMapping()); err != nil {

@@ -6,7 +6,6 @@ package pipeline
 
 import (
 	"fmt"
-	"go/types"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -14,6 +13,8 @@ import (
 
 	"github.com/muvaf/typewriter/pkg/wrapper"
 	"github.com/pkg/errors"
+
+	"github.com/crossplane/upjet/pkg/config"
 )
 
 var (
@@ -23,59 +24,61 @@ var (
 // generationPredicate controls whether a resource configuration will be marked
 // as a hub or spoke based on the API version of the resource file
 // being considered.
-type generationPredicate func(c *terraformedInput, fileAPIVersion string) bool
+type generationPredicate func(c *config.Resource, fileAPIVersion string) bool
 
 // NewConversionNodeGenerator returns a new ConversionNodeGenerator.
-func NewConversionNodeGenerator(pkg *types.Package, rootDir, group, generatedFileName, fileTemplate string, p generationPredicate) *ConversionNodeGenerator {
+func NewConversionNodeGenerator(pcModulePath, rootDir, group, generatedFileName, fileTemplate string, p generationPredicate) *ConversionNodeGenerator {
+	shortGroup := strings.ToLower(strings.Split(group, ".")[0])
 	return &ConversionNodeGenerator{
-		localDirectoryPath: filepath.Join(rootDir, "apis", strings.ToLower(strings.Split(group, ".")[0])),
-		licenseHeaderPath:  filepath.Join(rootDir, "hack", "boilerplate.go.txt"),
-		nodeVersionsMap:    make(map[string][]string),
-		pkg:                pkg,
-		generatedFileName:  generatedFileName,
-		fileTemplate:       fileTemplate,
-		predicate:          p,
+		apiGroupModule:    filepath.Join(pcModulePath, "apis", shortGroup),
+		apiGroupDir:       filepath.Join(rootDir, "apis", shortGroup),
+		licenseHeaderPath: filepath.Join(rootDir, "hack", "boilerplate.go.txt"),
+		nodeVersionsMap:   make(map[string][]string),
+		generatedFileName: generatedFileName,
+		fileTemplate:      fileTemplate,
+		predicate:         p,
 	}
 }
 
 // ConversionNodeGenerator generates conversion methods implementing the
 // conversion.Convertible interface on the CRD structs.
 type ConversionNodeGenerator struct {
-	localDirectoryPath string
-	licenseHeaderPath  string
-	nodeVersionsMap    map[string][]string
-	pkg                *types.Package
-	generatedFileName  string
-	fileTemplate       string
-	predicate          generationPredicate
+	apiGroupModule    string
+	apiGroupDir       string
+	licenseHeaderPath string
+	nodeVersionsMap   map[string][]string
+	generatedFileName string
+	fileTemplate      string
+	predicate         generationPredicate
 }
 
 // Generate writes generated conversion.Convertible interface functions
-func (cg *ConversionNodeGenerator) Generate(cfgs []*terraformedInput) error { //nolint:gocyclo
-	entries, err := os.ReadDir(cg.localDirectoryPath)
+func (cg *ConversionNodeGenerator) Generate(versionMap map[string]map[string]*config.Resource) error { //nolint:gocyclo
+	entries, err := os.ReadDir(cg.apiGroupDir)
 	if err != nil {
-		return errors.Wrapf(err, "cannot list the directory entries for the source folder %s while generating the conversion.Convertible interface functions", cg.localDirectoryPath)
+		return errors.Wrapf(err, "cannot list the directory entries for the source folder %s while generating the conversion functions", cg.apiGroupDir)
 	}
-
+	// iterate over the versions belonging to the API group
 	for _, e := range entries {
 		if !e.IsDir() {
 			continue
 		}
-		trFile := wrapper.NewFile(cg.pkg.Path(), cg.pkg.Name(), cg.fileTemplate,
+		version := e.Name()
+		convFile := wrapper.NewFile(filepath.Join(cg.apiGroupModule, version), version, cg.fileTemplate,
 			wrapper.WithGenStatement(GenStatement),
 			wrapper.WithHeaderPath(cg.licenseHeaderPath),
 		)
-		filePath := filepath.Join(cg.localDirectoryPath, e.Name(), cg.generatedFileName)
+		filePath := filepath.Join(cg.apiGroupDir, version, cg.generatedFileName)
 		vars := map[string]any{
-			"APIVersion": e.Name(),
+			"APIVersion": version,
 		}
 
-		var resources []map[string]any
-		versionDir := filepath.Join(cg.localDirectoryPath, e.Name())
+		versionDir := filepath.Join(cg.apiGroupDir, version)
 		files, err := os.ReadDir(versionDir)
 		if err != nil {
 			return errors.Wrapf(err, "cannot list the directory entries for the source folder %s while looking for the generated types", versionDir)
 		}
+		var resources []map[string]any
 		for _, f := range files {
 			if f.IsDir() {
 				continue
@@ -84,14 +87,14 @@ func (cg *ConversionNodeGenerator) Generate(cfgs []*terraformedInput) error { //
 			if len(m) < 2 {
 				continue
 			}
-			c := findKindTerraformedInput(cfgs, m[1])
+			c := findKindTerraformedInput(versionMap, m[1])
 			if c == nil {
 				// type may not be available in the new version =>
 				// no conversion is possible.
 				continue
 			}
 			// skip resource configurations that do not match the predicate
-			if !cg.predicate(c, e.Name()) {
+			if !cg.predicate(c, version) {
 				continue
 			}
 			resources = append(resources, map[string]any{
@@ -107,17 +110,19 @@ func (cg *ConversionNodeGenerator) Generate(cfgs []*terraformedInput) error { //
 		if len(resources) == 0 {
 			continue
 		}
-		if err := trFile.Write(filePath, vars, os.ModePerm); err != nil {
-			return errors.Wrapf(err, "cannot write the generated conversion Hub functions file %s", filePath)
+		if err := convFile.Write(filePath, vars, os.ModePerm); err != nil {
+			return errors.Wrapf(err, "cannot write the generated conversion functions file %s", filePath)
 		}
 	}
 	return nil
 }
 
-func findKindTerraformedInput(cfgs []*terraformedInput, name string) *terraformedInput {
-	for _, c := range cfgs {
-		if strings.EqualFold(name, c.Kind) {
-			return c
+func findKindTerraformedInput(versionMap map[string]map[string]*config.Resource, name string) *config.Resource {
+	for _, resources := range versionMap {
+		for _, r := range resources {
+			if strings.EqualFold(name, r.Kind) {
+				return r
+			}
 		}
 	}
 	return nil
