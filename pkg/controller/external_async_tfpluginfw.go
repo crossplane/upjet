@@ -7,6 +7,7 @@ package controller
 import (
 	"context"
 
+	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
@@ -116,7 +117,7 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Observe(ctx context.Contex
 			ResourceUpToDate: true,
 		}, nil
 	}
-	n.opTracker.LastOperation.Flush()
+	n.opTracker.LastOperation.Clear(true)
 
 	o, err := n.terraformPluginFrameworkExternalClient.Observe(ctx, mg)
 	// clear any previously reported LastAsyncOperation error condition here,
@@ -124,6 +125,8 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Observe(ctx context.Contex
 	// not scheduled to be deleted.
 	if err == nil && o.ResourceExists && o.ResourceUpToDate && !meta.WasDeleted(mg) {
 		mg.(resource.Terraformed).SetConditions(resource.LastAsyncOperationCondition(nil))
+		mg.(resource.Terraformed).SetConditions(xpv1.ReconcileSuccess())
+		n.opTracker.LastOperation.Clear(false)
 	}
 	return o, err
 }
@@ -149,7 +152,7 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Create(_ context.Context, 
 		}
 	}()
 
-	return managed.ExternalCreation{}, nil
+	return managed.ExternalCreation{}, n.opTracker.LastOperation.Error()
 }
 
 func (n *terraformPluginFrameworkAsyncExternalClient) Update(_ context.Context, mg xpresource.Managed) (managed.ExternalUpdate, error) {
@@ -173,7 +176,7 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Update(_ context.Context, 
 		}
 	}()
 
-	return managed.ExternalUpdate{}, nil
+	return managed.ExternalUpdate{}, n.opTracker.LastOperation.Error()
 }
 
 func (n *terraformPluginFrameworkAsyncExternalClient) Delete(_ context.Context, mg xpresource.Managed) error {
@@ -200,5 +203,5 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Delete(_ context.Context, 
 		}
 	}()
 
-	return nil
+	return n.opTracker.LastOperation.Error()
 }

@@ -8,6 +8,7 @@ import (
 	"context"
 	"time"
 
+	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
@@ -121,7 +122,7 @@ func (n *terraformPluginSDKAsyncExternal) Observe(ctx context.Context, mg xpreso
 			ResourceUpToDate: true,
 		}, nil
 	}
-	n.opTracker.LastOperation.Flush()
+	n.opTracker.LastOperation.Clear(true)
 
 	o, err := n.terraformPluginSDKExternal.Observe(ctx, mg)
 	// clear any previously reported LastAsyncOperation error condition here,
@@ -129,6 +130,8 @@ func (n *terraformPluginSDKAsyncExternal) Observe(ctx context.Context, mg xpreso
 	// not scheduled to be deleted.
 	if err == nil && o.ResourceExists && o.ResourceUpToDate && !meta.WasDeleted(mg) {
 		mg.(resource.Terraformed).SetConditions(resource.LastAsyncOperationCondition(nil))
+		mg.(resource.Terraformed).SetConditions(xpv1.ReconcileSuccess())
+		n.opTracker.LastOperation.Clear(false)
 	}
 	return o, err
 }
@@ -154,7 +157,7 @@ func (n *terraformPluginSDKAsyncExternal) Create(_ context.Context, mg xpresourc
 		}
 	}()
 
-	return managed.ExternalCreation{}, nil
+	return managed.ExternalCreation{}, n.opTracker.LastOperation.Error()
 }
 
 func (n *terraformPluginSDKAsyncExternal) Update(_ context.Context, mg xpresource.Managed) (managed.ExternalUpdate, error) {
@@ -178,7 +181,7 @@ func (n *terraformPluginSDKAsyncExternal) Update(_ context.Context, mg xpresourc
 		}
 	}()
 
-	return managed.ExternalUpdate{}, nil
+	return managed.ExternalUpdate{}, n.opTracker.LastOperation.Error()
 }
 
 func (n *terraformPluginSDKAsyncExternal) Delete(_ context.Context, mg xpresource.Managed) error {
@@ -205,5 +208,5 @@ func (n *terraformPluginSDKAsyncExternal) Delete(_ context.Context, mg xpresourc
 		}
 	}()
 
-	return nil
+	return n.opTracker.LastOperation.Error()
 }

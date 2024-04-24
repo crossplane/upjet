@@ -8,9 +8,11 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
 )
 
 func TestOperation(t *testing.T) {
+	testErr := errors.New("test error")
 	type args struct {
 		calls func(o *Operation)
 	}
@@ -54,13 +56,46 @@ func TestOperation(t *testing.T) {
 			args: args{
 				calls: func(o *Operation) {
 					o.MarkStart("type")
+					o.SetError(testErr)
 					o.MarkEnd()
 					o.Flush()
 				},
 			},
 			want: want{
 				checks: func(o *Operation) bool {
-					return o.Type == "" && o.startTime == nil && o.endTime == nil
+					return o.Type == "" && o.startTime == nil && o.endTime == nil && o.err == nil
+				},
+				result: true,
+			},
+		},
+		"ClearedIncludingErrors": {
+			args: args{
+				calls: func(o *Operation) {
+					o.MarkStart("type")
+					o.SetError(testErr)
+					o.MarkEnd()
+					o.Clear(false)
+				},
+			},
+			want: want{
+				checks: func(o *Operation) bool {
+					return o.Type == "" && o.startTime == nil && o.endTime == nil && o.err == nil
+				},
+				result: true,
+			},
+		},
+		"ClearedPreservingErrors": {
+			args: args{
+				calls: func(o *Operation) {
+					o.MarkStart("type")
+					o.SetError(testErr)
+					o.MarkEnd()
+					o.Clear(true)
+				},
+			},
+			want: want{
+				checks: func(o *Operation) bool {
+					return o.Type == "" && o.startTime == nil && o.endTime == nil && errors.Is(o.err, testErr)
 				},
 				result: true,
 			},
