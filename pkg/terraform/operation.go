@@ -43,14 +43,26 @@ func (o *Operation) MarkEnd() {
 	o.endTime = &now
 }
 
-// Flush cleans the operation information.
+// Flush cleans the operation information including the registered error from
+// the last reconciliation.
+// Deprecated: Please use Clear, which allows optionally preserving the error
+// from the last reconciliation to implement proper SYNC status condition for
+// the asynchronous external clients.
 func (o *Operation) Flush() {
+	o.Clear(false)
+}
+
+// Clear clears the operation information optionally preserving the last
+// registered error from the last reconciliation.
+func (o *Operation) Clear(preserveError bool) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	o.Type = ""
 	o.startTime = nil
 	o.endTime = nil
-	o.err = nil
+	if !preserveError {
+		o.err = nil
+	}
 }
 
 // IsEnded returns whether the operation has ended, regardless of its result.

@@ -27,6 +27,13 @@ const (
 	errReconcileRequestFmt = "cannot request the reconciliation of the resource %s/%s after an async %s"
 )
 
+// crossplane-runtime error constants
+const (
+	errXPReconcileCreate = "create failed"
+	errXPReconcileUpdate = "update failed"
+	errXPReconcileDelete = "delete failed"
+)
+
 const (
 	rateLimiterCallback = "asyncCallback"
 )
@@ -119,6 +126,20 @@ func (ac *APICallbacks) callbackFn(name, op string) terraform.CallbackFn {
 		// to do so. So we keep the `LastAsyncOperation` condition.
 		// TODO: move this to the `Synced` condition.
 		tr.SetConditions(resource.LastAsyncOperationCondition(err))
+		if err != nil {
+			wrapMsg := ""
+			switch op {
+			case "create":
+				wrapMsg = errXPReconcileCreate
+			case "update":
+				wrapMsg = errXPReconcileUpdate
+			case "destroy":
+				wrapMsg = errXPReconcileDelete
+			}
+			tr.SetConditions(xpv1.ReconcileError(errors.Wrap(err, wrapMsg)))
+		} else {
+			tr.SetConditions(xpv1.ReconcileSuccess())
+		}
 		if ac.enableStatusUpdates {
 			tr.SetConditions(resource.AsyncOperationFinishedCondition())
 		}
