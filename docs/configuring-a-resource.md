@@ -20,13 +20,19 @@ which can be found by checking the Terraform documentation of the resource:
 
 ## External Name
 
-Crossplane uses an annotation in managed resource CR to identify the external
-resource which is managed by Crossplane. See [the external name documentation]
-for more details. The format and source of the external name depends on the
-cloud provider; sometimes it could simply be the name of resource (e.g. S3
-Bucket), and sometimes it is an auto-generated id by cloud API (e.g. VPC id ).
-This is something specific to resource, and we need some input configuration for
-upjet to appropriately generate a resource.
+Crossplane uses `crossplane.io/external-name` annotation in managed resource CR
+to identify the external resource which is managed by Crossplane and always
+shows the final value of the external resource name.
+
+See [the external name documentation]
+and [Naming Conventions - One Pager Managed Resource API Design] for more
+details
+
+The format and source of the external name depends on the cloud provider;
+sometimes it could simply be the name of resource (e.g. S3 Bucket), and
+sometimes it is an auto-generated id by cloud API (e.g. VPC id ). That is
+something specific to resource, and we need some input configuration for `upjet`
+to appropriately generate a resource.
 
 Since Terraform already needs [a similar identifier] to import a resource, most
 helpful part of resource documentation is the [import section].
@@ -906,3 +912,4 @@ initializers for a resource.
 [NewInitializerFn]: https://github.com/crossplane/upjet/blob/main/pkg/config/resource.go#L210
 [crossplane-runtime]: https://github.com/crossplane/crossplane-runtime/blob/428b7c3903756bb0dcf5330f40298e1fa0c34301/pkg/reconciler/managed/reconciler.go#L138
 [tagging convention]: https://github.com/crossplane/crossplane/blob/60c7df9/design/one-pager-managed-resource-api-design.md#external-resource-labeling
+[Naming Conventions - One Pager Managed Resource API Design]: https://github.com/crossplane/crossplane/blob/master/design/one-pager-managed-resource-api-design.md#naming-conventions
