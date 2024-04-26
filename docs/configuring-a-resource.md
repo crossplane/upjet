@@ -319,7 +319,7 @@ In Upjet, we have a [configuration] to provide this information for a field:
 // Reference represents the Crossplane options used to generate
 // reference resolvers for fields
 type Reference struct {
-    // Type is the type name of the CRD if it is in the same package or
+    // Type is the Go type name of the CRD if it is in the same package or
     // <package-path>.<type-name> if it is in a different package.
     Type string
     // TerraformName is the name of the Terraform resource
