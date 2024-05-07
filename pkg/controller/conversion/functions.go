@@ -13,6 +13,12 @@ import (
 	"github.com/crossplane/upjet/pkg/resource"
 )
 
+const (
+	errFmtPrioritizedManagedConversion = "cannot apply the PrioritizedManagedConversion for the %q object"
+	errFmtPavedConversion              = "cannot apply the PavedConversion for the %q object"
+	errFmtManagedConversion            = "cannot apply the ManagedConversion for the %q object"
+)
+
 // RoundTrip round-trips from `src` to `dst` via an unstructured map[string]any
 // representation of the `src` object and applies the registered webhook
 // conversion functions of this registry.
@@ -21,7 +27,7 @@ func (r *registry) RoundTrip(dst, src resource.Terraformed) error { //nolint:goc
 	for _, c := range r.GetConversions(dst) {
 		if pc, ok := c.(conversion.PrioritizedManagedConversion); ok {
 			if _, err := pc.ConvertManaged(src, dst); err != nil {
-				return errors.Wrapf(err, "cannot apply the PrioritizedManagedConversion for the %q object", dst.GetTerraformResourceType())
+				return errors.Wrapf(err, errFmtPrioritizedManagedConversion, dst.GetTerraformResourceType())
 			}
 		}
 	}
@@ -41,7 +47,7 @@ func (r *registry) RoundTrip(dst, src resource.Terraformed) error { //nolint:goc
 	for _, c := range r.GetConversions(dst) {
 		if pc, ok := c.(conversion.PavedConversion); ok {
 			if _, err := pc.ConvertPaved(srcPaved, dstPaved); err != nil {
-				return errors.Wrapf(err, "cannot apply the PavedConversion for the %q object", dst.GetTerraformResourceType())
+				return errors.Wrapf(err, errFmtPavedConversion, dst.GetTerraformResourceType())
 			}
 		}
 	}
@@ -58,7 +64,7 @@ func (r *registry) RoundTrip(dst, src resource.Terraformed) error { //nolint:goc
 				continue // then already run in the first stage
 			}
 			if _, err := tc.ConvertManaged(src, dst); err != nil {
-				return errors.Wrapf(err, "cannot apply the ManagedConversion for the %q object", dst.GetTerraformResourceType())
+				return errors.Wrapf(err, errFmtManagedConversion, dst.GetTerraformResourceType())
 			}
 		}
 	}

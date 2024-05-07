@@ -272,10 +272,14 @@ func newIdentityConversion(sourceVersion, targetVersion string, excludePaths ...
 // NewIdentityConversionExpandPaths returns a new Conversion from the specified
 // sourceVersion of an API to the specified targetVersion, which copies the
 // identical paths from the source to the target. excludePaths can be used
-// to ignore certain field paths while copying.
-// The field paths in excludePath are sorted in lexical order and expanded
-// by default into spec.forProvider, spec.initProvider and
-// status.atProvider paths.
+// to ignore certain field paths while copying. Exclude paths must be specified
+// in standard crossplane-runtime fieldpath library syntax, i.e., with proper
+// indices for traversing map and slice types (e.g., a.b[*].c).
+// The field paths in excludePaths are sorted in lexical order and are prefixed
+// with each of the path prefixes specified with pathPrefixes. So if an
+// exclude path "x" is specified with the prefix slice ["a", "b"], then
+// paths a.x and b.x will both be skipped while copying fields from a source to
+// a target.
 func NewIdentityConversionExpandPaths(sourceVersion, targetVersion string, pathPrefixes []string, excludePaths ...string) Conversion {
 	return newIdentityConversion(sourceVersion, targetVersion, ExpandParameters(pathPrefixes, excludePaths...)...)
 }
@@ -295,4 +299,11 @@ func ExpandParameters(prefixes []string, excludePaths ...string) []string {
 		}
 	}
 	return r
+}
+
+// DefaultPathPrefixes returns the list of the default path prefixes for
+// excluding paths in the identity conversion. The returned value is
+// ["spec.forProvider", "spec.initProvider", "status.atProvider"].
+func DefaultPathPrefixes() []string {
+	return []string{"spec.forProvider", "spec.initProvider", "status.atProvider"}
 }

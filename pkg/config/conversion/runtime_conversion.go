@@ -5,6 +5,7 @@
 package conversion
 
 import (
+	"reflect"
 	"slices"
 	"sort"
 	"strings"
@@ -27,6 +28,11 @@ const (
 	// to a singleton list, i.e., the runtime conversions needed while passing
 	// the configuration data to the underlying Terraform layer.
 	ToSingletonList
+)
+
+const (
+	errFmtMultiItemList = "singleton list, at the field path %s, must have a length of at most 1 but it has a length of %d"
+	errFmtNonSlice      = "value at the field path %s must be []any, not %q"
 )
 
 // String returns a string representation of the conversion mode.
@@ -104,9 +110,12 @@ func Convert(params map[string]any, paths []string, mode Mode) (map[string]any, 
 				if v != nil {
 					newVal = map[string]any{}
 					s, ok := v.([]any)
-					if !ok || len(s) > 1 {
-						// if len(s) is 0, then it's not a slice
-						return nil, errors.Errorf("singleton list, at the field path %s, must have a length of at most 1 but it has a length of %d", e, len(s))
+					if !ok {
+						// then it's not a slice
+						return nil, errors.Errorf(errFmtNonSlice, e, reflect.TypeOf(v))
+					}
+					if len(s) > 1 {
+						return nil, errors.Errorf(errFmtMultiItemList, e, len(s))
 					}
 					if len(s) > 0 {
 						newVal = s[0]

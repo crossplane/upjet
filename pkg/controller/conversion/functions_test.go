@@ -8,9 +8,12 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/crossplane/upjet/pkg/config"
 	"github.com/crossplane/upjet/pkg/config/conversion"
@@ -25,6 +28,7 @@ const (
 	val2      = "val2"
 	commonKey = "commonKey"
 	commonVal = "commonVal"
+	errTest   = "test error"
 )
 
 func TestRoundTrip(t *testing.T) {
@@ -76,6 +80,39 @@ func TestRoundTrip(t *testing.T) {
 				dst: fake.NewTerraformed(fake.WithParameters(fake.NewMap(commonKey, commonVal, key2, val1))),
 			},
 		},
+		"RoundTripFailedPrioritizedConversion": {
+			reason: "Should return an error if a PrioritizedConversion fails.",
+			args: args{
+				dst:         fake.NewTerraformed(),
+				src:         fake.NewTerraformed(),
+				conversions: []conversion.Conversion{failedPrioritizedConversion{}},
+			},
+			want: want{
+				err: errors.Wrapf(errors.New(errTest), errFmtPrioritizedManagedConversion, ""),
+			},
+		},
+		"RoundTripFailedPavedConversion": {
+			reason: "Should return an error if a PavedConversion fails.",
+			args: args{
+				dst:         fake.NewTerraformed(),
+				src:         fake.NewTerraformed(),
+				conversions: []conversion.Conversion{failedPavedConversion{}},
+			},
+			want: want{
+				err: errors.Wrapf(errors.New(errTest), errFmtPavedConversion, ""),
+			},
+		},
+		"RoundTripFailedManagedConversion": {
+			reason: "Should return an error if a ManagedConversion fails.",
+			args: args{
+				dst:         fake.NewTerraformed(),
+				src:         fake.NewTerraformed(),
+				conversions: []conversion.Conversion{failedManagedConversion{}},
+			},
+			want: want{
+				err: errors.Wrapf(errors.New(errTest), errFmtManagedConversion, ""),
+			},
+		},
 		"RoundTripWithExcludedFields": {
 			reason: "Source object is successfully copied into the target object with certain fields excluded.",
 			args: args{
@@ -113,4 +150,36 @@ func TestRoundTrip(t *testing.T) {
 			}
 		})
 	}
+}
+
+type failedPrioritizedConversion struct{}
+
+func (failedPrioritizedConversion) Applicable(_, _ runtime.Object) bool {
+	return true
+}
+
+func (failedPrioritizedConversion) ConvertManaged(_, _ xpresource.Managed) (bool, error) {
+	return false, errors.New(errTest)
+}
+
+func (failedPrioritizedConversion) Prioritized() {}
+
+type failedPavedConversion struct{}
+
+func (failedPavedConversion) Applicable(_, _ runtime.Object) bool {
+	return true
+}
+
+func (failedPavedConversion) ConvertPaved(_, _ *fieldpath.Paved) (bool, error) {
+	return false, errors.New(errTest)
+}
+
+type failedManagedConversion struct{}
+
+func (failedManagedConversion) Applicable(_, _ runtime.Object) bool {
+	return true
+}
+
+func (failedManagedConversion) ConvertManaged(_, _ xpresource.Managed) (bool, error) {
+	return false, errors.New(errTest)
 }
