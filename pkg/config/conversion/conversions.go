@@ -5,6 +5,9 @@
 package conversion
 
 import (
+	"fmt"
+	"slices"
+
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/pkg/errors"
@@ -19,12 +22,29 @@ const (
 	AllVersions = "*"
 )
 
+const (
+	pathForProvider = "spec.forProvider"
+)
+
+var (
+	_ PrioritizedManagedConversion = &identityConversion{}
+	_ PavedConversion              = &fieldCopy{}
+	_ PavedConversion              = &singletonListConverter{}
+)
+
 // Conversion is the interface for the API version converters.
 // Conversion implementations registered for a source, target
 // pair are called in chain so Conversion implementations can be modular, e.g.,
 // a Conversion implementation registered for a specific source and target
 // versions does not have to contain all the needed API conversions between
-// these two versions.
+// these two versions. All PavedConversions are run in their registration
+// order before the ManagedConversions. Conversions are run in three stages:
+//  1. PrioritizedManagedConversions are run.
+//  2. The source and destination objects are paved and the PavedConversions are
+//     run in chain without unpaving the unstructured representation between
+//     conversions.
+//  3. The destination paved object is converted back to a managed resource and
+//     ManagedConversions are run in the order they are registered.
 type Conversion interface {
 	// Applicable should return true if this Conversion is applicable while
 	// converting the API of the `src` object to the API of the `dst` object.
@@ -63,9 +83,21 @@ type ManagedConversion interface {
 	ConvertManaged(src, target resource.Managed) (bool, error)
 }
 
+// PrioritizedManagedConversion is a ManagedConversion that take precedence
+// over all the other converters. PrioritizedManagedConversions are run,
+// in their registration order, before the PavedConversions.
+type PrioritizedManagedConversion interface {
+	ManagedConversion
+	Prioritized()
+}
+
 type baseConversion struct {
 	sourceVersion string
 	targetVersion string
+}
+
+func (c *baseConversion) String() string {
+	return fmt.Sprintf("source API version %q, target API version %q", c.sourceVersion, c.targetVersion)
 }
 
 func newBaseConversion(sourceVersion, targetVersion string) baseConversion {
@@ -140,4 +172,138 @@ func NewCustomConverter(sourceVersion, targetVersion string, converter func(src,
 		baseConversion:  newBaseConversion(sourceVersion, targetVersion),
 		customConverter: converter,
 	}
+}
+
+type singletonListConverter struct {
+	baseConversion
+	crdPaths []string
+	mode     Mode
+}
+
+// NewSingletonListConversion returns a new Conversion from the specified
+// sourceVersion of an API to the specified targetVersion and uses the
+// CRD field paths given in crdPaths to convert between the singleton
+// lists and embedded objects in the given conversion mode.
+func NewSingletonListConversion(sourceVersion, targetVersion string, crdPaths []string, mode Mode) Conversion {
+	return &singletonListConverter{
+		baseConversion: newBaseConversion(sourceVersion, targetVersion),
+		crdPaths:       crdPaths,
+		mode:           mode,
+	}
+}
+
+func (s *singletonListConverter) ConvertPaved(src, target *fieldpath.Paved) (bool, error) {
+	if !s.Applicable(&unstructured.Unstructured{Object: src.UnstructuredContent()},
+		&unstructured.Unstructured{Object: target.UnstructuredContent()}) {
+		return false, nil
+	}
+	if len(s.crdPaths) == 0 {
+		return false, nil
+	}
+	v, err := src.GetValue(pathForProvider)
+	if err != nil {
+		return true, errors.Wrapf(err, "failed to read the %s value for conversion in mode %q", pathForProvider, s.mode)
+	}
+	m, ok := v.(map[string]any)
+	if !ok {
+		return true, errors.Errorf("value at path %s is not a map[string]any", pathForProvider)
+	}
+	if _, err := Convert(m, s.crdPaths, s.mode); err != nil {
+		return true, errors.Wrapf(err, "failed to convert the source map in mode %q with %s", s.mode, s.baseConversion.String())
+	}
+	return true, errors.Wrapf(target.SetValue(pathForProvider, m), "failed to set the %s value for conversion in mode %q", pathForProvider, s.mode)
+}
+
+type identityConversion struct {
+	baseConversion
+	excludePaths []string
+}
+
+func (i *identityConversion) ConvertManaged(src, target resource.Managed) (bool, error) {
+	if !i.Applicable(src, target) {
+		return false, nil
+	}
+
+	srcCopy := src.DeepCopyObject()
+	srcRaw, err := runtime.DefaultUnstructuredConverter.ToUnstructured(srcCopy)
+	if err != nil {
+		return false, errors.Wrap(err, "cannot convert the source managed resource into an unstructured representation")
+	}
+
+	// remove excluded fields
+	if len(i.excludePaths) > 0 {
+		pv := fieldpath.Pave(srcRaw)
+		for _, ex := range i.excludePaths {
+			exPaths, err := pv.ExpandWildcards(ex)
+			if err != nil {
+				return false, errors.Wrapf(err, "cannot expand wildcards in the fieldpath expression %s", ex)
+			}
+			for _, p := range exPaths {
+				if err := pv.DeleteField(p); err != nil {
+					return false, errors.Wrapf(err, "cannot delete a field in the conversion source object")
+				}
+			}
+		}
+	}
+
+	// copy the remaining fields
+	gvk := target.GetObjectKind().GroupVersionKind()
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(srcRaw, target); err != nil {
+		return true, errors.Wrap(err, "cannot convert the map[string]any representation of the source object to the conversion target object")
+	}
+	// restore the original GVK for the conversion destination
+	target.GetObjectKind().SetGroupVersionKind(gvk)
+	return true, nil
+}
+
+func (i *identityConversion) Prioritized() {}
+
+// newIdentityConversion returns a new Conversion from the specified
+// sourceVersion of an API to the specified targetVersion, which copies the
+// identical paths from the source to the target. excludePaths can be used
+// to ignore certain field paths while copying.
+func newIdentityConversion(sourceVersion, targetVersion string, excludePaths ...string) Conversion {
+	return &identityConversion{
+		baseConversion: newBaseConversion(sourceVersion, targetVersion),
+		excludePaths:   excludePaths,
+	}
+}
+
+// NewIdentityConversionExpandPaths returns a new Conversion from the specified
+// sourceVersion of an API to the specified targetVersion, which copies the
+// identical paths from the source to the target. excludePaths can be used
+// to ignore certain field paths while copying. Exclude paths must be specified
+// in standard crossplane-runtime fieldpath library syntax, i.e., with proper
+// indices for traversing map and slice types (e.g., a.b[*].c).
+// The field paths in excludePaths are sorted in lexical order and are prefixed
+// with each of the path prefixes specified with pathPrefixes. So if an
+// exclude path "x" is specified with the prefix slice ["a", "b"], then
+// paths a.x and b.x will both be skipped while copying fields from a source to
+// a target.
+func NewIdentityConversionExpandPaths(sourceVersion, targetVersion string, pathPrefixes []string, excludePaths ...string) Conversion {
+	return newIdentityConversion(sourceVersion, targetVersion, ExpandParameters(pathPrefixes, excludePaths...)...)
+}
+
+// ExpandParameters sorts and expands the given list of field path suffixes
+// with the given prefixes.
+func ExpandParameters(prefixes []string, excludePaths ...string) []string {
+	slices.Sort(excludePaths)
+	if len(prefixes) == 0 {
+		return excludePaths
+	}
+
+	r := make([]string, 0, len(prefixes)*len(excludePaths))
+	for _, p := range prefixes {
+		for _, ex := range excludePaths {
+			r = append(r, fmt.Sprintf("%s.%s", p, ex))
+		}
+	}
+	return r
+}
+
+// DefaultPathPrefixes returns the list of the default path prefixes for
+// excluding paths in the identity conversion. The returned value is
+// ["spec.forProvider", "spec.initProvider", "status.atProvider"].
+func DefaultPathPrefixes() []string {
+	return []string{"spec.forProvider", "spec.initProvider", "status.atProvider"}
 }

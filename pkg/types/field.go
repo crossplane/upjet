@@ -18,6 +18,7 @@ import (
 
 	"github.com/crossplane/upjet/pkg"
 	"github.com/crossplane/upjet/pkg/config"
+	"github.com/crossplane/upjet/pkg/schema/traverser"
 	"github.com/crossplane/upjet/pkg/types/comments"
 	"github.com/crossplane/upjet/pkg/types/name"
 )
@@ -61,7 +62,7 @@ type Field struct {
 func getDocString(cfg *config.Resource, f *Field, tfPath []string) string { //nolint:gocyclo
 	hName := f.Name.Snake
 	if len(tfPath) > 0 {
-		hName = fieldPath(append(tfPath, hName))
+		hName = traverser.FieldPath(append(tfPath, hName))
 	}
 	docString := ""
 	if cfg.MetaResource != nil {
@@ -156,12 +157,12 @@ func NewField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema,
 		//  like GetIgnoredCanonicalFields where we just make each word
 		//  between points camel case using names.go utilities. If the path
 		//  doesn't match anything, it's no-op in late-init logic anyway.
-		if ignoreField == fieldPath(f.TerraformPaths) {
-			cfg.LateInitializer.AddIgnoredCanonicalFields(fieldPath(f.CanonicalPaths))
+		if ignoreField == traverser.FieldPath(f.TerraformPaths) {
+			cfg.LateInitializer.AddIgnoredCanonicalFields(traverser.FieldPath(f.CanonicalPaths))
 		}
 	}
 
-	fieldType, initType, err := g.buildSchema(f, cfg, names, fieldPath(append(tfPath, snakeFieldName)), r)
+	fieldType, initType, err := g.buildSchema(f, cfg, names, traverser.FieldPath(append(tfPath, snakeFieldName)), r)
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot infer type from schema of field %s", f.Name.Snake)
 	}
@@ -269,7 +270,7 @@ func NewSensitiveField(g *Builder, cfg *config.Resource, r *resource, sch *schem
 	}
 
 	if IsObservation(f.Schema) {
-		cfg.Sensitive.AddFieldPath(fieldPathWithWildcard(f.TerraformPaths), "status.atProvider."+fieldPathWithWildcard(f.CRDPaths))
+		cfg.Sensitive.AddFieldPath(traverser.FieldPathWithWildcard(f.TerraformPaths), "status.atProvider."+traverser.FieldPathWithWildcard(f.CRDPaths))
 		// Drop an observation field from schema if it is sensitive.
 		// Data will be stored in connection details secret
 		return nil, true, nil
@@ -278,9 +279,9 @@ func NewSensitiveField(g *Builder, cfg *config.Resource, r *resource, sch *schem
 	switch f.FieldType.(type) {
 	case *types.Slice:
 		f.CRDPaths[len(f.CRDPaths)-2] = f.CRDPaths[len(f.CRDPaths)-2] + sfx
-		cfg.Sensitive.AddFieldPath(fieldPathWithWildcard(f.TerraformPaths), "spec.forProvider."+fieldPathWithWildcard(f.CRDPaths))
+		cfg.Sensitive.AddFieldPath(traverser.FieldPathWithWildcard(f.TerraformPaths), "spec.forProvider."+traverser.FieldPathWithWildcard(f.CRDPaths))
 	default:
-		cfg.Sensitive.AddFieldPath(fieldPathWithWildcard(f.TerraformPaths), "spec.forProvider."+fieldPathWithWildcard(f.CRDPaths)+sfx)
+		cfg.Sensitive.AddFieldPath(traverser.FieldPathWithWildcard(f.TerraformPaths), "spec.forProvider."+traverser.FieldPathWithWildcard(f.CRDPaths)+sfx)
 	}
 	// todo(turkenh): do we need to support other field types as sensitive?
 	if f.FieldType.String() != "string" && f.FieldType.String() != "*string" && f.FieldType.String() != "[]string" &&

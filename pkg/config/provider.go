@@ -16,6 +16,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/crossplane/upjet/pkg/registry"
+	"github.com/crossplane/upjet/pkg/schema/traverser"
 	conversiontfjson "github.com/crossplane/upjet/pkg/types/conversion/tfjson"
 )
 
@@ -155,6 +156,12 @@ type Provider struct {
 	// resourceConfigurators is a map holding resource configurators where key
 	// is Terraform resource name.
 	resourceConfigurators map[string]ResourceConfiguratorChain
+
+	// schemaTraversers is a chain of schema traversers to be used with
+	// this Provider configuration. Schema traversers can be used to inspect or
+	// modify the Provider configuration based on the underlying Terraform
+	// resource schemas.
+	schemaTraversers []traverser.SchemaTraverser
 }
 
 // ReferenceInjector injects cross-resource references across the resources
@@ -257,9 +264,22 @@ func WithFeaturesPackage(s string) ProviderOption {
 	}
 }
 
+// WithMainTemplate configures the provider family main module file's path.
+// This template file will be used to generate the main modules of the
+// family's members.
 func WithMainTemplate(template string) ProviderOption {
 	return func(p *Provider) {
 		p.MainTemplate = template
+	}
+}
+
+// WithSchemaTraversers configures a chain of schema traversers to be used with
+// this Provider configuration. Schema traversers can be used to inspect or
+// modify the Provider configuration based on the underlying Terraform
+// resource schemas.
+func WithSchemaTraversers(traversers ...traverser.SchemaTraverser) ProviderOption {
+	return func(p *Provider) {
+		p.schemaTraversers = traversers
 	}
 }
 
@@ -269,7 +289,7 @@ func WithMainTemplate(template string) ProviderOption {
 func NewProvider(schema []byte, prefix string, modulePath string, metadata []byte, opts ...ProviderOption) *Provider { //nolint:gocyclo
 	ps := tfjson.ProviderSchemas{}
 	if err := ps.UnmarshalJSON(schema); err != nil {
-		panic(err)
+		panic(errors.Wrap(err, "failed to unmarshal the Terraform JSON schema"))
 	}
 	if len(ps.Schemas) != 1 {
 		panic(fmt.Sprintf("there should exactly be 1 provider schema but there are %d", len(ps.Schemas)))
@@ -351,6 +371,11 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadata []byt
 		p.Resources[name] = DefaultResource(name, terraformResource, terraformPluginFrameworkResource, providerMetadata.Resources[name], p.DefaultResourceOptions...)
 		p.Resources[name].useTerraformPluginSDKClient = isTerraformPluginSDK
 		p.Resources[name].useTerraformPluginFrameworkClient = isPluginFrameworkResource
+		// traverse the Terraform resource schema to initialize the upjet Resource
+		// configurations
+		if err := traverseSchemas(name, terraformResource, p.Resources[name], p.schemaTraversers...); err != nil {
+			panic(errors.Wrap(err, "failed to execute the Terraform schema traverser chain"))
+		}
 	}
 	for i, refInjector := range p.refInjectors {
 		if err := refInjector.InjectReferences(p.Resources); err != nil {

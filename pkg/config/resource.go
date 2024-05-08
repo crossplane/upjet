@@ -7,6 +7,7 @@ package config
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
@@ -435,6 +436,29 @@ type Resource struct {
 	// SchemaElementOption for configuring options for schema elements.
 	SchemaElementOptions SchemaElementOptions
 
+	// crdStorageVersion is the CRD storage API version.
+	// Use Resource.CRDStorageVersion to read the configured storage version
+	// which implements a defaulting to the current version being generated
+	// for backwards compatibility. This field is not exported to enforce
+	// defaulting, which is needed for backwards-compatibility.
+	crdStorageVersion string
+
+	// crdHubVersion is the conversion hub API version for the generated CRD.
+	// Use Resource.CRDHubVersion to read the configured hub version
+	// which implements a defaulting to the current version being generated
+	// for backwards compatibility. This field is not exported to enforce
+	// the defaulting behavior, which is needed for backwards-compatibility.
+	crdHubVersion string
+
+	// listConversionPaths maps the Terraform field paths of embedded objects
+	// that need to be converted into singleton lists (lists of
+	// at most one element) at runtime, to the corresponding CRD paths.
+	// Such fields are lists in the Terraform schema, however upjet generates
+	// them as nested objects, and we need to convert them back to lists
+	// at runtime before passing them to the Terraform stack and lists into
+	// embedded objects after reading the state from the Terraform stack.
+	listConversionPaths map[string]string
+
 	// TerraformConfigurationInjector allows a managed resource to inject
 	// configuration values in the Terraform configuration map obtained by
 	// deserializing its `spec.forProvider` value. Managed resources can
@@ -541,7 +565,81 @@ func (m SchemaElementOptions) AddToObservation(el string) bool {
 	return m[el] != nil && m[el].AddToObservation
 }
 
+// TFListConversionPaths returns the Resource's runtime Terraform list
+// conversion paths in fieldpath syntax.
+func (r *Resource) TFListConversionPaths() []string {
+	l := make([]string, 0, len(r.listConversionPaths))
+	for k := range r.listConversionPaths {
+		l = append(l, k)
+	}
+	return l
+}
+
+// CRDListConversionPaths returns the Resource's runtime CRD list
+// conversion paths in fieldpath syntax.
+func (r *Resource) CRDListConversionPaths() []string {
+	l := make([]string, 0, len(r.listConversionPaths))
+	for _, v := range r.listConversionPaths {
+		l = append(l, v)
+	}
+	return l
+}
+
+// CRDStorageVersion returns the CRD storage version if configured. If not,
+// returns the Version being generated as the default value.
+func (r *Resource) CRDStorageVersion() string {
+	if r.crdStorageVersion != "" {
+		return r.crdStorageVersion
+	}
+	return r.Version
+}
+
+// SetCRDStorageVersion configures the CRD storage version for a Resource.
+// If unset, the default storage version is the current Version
+// being generated.
+func (r *Resource) SetCRDStorageVersion(v string) {
+	r.crdStorageVersion = v
+}
+
+// CRDHubVersion returns the CRD hub version if configured. If not,
+// returns the Version being generated as the default value.
+func (r *Resource) CRDHubVersion() string {
+	if r.crdHubVersion != "" {
+		return r.crdHubVersion
+	}
+	return r.Version
+}
+
+// SetCRDHubVersion configures the CRD API conversion hub version
+// for a Resource.
+// If unset, the default hub version is the current Version
+// being generated.
+func (r *Resource) SetCRDHubVersion(v string) {
+	r.crdHubVersion = v
+}
+
+// AddSingletonListConversion configures the list at the specified Terraform
+// field path and the specified CRD field path as an embedded object.
+// crdPath is the field path expression for the CRD schema and tfPath is
+// the field path expression for the Terraform schema corresponding to the
+// singleton list to be converted to an embedded object.
+// At runtime, upjet will convert such objects back and forth
+// from/to singleton lists while communicating with the Terraform stack.
+// The specified fieldpath expression must be a wildcard expression such as
+// `conditions[*]` or a 0-indexed expression such as `conditions[0]`. Other
+// index values are not allowed as this function deals with singleton lists.
+func (r *Resource) AddSingletonListConversion(tfPath, crdPath string) {
+	// SchemaElementOptions.SetEmbeddedObject does not expect the indices and
+	// because we are dealing with singleton lists here, we only expect wildcards
+	// or the zero-index.
+	nPath := strings.ReplaceAll(tfPath, "[*]", "")
+	nPath = strings.ReplaceAll(nPath, "[0]", "")
+	r.SchemaElementOptions.SetEmbeddedObject(nPath)
+	r.listConversionPaths[tfPath] = crdPath
+}
+
 // SetEmbeddedObject sets the EmbeddedObject for the specified key.
+// The key is a Terraform field path without the wildcard segments.
 func (m SchemaElementOptions) SetEmbeddedObject(el string) {
 	if m[el] == nil {
 		m[el] = &SchemaElementOption{}

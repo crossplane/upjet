@@ -10,6 +10,7 @@ import (
 	fwresource "github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 
+	"github.com/crossplane/upjet/pkg/config/conversion"
 	"github.com/crossplane/upjet/pkg/registry"
 	tjname "github.com/crossplane/upjet/pkg/types/name"
 )
@@ -91,6 +92,9 @@ func DefaultResource(name string, terraformSchema *schema.Resource, terraformPlu
 		UseAsync:                         true,
 		SchemaElementOptions:             make(SchemaElementOptions),
 		ServerSideApplyMergeStrategies:   make(ServerSideApplyMergeStrategies),
+		Conversions:                      []conversion.Conversion{conversion.NewIdentityConversionExpandPaths(conversion.AllVersions, conversion.AllVersions, nil)},
+		OverrideFieldNames:               map[string]string{},
+		listConversionPaths:              make(map[string]string),
 	}
 	for _, f := range opts {
 		f(r)
@@ -137,8 +141,8 @@ func (r *Resource) MarkAsRequired(fieldpaths ...string) {
 // Deprecated: Use Resource.MarkAsRequired instead.
 // This function will be removed in future versions.
 func MarkAsRequired(sch *schema.Resource, fieldpaths ...string) {
-	for _, fieldpath := range fieldpaths {
-		if s := GetSchema(sch, fieldpath); s != nil {
+	for _, fp := range fieldpaths {
+		if s := GetSchema(sch, fp); s != nil {
 			s.Computed = false
 			s.Optional = false
 		}
