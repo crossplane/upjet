@@ -335,7 +335,7 @@ type Reference struct {
     // <field-name>Ref or <field-name>Refs.
     // Optional
     RefFieldName string
-    // SelectorFieldName is the field name for the Selector field. Defaults to
+    // SelectorFieldName is the Go field name for the Selector field. Defaults to
     // <field-name>Selector.
     // Optional
     SelectorFieldName string
