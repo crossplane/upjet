@@ -112,7 +112,11 @@ func Run(pc *config.Provider, rootDir string) { //nolint:gocyclo
 				if pc.FeaturesPackage != "" {
 					featuresPkgPath = filepath.Join(pc.ModulePath, pc.FeaturesPackage)
 				}
-				ctrlPkgPath, err := ctrlGen.Generate(resources[name], versionGen.Package().Path(), featuresPkgPath)
+				watchVersionGen := versionGen
+				if len(resources[name].ControllerReconcileVersion) != 0 {
+					watchVersionGen = NewVersionGenerator(rootDir, pc.ModulePath, group, resources[name].ControllerReconcileVersion)
+				}
+				ctrlPkgPath, err := ctrlGen.Generate(resources[name], watchVersionGen.Package().Path(), featuresPkgPath)
 				if err != nil {
 					panic(errors.Wrapf(err, "cannot generate controller for resource %s", name))
 				}

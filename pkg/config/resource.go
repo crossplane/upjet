@@ -393,8 +393,18 @@ type Resource struct {
 	// be `ec2.aws.crossplane.io`
 	ShortGroup string
 
-	// Version is the version CRD will have.
+	// Version is the API version being generated for the corresponding CRD.
 	Version string
+
+	// ControllerReconcileVersion is the CRD API version the associated
+	// controller will watch & reconcile. If left unspecified,
+	// defaults to the value of Version. This configuration parameter
+	// can be used to have a controller use an older
+	// API version of the generated CRD instead of the API version being
+	// generated. Because this configuration parameter's value defaults to
+	// the value of Version, by default the controllers will reconcile the
+	// currently generated API versions of their associated CRs.
+	ControllerReconcileVersion string
 
 	// Kind is the kind of the CRD.
 	Kind string
