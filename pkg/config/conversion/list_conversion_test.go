@@ -18,7 +18,7 @@ func TestConvert(t *testing.T) {
 	type args struct {
 		params map[string]any
 		paths  []string
-		mode   Mode
+		mode   ListConversionMode
 	}
 	type want struct {
 		err    error
@@ -294,7 +294,7 @@ func TestConvert(t *testing.T) {
 
 func TestModeString(t *testing.T) {
 	tests := map[string]struct {
-		m    Mode
+		m    ListConversionMode
 		want string
 	}{
 		"ToSingletonList": {

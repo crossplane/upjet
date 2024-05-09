@@ -365,7 +365,7 @@ func TestSingletonListConversion(t *testing.T) {
 		targetVersion string
 		targetMap     map[string]any
 		crdPaths      []string
-		mode          Mode
+		mode          ListConversionMode
 	}
 	type want struct {
 		converted bool

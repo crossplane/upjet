@@ -177,14 +177,14 @@ func NewCustomConverter(sourceVersion, targetVersion string, converter func(src,
 type singletonListConverter struct {
 	baseConversion
 	crdPaths []string
-	mode     Mode
+	mode     ListConversionMode
 }
 
 // NewSingletonListConversion returns a new Conversion from the specified
 // sourceVersion of an API to the specified targetVersion and uses the
 // CRD field paths given in crdPaths to convert between the singleton
 // lists and embedded objects in the given conversion mode.
-func NewSingletonListConversion(sourceVersion, targetVersion string, crdPaths []string, mode Mode) Conversion {
+func NewSingletonListConversion(sourceVersion, targetVersion string, crdPaths []string, mode ListConversionMode) Conversion {
 	return &singletonListConverter{
 		baseConversion: newBaseConversion(sourceVersion, targetVersion),
 		crdPaths:       crdPaths,
