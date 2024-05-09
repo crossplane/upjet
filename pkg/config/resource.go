@@ -496,7 +496,7 @@ type Resource struct {
 	// TerraformConversions is the list of conversions to be invoked when passing
 	// data from the Crossplane layer to the Terraform layer and when reading
 	// data (state) from the Terraform layer to be used in the Crossplane layer.
-	TerraformConversions []conversion.TerraformConversion
+	TerraformConversions []TerraformConversion
 
 	// useTerraformPluginSDKClient indicates that a plugin SDK external client should
 	// be generated instead of the Terraform CLI-forking client.

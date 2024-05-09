@@ -26,7 +26,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/crossplane/upjet/pkg/config"
-	"github.com/crossplane/upjet/pkg/config/conversion"
 	"github.com/crossplane/upjet/pkg/metrics"
 	"github.com/crossplane/upjet/pkg/resource"
 	"github.com/crossplane/upjet/pkg/resource/json"
@@ -123,7 +122,7 @@ type terraformPluginSDKExternal struct {
 	opTracker      *AsyncTracker
 }
 
-func getExtendedParameters(ctx context.Context, tr resource.Terraformed, externalName string, config *config.Resource, ts terraform.Setup, initParamsMerged bool, kube client.Client) (map[string]any, error) {
+func getExtendedParameters(ctx context.Context, tr resource.Terraformed, externalName string, cfg *config.Resource, ts terraform.Setup, initParamsMerged bool, kube client.Client) (map[string]any, error) {
 	params, err := tr.GetMergedParameters(initParamsMerged)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot get merged parameters")
@@ -131,18 +130,18 @@ func getExtendedParameters(ctx context.Context, tr resource.Terraformed, externa
 	if err = resource.GetSensitiveParameters(ctx, &APISecretClient{kube: kube}, tr, params, tr.GetConnectionDetailsMapping()); err != nil {
 		return nil, errors.Wrap(err, "cannot store sensitive parameters into params")
 	}
-	config.ExternalName.SetIdentifierArgumentFn(params, externalName)
-	if config.TerraformConfigurationInjector != nil {
+	cfg.ExternalName.SetIdentifierArgumentFn(params, externalName)
+	if cfg.TerraformConfigurationInjector != nil {
 		m, err := getJSONMap(tr)
 		if err != nil {
 			return nil, errors.Wrap(err, "cannot get JSON map for the managed resource's spec.forProvider value")
 		}
-		if err := config.TerraformConfigurationInjector(m, params); err != nil {
+		if err := cfg.TerraformConfigurationInjector(m, params); err != nil {
 			return nil, errors.Wrap(err, "cannot invoke the configured TerraformConfigurationInjector")
 		}
 	}
 
-	tfID, err := config.ExternalName.GetIDFn(ctx, externalName, params, ts.Map())
+	tfID, err := cfg.ExternalName.GetIDFn(ctx, externalName, params, ts.Map())
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot get ID")
 	}
@@ -151,12 +150,12 @@ func getExtendedParameters(ctx context.Context, tr resource.Terraformed, externa
 	// not all providers may have this attribute
 	// TODO: tags-tags_all implementation is AWS specific.
 	// Consider making this logic independent of provider.
-	if config.TerraformResource != nil {
-		if _, ok := config.TerraformResource.CoreConfigSchema().Attributes["tags_all"]; ok {
+	if cfg.TerraformResource != nil {
+		if _, ok := cfg.TerraformResource.CoreConfigSchema().Attributes["tags_all"]; ok {
 			params["tags_all"] = params["tags"]
 		}
 	}
-	return conversion.Convert(params, config.TFListConversionPaths(), conversion.ToSingletonList)
+	return cfg.ApplyTFConversions(params, config.ToTerraform)
 }
 
 func (c *TerraformPluginSDKConnector) processParamsWithHCLParser(schemaMap map[string]*schema.Schema, params map[string]any) map[string]any {
@@ -256,7 +255,7 @@ func (c *TerraformPluginSDKConnector) Connect(ctx context.Context, mg xpresource
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to get the observation")
 		}
-		tfState, err = conversion.Convert(tfState, c.config.TFListConversionPaths(), conversion.ToSingletonList)
+		tfState, err = c.config.ApplyTFConversions(tfState, config.ToTerraform)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to run the API converters on the Terraform state")
 		}
@@ -525,7 +524,7 @@ func (n *terraformPluginSDKExternal) Observe(ctx context.Context, mg xpresource.
 			return managed.ExternalObservation{}, errors.Wrap(err, "cannot get connection details")
 		}
 
-		stateValueMap, err = conversion.Convert(stateValueMap, n.config.TFListConversionPaths(), conversion.ToEmbeddedObject)
+		stateValueMap, err = n.config.ApplyTFConversions(stateValueMap, config.FromTerraform)
 		if err != nil {
 			return managed.ExternalObservation{}, errors.Wrap(err, "cannot convert the singleton lists in the observed state value map into embedded objects")
 		}
@@ -645,7 +644,7 @@ func (n *terraformPluginSDKExternal) Create(ctx context.Context, mg xpresource.M
 		return managed.ExternalCreation{}, errors.Wrap(err, "cannot get connection details")
 	}
 
-	stateValueMap, err = conversion.Convert(stateValueMap, n.config.TFListConversionPaths(), conversion.ToEmbeddedObject)
+	stateValueMap, err = n.config.ApplyTFConversions(stateValueMap, config.FromTerraform)
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, "cannot convert the singleton lists in the state value map of the newly created resource into embedded objects")
 	}
