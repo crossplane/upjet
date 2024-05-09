@@ -487,7 +487,16 @@ type Resource struct {
 	// index notation (i.e., array/map components do not need indices).
 	ServerSideApplyMergeStrategies ServerSideApplyMergeStrategies
 
+	// Conversions is the list of CRD API conversion functions to be invoked
+	// in-chain by the installed conversion Webhook for the generated CRD.
+	// This list of conversion.Conversion registered here are responsible for
+	// doing the conversions between the hub & spoke CRD API versions.
 	Conversions []conversion.Conversion
+
+	// TerraformConversions is the list of conversions to be invoked when passing
+	// data from the Crossplane layer to the Terraform layer and when reading
+	// data (state) from the Terraform layer to be used in the Crossplane layer.
+	TerraformConversions []conversion.TerraformConversion
 
 	// useTerraformPluginSDKClient indicates that a plugin SDK external client should
 	// be generated instead of the Terraform CLI-forking client.

@@ -32,7 +32,7 @@ var (
 	_ PavedConversion              = &singletonListConverter{}
 )
 
-// Conversion is the interface for the API version converters.
+// Conversion is the interface for the CRD API version converters.
 // Conversion implementations registered for a source, target
 // pair are called in chain so Conversion implementations can be modular, e.g.,
 // a Conversion implementation registered for a specific source and target
