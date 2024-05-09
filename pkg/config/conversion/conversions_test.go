@@ -383,7 +383,7 @@ func TestSingletonListConversion(t *testing.T) {
 				sourceVersion: AllVersions,
 				sourceMap: map[string]any{
 					"spec": map[string]any{
-						"forProvider": map[string]any{
+						"initProvider": map[string]any{
 							"l": []map[string]any{
 								{
 									"k": "v",
@@ -401,7 +401,7 @@ func TestSingletonListConversion(t *testing.T) {
 				converted: true,
 				targetMap: map[string]any{
 					"spec": map[string]any{
-						"forProvider": map[string]any{
+						"initProvider": map[string]any{
 							"l": map[string]any{
 								"k": "v",
 							},
@@ -416,7 +416,7 @@ func TestSingletonListConversion(t *testing.T) {
 				sourceVersion: AllVersions,
 				sourceMap: map[string]any{
 					"spec": map[string]any{
-						"forProvider": map[string]any{
+						"initProvider": map[string]any{
 							"o": map[string]any{
 								"k": "v",
 							},
@@ -432,7 +432,7 @@ func TestSingletonListConversion(t *testing.T) {
 				converted: true,
 				targetMap: map[string]any{
 					"spec": map[string]any{
-						"forProvider": map[string]any{
+						"initProvider": map[string]any{
 							"o": []map[string]any{
 								{
 									"k": "v",
@@ -449,7 +449,7 @@ func TestSingletonListConversion(t *testing.T) {
 				sourceVersion: AllVersions,
 				sourceMap: map[string]any{
 					"spec": map[string]any{
-						"forProvider": map[string]any{
+						"initProvider": map[string]any{
 							"o": map[string]any{
 								"k": "v",
 							},
@@ -468,7 +468,7 @@ func TestSingletonListConversion(t *testing.T) {
 	}
 	for n, tc := range tests {
 		t.Run(n, func(t *testing.T) {
-			c := NewSingletonListConversion(tc.args.sourceVersion, tc.args.targetVersion, tc.args.crdPaths, tc.args.mode)
+			c := NewSingletonListConversion(tc.args.sourceVersion, tc.args.targetVersion, []string{pathInitProvider}, tc.args.crdPaths, tc.args.mode)
 			sourceMap, err := roundTrip(tc.args.sourceMap)
 			if err != nil {
 				t.Fatalf("Failed to preprocess tc.args.sourceMap: %v", err)
