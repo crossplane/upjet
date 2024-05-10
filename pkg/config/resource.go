@@ -174,6 +174,11 @@ type References map[string]Reference
 type Reference struct {
 	// Type is the Go type name of the CRD if it is in the same package or
 	// <package-path>.<type-name> if it is in a different package.
+	// Deprecated: Type is deprecated in favor of TerraformName, which provides
+	// a more stable and less error-prone API compared to Type. TerraformName
+	// will automatically handle name & version configurations that will affect
+	// the generated cross-resource reference. This is crucial especially if the
+	// provider generates multiple versions for its MR APIs.
 	Type string
 	// TerraformName is the name of the Terraform resource
 	// which will be referenced. The supplied resource name is
