@@ -174,6 +174,11 @@ type References map[string]Reference
 type Reference struct {
 	// Type is the Go type name of the CRD if it is in the same package or
 	// <package-path>.<type-name> if it is in a different package.
+	// Deprecated: Type is deprecated in favor of TerraformName, which provides
+	// a more stable and less error-prone API compared to Type. TerraformName
+	// will automatically handle name & version configurations that will affect
+	// the generated cross-resource reference. This is crucial especially if the
+	// provider generates multiple versions for its MR APIs.
 	Type string
 	// TerraformName is the name of the Terraform resource
 	// which will be referenced. The supplied resource name is
@@ -393,8 +398,18 @@ type Resource struct {
 	// be `ec2.aws.crossplane.io`
 	ShortGroup string
 
-	// Version is the version CRD will have.
+	// Version is the API version being generated for the corresponding CRD.
 	Version string
+
+	// ControllerReconcileVersion is the CRD API version the associated
+	// controller will watch & reconcile. If left unspecified,
+	// defaults to the value of Version. This configuration parameter
+	// can be used to have a controller use an older
+	// API version of the generated CRD instead of the API version being
+	// generated. Because this configuration parameter's value defaults to
+	// the value of Version, by default the controllers will reconcile the
+	// currently generated API versions of their associated CRs.
+	ControllerReconcileVersion string
 
 	// Kind is the kind of the CRD.
 	Kind string
@@ -477,7 +492,16 @@ type Resource struct {
 	// index notation (i.e., array/map components do not need indices).
 	ServerSideApplyMergeStrategies ServerSideApplyMergeStrategies
 
+	// Conversions is the list of CRD API conversion functions to be invoked
+	// in-chain by the installed conversion Webhook for the generated CRD.
+	// This list of conversion.Conversion registered here are responsible for
+	// doing the conversions between the hub & spoke CRD API versions.
 	Conversions []conversion.Conversion
+
+	// TerraformConversions is the list of conversions to be invoked when passing
+	// data from the Crossplane layer to the Terraform layer and when reading
+	// data (state) from the Terraform layer to be used in the Crossplane layer.
+	TerraformConversions []TerraformConversion
 
 	// useTerraformPluginSDKClient indicates that a plugin SDK external client should
 	// be generated instead of the Terraform CLI-forking client.

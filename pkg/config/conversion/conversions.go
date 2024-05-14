@@ -23,7 +23,9 @@ const (
 )
 
 const (
-	pathForProvider = "spec.forProvider"
+	pathForProvider  = "spec.forProvider"
+	pathInitProvider = "spec.initProvider"
+	pathAtProvider   = "status.atProvider"
 )
 
 var (
@@ -32,7 +34,7 @@ var (
 	_ PavedConversion              = &singletonListConverter{}
 )
 
-// Conversion is the interface for the API version converters.
+// Conversion is the interface for the CRD API version converters.
 // Conversion implementations registered for a source, target
 // pair are called in chain so Conversion implementations can be modular, e.g.,
 // a Conversion implementation registered for a specific source and target
@@ -176,17 +178,19 @@ func NewCustomConverter(sourceVersion, targetVersion string, converter func(src,
 
 type singletonListConverter struct {
 	baseConversion
-	crdPaths []string
-	mode     Mode
+	pathPrefixes []string
+	crdPaths     []string
+	mode         ListConversionMode
 }
 
 // NewSingletonListConversion returns a new Conversion from the specified
 // sourceVersion of an API to the specified targetVersion and uses the
 // CRD field paths given in crdPaths to convert between the singleton
 // lists and embedded objects in the given conversion mode.
-func NewSingletonListConversion(sourceVersion, targetVersion string, crdPaths []string, mode Mode) Conversion {
+func NewSingletonListConversion(sourceVersion, targetVersion string, pathPrefixes []string, crdPaths []string, mode ListConversionMode) Conversion {
 	return &singletonListConverter{
 		baseConversion: newBaseConversion(sourceVersion, targetVersion),
+		pathPrefixes:   pathPrefixes,
 		crdPaths:       crdPaths,
 		mode:           mode,
 	}
@@ -200,18 +204,24 @@ func (s *singletonListConverter) ConvertPaved(src, target *fieldpath.Paved) (boo
 	if len(s.crdPaths) == 0 {
 		return false, nil
 	}
-	v, err := src.GetValue(pathForProvider)
-	if err != nil {
-		return true, errors.Wrapf(err, "failed to read the %s value for conversion in mode %q", pathForProvider, s.mode)
+
+	for _, p := range s.pathPrefixes {
+		v, err := src.GetValue(p)
+		if err != nil {
+			return true, errors.Wrapf(err, "failed to read the %s value for conversion in mode %q", p, s.mode)
+		}
+		m, ok := v.(map[string]any)
+		if !ok {
+			return true, errors.Errorf("value at path %s is not a map[string]any", p)
+		}
+		if _, err := Convert(m, s.crdPaths, s.mode); err != nil {
+			return true, errors.Wrapf(err, "failed to convert the source map in mode %q with %s", s.mode, s.baseConversion.String())
+		}
+		if err := target.SetValue(p, m); err != nil {
+			return true, errors.Wrapf(err, "failed to set the %s value for conversion in mode %q", p, s.mode)
+		}
 	}
-	m, ok := v.(map[string]any)
-	if !ok {
-		return true, errors.Errorf("value at path %s is not a map[string]any", pathForProvider)
-	}
-	if _, err := Convert(m, s.crdPaths, s.mode); err != nil {
-		return true, errors.Wrapf(err, "failed to convert the source map in mode %q with %s", s.mode, s.baseConversion.String())
-	}
-	return true, errors.Wrapf(target.SetValue(pathForProvider, m), "failed to set the %s value for conversion in mode %q", pathForProvider, s.mode)
+	return true, nil
 }
 
 type identityConversion struct {
@@ -305,5 +315,5 @@ func ExpandParameters(prefixes []string, excludePaths ...string) []string {
 // excluding paths in the identity conversion. The returned value is
 // ["spec.forProvider", "spec.initProvider", "status.atProvider"].
 func DefaultPathPrefixes() []string {
-	return []string{"spec.forProvider", "spec.initProvider", "status.atProvider"}
+	return []string{pathForProvider, pathInitProvider, pathAtProvider}
 }

@@ -14,16 +14,16 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Mode denotes the mode of the runtime API conversion, e.g.,
+// ListConversionMode denotes the mode of the list-object API conversion, e.g.,
 // conversion of embedded objects into singleton lists.
-type Mode int
+type ListConversionMode int
 
 const (
 	// ToEmbeddedObject represents a runtime conversion from a singleton list
 	// to an embedded object, i.e., the runtime conversions needed while
 	// reading from the Terraform state and updating the CRD
 	// (for status, late-initialization, etc.)
-	ToEmbeddedObject Mode = iota
+	ToEmbeddedObject ListConversionMode = iota
 	// ToSingletonList represents a runtime conversion from an embedded object
 	// to a singleton list, i.e., the runtime conversions needed while passing
 	// the configuration data to the underlying Terraform layer.
@@ -36,7 +36,7 @@ const (
 )
 
 // String returns a string representation of the conversion mode.
-func (m Mode) String() string {
+func (m ListConversionMode) String() string {
 	switch m {
 	case ToSingletonList:
 		return "toSingletonList"
@@ -79,7 +79,7 @@ func setValue(pv *fieldpath.Paved, v any, fp string) error {
 // an embedded object will be converted into a singleton list or a singleton
 // list will be converted into an embedded object) is determined by the mode
 // parameter.
-func Convert(params map[string]any, paths []string, mode Mode) (map[string]any, error) { //nolint:gocyclo // easier to follow as a unit
+func Convert(params map[string]any, paths []string, mode ListConversionMode) (map[string]any, error) { //nolint:gocyclo // easier to follow as a unit
 	switch mode {
 	case ToSingletonList:
 		slices.Sort(paths)
