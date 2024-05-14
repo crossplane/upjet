@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package config
+package conversion
 
 import (
 	"bytes"
@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/crossplane/upjet/pkg/config"
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	k8sschema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -22,19 +23,29 @@ import (
 	"github.com/crossplane/upjet/pkg/config/conversion"
 )
 
-func ConvertSingletonListToEmbeddedObject(pc *Provider, startPath string) error { //nolint:gocyclo
+func ConvertSingletonListToEmbeddedObject(pc *config.Provider, startPath, licenseHeaderPath string) error {
 	resourceRegistry := prepareResourceRegistry(pc)
+
+	var license string
+	var lErr error
+	if licenseHeaderPath != "" {
+		license, lErr = getLicenseHeader(licenseHeaderPath)
+		if lErr != nil {
+			return errors.Wrap(lErr, "failed to get license header")
+		}
+	}
+
 	err := filepath.Walk(startPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			return errors.Wrap(err, "walk failed")
+			return errors.Wrapf(err, "walk failed: %s", startPath)
 		}
 
 		var convertedFileContent string
 		if !info.IsDir() && strings.HasSuffix(info.Name(), ".yaml") {
 			log.Printf("Converting: %s\n", path)
-			content, err := os.ReadFile(path) //nolint:gosec
+			content, err := os.ReadFile(filepath.Clean(path))
 			if err != nil {
-				return errors.Wrap(err, "failed to read file")
+				return errors.Wrapf(err, "failed to read the %s file", path)
 			}
 
 			examples, err := decodeExamples(string(content))
@@ -44,10 +55,11 @@ func ConvertSingletonListToEmbeddedObject(pc *Provider, startPath string) error 
 
 			rootResource := resourceRegistry[fmt.Sprintf("%s/%s", examples[0].GroupVersionKind().Kind, examples[0].GroupVersionKind().Group)]
 			if rootResource == nil {
+				log.Printf("Warning: Skipping %s because the corresponding resource could not be found in the provider", path)
 				return nil
 			}
 
-			newPath := strings.Replace(path, examples[0].GroupVersionKind().Version, rootResource.Version, -1) //nolint:gocritic
+			newPath := strings.ReplaceAll(path, examples[0].GroupVersionKind().Version, rootResource.Version)
 			if path == newPath {
 				return nil
 			}
@@ -57,6 +69,9 @@ func ConvertSingletonListToEmbeddedObject(pc *Provider, startPath string) error 
 					conversionPaths := resource.CRDListConversionPaths()
 					if conversionPaths != nil && e.GroupVersionKind().Version != resource.Version {
 						for i, cp := range conversionPaths {
+							// Here, for the manifests to be converted, only `forProvider
+							// is converted, assuming the `initProvider` field is empty in the
+							// spec.
 							conversionPaths[i] = "spec.forProvider." + cp
 						}
 						converted, err := conversion.Convert(e.Object, conversionPaths, conversion.ToEmbeddedObject)
@@ -75,34 +90,10 @@ func ConvertSingletonListToEmbeddedObject(pc *Provider, startPath string) error 
 					e.SetAnnotations(annotations)
 				}
 			}
-			convertedFileContent = "# SPDX-FileCopyrightText: 2024 The Crossplane Authors <https://crossplane.io>\n#\n# SPDX-License-Identifier: CC0-1.0\n\n"
-			for i, e := range examples {
-				var convertedData []byte
-				convertedData, err := yaml.Marshal(&e) //nolint:gosec
-				if err != nil {
-					return errors.Wrap(err, "failed to marshal example to yaml")
-				}
-				if i == len(examples)-1 {
-					convertedFileContent += string(convertedData)
-				} else {
-					convertedFileContent += string(convertedData) + "\n---\n\n"
-				}
+			convertedFileContent = license + "\n\n"
+			if err := writeExampleContent(path, convertedFileContent, examples, newPath); err != nil {
+				return errors.Wrap(err, "failed to write example content")
 			}
-			dir := filepath.Dir(newPath)
-
-			// Create all necessary directories if they do not exist
-			err = os.MkdirAll(dir, os.ModePerm)
-			if err != nil {
-				return errors.Wrap(err, "failed to create directory")
-			}
-			f, err := os.Create(newPath) //nolint:gosec
-			if err != nil {
-				return errors.Wrap(err, "failed to create file")
-			}
-			if _, err := f.WriteString(convertedFileContent); err != nil {
-				return errors.Wrap(err, "failed to write to file")
-			}
-			log.Printf("Converted: %s\n", path)
 		}
 		return nil
 	})
@@ -112,8 +103,48 @@ func ConvertSingletonListToEmbeddedObject(pc *Provider, startPath string) error 
 	return nil
 }
 
-func prepareResourceRegistry(pc *Provider) map[string]*Resource {
-	reg := map[string]*Resource{}
+func writeExampleContent(path string, convertedFileContent string, examples []*unstructured.Unstructured, newPath string) error {
+	for i, e := range examples {
+		var convertedData []byte
+		e := e
+		convertedData, err := yaml.Marshal(&e)
+		if err != nil {
+			return errors.Wrap(err, "failed to marshal example to yaml")
+		}
+		if i == len(examples)-1 {
+			convertedFileContent += string(convertedData)
+		} else {
+			convertedFileContent += string(convertedData) + "\n---\n\n"
+		}
+	}
+	dir := filepath.Dir(newPath)
+
+	// Create all necessary directories if they do not exist
+	if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+		return errors.Wrap(err, "failed to create directory")
+	}
+	f, err := os.Create(filepath.Clean(newPath))
+	if err != nil {
+		return errors.Wrap(err, "failed to create file")
+	}
+	if _, err := f.WriteString(convertedFileContent); err != nil {
+		return errors.Wrap(err, "failed to write to file")
+	}
+	log.Printf("Converted: %s\n", path)
+	return nil
+}
+
+func getLicenseHeader(licensePath string) (string, error) {
+	licenseData, err := os.ReadFile(licensePath)
+	if err != nil {
+		return "", errors.Wrapf(err, "failed to read license file: %s", licensePath)
+	}
+
+	return string(licenseData), nil
+}
+
+func prepareResourceRegistry(pc *config.Provider) map[string]*config.Resource {
+	reg := map[string]*config.Resource{}
 	for _, r := range pc.Resources {
 		reg[fmt.Sprintf("%s/%s.%s", r.Kind, r.ShortGroup, pc.RootGroup)] = r
 	}
