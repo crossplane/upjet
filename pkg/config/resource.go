@@ -401,6 +401,11 @@ type Resource struct {
 	// Version is the API version being generated for the corresponding CRD.
 	Version string
 
+	// PreviousVersions is the list of API versions previously generated for this
+	// resource for multi-versioned managed resources. upjet will attempt to load
+	// the type definitions from these previous versions if configured.
+	PreviousVersions []string
+
 	// ControllerReconcileVersion is the CRD API version the associated
 	// controller will watch & reconcile. If left unspecified,
 	// defaults to the value of Version. This configuration parameter
