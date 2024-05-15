@@ -98,6 +98,10 @@ func Run(pc *config.Provider, rootDir string) { //nolint:gocyclo
 			tfGen := NewTerraformedGenerator(versionGen.Package(), rootDir, group, version)
 			ctrlGen := NewControllerGenerator(rootDir, pc.ModulePath, group)
 
+			if err := versionGen.InsertPreviousObjects(versions); err != nil {
+				panic(errors.Wrapf(err, "cannot insert type definitions from the previous versions into the package scope for group %q", group))
+			}
+
 			for _, name := range sortedResources(resources) {
 				paramTypeName, err := crdGen.Generate(resources[name])
 				if err != nil {

@@ -5,6 +5,7 @@
 package pipeline
 
 import (
+	"fmt"
 	"go/types"
 	"os"
 	"path/filepath"
@@ -12,7 +13,9 @@ import (
 
 	"github.com/muvaf/typewriter/pkg/wrapper"
 	"github.com/pkg/errors"
+	"golang.org/x/tools/go/packages"
 
+	"github.com/crossplane/upjet/pkg/config"
 	"github.com/crossplane/upjet/pkg/pipeline/templates"
 )
 
@@ -59,4 +62,37 @@ func (vg *VersionGenerator) Generate() error {
 // Package returns the package of the version that will be generated.
 func (vg *VersionGenerator) Package() *types.Package {
 	return vg.pkg
+}
+
+// InsertPreviousObjects inserts into this VersionGenerator's package scope all
+// the type definitions from the previous versions of the managed resource APIs
+// found in the Go package.
+func (vg *VersionGenerator) InsertPreviousObjects(versions map[string]map[string]*config.Resource) error {
+	for _, resources := range versions {
+		for _, r := range resources {
+			for _, v := range r.PreviousVersions {
+				if vg.Version != v {
+					// if this previous version v is not the version we are currently
+					// processing
+					continue
+				}
+				pkgs, err := packages.Load(&packages.Config{
+					Mode: packages.NeedTypes,
+					Dir:  vg.DirectoryPath,
+				}, fmt.Sprintf("zz_%s_types.go", strings.ToLower(r.Kind)))
+				if err != nil {
+					return errors.Wrapf(err, "cannot load the previous versions of %q from path %s", r.Name, vg.pkg.Path())
+				}
+				for _, p := range pkgs {
+					if p.Types == nil || p.Types.Scope() == nil {
+						continue
+					}
+					for _, n := range p.Types.Scope().Names() {
+						vg.pkg.Scope().Insert(p.Types.Scope().Lookup(n))
+					}
+				}
+			}
+		}
+	}
+	return nil
 }
