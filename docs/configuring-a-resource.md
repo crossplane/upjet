@@ -342,6 +342,13 @@ type Reference struct {
 }
 ```
 
+> [!Warning]
+> Please note the `Reference.Type` field has been deprecated, use
+`Reference.TerraformName` instead. `TerraformName` is a more stable and
+less error prone API compared to `Type` because it automatically accounts
+for the configuration changes affecting the cross-resource reference target's
+kind name, group or version.
+
 For a resource that we want to generate, we need to check its argument list in
 Terraform documentation and figure out which field needs reference to which
 resource.
@@ -354,24 +361,23 @@ following referencing configuration:
 func Configure(p *config.Provider) {
     p.AddResourceConfigurator("aws_iam_access_key", func (r *config.Resource) {
         r.References["user"] = config.Reference{
-            Type: "User",
+            TerraformName: "aws_iam_user",
         }
     })
 }
 ```
 
-Please note the value of `Type` field needs to be a string representing the Go
-type of the resource. Since, `AccessKey` and `User` resources are under the same
-go package, we don't need to provide the package path. However, this is not
-always the case and referenced resources might be in different package. In that
-case, we would need to provide the full path. Referencing to a [kms key] from
-`aws_ebs_volume` resource is a good example here:
+`TerraformName` is the name of the Terraform resource, such as
+`aws_iam_user`. Because `TerraformName` uniquely identifies a
+Terraform resource, it remains the same when the referenced and
+referencing resources are in different groups. A good example is
+referencing a [kms key] from `aws_ebs_volume` resource:
 
 ```go
 func Configure(p *config.Provider) {
     p.AddResourceConfigurator("aws_ebs_volume", func(r *config.Resource) {
         r.References["kms_key_id"] = config.Reference{
-           Type: "github.com/crossplane-contrib/provider-tf-aws/apis/kms/v1alpha1.Key",
+           TerraformName: "aws_kms_key",
         }
     })
 }
@@ -732,8 +738,8 @@ like:
 
 - Field contains sensitive information but not marked as `Sensitive` or vice
   versa.
-- An attribute does not make sense to have in CRD schema, like [tags_all for jet
-  AWS resources].
+- An attribute does not make sense to have in CRD schema, like [tags_all for
+  provider-upjet-aws resources].
 - Moving parameters from Terraform provider config to resources schema to fit
   Crossplane model, e.g. [AWS region] parameter is part of provider config in
   Terraform but Crossplane expects it in CR spec.
@@ -878,7 +884,7 @@ initializers for a resource.
 [import section of s3 bucket]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket#import
 [bucket]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket#bucket
 [cluster_identifier]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/rds_cluster#cluster_identifier
-[aws_rds_cluster]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/rds_cluster.
+[aws_rds_cluster]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/rds_cluster
 [import section of aws_vpc]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc#import
 [arguments list]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc#argument-reference
 [example usages]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc#example-usage
@@ -888,7 +894,7 @@ initializers for a resource.
 [handle dependencies]: https://docs.crossplane.io/master/concepts/managed-resources/#referencing-other-resources
 [user]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_access_key#user
 [generate reference resolution methods]: https://github.com/crossplane/crossplane-tools/pull/35
-[configuration]: https://github.com/crossplane/upjet/blob/main/pkg/config/resource.go#L123
+[configuration]: https://github.com/crossplane/upjet/blob/942508c5370a697b1cb81d074933ba75d8f1fb4f/pkg/config/resource.go#L172
 [iam_access_key]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_access_key#argument-reference
 [kms key]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ebs_volume#kms_key_id
 [connection details]: https://docs.crossplane.io/master/concepts/managed-resources/#writeconnectionsecrettoref
@@ -904,12 +910,12 @@ initializers for a resource.
 [Description]: https://github.com/hashicorp/terraform-plugin-sdk/blob/e3325b095ef501cf551f7935254ce942c44c1af0/helper/schema/schema.go#L120
 [Optional]: https://github.com/hashicorp/terraform-plugin-sdk/blob/e3325b095ef501cf551f7935254ce942c44c1af0/helper/schema/schema.go#L80
 [Computed]: https://github.com/hashicorp/terraform-plugin-sdk/blob/e3325b095ef501cf551f7935254ce942c44c1af0/helper/schema/schema.go#L139
-[tags_all for jet AWS resources]: https://github.com/upbound/provider-aws/blob/main/config/overrides.go#L62
-[AWS region]: https://github.com/upbound/provider-aws/blob/main/config/overrides.go#L32
+[tags_all for provider-upjet-aws resources]: https://github.com/crossplane-contrib/provider-upjet-aws/blob/199dbf93b8c67632db50b4f9c0adbd79021146a3/config/overrides.go#L72
+[AWS region]: https://github.com/crossplane-contrib/provider-upjet-aws/blob/199dbf93b8c67632db50b4f9c0adbd79021146a3/config/overrides.go#L42
 [this figure]: ../docs/images/upjet-externalname.png
 [Initializers]: #initializers
-[InitializerFns]: https://github.com/crossplane/upjet/blob/main/pkg/config/resource.go#L297
-[NewInitializerFn]: https://github.com/crossplane/upjet/blob/main/pkg/config/resource.go#L210
+[InitializerFns]: https://github.com/crossplane/upjet/blob/92d1af84d24241bef08e6b4a2cfe1ab66a93308a/pkg/config/resource.go#L427
+[NewInitializerFn]: https://github.com/crossplane/upjet/blob/92d1af84d24241bef08e6b4a2cfe1ab66a93308a/pkg/config/resource.go#L265
 [crossplane-runtime]: https://github.com/crossplane/crossplane-runtime/blob/428b7c3903756bb0dcf5330f40298e1fa0c34301/pkg/reconciler/managed/reconciler.go#L138
 [tagging convention]: https://github.com/crossplane/crossplane/blob/60c7df9/design/one-pager-managed-resource-api-design.md#external-resource-labeling
 [Naming Conventions - One Pager Managed Resource API Design]: https://github.com/crossplane/crossplane/blob/master/design/one-pager-managed-resource-api-design.md#naming-conventions
