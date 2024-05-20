@@ -127,7 +127,7 @@ func GetSensitiveAttributes(from map[string]any, mapping map[string]string) (map
 			// Note(turkenh): k8s secrets uses a strict regex to validate secret
 			// keys which does not allow having brackets inside. So, we need to
 			// do a conversion to be able to store as connection secret keys.
-			// See https://github.com/crossplane/upjet/pull/94 for
+			// See https://github.com/crossplane/terrajet/pull/94 for
 			// more details.
 			k, err := fieldPathToSecretKey(fp)
 			if err != nil {
