@@ -138,7 +138,7 @@ func TestDefaultResource(t *testing.T) {
 	// TODO(muvaf): Find a way to compare function pointers.
 	ignoreUnexported := []cmp.Option{
 		cmpopts.IgnoreFields(Sensitive{}, "fieldPaths", "AdditionalConnectionDetailsFn"),
-		cmpopts.IgnoreFields(LateInitializer{}, "ignoredCanonicalFieldPaths"),
+		cmpopts.IgnoreFields(LateInitializer{}, "ignoredCanonicalFieldPaths", "conditionalIgnoredCanonicalFieldPaths"),
 		cmpopts.IgnoreFields(ExternalName{}, "SetIdentifierArgumentFn", "GetExternalNameFn", "GetIDFn"),
 		cmpopts.IgnoreUnexported(Resource{}),
 		cmpopts.IgnoreUnexported(reflect.ValueOf(identityConversion).Elem().Interface()),
