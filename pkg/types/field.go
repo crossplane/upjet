@@ -283,9 +283,9 @@ func NewSensitiveField(g *Builder, cfg *config.Resource, r *resource, sch *schem
 	switch f.FieldType.(type) {
 	case *types.Slice:
 		f.CRDPaths[len(f.CRDPaths)-2] = f.CRDPaths[len(f.CRDPaths)-2] + sfx
-		cfg.Sensitive.AddFieldPath(traverser.FieldPathWithWildcard(f.TerraformPaths), "spec.forProvider."+traverser.FieldPathWithWildcard(f.CRDPaths))
+		cfg.Sensitive.AddFieldPath(traverser.FieldPathWithWildcard(f.TerraformPaths), traverser.FieldPathWithWildcard(f.CRDPaths))
 	default:
-		cfg.Sensitive.AddFieldPath(traverser.FieldPathWithWildcard(f.TerraformPaths), "spec.forProvider."+traverser.FieldPathWithWildcard(f.CRDPaths)+sfx)
+		cfg.Sensitive.AddFieldPath(traverser.FieldPathWithWildcard(f.TerraformPaths), traverser.FieldPathWithWildcard(f.CRDPaths)+sfx)
 	}
 	// todo(turkenh): do we need to support other field types as sensitive?
 	if f.FieldType.String() != "string" && f.FieldType.String() != "*string" && f.FieldType.String() != "[]string" &&

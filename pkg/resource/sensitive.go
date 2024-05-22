@@ -22,13 +22,16 @@ import (
 )
 
 const (
-	errCannotExpandWildcards               = "cannot expand wildcards"
+	errGetAdditionalConnectionDetails = "cannot get additional connection details"
+	errCannotExpandWildcards          = "cannot expand wildcards"
+
 	errFmtCannotGetValueForFieldPath       = "cannot not get a value for fieldpath %q"
 	errFmtCannotGetStringForFieldPath      = "cannot not get a string for fieldpath %q"
 	errFmtCannotGetSecretKeySelector       = "cannot get SecretKeySelector from xp resource for fieldpath %q"
 	errFmtCannotGetSecretKeySelectorAsList = "cannot get SecretKeySelector list from xp resource for fieldpath %q"
 	errFmtCannotGetSecretKeySelectorAsMap  = "cannot get SecretKeySelector map from xp resource for fieldpath %q"
 	errFmtCannotGetSecretValue             = "cannot get secret value for %v"
+	errFmtCannotOverrideExistingKey        = "overriding a reserved connection key (%q) is not allowed"
 )
 
 const (
@@ -39,20 +42,14 @@ const (
 	prefixAttribute = "attribute."
 
 	pluralSuffix = "s"
-
-	errGetAdditionalConnectionDetails = "cannot get additional connection details"
-	errFmtCannotOverrideExistingKey   = "overriding a reserved connection key (%q) is not allowed"
 )
 
-var reEndsWithIndex *regexp.Regexp
-var reMiddleIndex *regexp.Regexp
-var reInsideThreeDotsBlock *regexp.Regexp
-
-func init() {
-	reEndsWithIndex = regexp.MustCompile(`\.(\d+?)$`)
-	reMiddleIndex = regexp.MustCompile(`\.(\d+?)\.`)
+var (
+	reFieldPathSpec        = regexp.MustCompile(`^spec\.(forProvider|initProvider)\.(.+)$`)
+	reEndsWithIndex        = regexp.MustCompile(`\.(\d+?)$`)
+	reMiddleIndex          = regexp.MustCompile(`\.(\d+?)\.`)
 	reInsideThreeDotsBlock = regexp.MustCompile(`\.\.\.(.*?)\.\.\.`)
-}
+)
 
 // SecretClient is the client to get sensitive data from kubernetes secrets
 //
@@ -161,11 +158,7 @@ func GetSensitiveAttributes(from map[string]any, mapping map[string]string) (map
 
 // GetSensitiveParameters will collect sensitive information as terraform state
 // attributes by following secret references in the spec.
-func GetSensitiveParameters(ctx context.Context, client SecretClient, from runtime.Object, into map[string]any, mapping map[string]string) error { //nolint: gocyclo
-	// Note(turkenh): Cyclomatic complexity of this function is slightly higher
-	// than the threshold but preferred to use nolint directive for better
-	// readability and not to split the logic.
-
+func GetSensitiveParameters(ctx context.Context, client SecretClient, from runtime.Object, into map[string]any, mapping map[string]string) error {
 	if len(mapping) == 0 {
 		return nil
 	}
@@ -176,91 +169,108 @@ func GetSensitiveParameters(ctx context.Context, client SecretClient, from runti
 	}
 	pavedTF := fieldpath.Pave(into)
 
-	var sensitive []byte
 	for tfPath, jsonPath := range mapping {
-		jsonPathSet, err := pavedJSON.ExpandWildcards(jsonPath)
-		if err != nil {
-			return errors.Wrapf(err, "cannot expand wildcard for xp resource")
+		jp := jsonPath
+		groups := reFieldPathSpec.FindStringSubmatch(jsonPath)
+		if len(groups) == 3 {
+			jp = groups[2]
 		}
-		for _, expandedJSONPath := range jsonPathSet {
-			v, err := pavedJSON.GetValue(expandedJSONPath)
-			if err != nil {
-				return errors.Wrapf(err, errFmtCannotGetValueForFieldPath, expandedJSONPath)
-			}
-			// ExpandWildcards call above already skips "nested" optional fields
-			// as they won't be available in the data but added this as an
-			// additional check here. Please note, here all path starts with
-			// spec.forProvider., so, all is "nested" different from GetAttributes
-			if v == nil {
-				continue
-			}
 
-			switch k := v.(type) {
-			case map[string]any:
-				_, ok := k["key"]
-				if !ok {
-					// This is a special case where we have a "SecretReference" without a selected "key". This happens
-					// when there is an input field of type map[string]string (or map[string]*string).
-					// In this case, we need to get the entire secret data and fill it in the terraform state as a map.
-					// This is the only case where we have one-to-many mapping between json and tf paths.
-					ref := &v1.SecretReference{}
-					if err = pavedJSON.GetValueInto(expandedJSONPath, ref); err != nil {
-						return errors.Wrapf(err, errFmtCannotGetSecretKeySelectorAsMap, expandedJSONPath)
-					}
-					data, err := client.GetSecretData(ctx, ref)
-					// We don't want to fail if the secret is not found. Otherwise, we won't be able to delete the
-					// resource if secret is deleted before. This is quite expected when both secret and resource
-					// got deleted in parallel.
-					if resource.IgnoreNotFound(err) != nil {
-						return errors.Wrapf(err, errFmtCannotGetSecretValue, ref)
-					}
-					for key, value := range data {
-						if err = pavedTF.SetValue(fmt.Sprintf("%s.%s", tfPath, key), string(value)); err != nil {
-							return errors.Wrapf(err, "cannot set string as terraform attribute for fieldpath %q", fmt.Sprintf("%s.%s", tfPath, key))
-						}
-					}
-					continue
-				}
-
-				sel := &v1.SecretKeySelector{}
-				if err = pavedJSON.GetValueInto(expandedJSONPath, sel); err != nil {
-					return errors.Wrapf(err, errFmtCannotGetSecretKeySelector, expandedJSONPath)
-				}
-				sensitive, err = client.GetSecretValue(ctx, *sel)
-				if resource.IgnoreNotFound(err) != nil {
-					return errors.Wrapf(err, errFmtCannotGetSecretValue, sel)
-				}
-				if err := setSensitiveParametersWithPaved(pavedTF, expandedJSONPath, tfPath, mapping, string(sensitive)); err != nil {
-					return err
-				}
-			case []any:
-				sel := &[]v1.SecretKeySelector{}
-				if err = pavedJSON.GetValueInto(expandedJSONPath, sel); err != nil {
-					return errors.Wrapf(err, errFmtCannotGetSecretKeySelectorAsList, expandedJSONPath)
-				}
-				var sensitives []any
-				for _, s := range *sel {
-					sensitive, err = client.GetSecretValue(ctx, s)
-					if resource.IgnoreNotFound(err) != nil {
-						return errors.Wrapf(err, errFmtCannotGetSecretValue, sel)
-					}
-
-					// If referenced k8s secret is deleted before the MR, we pass empty string for the sensitive
-					// field to be able to destroy the resource.
-					if kerrors.IsNotFound(err) {
-						sensitive = []byte("")
-					}
-					sensitives = append(sensitives, string(sensitive))
-				}
-				if err := setSensitiveParametersWithPaved(pavedTF, expandedJSONPath, tfPath, mapping, sensitives); err != nil {
-					return err
-				}
-			default:
-				return errors.Wrapf(err, errFmtCannotGetSecretKeySelector, expandedJSONPath)
+		// spec.forProvider secret references override the spec.initProvider
+		// references.
+		for _, p := range []string{"spec.initProvider.", "spec.forProvider."} {
+			if err := storeSensitiveData(ctx, client, tfPath, p+jp, pavedTF, pavedJSON, mapping); err != nil {
+				return err
 			}
 		}
 	}
 
+	return nil
+}
+
+func storeSensitiveData(ctx context.Context, client SecretClient, tfPath, jsonPath string, pavedTF, pavedJSON *fieldpath.Paved, mapping map[string]string) error { //nolint: gocyclo // for better readability and not to split the logic
+	jsonPathSet, err := pavedJSON.ExpandWildcards(jsonPath)
+	if err != nil {
+		return errors.Wrapf(err, "cannot expand wildcard for xp resource")
+	}
+	var sensitive []byte
+	for _, expandedJSONPath := range jsonPathSet {
+		v, err := pavedJSON.GetValue(expandedJSONPath)
+		if err != nil {
+			return errors.Wrapf(err, errFmtCannotGetValueForFieldPath, expandedJSONPath)
+		}
+		// ExpandWildcards call above already skips "nested" optional fields
+		// as they won't be available in the data but added this as an
+		// additional check here. Please note, here all path starts with
+		// spec.forProvider., so, all is "nested" different from GetAttributes
+		if v == nil {
+			continue
+		}
+
+		switch k := v.(type) {
+		case map[string]any:
+			_, ok := k["key"]
+			if !ok {
+				// This is a special case where we have a "SecretReference" without a selected "key". This happens
+				// when there is an input field of type map[string]string (or map[string]*string).
+				// In this case, we need to get the entire secret data and fill it in the terraform state as a map.
+				// This is the only case where we have one-to-many mapping between json and tf paths.
+				ref := &v1.SecretReference{}
+				if err = pavedJSON.GetValueInto(expandedJSONPath, ref); err != nil {
+					return errors.Wrapf(err, errFmtCannotGetSecretKeySelectorAsMap, expandedJSONPath)
+				}
+				data, err := client.GetSecretData(ctx, ref)
+				// We don't want to fail if the secret is not found. Otherwise, we won't be able to delete the
+				// resource if secret is deleted before. This is quite expected when both secret and resource
+				// got deleted in parallel.
+				if resource.IgnoreNotFound(err) != nil {
+					return errors.Wrapf(err, errFmtCannotGetSecretValue, ref)
+				}
+				for key, value := range data {
+					if err = pavedTF.SetValue(fmt.Sprintf("%s.%s", tfPath, key), string(value)); err != nil {
+						return errors.Wrapf(err, "cannot set string as terraform attribute for fieldpath %q", fmt.Sprintf("%s.%s", tfPath, key))
+					}
+				}
+				continue
+			}
+
+			sel := &v1.SecretKeySelector{}
+			if err = pavedJSON.GetValueInto(expandedJSONPath, sel); err != nil {
+				return errors.Wrapf(err, errFmtCannotGetSecretKeySelector, expandedJSONPath)
+			}
+			sensitive, err = client.GetSecretValue(ctx, *sel)
+			if resource.IgnoreNotFound(err) != nil {
+				return errors.Wrapf(err, errFmtCannotGetSecretValue, sel)
+			}
+			if err := setSensitiveParametersWithPaved(pavedTF, expandedJSONPath, tfPath, mapping, string(sensitive)); err != nil {
+				return err
+			}
+		case []any:
+			sel := &[]v1.SecretKeySelector{}
+			if err = pavedJSON.GetValueInto(expandedJSONPath, sel); err != nil {
+				return errors.Wrapf(err, errFmtCannotGetSecretKeySelectorAsList, expandedJSONPath)
+			}
+			var sensitives []any
+			for _, s := range *sel {
+				sensitive, err = client.GetSecretValue(ctx, s)
+				if resource.IgnoreNotFound(err) != nil {
+					return errors.Wrapf(err, errFmtCannotGetSecretValue, sel)
+				}
+
+				// If referenced k8s secret is deleted before the MR, we pass empty string for the sensitive
+				// field to be able to destroy the resource.
+				if kerrors.IsNotFound(err) {
+					sensitive = []byte("")
+				}
+				sensitives = append(sensitives, string(sensitive))
+			}
+			if err := setSensitiveParametersWithPaved(pavedTF, expandedJSONPath, tfPath, mapping, sensitives); err != nil {
+				return err
+			}
+		default:
+			return errors.Wrapf(err, errFmtCannotGetSecretKeySelector, expandedJSONPath)
+		}
+	}
 	return nil
 }
 
@@ -353,7 +363,11 @@ func expandedFor(expanded fieldpath.Segments, withWildcard fieldpath.Segments) b
 }
 
 func normalizeJSONPath(s string) string {
-	return strings.TrimPrefix(strings.TrimPrefix(s, "spec.forProvider."), "status.atProvider.")
+	result := s
+	for _, p := range []string{"spec.forProvider.", "spec.initProvider.", "status.atProvider."} {
+		result = strings.TrimPrefix(result, p)
+	}
+	return result
 }
 
 func secretKeyToFieldPath(s string) (string, error) {
