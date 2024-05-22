@@ -124,6 +124,15 @@ func (tr *{{ .CRD.Kind }}) LateInitialize(attrs []byte) (bool, error) {
     {{ range .LateInitializer.IgnoredFields -}}
         opts = append(opts, resource.WithNameFilter("{{ . }}"))
     {{ end }}
+    {{- if gt (len .LateInitializer.ConditionalIgnoredFields) 0 -}}
+        initParams, err := tr.GetInitParameters()
+        if err != nil {
+            return false, errors.Wrapf(err, "cannot get init parameters for resource '%q'", tr.GetName())
+        }
+        {{ range .LateInitializer.ConditionalIgnoredFields -}}
+            opts = append(opts, resource.WithConditionalFilter("{{ . }}", initParams))
+        {{ end }}
+    {{ end }}
 
     li := resource.NewGenericLateInitializer(opts...)
     return li.LateInitialize(&tr.Spec.ForProvider, params)

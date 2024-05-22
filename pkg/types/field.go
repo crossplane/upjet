@@ -104,7 +104,7 @@ func getDocString(cfg *config.Resource, f *Field, tfPath []string) string { //no
 }
 
 // NewField returns a constructed Field object.
-func NewField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema, snakeFieldName string, tfPath, xpPath, names []string, asBlocksMode bool) (*Field, error) {
+func NewField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema, snakeFieldName string, tfPath, xpPath, names []string, asBlocksMode bool) (*Field, error) { //nolint:gocyclo // easy to follow
 	f := &Field{
 		Schema:         sch,
 		Name:           name.NewFromSnake(snakeFieldName),
@@ -159,6 +159,12 @@ func NewField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema,
 		//  doesn't match anything, it's no-op in late-init logic anyway.
 		if ignoreField == traverser.FieldPath(f.TerraformPaths) {
 			cfg.LateInitializer.AddIgnoredCanonicalFields(traverser.FieldPath(f.CanonicalPaths))
+		}
+	}
+
+	for _, ignoreField := range cfg.LateInitializer.ConditionalIgnoredFields {
+		if ignoreField == traverser.FieldPath(f.TerraformPaths) {
+			cfg.LateInitializer.AddConditionalIgnoredCanonicalFields(traverser.FieldPath(f.CanonicalPaths))
 		}
 	}
 

@@ -59,7 +59,8 @@ func (tg *TerraformedGenerator) Generate(cfgs []*terraformedInput, apiVersion st
 			"Fields": cfg.Sensitive.GetFieldPaths(),
 		}
 		vars["LateInitializer"] = map[string]any{
-			"IgnoredFields": cfg.LateInitializer.GetIgnoredCanonicalFields(),
+			"IgnoredFields":            cfg.LateInitializer.GetIgnoredCanonicalFields(),
+			"ConditionalIgnoredFields": cfg.LateInitializer.GetConditionalIgnoredCanonicalFields(),
 		}
 
 		if err := trFile.Write(filePath, vars, os.ModePerm); err != nil {
