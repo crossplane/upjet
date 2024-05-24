@@ -775,6 +775,396 @@ func TestGetSensitiveParameters(t *testing.T) {
 				},
 			},
 		},
+		// spec.initProvider tests
+		"NoSensitiveDataInitProvider": {
+			args: args{
+				clientFn: func(client *mocks.MockSecretClient) {},
+				from: &unstructured.Unstructured{
+					Object: map[string]any{
+						"spec": map[string]any{
+							"initProvider": map[string]any{
+								"adminPasswordSecretRef": nil,
+							},
+						},
+					},
+				},
+				into: map[string]any{
+					"some_other_key": "some_other_value",
+				},
+				mapping: map[string]string{
+					"admin_password": "spec.forProvider.adminPasswordSecretRef",
+				},
+			},
+			want: want{
+				out: map[string]any{
+					"some_other_key": "some_other_value",
+				},
+			},
+		},
+		"SingleNoWildcardInitProvider": {
+			args: args{
+				clientFn: func(client *mocks.MockSecretClient) {
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
+						SecretReference: xpv1.SecretReference{
+							Name:      "admin-password",
+							Namespace: "crossplane-system",
+						},
+						Key: "pass",
+					})).Return([]byte("foo"), nil)
+				},
+				from: &unstructured.Unstructured{
+					Object: map[string]any{
+						"spec": map[string]any{
+							"initProvider": map[string]any{
+								"adminPasswordSecretRef": map[string]any{
+									"key":       "pass",
+									"name":      "admin-password",
+									"namespace": "crossplane-system",
+								},
+							},
+						},
+					},
+				},
+				into: map[string]any{
+					"some_other_key": "some_other_value",
+				},
+				mapping: map[string]string{
+					"admin_password": "spec.forProvider.adminPasswordSecretRef",
+				},
+			},
+			want: want{
+				out: map[string]any{
+					"some_other_key": "some_other_value",
+					"admin_password": "foo",
+				},
+			},
+		},
+		"SingleNoWildcardWithNoSecretInitProvider": {
+			args: args{
+				clientFn: func(client *mocks.MockSecretClient) {
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
+						SecretReference: xpv1.SecretReference{
+							Name:      "admin-password",
+							Namespace: "crossplane-system",
+						},
+						Key: "pass",
+					})).Return([]byte(""), kerrors.NewNotFound(v1.Resource("secret"), "admin-password"))
+				},
+				from: &unstructured.Unstructured{
+					Object: map[string]any{
+						"spec": map[string]any{
+							"initProvider": map[string]any{
+								"adminPasswordSecretRef": map[string]any{
+									"key":       "pass",
+									"name":      "admin-password",
+									"namespace": "crossplane-system",
+								},
+							},
+						},
+					},
+				},
+				into: map[string]any{
+					"some_other_key": "some_other_value",
+				},
+				mapping: map[string]string{
+					"admin_password": "spec.forProvider.adminPasswordSecretRef",
+				},
+			},
+			want: want{
+				out: map[string]any{
+					"some_other_key": "some_other_value",
+					"admin_password": "",
+				},
+			},
+		},
+		"SingleNoWildcardWithSliceInitProvider": {
+			args: args{
+				clientFn: func(client *mocks.MockSecretClient) {
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
+						SecretReference: xpv1.SecretReference{
+							Name:      "db-passwords",
+							Namespace: "crossplane-system",
+						},
+						Key: "admin",
+					})).Return([]byte("admin_pwd"), nil)
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
+						SecretReference: xpv1.SecretReference{
+							Name:      "db-passwords",
+							Namespace: "crossplane-system",
+						},
+						Key: "system",
+					})).Return([]byte("system_pwd"), nil)
+				},
+				from: &unstructured.Unstructured{
+					Object: map[string]any{
+						"spec": map[string]any{
+							"initProvider": map[string]any{
+								"passwordsSecretRef": []any{
+									secretKeySelector(
+										secretKeySelectorWithKey("admin"),
+										secretKeySelectorWithSecretReference(xpv1.SecretReference{
+											Name:      "db-passwords",
+											Namespace: "crossplane-system",
+										}),
+									),
+									secretKeySelector(
+										secretKeySelectorWithKey("system"),
+										secretKeySelectorWithSecretReference(xpv1.SecretReference{
+											Name:      "db-passwords",
+											Namespace: "crossplane-system",
+										}),
+									),
+								},
+							},
+						},
+					},
+				},
+				into: map[string]any{
+					"some_other_key": "some_other_value",
+				},
+				mapping: map[string]string{
+					"db_passwords": "spec.forProvider.passwordsSecretRef",
+				},
+			},
+			want: want{
+				out: map[string]any{
+					"some_other_key": "some_other_value",
+					"db_passwords": []any{
+						"admin_pwd",
+						"system_pwd",
+					},
+				},
+			},
+		},
+		"SingleNoWildcardWithSecretReferenceInitProvider": {
+			args: args{
+				clientFn: func(client *mocks.MockSecretClient) {
+					client.EXPECT().GetSecretData(gomock.Any(), gomock.Eq(&xpv1.SecretReference{
+						Name:      "db-passwords",
+						Namespace: "crossplane-system",
+					})).Return(map[string][]byte{"admin": []byte("admin_pwd"), "system": []byte("system_pwd")}, nil)
+				},
+				from: &unstructured.Unstructured{
+					Object: map[string]any{
+						"spec": map[string]any{
+							"initProvider": map[string]any{
+								"dbPasswordsSecretRef": map[string]any{
+									"name":      "db-passwords",
+									"namespace": "crossplane-system",
+								},
+							},
+						},
+					},
+				},
+				into: map[string]any{
+					"some_other_key": "some_other_value",
+				},
+				mapping: map[string]string{
+					"db_passwords": "spec.forProvider.dbPasswordsSecretRef",
+				},
+			},
+			want: want{
+				out: map[string]any{
+					"some_other_key": "some_other_value",
+					"db_passwords": map[string]any{
+						"admin":  "admin_pwd",
+						"system": "system_pwd",
+					},
+				},
+			},
+		},
+		"MultipleNoWildcardInitProvider": {
+			args: args{
+				clientFn: func(client *mocks.MockSecretClient) {
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
+						SecretReference: xpv1.SecretReference{
+							Name:      "admin-password",
+							Namespace: "crossplane-system",
+						},
+						Key: "pass",
+					})).Return([]byte("foo"), nil)
+				},
+				from: &unstructured.Unstructured{
+					Object: map[string]any{
+						"spec": map[string]any{
+							"initProvider": map[string]any{
+								"adminPasswordSecretRef": map[string]any{
+									"key":       "pass",
+									"name":      "admin-password",
+									"namespace": "crossplane-system",
+								},
+							},
+						},
+					},
+				},
+				into: map[string]any{
+					"some_other_key": "some_other_value",
+				},
+				mapping: map[string]string{
+					"admin_password": "spec.forProvider.adminPasswordSecretRef",
+					"admin_key":      "spec.forProvider.adminKeySecretRef",
+				},
+			},
+			want: want{
+				out: map[string]any{
+					"some_other_key": "some_other_value",
+					"admin_password": "foo",
+				},
+			},
+		},
+		"MultipleWithWildcardInitProvider": {
+			args: args{
+				clientFn: func(client *mocks.MockSecretClient) {
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
+						SecretReference: xpv1.SecretReference{
+							Name:      "admin-password",
+							Namespace: "crossplane-system",
+						},
+						Key: "pass",
+					})).Return([]byte("foo"), nil)
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
+						SecretReference: xpv1.SecretReference{
+							Name:      "maintenance-password",
+							Namespace: "crossplane-system",
+						},
+						Key: "pass",
+					})).Return([]byte("baz"), nil)
+				},
+				from: &unstructured.Unstructured{
+					Object: map[string]any{
+						"spec": map[string]any{
+							"initProvider": map[string]any{
+								"databaseUsers": []any{
+									map[string]any{
+										"name": "admin",
+										"passwordSecretRef": map[string]any{
+											"key":       "pass",
+											"name":      "admin-password",
+											"namespace": "crossplane-system",
+										},
+										"displayName": "Administrator",
+									},
+									map[string]any{
+										"name": "system",
+										// Intentionally skip providing this optional parameter
+										// to test the behaviour when an optional parameter
+										// not provided.
+										/*"passwordSecretRef": map[string]any{
+											"name":      "system-password",
+											"namespace": "crossplane-system",
+											"key":       "pass",
+										},*/
+										"displayName": "System",
+									},
+									map[string]any{
+										"name": "maintenance",
+										"passwordSecretRef": map[string]any{
+											"key":       "pass",
+											"name":      "maintenance-password",
+											"namespace": "crossplane-system",
+										},
+										"displayName": "Maintenance",
+									},
+								},
+							},
+						},
+					},
+				},
+				into: map[string]any{
+					"some_other_key": "some_other_value",
+					"database_users": []any{
+						map[string]any{
+							"name":         "admin",
+							"display_name": "Administrator",
+						},
+						map[string]any{
+							"name":         "system",
+							"display_name": "System",
+						},
+						map[string]any{
+							"name":         "maintenance",
+							"display_name": "Maintenance",
+						},
+					},
+				},
+				mapping: map[string]string{
+					"database_users[*].password": "spec.forProvider.databaseUsers[*].passwordSecretRef",
+				},
+			},
+			want: want{
+				out: map[string]any{
+					"some_other_key": "some_other_value",
+					"database_users": []any{
+						map[string]any{
+							"name":         "admin",
+							"password":     "foo",
+							"display_name": "Administrator",
+						},
+						map[string]any{
+							"name":         "system",
+							"display_name": "System",
+						},
+						map[string]any{
+							"name":         "maintenance",
+							"password":     "baz",
+							"display_name": "Maintenance",
+						},
+					},
+				},
+			},
+		},
+		"ForProviderRefOverridesInitProviderRef": {
+			args: args{
+				clientFn: func(client *mocks.MockSecretClient) {
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
+						SecretReference: xpv1.SecretReference{
+							Name:      "admin-password",
+							Namespace: "crossplane-system",
+						},
+						Key: "pass-forprovider",
+					})).Return([]byte("sensitive-forprovider"), nil)
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
+						SecretReference: xpv1.SecretReference{
+							Name:      "admin-password",
+							Namespace: "crossplane-system",
+						},
+						Key: "pass-initprovider",
+					})).Return([]byte("sensitive-initprovider"), nil)
+				},
+				from: &unstructured.Unstructured{
+					Object: map[string]any{
+						"spec": map[string]any{
+							"forProvider": map[string]any{
+								"adminPasswordSecretRef": map[string]any{
+									"key":       "pass-forprovider",
+									"name":      "admin-password",
+									"namespace": "crossplane-system",
+								},
+							},
+							"initProvider": map[string]any{
+								"adminPasswordSecretRef": map[string]any{
+									"key":       "pass-initprovider",
+									"name":      "admin-password",
+									"namespace": "crossplane-system",
+								},
+							},
+						},
+					},
+				},
+				into: map[string]any{
+					"some_other_key": "some_other_value",
+				},
+				mapping: map[string]string{
+					"admin_password": "adminPasswordSecretRef",
+				},
+			},
+			want: want{
+				out: map[string]any{
+					"some_other_key": "some_other_value",
+					"admin_password": "sensitive-forprovider",
+				},
+			},
+		},
 	}
 	for name, tc := range cases {
 		ctrl := gomock.NewController(t)

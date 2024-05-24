@@ -50,6 +50,9 @@ type Field struct {
 	// Injected is set if this Field is an injected field to the Terraform
 	// schema as an object list map key for server-side apply merges.
 	Injected bool
+	// Sensitive is set if this Field holds sensitive data and is thus
+	// generated as a secret reference.
+	Sensitive bool
 }
 
 // getDocString tries to extract the documentation string for the specified
@@ -268,6 +271,7 @@ func NewSensitiveField(g *Builder, cfg *config.Resource, r *resource, sch *schem
 	if err != nil {
 		return nil, false, err
 	}
+	f.Sensitive = true
 
 	if IsObservation(f.Schema) {
 		cfg.Sensitive.AddFieldPath(traverser.FieldPathWithWildcard(f.TerraformPaths), "status.atProvider."+traverser.FieldPathWithWildcard(f.CRDPaths))
@@ -279,9 +283,9 @@ func NewSensitiveField(g *Builder, cfg *config.Resource, r *resource, sch *schem
 	switch f.FieldType.(type) {
 	case *types.Slice:
 		f.CRDPaths[len(f.CRDPaths)-2] = f.CRDPaths[len(f.CRDPaths)-2] + sfx
-		cfg.Sensitive.AddFieldPath(traverser.FieldPathWithWildcard(f.TerraformPaths), "spec.forProvider."+traverser.FieldPathWithWildcard(f.CRDPaths))
+		cfg.Sensitive.AddFieldPath(traverser.FieldPathWithWildcard(f.TerraformPaths), traverser.FieldPathWithWildcard(f.CRDPaths))
 	default:
-		cfg.Sensitive.AddFieldPath(traverser.FieldPathWithWildcard(f.TerraformPaths), "spec.forProvider."+traverser.FieldPathWithWildcard(f.CRDPaths)+sfx)
+		cfg.Sensitive.AddFieldPath(traverser.FieldPathWithWildcard(f.TerraformPaths), traverser.FieldPathWithWildcard(f.CRDPaths)+sfx)
 	}
 	// todo(turkenh): do we need to support other field types as sensitive?
 	if f.FieldType.String() != "string" && f.FieldType.String() != "*string" && f.FieldType.String() != "[]string" &&
@@ -415,7 +419,7 @@ func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames, add
 // an earlier step, so they cannot be included as well. Plus probably they
 // should also not change for Create and Update steps.
 func (f *Field) isInit() bool {
-	return !f.Identifier && (f.TFTag != "-" || f.Injected)
+	return !f.Identifier && (f.TFTag != "-" || f.Injected || f.Sensitive)
 }
 
 func getDescription(s string) string {
