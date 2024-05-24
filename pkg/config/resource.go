@@ -220,10 +220,20 @@ type LateInitializer struct {
 	// "block_device_mappings.ebs".
 	IgnoredFields []string
 
+	// ConditionalIgnoredFields are the field paths to be skipped during
+	// late-initialization if they are filled in spec.initProvider.
+	ConditionalIgnoredFields []string
+
 	// ignoredCanonicalFieldPaths are the Canonical field paths to be skipped
 	// during late-initialization. This is filled using the `IgnoredFields`
 	// field which keeps Terraform paths by converting them to Canonical paths.
 	ignoredCanonicalFieldPaths []string
+
+	// conditionalIgnoredCanonicalFieldPaths are the Canonical field paths to be
+	// skipped during late-initialization if they are filled in spec.initProvider.
+	// This is filled using the `ConditionalIgnoredFields` field which keeps
+	// Terraform paths by converting them to Canonical paths.
+	conditionalIgnoredCanonicalFieldPaths []string
 }
 
 // GetIgnoredCanonicalFields returns the ignoredCanonicalFields
@@ -237,6 +247,19 @@ func (l *LateInitializer) AddIgnoredCanonicalFields(cf string) {
 		l.ignoredCanonicalFieldPaths = make([]string, 0)
 	}
 	l.ignoredCanonicalFieldPaths = append(l.ignoredCanonicalFieldPaths, cf)
+}
+
+// GetConditionalIgnoredCanonicalFields returns the conditionalIgnoredCanonicalFieldPaths
+func (l *LateInitializer) GetConditionalIgnoredCanonicalFields() []string {
+	return l.conditionalIgnoredCanonicalFieldPaths
+}
+
+// AddConditionalIgnoredCanonicalFields sets conditional ignored canonical fields
+func (l *LateInitializer) AddConditionalIgnoredCanonicalFields(cf string) {
+	if l.conditionalIgnoredCanonicalFieldPaths == nil {
+		l.conditionalIgnoredCanonicalFieldPaths = make([]string, 0)
+	}
+	l.conditionalIgnoredCanonicalFieldPaths = append(l.conditionalIgnoredCanonicalFieldPaths, cf)
 }
 
 // GetFieldPaths returns the fieldPaths map for Sensitive

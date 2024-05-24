@@ -10,12 +10,14 @@ import (
 	"runtime/debug"
 	"strings"
 
+	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 	xpmeta "github.com/crossplane/crossplane-runtime/pkg/meta"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/crossplane/upjet/pkg/config"
+	"github.com/crossplane/upjet/pkg/types/name"
 )
 
 const (
@@ -43,8 +45,9 @@ const (
 
 // GenericLateInitializer performs late-initialization of a Terraformed resource.
 type GenericLateInitializer struct {
-	valueFilters []ValueFilter
-	nameFilters  []NameFilter
+	valueFilters       []ValueFilter
+	nameFilters        []NameFilter
+	conditionalFilters []ConditionalFilter
 }
 
 // SetCriticalAnnotations sets the critical annotations of the resource and reports
@@ -175,6 +178,35 @@ func isZeroValueOmitted(tag string) bool {
 	return false
 }
 
+// ConditionalFilter defines a late-initialization filter on CR field canonical names.
+// Fields with matching cnames will not be processed during late-initialization
+// if they are filled in spec.initProvider.
+type ConditionalFilter func(string) bool
+
+// WithConditionalFilter returns a GenericLateInitializer that causes to
+// skip initialization of the field with the specified canonical name
+// if the field is filled in spec.initProvider.
+func WithConditionalFilter(cName string, initProvider map[string]any) GenericLateInitializerOption {
+	return func(l *GenericLateInitializer) {
+		l.conditionalFilters = append(l.conditionalFilters, conditionalFilter(cName, initProvider))
+	}
+}
+
+func conditionalFilter(cName string, initProvider map[string]any) ConditionalFilter {
+	return func(cn string) bool {
+		if cName != cn {
+			return false
+		}
+
+		paved := fieldpath.Pave(initProvider)
+		value, err := paved.GetValue(name.NewFromCamel(cName).Snake)
+		if err != nil || value == nil {
+			return false
+		}
+		return true
+	}
+}
+
 // LateInitialize Copy unset (nil) values from responseObject to crObject
 // Both crObject and responseObject must be pointers to structs.
 // Otherwise, an error will be returned. Returns `true` if at least one field has been stored
@@ -221,6 +253,16 @@ func (li *GenericLateInitializer) handleStruct(parentName string, desiredObject 
 		filtered := false
 
 		for _, f := range li.nameFilters {
+			if f(cName) {
+				filtered = true
+				break
+			}
+		}
+		if filtered {
+			continue
+		}
+
+		for _, f := range li.conditionalFilters {
 			if f(cName) {
 				filtered = true
 				break
