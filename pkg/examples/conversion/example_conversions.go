@@ -81,7 +81,7 @@ func ConvertSingletonListToEmbeddedObject(pc *config.Provider, startPath, licens
 						}
 						converted, err := conversion.Convert(e.Object, conversionPaths, conversion.ToEmbeddedObject)
 						if err != nil {
-							return errors.Wrap(err, "failed to convert example to embedded object")
+							return errors.Wrapf(err, "failed to convert example to embedded object in manifest %s", path)
 						}
 						e.Object = converted
 						e.SetGroupVersionKind(k8sschema.GroupVersionKind{
