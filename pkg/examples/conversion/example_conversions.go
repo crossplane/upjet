@@ -13,16 +13,21 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/crossplane/upjet/pkg/config"
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	k8sschema "k8s.io/apimachinery/pkg/runtime/schema"
 	kyaml "k8s.io/apimachinery/pkg/util/yaml"
 	"sigs.k8s.io/yaml"
 
+	"github.com/crossplane/upjet/pkg/config"
 	"github.com/crossplane/upjet/pkg/config/conversion"
 )
 
+// ConvertSingletonListToEmbeddedObject generates the example manifests for
+// the APIs with converted singleton lists in their new API versions with the
+// embedded objects. All manifests under `startPath` are scanned and the
+// header at the specified path `licenseHeaderPath` is used for the converted
+// example manifests.
 func ConvertSingletonListToEmbeddedObject(pc *config.Provider, startPath, licenseHeaderPath string) error {
 	resourceRegistry := prepareResourceRegistry(pc)
 
@@ -86,6 +91,10 @@ func ConvertSingletonListToEmbeddedObject(pc *config.Provider, startPath, licens
 						})
 					}
 					annotations := e.GetAnnotations()
+					if annotations == nil {
+						annotations = make(map[string]string)
+						log.Printf("Missing annotations: %s", path)
+					}
 					annotations["meta.upbound.io/example-id"] = annotationValue
 					e.SetAnnotations(annotations)
 				}
