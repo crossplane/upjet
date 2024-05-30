@@ -17,7 +17,11 @@ type ResourceSetter interface {
 	SetResource(r *Resource)
 }
 
-func traverseSchemas(tfName string, tfResource *schema.Resource, r *Resource, visitors ...traverser.SchemaTraverser) error {
+// TraverseSchemas visits the specified schema belonging to the Terraform
+// resource with the given name and given upjet resource configuration using
+// the specified visitors. If any visitors report an error, traversal is
+// stopped and the error is reported to the caller.
+func TraverseSchemas(tfName string, tfResource *schema.Resource, r *Resource, visitors ...traverser.SchemaTraverser) error {
 	// set the upjet Resource configuration as context for the visitors that
 	// satisfy the ResourceSetter interface.
 	for _, v := range visitors {
