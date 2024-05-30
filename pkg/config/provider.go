@@ -373,7 +373,7 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadata []byt
 		p.Resources[name].useTerraformPluginFrameworkClient = isPluginFrameworkResource
 		// traverse the Terraform resource schema to initialize the upjet Resource
 		// configurations
-		if err := TraverseSchemas(name, terraformResource, p.Resources[name], p.schemaTraversers...); err != nil {
+		if err := TraverseSchemas(name, p.Resources[name], p.schemaTraversers...); err != nil {
 			panic(errors.Wrap(err, "failed to execute the Terraform schema traverser chain"))
 		}
 	}

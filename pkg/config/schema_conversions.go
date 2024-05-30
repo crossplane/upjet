@@ -6,6 +6,7 @@ package config
 
 import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/pkg/errors"
 
 	"github.com/crossplane/upjet/pkg/schema/traverser"
 )
@@ -17,11 +18,23 @@ type ResourceSetter interface {
 	SetResource(r *Resource)
 }
 
+// TraverseTFSchemas traverses the Terraform schemas of all the resources of
+// the Provider `p` using the specified visitors. Reports any errors
+// encountered.
+func (p *Provider) TraverseTFSchemas(visitors ...traverser.SchemaTraverser) error {
+	for name, cfg := range p.Resources {
+		if err := TraverseSchemas(name, cfg, visitors...); err != nil {
+			return errors.Wrapf(err, "failed to traverse the schema of the Terraform resource with name %q", name)
+		}
+	}
+	return nil
+}
+
 // TraverseSchemas visits the specified schema belonging to the Terraform
 // resource with the given name and given upjet resource configuration using
 // the specified visitors. If any visitors report an error, traversal is
 // stopped and the error is reported to the caller.
-func TraverseSchemas(tfName string, tfResource *schema.Resource, r *Resource, visitors ...traverser.SchemaTraverser) error {
+func TraverseSchemas(tfName string, r *Resource, visitors ...traverser.SchemaTraverser) error {
 	// set the upjet Resource configuration as context for the visitors that
 	// satisfy the ResourceSetter interface.
 	for _, v := range visitors {
@@ -29,7 +42,7 @@ func TraverseSchemas(tfName string, tfResource *schema.Resource, r *Resource, vi
 			rs.SetResource(r)
 		}
 	}
-	return traverser.Traverse(tfName, tfResource, visitors...)
+	return traverser.Traverse(tfName, r.TerraformResource, visitors...)
 }
 
 type resourceContext struct {

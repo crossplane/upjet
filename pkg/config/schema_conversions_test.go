@@ -155,7 +155,7 @@ func TestSingletonListEmbedder(t *testing.T) {
 		t.Run(n, func(t *testing.T) {
 			e := &SingletonListEmbedder{}
 			r := DefaultResource(tt.args.name, tt.args.resource, nil, nil)
-			err := TraverseSchemas(tt.args.name, tt.args.resource, r, e)
+			err := TraverseSchemas(tt.args.name, r, e)
 			if diff := cmp.Diff(tt.want.err, err, test.EquateErrors()); diff != "" {
 				t.Fatalf("\n%s\ntraverseSchemas(name, schema, ...): -wantErr, +gotErr:\n%s", tt.reason, diff)
 			}
