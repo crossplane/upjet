@@ -18,7 +18,7 @@ type SchemaAccessor func(*schema.Schema) error
 // the accessors. The terminal node at the end of the specified path must be
 // a *schema.Resource or an error will be reported. The specified path must
 // have at least one component.
-func AccessSchema(sch any, path []string, accessors ...SchemaAccessor) error {
+func AccessSchema(sch any, path []string, accessors ...SchemaAccessor) error { //nolint:gocyclo // easier to follow the flow
 	if len(path) == 0 {
 		return errors.New("empty path specified while accessing the Terraform resource schema")
 	}

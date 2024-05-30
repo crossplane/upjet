@@ -18,11 +18,14 @@ type ResourceSetter interface {
 	SetResource(r *Resource)
 }
 
+// ResourceSchema represents a provider's resource schema.
+type ResourceSchema map[string]*Resource
+
 // TraverseTFSchemas traverses the Terraform schemas of all the resources of
 // the Provider `p` using the specified visitors. Reports any errors
 // encountered.
-func (p *Provider) TraverseTFSchemas(visitors ...traverser.SchemaTraverser) error {
-	for name, cfg := range p.Resources {
+func (s ResourceSchema) TraverseTFSchemas(visitors ...traverser.SchemaTraverser) error {
+	for name, cfg := range s {
 		if err := TraverseSchemas(name, cfg, visitors...); err != nil {
 			return errors.Wrapf(err, "failed to traverse the schema of the Terraform resource with name %q", name)
 		}
