@@ -112,3 +112,34 @@ func TestSetExternalTagsWithPaved(t *testing.T) {
 		})
 	}
 }
+
+func TestReferences_AddReference(t *testing.T) {
+	t.Run("Adding a reference", func(t *testing.T) {
+		r := &Resource{References: References{}}
+		err := r.References.AddReference("forwarding_rule.certificate_name", Reference{
+			TerraformName: "digitalocean_certificate",
+		})
+		if err != nil {
+			t.Fatalf("AddReference() got error: %v", err)
+		}
+		if len(r.References) != 1 {
+			t.Fatalf("AddReference() got error: %v", err)
+		}
+	})
+	t.Run("Adding twice a reference for a given field", func(t *testing.T) {
+		r := &Resource{References: References{}}
+		err := r.References.AddReference("forwarding_rule.certificate_name", Reference{
+			TerraformName: "digitalocean_certificate",
+		})
+		if err != nil {
+			t.Fatalf("AddReference() got error: %v", err)
+		}
+
+		err = r.References.AddReference("forwarding_rule.certificate_name", Reference{
+			TerraformName: "digitalocean_certificate",
+		})
+		if !errors.Is(err, ErrReferenceAlreadyExists) {
+			t.Fatalf("AddReference() should have returned an error")
+		}
+	})
+}
