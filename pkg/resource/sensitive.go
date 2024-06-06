@@ -168,17 +168,25 @@ func GetSensitiveParameters(ctx context.Context, client SecretClient, from runti
 		return err
 	}
 	pavedTF := fieldpath.Pave(into)
+	prefixes := []string{"spec.initProvider.", "spec.forProvider."}
 
 	for tfPath, jsonPath := range mapping {
 		jp := jsonPath
 		groups := reFieldPathSpec.FindStringSubmatch(jsonPath)
 		if len(groups) == 3 {
 			jp = groups[2]
+		} else if strings.HasPrefix(jsonPath, "status.atProvider.") {
+			// we will not be prefixing the JSON fieldpath expression if it starts
+			// with "status.atProvider" in case there is a spec.forProvider.status
+			// field. If there exists a spec.forProvider.status field, then the
+			// fieldpath.ExpandWildcards will complain instead of expanding the
+			// fieldpath expression as an empty slice.
+			prefixes = []string{""}
 		}
 
 		// spec.forProvider secret references override the spec.initProvider
 		// references.
-		for _, p := range []string{"spec.initProvider.", "spec.forProvider."} {
+		for _, p := range prefixes {
 			if err := storeSensitiveData(ctx, client, tfPath, p+jp, pavedTF, pavedJSON, mapping); err != nil {
 				return err
 			}
