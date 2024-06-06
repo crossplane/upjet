@@ -12,6 +12,7 @@ import (
 
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
+	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	fwresource "github.com/hashicorp/terraform-plugin-framework/resource"
@@ -315,7 +316,7 @@ func (t *Tagger) Initialize(ctx context.Context, mg xpresource.Managed) error {
 	if err != nil {
 		return err
 	}
-	pavedByte, err := setExternalTagsWithPaved(xpresource.GetExternalTags(mg), paved, t.fieldName)
+	pavedByte, err := setExternalTagsWithPaved(getExternalTags(mg), paved, t.fieldName)
 	if err != nil {
 		return err
 	}
@@ -328,11 +329,20 @@ func (t *Tagger) Initialize(ctx context.Context, mg xpresource.Managed) error {
 	return nil
 }
 
+const externalResourceTagKeyExternalName = "crossplane-external-name"
+
+func getExternalTags(mg xpresource.Managed) map[string]string {
+	externalTags := xpresource.GetExternalTags(mg)
+	externalTags[externalResourceTagKeyExternalName] = mg.GetAnnotations()[meta.AnnotationKeyExternalName]
+	return externalTags
+}
+
 func setExternalTagsWithPaved(externalTags map[string]string, paved *fieldpath.Paved, fieldName string) ([]byte, error) {
 	tags := map[string]*string{
 		xpresource.ExternalResourceTagKeyKind:     ptr.To(externalTags[xpresource.ExternalResourceTagKeyKind]),
 		xpresource.ExternalResourceTagKeyName:     ptr.To(externalTags[xpresource.ExternalResourceTagKeyName]),
 		xpresource.ExternalResourceTagKeyProvider: ptr.To(externalTags[xpresource.ExternalResourceTagKeyProvider]),
+		externalResourceTagKeyExternalName:        ptr.To(externalTags[externalResourceTagKeyExternalName]),
 	}
 
 	if err := paved.SetValue(fmt.Sprintf("spec.forProvider.%s", fieldName), tags); err != nil {

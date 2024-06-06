@@ -11,17 +11,20 @@ import (
 
 	"github.com/crossplane/crossplane-runtime/pkg/errors"
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
+	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/crossplane/crossplane-runtime/pkg/resource/fake"
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	"github.com/google/go-cmp/cmp"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
-	kind     = "ACoolService"
-	name     = "example-service"
-	provider = "ACoolProvider"
+	kind         = "ACoolService"
+	name         = "example-service"
+	provider     = "ACoolProvider"
+	externalName = "anExternalName"
 )
 
 func TestTagger_Initialize(t *testing.T) {
@@ -82,7 +85,7 @@ func TestSetExternalTagsWithPaved(t *testing.T) {
 		args
 		want
 	}{
-		"Successful": {
+		"Successful without external-name": {
 			args: args{
 				externalTags: map[string]string{
 					xpresource.ExternalResourceTagKeyKind:     kind,
@@ -93,7 +96,27 @@ func TestSetExternalTagsWithPaved(t *testing.T) {
 				fieldName: "tags",
 			},
 			want: want{
-				pavedString: fmt.Sprintf(`{"spec":{"forProvider":{"tags":{"%s":"%s","%s":"%s","%s":"%s"}}}}`,
+				pavedString: fmt.Sprintf(`{"spec":{"forProvider":{"tags":{"%s":"%s","%s":"%s","%s":"%s","%s":"%s"}}}}`,
+					externalResourceTagKeyExternalName, "",
+					xpresource.ExternalResourceTagKeyKind, kind,
+					xpresource.ExternalResourceTagKeyName, name,
+					xpresource.ExternalResourceTagKeyProvider, provider),
+			},
+		},
+		"Successful with external-name": {
+			args: args{
+				externalTags: map[string]string{
+					xpresource.ExternalResourceTagKeyKind:     kind,
+					xpresource.ExternalResourceTagKeyName:     name,
+					xpresource.ExternalResourceTagKeyProvider: provider,
+					externalResourceTagKeyExternalName:        externalName,
+				},
+				paved:     fieldpath.Pave(map[string]any{}),
+				fieldName: "tags",
+			},
+			want: want{
+				pavedString: fmt.Sprintf(`{"spec":{"forProvider":{"tags":{"%s":"%s","%s":"%s","%s":"%s","%s":"%s"}}}}`,
+					externalResourceTagKeyExternalName, externalName,
 					xpresource.ExternalResourceTagKeyKind, kind,
 					xpresource.ExternalResourceTagKeyName, name,
 					xpresource.ExternalResourceTagKeyProvider, provider),
@@ -108,6 +131,50 @@ func TestSetExternalTagsWithPaved(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.want.pavedString, string(gotByte), test.EquateErrors()); diff != "" {
 				t.Fatalf("generateTypeName(...): -want gotByte, +got gotByte: %s", diff)
+			}
+		})
+	}
+}
+
+func TestGetExternalTags(t *testing.T) {
+	cases := map[string]struct {
+		mg   xpresource.Managed
+		want map[string]string
+	}{
+		"Without external-name": {
+			mg: &fake.Managed{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: name,
+				},
+			},
+			want: map[string]string{
+				xpresource.ExternalResourceTagKeyKind: "",
+				xpresource.ExternalResourceTagKeyName: name,
+				externalResourceTagKeyExternalName:    "",
+			},
+		},
+		"With external-name": {
+			mg: &fake.Managed{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: name,
+					Annotations: map[string]string{
+						meta.AnnotationKeyExternalName: externalName,
+					},
+				},
+			},
+			want: map[string]string{
+				xpresource.ExternalResourceTagKeyKind: "",
+				xpresource.ExternalResourceTagKeyName: name,
+				externalResourceTagKeyExternalName:    externalName,
+			},
+		},
+	}
+
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			got := getExternalTags(tc.mg)
+			if diff := cmp.Diff(tc.want, got, test.EquateErrors()); diff != "" {
+				t.Fatalf("generateTypeName(...): -want, +got: %s", diff)
 			}
 		})
 	}
