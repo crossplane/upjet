@@ -24,7 +24,7 @@ const (
 	provider = "ACoolProvider"
 )
 
-func TestTagger_Initialize(t *testing.T) {
+func TestTaggerInitialize(t *testing.T) {
 	errBoom := errors.New("boom")
 
 	type args struct {
@@ -108,6 +108,190 @@ func TestSetExternalTagsWithPaved(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.want.pavedString, string(gotByte), test.EquateErrors()); diff != "" {
 				t.Fatalf("generateTypeName(...): -want gotByte, +got gotByte: %s", diff)
+			}
+		})
+	}
+}
+
+func TestAddSingletonListConversion(t *testing.T) {
+	type args struct {
+		r       func() *Resource
+		tfPath  string
+		crdPath string
+	}
+	type want struct {
+		r func() *Resource
+	}
+	cases := map[string]struct {
+		reason string
+		args
+		want
+	}{
+		"AddNonWildcardTFPath": {
+			reason: "A non-wildcard TF path of a singleton list should successfully be configured to be converted into an embedded object.",
+			args: args{
+				tfPath:  "singleton_list",
+				crdPath: "singletonList",
+				r: func() *Resource {
+					r := DefaultResource("test_resource", nil, nil, nil)
+					r.AddSingletonListConversion("singleton_list", "singletonList")
+					return r
+				},
+			},
+			want: want{
+				r: func() *Resource {
+					r := DefaultResource("test_resource", nil, nil, nil)
+					r.SchemaElementOptions = SchemaElementOptions{}
+					r.SchemaElementOptions["singleton_list"] = &SchemaElementOption{
+						EmbeddedObject: true,
+					}
+					r.listConversionPaths["singleton_list"] = "singletonList"
+					return r
+				},
+			},
+		},
+		"AddWildcardTFPath": {
+			reason: "A wildcard TF path of a singleton list should successfully be configured to be converted into an embedded object.",
+			args: args{
+				tfPath:  "parent[*].singleton_list",
+				crdPath: "parent[*].singletonList",
+				r: func() *Resource {
+					r := DefaultResource("test_resource", nil, nil, nil)
+					r.AddSingletonListConversion("parent[*].singleton_list", "parent[*].singletonList")
+					return r
+				},
+			},
+			want: want{
+				r: func() *Resource {
+					r := DefaultResource("test_resource", nil, nil, nil)
+					r.SchemaElementOptions = SchemaElementOptions{}
+					r.SchemaElementOptions["parent.singleton_list"] = &SchemaElementOption{
+						EmbeddedObject: true,
+					}
+					r.listConversionPaths["parent[*].singleton_list"] = "parent[*].singletonList"
+					return r
+				},
+			},
+		},
+		"AddIndexedTFPath": {
+			reason: "An indexed TF path of a singleton list should successfully be configured to be converted into an embedded object.",
+			args: args{
+				tfPath:  "parent[0].singleton_list",
+				crdPath: "parent[0].singletonList",
+				r: func() *Resource {
+					r := DefaultResource("test_resource", nil, nil, nil)
+					r.AddSingletonListConversion("parent[0].singleton_list", "parent[0].singletonList")
+					return r
+				},
+			},
+			want: want{
+				r: func() *Resource {
+					r := DefaultResource("test_resource", nil, nil, nil)
+					r.SchemaElementOptions = SchemaElementOptions{}
+					r.SchemaElementOptions["parent.singleton_list"] = &SchemaElementOption{
+						EmbeddedObject: true,
+					}
+					r.listConversionPaths["parent[0].singleton_list"] = "parent[0].singletonList"
+					return r
+				},
+			},
+		},
+	}
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			r := tc.args.r()
+			r.AddSingletonListConversion(tc.args.tfPath, tc.args.crdPath)
+			wantR := tc.want.r()
+			if diff := cmp.Diff(wantR.listConversionPaths, r.listConversionPaths); diff != "" {
+				t.Errorf("%s\nAddSingletonListConversion(tfPath): -wantConversionPaths, +gotConversionPaths: \n%s", tc.reason, diff)
+			}
+			if diff := cmp.Diff(wantR.SchemaElementOptions, r.SchemaElementOptions); diff != "" {
+				t.Errorf("%s\nAddSingletonListConversion(tfPath): -wantSchemaElementOptions, +gotSchemaElementOptions: \n%s", tc.reason, diff)
+			}
+		})
+	}
+}
+
+func TestRemoveSingletonListConversion(t *testing.T) {
+	type args struct {
+		r      func() *Resource
+		tfPath string
+	}
+	type want struct {
+		removed bool
+		r       func() *Resource
+	}
+	cases := map[string]struct {
+		reason string
+		args
+		want
+	}{
+		"RemoveWildcardListConversion": {
+			reason: "An existing wildcard list conversion can successfully be removed.",
+			args: args{
+				tfPath: "parent[*].singleton_list",
+				r: func() *Resource {
+					r := DefaultResource("test_resource", nil, nil, nil)
+					r.AddSingletonListConversion("parent[*].singleton_list", "parent[*].singletonList")
+					return r
+				},
+			},
+			want: want{
+				removed: true,
+				r: func() *Resource {
+					r := DefaultResource("test_resource", nil, nil, nil)
+					return r
+				},
+			},
+		},
+		"RemoveIndexedListConversion": {
+			reason: "An existing indexed list conversion can successfully be removed.",
+			args: args{
+				tfPath: "parent[0].singleton_list",
+				r: func() *Resource {
+					r := DefaultResource("test_resource", nil, nil, nil)
+					r.AddSingletonListConversion("parent[0].singleton_list", "parent[0].singletonList")
+					return r
+				},
+			},
+			want: want{
+				removed: true,
+				r: func() *Resource {
+					r := DefaultResource("test_resource", nil, nil, nil)
+					return r
+				},
+			},
+		},
+		"NonExistingListConversion": {
+			reason: "A list conversion path that does not exist cannot be removed.",
+			args: args{
+				tfPath: "non-existent",
+				r: func() *Resource {
+					r := DefaultResource("test_resource", nil, nil, nil)
+					r.AddSingletonListConversion("parent[*].singleton_list", "parent[*].singletonList")
+					return r
+				},
+			},
+			want: want{
+				removed: false,
+				r: func() *Resource {
+					r := DefaultResource("test_resource", nil, nil, nil)
+					r.AddSingletonListConversion("parent[*].singleton_list", "parent[*].singletonList")
+					return r
+				},
+			},
+		},
+	}
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			r := tc.args.r()
+			got := r.RemoveSingletonListConversion(tc.args.tfPath)
+			if diff := cmp.Diff(tc.want.removed, got); diff != "" {
+				t.Errorf("%s\nRemoveSingletonListConversion(tfPath): -wantRemoved, +gotRemoved: \n%s", tc.reason, diff)
+			}
+
+			if diff := cmp.Diff(tc.want.r().listConversionPaths, r.listConversionPaths); diff != "" {
+				t.Errorf("%s\nRemoveSingletonListConversion(tfPath): -wantConversionPaths, +gotConversionPaths: \n%s", tc.reason, diff)
 			}
 		})
 	}
