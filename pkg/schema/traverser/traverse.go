@@ -140,3 +140,17 @@ func (n NoopTraverser) VisitSchema(*SchemaNode) error {
 func (n NoopTraverser) VisitResource(*ResourceNode) error {
 	return nil
 }
+
+// TFResourceSchema represents a provider's Terraform resource schema.
+type TFResourceSchema map[string]*schema.Resource
+
+// Traverse traverses the receiver schema using the specified
+// visitors. Reports any errors encountered by the visitors.
+func (s TFResourceSchema) Traverse(visitors ...SchemaTraverser) error {
+	for n, r := range s {
+		if err := Traverse(n, r, visitors...); err != nil {
+			return errors.Wrapf(err, "failed to traverse the schema of the Terraform resource with name %q", n)
+		}
+	}
+	return nil
+}

@@ -693,6 +693,28 @@ func (r *Resource) AddSingletonListConversion(tfPath, crdPath string) {
 	r.listConversionPaths[tfPath] = crdPath
 }
 
+// RemoveSingletonListConversion removes the singleton list conversion
+// for the specified Terraform configuration path. Also unsets the path's
+// embedding mode. The specified fieldpath expression must be a Terraform
+// field path with or without the wildcard segments. Returns true if
+// the path has already been registered for singleton list conversion.
+func (r *Resource) RemoveSingletonListConversion(tfPath string) bool {
+	nPath := strings.ReplaceAll(tfPath, "[*]", "")
+	nPath = strings.ReplaceAll(nPath, "[0]", "")
+	for p := range r.listConversionPaths {
+		n := strings.ReplaceAll(p, "[*]", "")
+		n = strings.ReplaceAll(n, "[0]", "")
+		if n == nPath {
+			delete(r.listConversionPaths, p)
+			if r.SchemaElementOptions[n] != nil {
+				r.SchemaElementOptions[n].EmbeddedObject = false
+			}
+			return true
+		}
+	}
+	return false
+}
+
 // SetEmbeddedObject sets the EmbeddedObject for the specified key.
 // The key is a Terraform field path without the wildcard segments.
 func (m SchemaElementOptions) SetEmbeddedObject(el string) {
