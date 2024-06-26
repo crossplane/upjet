@@ -8,11 +8,13 @@ SPDX-License-Identifier: CC-BY-4.0
 
 To follow this guide, you will need:
 
-1. Obtained a Kubernetes Cluster: For manual/local effort, generally a Kind
-cluster is sufficient and can be used. For detailed information about Kind see
+1. A Kubernetes Cluster: For manual/local effort, generally a Kind cluster
+is sufficient and can be used. For detailed information about Kind see
 [this repo]. An alternative way to obtain a cluster is: [k3d]
-2. [Go 1.21+] installed and configured.
-3. [Terraform v1.5.5+] installed locally.
+2. [Go] installed and configured. Check the provider repo you will be working
+with and install the version in the `go.mod` file.
+3. [Terraform v1.5.5] installed locally. The last version we used before the
+license change.
 4. [goimports] installed.
 
 # Adding a New Resource
@@ -21,13 +23,17 @@ There are long and detailed guides showing [how to bootstrap a
 provider][provider-guide] and [how to configure resources][config-guide]. Here
 we will go over the steps that will take us to `v1beta1` quality.
 
-1. Fork the provider to which you will add resources and create a feature
+1. Fork the provider repo to which you will add resources and create a feature
 branch.
 
-2. Go to the Terraform Registry page of the resource you will add, we will add
+2. Go to the Terraform Registry page of the resource you will add. We will add
 the resource [`aws_redshift_endpoint_access`] as an example in this guide.
+We will use this page in the following steps, especially in determining the
+external name configuration, determining conflicting fields, etc.
 
 3. Determine the resource's external name configuration:
+Our external name configuration relies on the Terraform ID format of the
+resource which we find in the import section on the Terraform Registry page.
 Here we'll look for clues about how the Terraform ID is shaped so that we can
 infer the external name configuration. In this case, there is an `endpoint_name`
 argument seen under the `Argument Reference` section and when we look at
@@ -37,11 +43,12 @@ is the same as the `endpoint_name` argument. This means that we can use
 external name config. See section [External Name Cases] to see how you can infer
 in many different cases of Terraform ID.
 
-4. Check if the resource is an SDK resource or Framework resource from the
-[source code], for SDK resources, you will see a comment line like 
-`// @SDKResource` in the source code:
+4. Check if the resource is an Terraform Plugin SDK resource or Terraform Plugin
+Framework resource from the [source code].
 
-- The `aws_redshift_endpoint_access` resource is an SDK resource, go to
+- For SDK resources, you will see a comment line like `// @SDKResource` in the
+source code.
+The `aws_redshift_endpoint_access` resource is an SDK resource, go to
 `config/externalname.go` and add the following line to the
 `TerraformPluginSDKExternalNameConfigs` table:
 
@@ -97,11 +104,10 @@ Untracked files:
 see whether any of the fields are represented as separate resources as well.
 It usually goes like this:
 
-    ```
-    Routes can be defined either directly on the azurerm_iothub
-    resource, or using the azurerm_iothub_route resource - but the two cannot be
-    used together.
-    ```
+    > Routes can be defined either directly on the azurerm_iothub
+    > resource, or using the azurerm_iothub_route resource - but the two cannot be
+    > used together.
+
     In such cases, the field should be moved to status since we prefer to
     represent it only as a separate CRD. Go ahead and add a configuration block
     for that resource similar to the following:
@@ -214,10 +220,10 @@ new PR: `git push --set-upstream origin add-redshift-endpoint-access`
 
 # Testing Instructions
 
-While configuring resources, the testing effort is the longest part. Because the
+While configuring resources, the testing effort is the longest part, because the
 characteristics of cloud providers and services can change. This test effort can
 be executed in two main methods. The first one is testing the resources in a
-manual way and the second one is using the `Uptest` which is an automated test
+manual way and the second one is using the [Uptest] which is an automated test
 tool for Official Providers. `Uptest` provides a framework to test resources in
 an end-to-end pipeline during the resource configuration process. Together with
 the example manifest generation tool, it allows us to avoid manual interventions
@@ -268,15 +274,54 @@ some resources in the tests of the relevant group via an annotation:
 upjet.upbound.io/manual-intervention: "The Certificate needs to be provisioned successfully which requires a real domain."
 ```
 
-The key is important for skipping, we are checking this
-`upjet.upbound.io/manual-intervention` annotation key and if is in there, we
+The key is important for skipping. We are checking this
+`upjet.upbound.io/manual-intervention` annotation key and if it is in there, we
 skip the related resource. The value is also important to see why we skip this
 resource.
 
 ```
 NOTE: For resources that are ignored during Automated Tests, manual testing is a
-must. Because we need to make sure that all resources published in the `v1beta1`
+must, because we need to make sure that all resources published in the `v1beta1`
 version is working.
+```
+
+### Running Uptest locally
+
+For a faster feedback loop, you might want to run `uptest` locally in your
+development setup. For this, you can use the e2e make target available in
+the provider repositories. This target requires the following environment
+variables to be set:
+
+- `UPTEST_CLOUD_CREDENTIALS`: cloud credentials for the provider being tested.
+- `UPTEST_EXAMPLE_LIST`: a comma-separated list of examples to test.
+- `UPTEST_DATASOURCE_PATH`: (optional), see [Injecting Dynamic Values (and Datasource)]
+
+You can check the e2e target in the Makefile for each provider. Let's check the [target]
+in provider-upjet-aws and run a test for the resource `examples/ec2/v1beta1/vpc.yaml`.
+
+- You can either save your credentials in a file as stated in the target's [comments],
+or you can do it by adding your credentials to the command below.
+
+```console
+export UPTEST_CLOUD_CREDENTIALS="DEFAULT='[default]
+aws_access_key_id = <YOUR-ACCESS_KEY_ID>
+aws_secret_access_key = <YOUR-ACCESS_KEY'"
+```
+
+```console
+export UPTEST_EXAMPLE_LIST="examples/ec2/v1beta1/vpc.yaml"
+```
+
+After setting the above environment variables, run `make e2e`. If the test is
+successful, you will see a log like the one below, kindly add to the PR
+description this log:
+
+```console
+--- PASS: kuttl (37.41s)
+    --- PASS: kuttl/harness (0.00s)
+        --- PASS: kuttl/harness/case (36.62s)
+PASS
+14:02:30 [ OK ] running automated tests
 ```
 
 ## Manual Test
@@ -313,8 +358,9 @@ spot problems and fix them.
 testing. There are 3 steps we need to verify in manual tests: `Apply`, `Import`,
 `Delete`.
 
-**Apply:** We need to apply the example manifest to the cluster.
+### Apply:
 
+We need to apply the example manifest to the cluster.
 
 ```bash
 kubectl apply -f examples/redshift/v1beta1/endpointaccess.yaml
@@ -382,7 +428,7 @@ You should see the output below:
 
 When all of the fields are `True`, the `Apply` test was successfully completed!
 
-**Import**
+### Import
 
 There are a few steps to perform the import test, here we will stop the provider,
 delete the status conditions, and check the conditions when we re-run the provider.
@@ -400,7 +446,7 @@ they are the same
 
 The import test was successful when the above conditions were met.
 
-**Delete**
+### Delete
 
 Make sure the resource has been successfully deleted by running the following
 command:
@@ -519,13 +565,13 @@ You can see example usages in the big three providers below.
 For `aws_glue_user_defined_function`, we see that the `name` argument is used
 to name the resource and the import instructions read as the following:
 
-```
-Glue User Defined Functions can be imported using the
-`catalog_id:database_name:function_name`. If you have not set a Catalog ID
-specify the AWS Account ID that the database is in, e.g.,
+> Glue User Defined Functions can be imported using the
+> `catalog_id:database_name:function_name`. If you have not set a Catalog ID
+> specify the AWS Account ID that the database is in, e.g.,
 
-$ terraform import aws_glue_user_defined_function.func 123456789012:my_database:my_func
-```
+> $ terraform import aws_glue_user_defined_function.func
+123456789012:my_database:my_func
+
 
 Our configuration would look like the following:
 
@@ -557,11 +603,9 @@ identifier as Terraform ID.
 For `azurerm_mariadb_firewall_rule`, we see that the `name` argument is used to
 name the resource and the import instructions read as the following:
 
-```
-MariaDB Firewall rules can be imported using the resource ID, e.g.
-
-terraform import azurerm_mariadb_firewall_rule.rule1 /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/mygroup1/providers/Microsoft.DBforMariaDB/servers/server1/firewallRules/rule1
-```
+> MariaDB Firewall rules can be imported using the resource ID, e.g.
+>
+> `terraform import azurerm_mariadb_firewall_rule.rule1 /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/mygroup1/providers/Microsoft.DBforMariaDB/servers/server1/firewallRules/rule1`
 
 Our configuration would look like the following:
 
@@ -586,15 +630,15 @@ identifier as Terraform ID.
 For `google_container_cluster`, we see that the `name` argument is used to name
 the resource and the import instructions read as the following:
 
-```console
-GKE clusters can be imported using the project, location, and name.
-If the project is omitted, the default provider value will be used.
-Examples:
-
-$ terraform import google_container_cluster.mycluster projects/my-gcp-project/locations/us-east1-a/clusters/my-cluster
-$ terraform import google_container_cluster.mycluster my-gcp-project/us-east1-a/my-cluster
-$ terraform import google_container_cluster.mycluster us-east1-a/my-cluster
-```
+> GKE clusters can be imported using the project, location, and name.
+> If the project is omitted, the default provider value will be used.
+> Examples:
+> 
+> ```console
+> $ terraform import google_container_cluster.mycluster projects/my-gcp-project/locations/us-east1-a/clusters/my-cluster
+> $ terraform import google_container_cluster.mycluster my-gcp-project/us-east1-a/my-cluster
+> $ terraform import google_container_cluster.mycluster us-east1-a/my-cluster
+> ```
 
 In cases where there are multiple ways to construct the ID, we should take the
 one with the least parameters so that we rely only on required fields because
@@ -673,8 +717,8 @@ detailed guide could also help you.
 
 [this repo]: https://github.com/kubernetes-sigs/kind
 [k3d]: https://k3d.io/
-[Go 1.21+]: https://go.dev/doc/install
-[Terraform v1.5.5+]: https://developer.hashicorp.com/terraform/install
+[Go]: https://go.dev/doc/install
+[Terraform v1.5.5]: https://developer.hashicorp.com/terraform/install
 [goimports]: https://pkg.go.dev/golang.org/x/tools/cmd/goimports
 [provider-guide]: https://github.com/upbound/upjet/blob/main/docs/generating-a-provider.md
 [config-guide]: https://github.com/crossplane/upjet/blob/main/docs/configuring-a-resource.md
@@ -703,3 +747,7 @@ detailed guide could also help you.
 [`aws_route`]: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route
 [route-impl]: https://github.com/upbound/provider-aws/blob/8b3887c91c4b44dc14e1123b3a5ae1a70e0e45ed/config/externalname.go#L172
 [This section]: #external-name-cases
+[Injecting Dynamic Values (and Datasource)]: https://github.com/crossplane/uptest?tab=readme-ov-file#injecting-dynamic-values-and-datasource
+[target]: https://github.com/crossplane-contrib/provider-upjet-aws/blob/e4b8f222a4baf0ea37caf1d348fe109bf8235dc2/Makefile#L257
+[comments]: https://github.com/crossplane-contrib/provider-upjet-aws/blob/e4b8f222a4baf0ea37caf1d348fe109bf8235dc2/Makefile#L259
+[Uptest]: https://github.com/crossplane/uptest
