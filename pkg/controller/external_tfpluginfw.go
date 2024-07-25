@@ -279,7 +279,7 @@ func (n *terraformPluginFrameworkExternalClient) getDiffPlanResponse(ctx context
 	// parametrizable attributes.
 	filteredDiff := make([]tftypes.ValueDiff, 0)
 	for _, diff := range rawDiff {
-		if diff.Value1.IsKnown() && !diff.Value1.IsNull() {
+		if diff.Value1 != nil && diff.Value1.IsKnown() && !diff.Value1.IsNull() {
 			filteredDiff = append(filteredDiff, diff)
 		}
 	}
