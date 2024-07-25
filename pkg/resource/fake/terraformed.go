@@ -5,10 +5,14 @@
 package fake
 
 import (
+	"reflect"
+
 	"github.com/crossplane/crossplane-runtime/pkg/resource/fake"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/json"
+	"sigs.k8s.io/controller-runtime/pkg/scheme"
 )
 
 // Observable is mock Observable.
@@ -100,6 +104,7 @@ func (li *LateInitializer) LateInitialize(_ []byte) (bool, error) {
 
 // Terraformed is a mock that implements Terraformed interface.
 type Terraformed struct {
+	metav1.TypeMeta `json:",inline"`
 	fake.Managed
 	Observable
 	Parameterizable
@@ -109,7 +114,7 @@ type Terraformed struct {
 
 // GetObjectKind returns schema.ObjectKind.
 func (t *Terraformed) GetObjectKind() schema.ObjectKind {
-	return schema.EmptyObjectKind
+	return &t.TypeMeta
 }
 
 // DeepCopyObject returns a copy of the object as runtime.Object
@@ -133,9 +138,21 @@ func WithParameters(params map[string]any) Option {
 	}
 }
 
+// WithTypeMeta sets the TypeMeta of a Terraformed.
+func WithTypeMeta(t metav1.TypeMeta) Option {
+	return func(tr *Terraformed) {
+		tr.TypeMeta = t
+	}
+}
+
 // NewTerraformed initializes a new Terraformed with the given options.
 func NewTerraformed(opts ...Option) *Terraformed {
-	tr := &Terraformed{}
+	tr := &Terraformed{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       Kind,
+			APIVersion: GroupVersion.String(),
+		},
+	}
 	for _, o := range opts {
 		o(tr)
 	}
@@ -151,4 +168,29 @@ func NewMap(keyValue ...string) map[string]any {
 		m[keyValue[i]] = keyValue[i+1]
 	}
 	return m
+}
+
+const (
+	// Group for the fake.Terraformed objects
+	Group = "fake.upjet.crossplane.io"
+	// Version for the fake.Terraformed objects
+	Version = "v1alpha1"
+)
+
+var (
+	// Kind is the Go type name of the Terraformed resource.
+	Kind = reflect.TypeOf(Terraformed{}).Name()
+
+	// GroupVersion is the API Group Version used to register the objects
+	GroupVersion = schema.GroupVersion{Group: Group, Version: Version}
+
+	// SchemeBuilder is used to add go types to the GroupVersionKind scheme
+	SchemeBuilder = &scheme.Builder{GroupVersion: GroupVersion}
+
+	// AddToScheme adds the types in this group-version to the given scheme.
+	AddToScheme = SchemeBuilder.AddToScheme
+)
+
+func init() {
+	SchemeBuilder.Register(&Terraformed{})
 }
