@@ -229,6 +229,22 @@ func (c *TerraformPluginFrameworkConnector) configureProvider(ctx context.Contex
 	return providerServer, nil
 }
 
+// Filter diffs that have unknown plan values, which correspond to
+// computed fields, and null plan values, which correspond to
+// not-specified fields. Such cases cause unnecessary diff detection
+// when only computed attributes or not-specified argument diffs
+// exist in the raw diff and no actual diff exists in the
+// parametrizable attributes.
+func (n *terraformPluginFrameworkExternalClient) filteredDiffExists(rawDiff []tftypes.ValueDiff) bool {
+	filteredDiff := make([]tftypes.ValueDiff, 0)
+	for _, diff := range rawDiff {
+		if diff.Value1 != nil && diff.Value1.IsKnown() && !diff.Value1.IsNull() {
+			filteredDiff = append(filteredDiff, diff)
+		}
+	}
+	return len(filteredDiff) > 0
+}
+
 // getDiffPlanResponse calls the underlying native TF provider's PlanResourceChange RPC,
 // and returns the planned state and whether a diff exists.
 // If plan response contains non-empty RequiresReplace (i.e. the resource needs
@@ -271,20 +287,7 @@ func (n *terraformPluginFrameworkExternalClient) getDiffPlanResponse(ctx context
 		return nil, false, errors.Wrap(err, "cannot compare prior state and plan")
 	}
 
-	// Filter diffs that have unknown plan values, which correspond to
-	// computed fields, and null plan values, which correspond to
-	// not-specified fields. Such cases cause unnecessary diff detection
-	// when only computed attributes or not-specified argument diffs
-	// exist in the raw diff and no actual diff exists in the
-	// parametrizable attributes.
-	filteredDiff := make([]tftypes.ValueDiff, 0)
-	for _, diff := range rawDiff {
-		if diff.Value1.IsKnown() && !diff.Value1.IsNull() {
-			filteredDiff = append(filteredDiff, diff)
-		}
-	}
-
-	return planResponse, len(filteredDiff) > 0, nil
+	return planResponse, n.filteredDiffExists(rawDiff), nil
 }
 
 func (n *terraformPluginFrameworkExternalClient) Observe(ctx context.Context, mg xpresource.Managed) (managed.ExternalObservation, error) { //nolint:gocyclo
