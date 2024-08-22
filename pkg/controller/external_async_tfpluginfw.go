@@ -6,6 +6,7 @@ package controller
 
 import (
 	"context"
+	"fmt"
 
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
@@ -13,6 +14,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/pkg/errors"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/crossplane/upjet/pkg/config"
@@ -131,6 +133,31 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Observe(ctx context.Contex
 	return o, err
 }
 
+// panicHandler wraps an error, so that deferred functions that will
+// be executed on a panic can access the error more conveniently.
+type panicHandler struct {
+	err error
+}
+
+// recoverIfPanic recovers from panics, if any. Calls to this function
+// should be defferred directly: `defer ph.recoverIfPanic()`. Panic
+// recovery won't work if the call is wrapped in another function
+// call, such as `defer func() { ph.recoverIfPanic() }()`. On
+// recovery, API machinery panic handlers run. The implementation
+// follows the outline of panic recovery mechanism in
+// controller-runtime:
+// https://github.com/kubernetes-sigs/controller-runtime/blob/v0.17.3/pkg/internal/controller/controller.go#L105-L112
+func (ph *panicHandler) recoverIfPanic() {
+	ph.err = nil
+	if r := recover(); r != nil {
+		for _, fn := range utilruntime.PanicHandlers {
+			fn(r)
+		}
+
+		ph.err = fmt.Errorf("recovered from panic: %v", r)
+	}
+}
+
 func (n *terraformPluginFrameworkAsyncExternalClient) Create(_ context.Context, mg xpresource.Managed) (managed.ExternalCreation, error) {
 	if !n.opTracker.LastOperation.MarkStart("create") {
 		return managed.ExternalCreation{}, errors.Errorf("%s operation that started at %s is still running", n.opTracker.LastOperation.Type, n.opTracker.LastOperation.StartTime().String())
@@ -138,18 +165,27 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Create(_ context.Context, 
 
 	ctx, cancel := context.WithDeadline(context.Background(), n.opTracker.LastOperation.StartTime().Add(defaultAsyncTimeout))
 	go func() {
+		// The order of deferred functions, executed last-in-first-out, is
+		// significant. The context should be canceled last, because it is
+		// used by the finishing operations. Panic recovery should execute
+		// first, because the finishing operations report the panic error,
+		// if any.
+		var ph panicHandler
 		defer cancel()
+		defer func() { // Finishing operations
+			err := tferrors.NewAsyncCreateFailed(ph.err)
+			n.opTracker.LastOperation.SetError(err)
+			n.opTracker.logger.Debug("Async create ended.", "error", err)
+
+			n.opTracker.LastOperation.MarkEnd()
+			if cErr := n.callback.Create(mg.GetName())(err, ctx); cErr != nil {
+				n.opTracker.logger.Info("Async create callback failed", "error", cErr.Error())
+			}
+		}()
+		defer ph.recoverIfPanic()
 
 		n.opTracker.logger.Debug("Async create starting...")
-		_, err := n.terraformPluginFrameworkExternalClient.Create(ctx, mg)
-		err = tferrors.NewAsyncCreateFailed(err)
-		n.opTracker.LastOperation.SetError(err)
-		n.opTracker.logger.Debug("Async create ended.", "error", err)
-
-		n.opTracker.LastOperation.MarkEnd()
-		if cErr := n.callback.Create(mg.GetName())(err, ctx); cErr != nil {
-			n.opTracker.logger.Info("Async create callback failed", "error", cErr.Error())
-		}
+		_, ph.err = n.terraformPluginFrameworkExternalClient.Create(ctx, mg)
 	}()
 
 	return managed.ExternalCreation{}, n.opTracker.LastOperation.Error()
@@ -162,18 +198,27 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Update(_ context.Context, 
 
 	ctx, cancel := context.WithDeadline(context.Background(), n.opTracker.LastOperation.StartTime().Add(defaultAsyncTimeout))
 	go func() {
+		// The order of deferred functions, executed last-in-first-out, is
+		// significant. The context should be canceled last, because it is
+		// used by the finishing operations. Panic recovery should execute
+		// first, because the finishing operations report the panic error,
+		// if any.
+		var ph panicHandler
 		defer cancel()
+		defer func() { // Finishing operations
+			err := tferrors.NewAsyncUpdateFailed(ph.err)
+			n.opTracker.LastOperation.SetError(err)
+			n.opTracker.logger.Debug("Async update ended.", "error", err)
+
+			n.opTracker.LastOperation.MarkEnd()
+			if cErr := n.callback.Update(mg.GetName())(err, ctx); cErr != nil {
+				n.opTracker.logger.Info("Async update callback failed", "error", cErr.Error())
+			}
+		}()
+		defer ph.recoverIfPanic()
 
 		n.opTracker.logger.Debug("Async update starting...")
-		_, err := n.terraformPluginFrameworkExternalClient.Update(ctx, mg)
-		err = tferrors.NewAsyncUpdateFailed(err)
-		n.opTracker.LastOperation.SetError(err)
-		n.opTracker.logger.Debug("Async update ended.", "error", err)
-
-		n.opTracker.LastOperation.MarkEnd()
-		if cErr := n.callback.Update(mg.GetName())(err, ctx); cErr != nil {
-			n.opTracker.logger.Info("Async update callback failed", "error", cErr.Error())
-		}
+		_, ph.err = n.terraformPluginFrameworkExternalClient.Update(ctx, mg)
 	}()
 
 	return managed.ExternalUpdate{}, n.opTracker.LastOperation.Error()
@@ -190,17 +235,27 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Delete(_ context.Context, 
 
 	ctx, cancel := context.WithDeadline(context.Background(), n.opTracker.LastOperation.StartTime().Add(defaultAsyncTimeout))
 	go func() {
+		// The order of deferred functions, executed last-in-first-out, is
+		// significant. The context should be canceled last, because it is
+		// used by the finishing operations. Panic recovery should execute
+		// first, because the finishing operations report the panic error,
+		// if any.
+		var ph panicHandler
 		defer cancel()
+		defer func() { // Finishing operations
+			err := tferrors.NewAsyncDeleteFailed(ph.err)
+			n.opTracker.LastOperation.SetError(err)
+			n.opTracker.logger.Debug("Async delete ended.", "error", err)
+
+			n.opTracker.LastOperation.MarkEnd()
+			if cErr := n.callback.Destroy(mg.GetName())(err, ctx); cErr != nil {
+				n.opTracker.logger.Info("Async delete callback failed", "error", cErr.Error())
+			}
+		}()
+		defer ph.recoverIfPanic()
 
 		n.opTracker.logger.Debug("Async delete starting...")
-		err := tferrors.NewAsyncDeleteFailed(n.terraformPluginFrameworkExternalClient.Delete(ctx, mg))
-		n.opTracker.LastOperation.SetError(err)
-		n.opTracker.logger.Debug("Async delete ended.", "error", err)
-
-		n.opTracker.LastOperation.MarkEnd()
-		if cErr := n.callback.Destroy(mg.GetName())(err, ctx); cErr != nil {
-			n.opTracker.logger.Info("Async delete callback failed", "error", cErr.Error())
-		}
+		ph.err = n.terraformPluginFrameworkExternalClient.Delete(ctx, mg)
 	}()
 
 	return n.opTracker.LastOperation.Error()

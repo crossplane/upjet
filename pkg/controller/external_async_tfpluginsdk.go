@@ -143,18 +143,27 @@ func (n *terraformPluginSDKAsyncExternal) Create(_ context.Context, mg xpresourc
 
 	ctx, cancel := context.WithDeadline(context.Background(), n.opTracker.LastOperation.StartTime().Add(defaultAsyncTimeout))
 	go func() {
+		// The order of deferred functions, executed last-in-first-out, is
+		// significant. The context should be canceled last, because it is
+		// used by the finishing operations. Panic recovery should execute
+		// first, because the finishing operations report the panic error,
+		// if any.
+		var ph panicHandler
 		defer cancel()
+		defer func() { // Finishing operations
+			err := tferrors.NewAsyncCreateFailed(ph.err)
+			n.opTracker.LastOperation.SetError(err)
+			n.opTracker.logger.Debug("Async create ended.", "error", err, "tfID", n.opTracker.GetTfID())
+
+			n.opTracker.LastOperation.MarkEnd()
+			if cErr := n.callback.Create(mg.GetName())(err, ctx); cErr != nil {
+				n.opTracker.logger.Info("Async create callback failed", "error", cErr.Error())
+			}
+		}()
+		defer ph.recoverIfPanic()
 
 		n.opTracker.logger.Debug("Async create starting...", "tfID", n.opTracker.GetTfID())
-		_, err := n.terraformPluginSDKExternal.Create(ctx, mg)
-		err = tferrors.NewAsyncCreateFailed(err)
-		n.opTracker.LastOperation.SetError(err)
-		n.opTracker.logger.Debug("Async create ended.", "error", err, "tfID", n.opTracker.GetTfID())
-
-		n.opTracker.LastOperation.MarkEnd()
-		if cErr := n.callback.Create(mg.GetName())(err, ctx); cErr != nil {
-			n.opTracker.logger.Info("Async create callback failed", "error", cErr.Error())
-		}
+		_, ph.err = n.terraformPluginSDKExternal.Create(ctx, mg)
 	}()
 
 	return managed.ExternalCreation{}, n.opTracker.LastOperation.Error()
@@ -167,18 +176,27 @@ func (n *terraformPluginSDKAsyncExternal) Update(_ context.Context, mg xpresourc
 
 	ctx, cancel := context.WithDeadline(context.Background(), n.opTracker.LastOperation.StartTime().Add(defaultAsyncTimeout))
 	go func() {
+		// The order of deferred functions, executed last-in-first-out, is
+		// significant. The context should be canceled last, because it is
+		// used by the finishing operations. Panic recovery should execute
+		// first, because the finishing operations report the panic error,
+		// if any.
+		var ph panicHandler
 		defer cancel()
+		defer func() { // Finishing operations
+			err := tferrors.NewAsyncUpdateFailed(ph.err)
+			n.opTracker.LastOperation.SetError(err)
+			n.opTracker.logger.Debug("Async update ended.", "error", err, "tfID", n.opTracker.GetTfID())
+
+			n.opTracker.LastOperation.MarkEnd()
+			if cErr := n.callback.Update(mg.GetName())(err, ctx); cErr != nil {
+				n.opTracker.logger.Info("Async update callback failed", "error", cErr.Error())
+			}
+		}()
+		defer ph.recoverIfPanic()
 
 		n.opTracker.logger.Debug("Async update starting...", "tfID", n.opTracker.GetTfID())
-		_, err := n.terraformPluginSDKExternal.Update(ctx, mg)
-		err = tferrors.NewAsyncUpdateFailed(err)
-		n.opTracker.LastOperation.SetError(err)
-		n.opTracker.logger.Debug("Async update ended.", "error", err, "tfID", n.opTracker.GetTfID())
-
-		n.opTracker.LastOperation.MarkEnd()
-		if cErr := n.callback.Update(mg.GetName())(err, ctx); cErr != nil {
-			n.opTracker.logger.Info("Async update callback failed", "error", cErr.Error())
-		}
+		_, ph.err = n.terraformPluginSDKExternal.Update(ctx, mg)
 	}()
 
 	return managed.ExternalUpdate{}, n.opTracker.LastOperation.Error()
@@ -195,17 +213,27 @@ func (n *terraformPluginSDKAsyncExternal) Delete(_ context.Context, mg xpresourc
 
 	ctx, cancel := context.WithDeadline(context.Background(), n.opTracker.LastOperation.StartTime().Add(defaultAsyncTimeout))
 	go func() {
+		// The order of deferred functions, executed last-in-first-out, is
+		// significant. The context should be canceled last, because it is
+		// used by the finishing operations. Panic recovery should execute
+		// first, because the finishing operations report the panic error,
+		// if any.
+		var ph panicHandler
 		defer cancel()
+		defer func() { // Finishing operations
+			err := tferrors.NewAsyncDeleteFailed(ph.err)
+			n.opTracker.LastOperation.SetError(err)
+			n.opTracker.logger.Debug("Async delete ended.", "error", err, "tfID", n.opTracker.GetTfID())
+
+			n.opTracker.LastOperation.MarkEnd()
+			if cErr := n.callback.Destroy(mg.GetName())(err, ctx); cErr != nil {
+				n.opTracker.logger.Info("Async delete callback failed", "error", cErr.Error())
+			}
+		}()
+		defer ph.recoverIfPanic()
 
 		n.opTracker.logger.Debug("Async delete starting...", "tfID", n.opTracker.GetTfID())
-		err := tferrors.NewAsyncDeleteFailed(n.terraformPluginSDKExternal.Delete(ctx, mg))
-		n.opTracker.LastOperation.SetError(err)
-		n.opTracker.logger.Debug("Async delete ended.", "error", err, "tfID", n.opTracker.GetTfID())
-
-		n.opTracker.LastOperation.MarkEnd()
-		if cErr := n.callback.Destroy(mg.GetName())(err, ctx); cErr != nil {
-			n.opTracker.logger.Info("Async delete callback failed", "error", cErr.Error())
-		}
+		ph.err = n.terraformPluginSDKExternal.Delete(ctx, mg)
 	}()
 
 	return n.opTracker.LastOperation.Error()
