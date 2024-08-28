@@ -32,6 +32,7 @@ end to end.
 - Guide on how to add support for
 [management policies](adding-support-for-management-policies.md) to an existing
 provider.
+- Guide on how to [add a new resource](adding-new-resource.md) to an existing provider.
 
 ## Additional documentation
 
