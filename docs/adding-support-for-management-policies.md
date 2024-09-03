@@ -21,7 +21,7 @@ directory on your local machine.
     make generate
     
     # Consume the latest crossplane-runtime:
-    go get github.com/crossplane/crossplane-runtime@master
+    go get github.com/crossplane/crossplane-runtime@main
     go mod tidy
     ```
 

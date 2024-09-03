@@ -918,4 +918,4 @@ initializers for a resource.
 [NewInitializerFn]: https://github.com/crossplane/upjet/blob/92d1af84d24241bef08e6b4a2cfe1ab66a93308a/pkg/config/resource.go#L265
 [crossplane-runtime]: https://github.com/crossplane/crossplane-runtime/blob/428b7c3903756bb0dcf5330f40298e1fa0c34301/pkg/reconciler/managed/reconciler.go#L138
 [tagging convention]: https://github.com/crossplane/crossplane/blob/60c7df9/design/one-pager-managed-resource-api-design.md#external-resource-labeling
-[Naming Conventions - One Pager Managed Resource API Design]: https://github.com/crossplane/crossplane/blob/master/design/one-pager-managed-resource-api-design.md#naming-conventions
+[Naming Conventions - One Pager Managed Resource API Design]: https://github.com/crossplane/crossplane/blob/main/design/one-pager-managed-resource-api-design.md#naming-conventions
