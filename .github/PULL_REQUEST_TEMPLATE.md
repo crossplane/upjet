@@ -34,4 +34,4 @@ needs to tested and shown to be correct. Briefly describe the testing that has
 already been done or which is planned for this change.
 -->
 
-[contribution process]: https://github.com/crossplane/upjet/blob/master/CONTRIBUTING.md
+[contribution process]: https://github.com/crossplane/upjet/blob/main/CONTRIBUTING.md

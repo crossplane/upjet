@@ -108,9 +108,9 @@ replace github.com/crossplane/upjet => github.com/<your user name>/upjet <hash o
 ```
 
 [Slack]: https://crossplane.slack.com/archives/C01TRKD4623
-[code of conduct]: https://github.com/cncf/foundation/blob/master/code-of-conduct.md
+[code of conduct]: https://github.com/cncf/foundation/blob/main/code-of-conduct.md
 [good git commit hygiene]: https://www.futurelearn.com/info/blog/telling-stories-with-your-git-history
 [Developer Certificate of Origin]: https://github.com/apps/dco
 [test review comments]: https://github.com/golang/go/wiki/TestComments
 [docs]: docs/
-[Coding Style]: https://github.com/crossplane/crossplane/blob/master/CONTRIBUTING.md#coding-style
+[Coding Style]: https://github.com/crossplane/crossplane/blob/main/CONTRIBUTING.md#coding-style

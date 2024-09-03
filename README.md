@@ -54,5 +54,5 @@ Upjet originates from the [Terrajet][terrajet] project. See the original
 
 Upjet is under [the Apache 2.0 license](LICENSE) with [notice](NOTICE).
 
-[terrajet-design-doc]: https://github.com/crossplane/crossplane/blob/master/design/design-doc-terrajet.md
+[terrajet-design-doc]: https://github.com/crossplane/crossplane/blob/main/design/design-doc-terrajet.md
 [terrajet]: https://github.com/crossplane/terrajet
