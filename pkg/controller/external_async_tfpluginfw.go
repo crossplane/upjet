@@ -148,7 +148,6 @@ type panicHandler struct {
 // controller-runtime:
 // https://github.com/kubernetes-sigs/controller-runtime/blob/v0.17.3/pkg/internal/controller/controller.go#L105-L112
 func (ph *panicHandler) recoverIfPanic() {
-	ph.err = nil
 	if r := recover(); r != nil {
 		for _, fn := range utilruntime.PanicHandlers {
 			fn(r)
