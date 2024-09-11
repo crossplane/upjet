@@ -327,7 +327,7 @@ func TestAsyncTerraformPluginSDKDelete(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			terraformPluginSDKAsyncExternal := prepareTerraformPluginSDKAsyncExternal(tc.args.r, tc.args.cfg, tc.args.fns)
-			err := terraformPluginSDKAsyncExternal.Delete(context.TODO(), tc.args.obj)
+			_, err := terraformPluginSDKAsyncExternal.Delete(context.TODO(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nConnect(...): -want error, +got error:\n", diff)
 			}
