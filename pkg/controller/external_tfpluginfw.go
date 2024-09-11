@@ -520,17 +520,17 @@ func (n *terraformPluginFrameworkExternalClient) Update(ctx context.Context, mg 
 	return managed.ExternalUpdate{}, nil
 }
 
-func (n *terraformPluginFrameworkExternalClient) Delete(ctx context.Context, _ xpresource.Managed) error {
+func (n *terraformPluginFrameworkExternalClient) Delete(ctx context.Context, _ xpresource.Managed) (managed.ExternalDelete, error) {
 	n.logger.Debug("Deleting the external resource")
 
 	tfConfigDynamicVal, err := protov5DynamicValueFromMap(n.params, n.resourceValueTerraformType)
 	if err != nil {
-		return errors.Wrap(err, "cannot construct dynamic value for TF Config")
+		return managed.ExternalDelete{}, errors.Wrap(err, "cannot construct dynamic value for TF Config")
 	}
 	// set an empty planned state, this corresponds to deleting
 	plannedState, err := tfprotov5.NewDynamicValue(n.resourceValueTerraformType, tftypes.NewValue(n.resourceValueTerraformType, nil))
 	if err != nil {
-		return errors.Wrap(err, "cannot set the planned state for deletion")
+		return managed.ExternalDelete{}, errors.Wrap(err, "cannot set the planned state for deletion")
 	}
 
 	applyRequest := &tfprotov5.ApplyResourceChangeRequest{
@@ -542,22 +542,22 @@ func (n *terraformPluginFrameworkExternalClient) Delete(ctx context.Context, _ x
 	start := time.Now()
 	applyResponse, err := n.server.ApplyResourceChange(ctx, applyRequest)
 	if err != nil {
-		return errors.Wrap(err, "cannot delete resource")
+		return managed.ExternalDelete{}, errors.Wrap(err, "cannot delete resource")
 	}
 	metrics.ExternalAPITime.WithLabelValues("delete").Observe(time.Since(start).Seconds())
 	if fatalDiags := getFatalDiagnostics(applyResponse.Diagnostics); fatalDiags != nil {
-		return errors.Wrap(fatalDiags, "resource deletion call returned error diags")
+		return managed.ExternalDelete{}, errors.Wrap(fatalDiags, "resource deletion call returned error diags")
 	}
 	n.opTracker.SetFrameworkTFState(applyResponse.NewState)
 
 	newStateAfterApplyVal, err := applyResponse.NewState.Unmarshal(n.resourceValueTerraformType)
 	if err != nil {
-		return errors.Wrap(err, "cannot unmarshal state after deletion")
+		return managed.ExternalDelete{}, errors.Wrap(err, "cannot unmarshal state after deletion")
 	}
 	// mark the resource as logically deleted if the TF call clears the state
 	n.opTracker.SetDeleted(newStateAfterApplyVal.IsNull())
 
-	return nil
+	return managed.ExternalDelete{}, nil
 }
 
 func (n *terraformPluginFrameworkExternalClient) setExternalName(mg xpresource.Managed, stateValueMap map[string]interface{}) (bool, error) {
@@ -712,4 +712,8 @@ func protov5DynamicValueFromMap(data map[string]any, terraformType tftypes.Type)
 	}
 
 	return &dynamicValue, nil
+}
+
+func (n *terraformPluginFrameworkExternalClient) Disconnect(_ context.Context) error {
+	return nil
 }

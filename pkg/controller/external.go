@@ -140,6 +140,10 @@ type external struct {
 	logger            logging.Logger
 }
 
+func (e *external) Disconnect(ctx context.Context) error {
+	return nil
+}
+
 func (e *external) scheduleProvider(name string) (bool, error) {
 	if e.providerScheduler == nil || e.workspace == nil {
 		return false, nil

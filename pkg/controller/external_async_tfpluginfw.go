@@ -224,13 +224,13 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Update(_ context.Context, 
 	return managed.ExternalUpdate{}, n.opTracker.LastOperation.Error()
 }
 
-func (n *terraformPluginFrameworkAsyncExternalClient) Delete(_ context.Context, mg xpresource.Managed) error { //nolint:contextcheck // we intentionally use a fresh context for the async operation
+func (n *terraformPluginFrameworkAsyncExternalClient) Delete(_ context.Context, mg xpresource.Managed) (managed.ExternalDelete, error) { //nolint:contextcheck // we intentionally use a fresh context for the async operation
 	switch {
 	case n.opTracker.LastOperation.Type == "delete":
 		n.opTracker.logger.Debug("The previous delete operation is still ongoing")
-		return nil
+		return managed.ExternalDelete{}, nil
 	case !n.opTracker.LastOperation.MarkStart("delete"):
-		return errors.Errorf("%s operation that started at %s is still running", n.opTracker.LastOperation.Type, n.opTracker.LastOperation.StartTime().String())
+		return managed.ExternalDelete{}, errors.Errorf("%s operation that started at %s is still running", n.opTracker.LastOperation.Type, n.opTracker.LastOperation.StartTime().String())
 	}
 
 	ctx, cancel := context.WithDeadline(context.Background(), n.opTracker.LastOperation.StartTime().Add(defaultAsyncTimeout))
@@ -255,8 +255,12 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Delete(_ context.Context, 
 		defer ph.recoverIfPanic()
 
 		n.opTracker.logger.Debug("Async delete starting...")
-		ph.err = n.terraformPluginFrameworkExternalClient.Delete(ctx, mg)
+		_, ph.err = n.terraformPluginFrameworkExternalClient.Delete(ctx, mg)
 	}()
 
-	return n.opTracker.LastOperation.Error()
+	return managed.ExternalDelete{}, n.opTracker.LastOperation.Error()
+}
+
+func (n *terraformPluginFrameworkAsyncExternalClient) Disconnect(_ context.Context) error {
+	return nil
 }
