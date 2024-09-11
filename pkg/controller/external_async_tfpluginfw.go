@@ -139,13 +139,14 @@ type panicHandler struct {
 	err error
 }
 
-// recoverIfPanic recovers from panics, if any. Calls to this function
-// should be defferred directly: `defer ph.recoverIfPanic()`. Panic
-// recovery won't work if the call is wrapped in another function
-// call, such as `defer func() { ph.recoverIfPanic() }()`. On
-// recovery, API machinery panic handlers run. The implementation
-// follows the outline of panic recovery mechanism in
-// controller-runtime:
+// recoverIfPanic recovers from panics, if any. Upon recovery, the
+// error is set to a recovery message. Otherwise, the error is left
+// unmodified. Calls to this function should be defferred directly:
+// `defer ph.recoverIfPanic()`. Panic recovery won't work if the call
+// is wrapped in another function call, such as `defer func() {
+// ph.recoverIfPanic() }()`. On recovery, API machinery panic handlers
+// run. The implementation follows the outline of panic recovery
+// mechanism in controller-runtime:
 // https://github.com/kubernetes-sigs/controller-runtime/blob/v0.17.3/pkg/internal/controller/controller.go#L105-L112
 func (ph *panicHandler) recoverIfPanic() {
 	if r := recover(); r != nil {
