@@ -140,10 +140,6 @@ type external struct {
 	logger            logging.Logger
 }
 
-func (e *external) Disconnect(ctx context.Context) error {
-	return nil
-}
-
 func (e *external) scheduleProvider(name string) (bool, error) {
 	if e.providerScheduler == nil || e.workspace == nil {
 		return false, nil
@@ -430,6 +426,10 @@ func (e *external) Delete(ctx context.Context, mg xpresource.Managed) (managed.E
 		return managed.ExternalDelete{}, errors.Wrap(e.workspace.DestroyAsync(e.callback.Destroy(mg.GetName())), errStartAsyncDestroy)
 	}
 	return managed.ExternalDelete{}, errors.Wrap(e.workspace.Destroy(ctx), errDestroy)
+}
+
+func (e *external) Disconnect(_ context.Context) error {
+	return nil
 }
 
 func (e *external) Import(ctx context.Context, tr resource.Terraformed) (managed.ExternalObservation, error) {
