@@ -6,8 +6,6 @@ module github.com/crossplane/upjet
 
 go 1.22.7
 
-toolchain go1.23.1
-
 require (
 	dario.cat/mergo v1.0.0
 	github.com/alecthomas/kingpin/v2 v2.4.0
