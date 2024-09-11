@@ -502,7 +502,7 @@ func TestTPFDelete(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			tpfExternal := prepareTPFExternalWithTestConfig(tc.testConfiguration)
-			err := tpfExternal.Delete(context.TODO(), &tc.testConfiguration.obj)
+			_, err := tpfExternal.Delete(context.TODO(), &tc.testConfiguration.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nConnect(...): -want error, +got error:\n", diff)
 			}
