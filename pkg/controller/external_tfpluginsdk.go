@@ -715,6 +715,11 @@ func (n *terraformPluginSDKExternal) Update(ctx context.Context, mg xpresource.M
 		return managed.ExternalUpdate{}, err
 	}
 
+	stateValueMap, err = n.config.ApplyTFConversions(stateValueMap, config.FromTerraform)
+	if err != nil {
+		return managed.ExternalUpdate{}, errors.Wrap(err, "cannot convert the singleton lists for the updated resource state value map into embedded objects")
+	}
+
 	err = mg.(resource.Terraformed).SetObservation(stateValueMap)
 	if err != nil {
 		return managed.ExternalUpdate{}, errors.Errorf("failed to set observation: %v", err)
