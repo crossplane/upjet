@@ -991,3 +991,175 @@ resources:
                 - (Optional) The custom object to return when a requested
                 resource is not found.
         importStatements: []
+    google_network_connectivity_service_connection_policy:
+        subCategory: Network Connectivity
+        description: Manage Service Connection Policies.
+        name: google_network_connectivity_service_connection_policy
+        # title: google_network_connectivity_service_connection_policy
+        title: ""
+        examples:
+            - name: default
+              manifest: |-
+                  {
+                    "description": "my basic service connection policy",
+                    "location": "us-central1",
+                    "name": "my-network-connectivity-policy",
+                    "network": "${google_compute_network.producer_net.id}",
+                    "psc_config": [
+                      {
+                        "limit": 2,
+                        "subnetworks": [
+                          "${google_compute_subnetwork.producer_subnet.id}"
+                        ]
+                      }
+                    ],
+                    "service_class": "my-basic-service-class"
+                  }
+              references:
+                  network: google_compute_network.producer_net.id
+              dependencies:
+                  google_compute_network.producer_net: |-
+                      {
+                        "auto_create_subnetworks": false,
+                        "name": "producer-net"
+                      }
+                  google_compute_subnetwork.producer_subnet: |-
+                      {
+                        "ip_cidr_range": "10.0.0.0/16",
+                        "name": "producer-subnet",
+                        "network": "${google_compute_network.producer_net.id}",
+                        "region": "us-central1"
+                      }
+        argumentDocs:
+            create: '- Default is 30 minutes.'
+            create_time: |-
+              -
+              The timestamp when the resource was created.
+            delete: '- Default is 30 minutes.'
+            description: |-
+                -
+                (Optional)
+                Free-text description of the resource.
+            effective_labels: for all of the labels present on the resource.
+            error.code: |-
+                -
+                (Optional)
+                The status code, which should be an enum value of [google.rpc.Code][].
+            error.details: |-
+                -
+                (Output)
+                A list of messages that carry the error details.
+            error.message: |-
+                -
+                (Optional)
+                A developer-facing error message.
+            error_info.domain: |-
+                -
+                (Optional)
+                The logical grouping to which the "reason" belongs.
+            error_info.metadata: |-
+                -
+                (Optional)
+                Additional structured details about this error.
+            error_info.reason: |-
+                -
+                (Optional)
+                The reason of the error.
+            etag: |-
+                -
+                The etag is computed by the server, and may be sent on update and delete requests to ensure the client has an up-to-date value before proceeding.
+            id: '- an identifier for the resource with format projects/{{project}}/locations/{{location}}/serviceConnectionPolicies/{{name}}'
+            infrastructure: |-
+                -
+                The type of underlying resources used to create the connection.
+            labels: |-
+                -
+                (Optional)
+                User-defined labels.
+            location: |-
+                -
+                (Required)
+                The location of the ServiceConnectionPolicy.
+            service_class: |-
+                -
+                (Required)
+                The service class identifier for which this ServiceConnectionPolicy is for. The service class identifier is a unique, symbolic representation of a ServiceClass.
+                It is provided by the Service Producer. Google services have a prefix of gcp. For example, gcp-cloud-sql. 3rd party services do not. For example, test-service-a3dfcx.
+            network: |-
+                -
+                (Required)
+                The resource path of the consumer network. Example: - projects/{projectNumOrId}/global/networks/{resourceId}.
+            name: |-
+                -
+                (Required)
+                The name of a ServiceConnectionPolicy. Format: projects/{project}/locations/{location}/serviceConnectionPolicies/{service_connection_policy} See: https://google.aip.dev/122#fields-representing-resource-names
+            project: |-
+                - (Optional) The ID of the project in which the resource belongs.
+                If it is not provided, the provider project is used.
+            psc_config: |-
+                -
+                (Optional)
+                Configuration used for Private Service Connect connections. Used when Infrastructure is PSC.
+                Structure is documented below.
+            psc_config.limit: |-
+                -
+                (Optional)
+                Max number of PSC connections for this policy.
+            psc_config.subnetworks: |-
+                -
+                (Required)
+                IDs of the subnetworks or fully qualified identifiers for the subnetworks
+            psc_connections: |-
+                -
+                Information about each Private Service Connect connection.
+                Structure is documented below.
+            psc_connections.consumer_address: |-
+                -
+                (Optional)
+                The resource reference of the consumer address.
+            psc_connections.consumer_forwarding_rule: |-
+                -
+                (Optional)
+                The resource reference of the PSC Forwarding Rule within the consumer VPC.
+            psc_connections.consumer_target_project: |-
+                -
+                (Optional)
+                The project where the PSC connection is created.
+            psc_connections.error: |-
+                -
+                (Optional)
+                The most recent error during operating this connection.
+                Structure is documented below.
+            psc_connections.error_info: |-
+                -
+                (Optional)
+                The error info for the latest error during operating this connection.
+                Structure is documented below.
+            psc_connections.error_type: |-
+                -
+                (Optional)
+                The error type indicates whether the error is consumer facing, producer
+                facing or system internal.
+                Possible values are: CONNECTION_ERROR_TYPE_UNSPECIFIED, ERROR_INTERNAL, ERROR_CONSUMER_SIDE, ERROR_PRODUCER_SIDE.
+            psc_connections.gce_operation: |-
+                -
+                (Optional)
+                The last Compute Engine operation to setup PSC connection.
+            psc_connections.psc_connection_id: |-
+                -
+                (Optional)
+                The PSC connection id of the PSC forwarding rule.
+            psc_connections.state: |-
+                -
+                (Optional)
+                The state of the PSC connection.
+                Possible values are: STATE_UNSPECIFIED, ACTIVE, CREATING, DELETING, FAILED.
+            terraform_labels: |-
+              -
+              The combination of labels configured directly on the resource
+              and default labels configured on the provider.
+            update: '- Default is 30 minutes.'
+            update_time: |-
+              -
+              The timestamp when the resource was updated.
+        importStatements: []
