@@ -1017,6 +1017,7 @@ resources:
                   }
               references:
                   network: google_compute_network.producer_net.id
+                  psc_config.subnetworks: google_compute_subnetwork.producer_subnet.id
               dependencies:
                   google_compute_network.producer_net: |-
                       {
