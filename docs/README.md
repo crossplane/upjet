@@ -38,6 +38,7 @@ provider.
 
 - [Provider identity based authentication](design-doc-provider-identity-based-auth.md)
 - [Monitoring](monitoring.md) the Upjet runtime using Prometheus.
+- [Migration Framework](migration-framework.md)
 
 Feel free to ask your questions by opening an issue or starting a discussion in
 the [#upjet](https://crossplane.slack.com/archives/C05T19TB729) channel in
