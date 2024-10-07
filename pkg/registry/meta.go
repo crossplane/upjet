@@ -116,9 +116,20 @@ func (r *Resource) findReferences(parentPath string, file *hcl.File, b *hclsynta
 		return refs, nil
 	}
 	for name, attr := range b.Body.Attributes {
+		if name == "depends_on" {
+			continue
+		}
 		e, ok := attr.Expr.(*hclsyntax.ScopeTraversalExpr)
 		if !ok {
-			continue
+			t, ok := attr.Expr.(*hclsyntax.TupleConsExpr)
+			if ok && len(t.Exprs) > 0 {
+				e, ok = t.Exprs[0].(*hclsyntax.ScopeTraversalExpr)
+				if !ok {
+					continue
+				}
+			} else {
+				continue
+			}
 		}
 		refName := name
 		if parentPath != "" {
