@@ -413,19 +413,23 @@ func (e *external) Update(ctx context.Context, mg xpresource.Managed) (managed.E
 	return managed.ExternalUpdate{}, errors.Wrap(tr.SetObservation(attr), "cannot set observation")
 }
 
-func (e *external) Delete(ctx context.Context, mg xpresource.Managed) error {
+func (e *external) Delete(ctx context.Context, mg xpresource.Managed) (managed.ExternalDelete, error) {
 	requeued, err := e.scheduleProvider(mg.GetName())
 	if err != nil {
-		return errors.Wrapf(err, "cannot schedule a native provider during delete: %s", mg.GetUID())
+		return managed.ExternalDelete{}, errors.Wrapf(err, "cannot schedule a native provider during delete: %s", mg.GetUID())
 	}
 	if requeued {
-		return nil
+		return managed.ExternalDelete{}, nil
 	}
 	defer e.stopProvider()
 	if e.config.UseAsync {
-		return errors.Wrap(e.workspace.DestroyAsync(e.callback.Destroy(mg.GetName())), errStartAsyncDestroy)
+		return managed.ExternalDelete{}, errors.Wrap(e.workspace.DestroyAsync(e.callback.Destroy(mg.GetName())), errStartAsyncDestroy)
 	}
-	return errors.Wrap(e.workspace.Destroy(ctx), errDestroy)
+	return managed.ExternalDelete{}, errors.Wrap(e.workspace.Destroy(ctx), errDestroy)
+}
+
+func (e *external) Disconnect(_ context.Context) error {
+	return nil
 }
 
 func (e *external) Import(ctx context.Context, tr resource.Terraformed) (managed.ExternalObservation, error) {
