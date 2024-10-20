@@ -489,6 +489,15 @@ type Resource struct {
 	// the value of the generated Kind, for example:
 	// "TagParameters": "ClusterTagParameters"
 	OverrideFieldNames map[string]string
+
+	// requiredFields are the fields that will be marked as required in the
+	// generated CRD schema, although they are not required in the TF schema.
+	requiredFields []string
+}
+
+// RequiredFields returns slice of the marked as required fieldpaths.
+func (r *Resource) RequiredFields() []string {
+	return r.requiredFields
 }
 
 // ShouldUseTerraformPluginSDKClient returns whether to generate an SDKv2-based
