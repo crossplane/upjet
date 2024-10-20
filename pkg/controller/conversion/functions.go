@@ -8,6 +8,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 
 	"github.com/crossplane/upjet/pkg/config/conversion"
 	"github.com/crossplane/upjet/pkg/resource"
@@ -17,12 +18,32 @@ const (
 	errFmtPrioritizedManagedConversion = "cannot apply the PrioritizedManagedConversion for the %q object"
 	errFmtPavedConversion              = "cannot apply the PavedConversion for the %q object"
 	errFmtManagedConversion            = "cannot apply the ManagedConversion for the %q object"
+	errFmtGetGVK                       = "cannot get the GVK for the %s object of type %T"
 )
 
 // RoundTrip round-trips from `src` to `dst` via an unstructured map[string]any
 // representation of the `src` object and applies the registered webhook
 // conversion functions of this registry.
 func (r *registry) RoundTrip(dst, src resource.Terraformed) error { //nolint:gocyclo // considered breaking this according to the converters and I did not like it
+	if dst.GetObjectKind().GroupVersionKind().Version == "" {
+		gvk, err := apiutil.GVKForObject(dst, r.scheme)
+		if err != nil && !runtime.IsNotRegisteredError(err) {
+			return errors.Wrapf(err, errFmtGetGVK, "destination", dst)
+		}
+		if err == nil {
+			dst.GetObjectKind().SetGroupVersionKind(gvk)
+		}
+	}
+	if src.GetObjectKind().GroupVersionKind().Version == "" {
+		gvk, err := apiutil.GVKForObject(src, r.scheme)
+		if err != nil && !runtime.IsNotRegisteredError(err) {
+			return errors.Wrapf(err, errFmtGetGVK, "source", src)
+		}
+		if err == nil {
+			src.GetObjectKind().SetGroupVersionKind(gvk)
+		}
+	}
+
 	// first PrioritizedManagedConversions are run in their registration order
 	for _, c := range r.GetConversions(dst) {
 		if pc, ok := c.(conversion.PrioritizedManagedConversion); ok {
