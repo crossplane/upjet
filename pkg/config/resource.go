@@ -167,6 +167,9 @@ type ExternalName struct {
 
 // References represents reference resolver configurations for the fields of a
 // given resource. Key should be the field path of the field to be referenced.
+// The key is the Terraform field path of the field to be referenced.
+// Example: "vpc_id" or "forwarding_rule.certificate_name" in case of nested
+// in another object.
 type References map[string]Reference
 
 // Reference represents the Crossplane options used to generate
