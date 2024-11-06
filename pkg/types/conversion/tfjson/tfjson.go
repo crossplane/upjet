@@ -42,7 +42,11 @@ func v2ResourceFromTFJSONSchema(s *tfjson.Schema) *schemav2.Resource {
 	toSchemaMap := make(map[string]*schemav2.Schema, len(s.Block.Attributes)+len(s.Block.NestedBlocks))
 
 	for k, v := range s.Block.Attributes {
-		toSchemaMap[k] = tfJSONAttributeToV2Schema(v)
+		if v.AttributeNestedType != nil {
+			toSchemaMap[k] = tfJSONNestedAttributeTypeToV2Schema(v.AttributeNestedType)
+		} else {
+			toSchemaMap[k] = tfJSONAttributeToV2Schema(v)
+		}
 	}
 	for k, v := range s.Block.NestedBlocks {
 		// CRUD timeouts are not part of the generated MR API,
@@ -76,6 +80,74 @@ func tfJSONAttributeToV2Schema(attr *tfjson.SchemaAttribute) *schemav2.Schema {
 	return v2sch
 }
 
+func tfJSONNestedAttributeTypeToV2Schema(na *tfjson.SchemaNestedAttributeType) *schemav2.Schema {
+	v2sch := &schemav2.Schema{
+		MinItems: int(na.MinItems),
+		MaxItems: int(na.MaxItems),
+	}
+	switch na.NestingMode { //nolint:exhaustive
+	case tfjson.SchemaNestingModeSet:
+		v2sch.Type = schemav2.TypeSet
+	case tfjson.SchemaNestingModeList:
+		v2sch.Type = schemav2.TypeList
+	case tfjson.SchemaNestingModeMap:
+		v2sch.Type = schemav2.TypeMap
+	case tfjson.SchemaNestingModeSingle:
+		v2sch.Type = schemav2.TypeList
+		v2sch.MinItems = 0
+		v2sch.Required = hasNestedAttributeRequiredChild(na)
+		v2sch.Optional = !v2sch.Required
+		if v2sch.Required {
+			v2sch.MinItems = 1
+		}
+		v2sch.MaxItems = 1
+	default:
+		panic("unhandled nesting mode: " + na.NestingMode)
+	}
+
+	res := &schemav2.Resource{}
+	res.Schema = make(map[string]*schemav2.Schema, len(na.Attributes))
+	for key, attr := range na.Attributes {
+		if attr.AttributeNestedType != nil {
+			res.Schema[key] = tfJSONNestedAttributeTypeToV2Schema(attr.AttributeNestedType)
+		} else {
+			res.Schema[key] = tfJSONAttributeToV2Schema(attr)
+		}
+	}
+	v2sch.Elem = res
+	return v2sch
+}
+
+// checks whether the given tfjson.SchemaBlockType has any required children.
+// Children which are themselves blocks (nested blocks) are
+// checked recursively.
+func hasNestedAttributeRequiredChild(na *tfjson.SchemaNestedAttributeType) bool {
+	if na.Attributes == nil {
+		return false
+	}
+	for _, a := range na.Attributes {
+		if a == nil {
+			continue
+		}
+		if a.Required {
+			return true
+		}
+
+		if a.AttributeNestedType == nil {
+			continue
+		}
+		for _, nested := range a.AttributeNestedType.Attributes {
+			if nested.AttributeNestedType != nil {
+				return hasNestedAttributeRequiredChild(nested.AttributeNestedType)
+			}
+			if a.Required {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func tfJSONBlockTypeToV2Schema(nb *tfjson.SchemaBlockType) *schemav2.Schema { //nolint:gocyclo
 	v2sch := &schemav2.Schema{
 		MinItems: int(nb.MinItems), //nolint:gosec
@@ -104,7 +176,7 @@ func tfJSONBlockTypeToV2Schema(nb *tfjson.SchemaBlockType) *schemav2.Schema { //
 	case tfjson.SchemaNestingModeSingle:
 		v2sch.Type = schemav2.TypeList
 		v2sch.MinItems = 0
-		v2sch.Required = hasRequiredChild(nb)
+		v2sch.Required = hasBlockRequiredChild(nb)
 		v2sch.Optional = !v2sch.Required
 		if v2sch.Required {
 			v2sch.MinItems = 1
@@ -141,7 +213,7 @@ func tfJSONBlockTypeToV2Schema(nb *tfjson.SchemaBlockType) *schemav2.Schema { //
 // checks whether the given tfjson.SchemaBlockType has any required children.
 // Children which are themselves blocks (nested blocks) are
 // checked recursively.
-func hasRequiredChild(nb *tfjson.SchemaBlockType) bool {
+func hasBlockRequiredChild(nb *tfjson.SchemaBlockType) bool {
 	if nb.Block == nil {
 		return false
 	}
@@ -157,7 +229,7 @@ func hasRequiredChild(nb *tfjson.SchemaBlockType) bool {
 		if b == nil {
 			continue
 		}
-		if hasRequiredChild(b) {
+		if hasBlockRequiredChild(b) {
 			return true
 		}
 	}
