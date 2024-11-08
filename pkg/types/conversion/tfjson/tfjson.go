@@ -11,6 +11,11 @@ import (
 	"github.com/zclconf/go-cty/cty"
 )
 
+// SchemaTypeObject is the exported version of schema.typeObject to support
+// nested types.
+// TODO:remove once not dependent of terrafom sdkv2 schema
+const SchemaTypeObject = schemav2.ValueType(9)
+
 // GetV2ResourceMap converts input resource schemas with
 // "terraform-json" representation to terraform-plugin-sdk representation which
 // is what Upjet expects today.
@@ -93,7 +98,7 @@ func tfJSONNestedAttributeTypeToV2Schema(na *tfjson.SchemaNestedAttributeType) *
 	case tfjson.SchemaNestingModeMap:
 		v2sch.Type = schemav2.TypeMap
 	case tfjson.SchemaNestingModeSingle:
-		v2sch.Type = schemav2.TypeList
+		v2sch.Type = SchemaTypeObject
 		v2sch.MinItems = 0
 		v2sch.Required = hasNestedAttributeRequiredChild(na)
 		v2sch.Optional = !v2sch.Required

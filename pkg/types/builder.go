@@ -18,6 +18,7 @@ import (
 
 	"github.com/crossplane/upjet/pkg/config"
 	"github.com/crossplane/upjet/pkg/schema/traverser"
+	conversiontfjson "github.com/crossplane/upjet/pkg/types/conversion/tfjson"
 )
 
 const (
@@ -216,7 +217,7 @@ func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, cp
 		return types.NewPointer(types.Universe.Lookup("int64").Type()), nil, nil
 	case schema.TypeString:
 		return types.NewPointer(types.Universe.Lookup("string").Type()), nil, nil
-	case schema.TypeMap, schema.TypeList, schema.TypeSet:
+	case schema.TypeMap, schema.TypeList, schema.TypeSet, conversiontfjson.SchemaTypeObject:
 		names = append(names, f.Name.Camel)
 		if f.Schema.Type != schema.TypeMap {
 			// We don't want to have a many-to-many relationship in case of a Map, since we use SecretReference as
@@ -311,8 +312,9 @@ func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, cp
 			return nil, nil, errors.Errorf("element type of %s should be either schema.Resource or schema.Schema", traverser.FieldPath(names))
 		}
 
-		// if the singleton list is to be replaced by an embedded object
-		if cfg.SchemaElementOptions.EmbeddedObject(cpath) {
+		// if the singleton list is to be replaced by an embedded object or schema
+		// is an object
+		if cfg.SchemaElementOptions.EmbeddedObject(cpath) || f.Schema.Type == conversiontfjson.SchemaTypeObject {
 			return types.NewPointer(elemType), types.NewPointer(initElemType), nil
 		}
 		// NOTE(muvaf): Maps and slices are already pointers, so we don't need to
