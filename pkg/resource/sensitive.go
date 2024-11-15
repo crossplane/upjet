@@ -168,9 +168,8 @@ func GetSensitiveParameters(ctx context.Context, client SecretClient, from runti
 		return err
 	}
 	pavedTF := fieldpath.Pave(into)
-	prefixes := []string{"spec.initProvider.", "spec.forProvider."}
-
 	for tfPath, jsonPath := range mapping {
+		prefixes := []string{"spec.initProvider.", "spec.forProvider."}
 		jp := jsonPath
 		groups := reFieldPathSpec.FindStringSubmatch(jsonPath)
 		if len(groups) == 3 {
