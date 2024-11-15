@@ -13,6 +13,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/crossplane/upjet/pkg/config"
@@ -80,6 +81,32 @@ func TestRoundTrip(t *testing.T) {
 				dst: fake.NewTerraformed(fake.WithParameters(fake.NewMap(commonKey, commonVal, key2, val1))),
 			},
 		},
+		"SuccessfulRoundTripWithNonWildcardConversions": {
+			reason: "Source object is successfully converted into the target object with a set of non-wildcard conversions.",
+			args: args{
+				dst: fake.NewTerraformed(fake.WithTypeMeta(metav1.TypeMeta{})),
+				src: fake.NewTerraformed(fake.WithParameters(fake.NewMap(commonKey, commonVal, key1, val1)), fake.WithTypeMeta(metav1.TypeMeta{})),
+				conversions: []conversion.Conversion{
+					conversion.NewIdentityConversionExpandPaths(fake.Version, fake.Version, nil),
+					// Because the parameters of the fake.Terraformed is an unstructured
+					// map, all the fields of source (including key1) are successfully
+					// copied into dst by registry.RoundTrip.
+					// This conversion deletes the copied key "key1".
+					conversion.NewCustomConverter(fake.Version, fake.Version, func(_, target xpresource.Managed) error {
+						tr := target.(*fake.Terraformed)
+						delete(tr.Parameters, key1)
+						return nil
+					}),
+					conversion.NewFieldRenameConversion(fake.Version, fmt.Sprintf("parameterizable.parameters.%s", key1), fake.Version, fmt.Sprintf("parameterizable.parameters.%s", key2)),
+				},
+			},
+			want: want{
+				dst: fake.NewTerraformed(fake.WithParameters(fake.NewMap(commonKey, commonVal, key2, val1)), fake.WithTypeMeta(metav1.TypeMeta{
+					Kind:       fake.Kind,
+					APIVersion: fake.GroupVersion.String(),
+				})),
+			},
+		},
 		"RoundTripFailedPrioritizedConversion": {
 			reason: "Should return an error if a PrioritizedConversion fails.",
 			args: args{
@@ -125,6 +152,12 @@ func TestRoundTrip(t *testing.T) {
 			},
 		},
 	}
+
+	s := runtime.NewScheme()
+	if err := fake.AddToScheme(s); err != nil {
+		t.Fatalf("Failed to register the fake.Terraformed object with the runtime scheme")
+	}
+
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			p := &config.Provider{
@@ -134,7 +167,9 @@ func TestRoundTrip(t *testing.T) {
 					},
 				},
 			}
-			r := &registry{}
+			r := &registry{
+				scheme: s,
+			}
 			if err := r.RegisterConversions(p); err != nil {
 				t.Fatalf("\n%s\nRegisterConversions(p): Failed to register the conversions with the registry.\n", tc.reason)
 			}

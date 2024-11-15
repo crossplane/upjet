@@ -6,6 +6,7 @@ package conversion
 
 import (
 	"github.com/pkg/errors"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/crossplane/upjet/pkg/config"
 	"github.com/crossplane/upjet/pkg/config/conversion"
@@ -21,6 +22,7 @@ var instance *registry
 // registry represents the conversion hook registry for a provider.
 type registry struct {
 	provider *config.Provider
+	scheme   *runtime.Scheme
 }
 
 // RegisterConversions registers the API version conversions from the specified
@@ -50,11 +52,16 @@ func GetConversions(tr resource.Terraformed) []conversion.Conversion {
 }
 
 // RegisterConversions registers the API version conversions from the specified
-// provider configuration.
-func RegisterConversions(provider *config.Provider) error {
+// provider configuration. The specified scheme should contain the registrations
+// for the types whose versions are to be converted. If a registration for a
+// Go schema is not found in the specified registry, RoundTrip does not error
+// but only wildcard conversions must be used with the registry.
+func RegisterConversions(provider *config.Provider, scheme *runtime.Scheme) error {
 	if instance != nil {
 		return errors.New(errAlreadyRegistered)
 	}
-	instance = &registry{}
+	instance = &registry{
+		scheme: scheme,
+	}
 	return instance.RegisterConversions(provider)
 }
