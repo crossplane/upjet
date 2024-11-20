@@ -294,7 +294,7 @@ func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, cp
 				// parameter type has nested observation (status) fields.
 				if obsType.Underlying().String() != emptyStruct {
 					var t types.Type
-					if cfg.SchemaElementOptions.EmbeddedObject(cpath) {
+					if cfg.SchemaElementOptions.EmbeddedObject(cpath) || f.Schema.Type == conversiontfjson.SchemaTypeObject {
 						t = types.NewPointer(obsType)
 					} else {
 						t = types.NewSlice(obsType)
