@@ -130,6 +130,9 @@ func getExtendedParameters(ctx context.Context, tr resource.Terraformed, externa
 	if err = resource.GetSensitiveParameters(ctx, &APISecretClient{kube: kube}, tr, params, tr.GetConnectionDetailsMapping()); err != nil {
 		return nil, errors.Wrap(err, "cannot store sensitive parameters into params")
 	}
+	for _, a := range cfg.AttributesToPopulateWithMetadataName {
+		params[a] = tr.GetName()
+	}
 	cfg.ExternalName.SetIdentifierArgumentFn(params, externalName)
 	if cfg.TerraformConfigurationInjector != nil {
 		m, err := getJSONMap(tr)
