@@ -5,13 +5,17 @@
 package migration
 
 import (
+	"cmp"
+	"slices"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
+	"github.com/crossplane/crossplane-runtime/pkg/test"
+	gocmp "github.com/google/go-cmp/cmp"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/discovery/cached/memory"
 	"k8s.io/client-go/dynamic/fake"
 	fakeclientset "k8s.io/client-go/kubernetes/fake"
@@ -119,12 +123,34 @@ func TestNewKubernetesSource(t *testing.T) {
 			}
 
 			ks, err := NewKubernetesSource(dynamicClient, memory.NewMemCacheClient(client.Discovery()), WithRegistry(r))
-			if diff := cmp.Diff(tc.want.err, err); diff != "" {
+			if diff := gocmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\nNext(...): -want, +got:\n%s", diff)
 			}
-			if diff := cmp.Diff(tc.want.ks.items, ks.items); diff != "" {
+			slices.SortFunc(tc.want.ks.items, compareUnstructuredWithMetadata)
+			slices.SortFunc(ks.items, compareUnstructuredWithMetadata)
+			if diff := gocmp.Diff(tc.want.ks.items, ks.items); diff != "" {
 				t.Errorf("\nNext(...): -want, +got:\n%s", diff)
 			}
 		})
 	}
+}
+
+// compareUnstructuredWithMetadata is used for sorting UnstructuredWithMetadata
+// slices based on their namespaced names and GVKs.
+func compareUnstructuredWithMetadata(a, b UnstructuredWithMetadata) int {
+	switch {
+	case a.Object.Object == nil && b.Object.Object == nil:
+		return 0 // not comparable
+	case a.Object.Object == nil && b.Object.Object != nil:
+		return -1
+	case a.Object.Object != nil && b.Object.Object == nil:
+		return 1
+	}
+	fS := func(x *UnstructuredWithMetadata) string {
+		return types.NamespacedName{
+			Namespace: x.Object.GetNamespace(),
+			Name:      x.Object.GetName(),
+		}.String() + ":" + x.Object.GetObjectKind().GroupVersionKind().String()
+	}
+	return cmp.Compare(fS(&a), fS(&b))
 }
