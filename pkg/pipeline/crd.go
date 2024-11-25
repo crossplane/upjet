@@ -60,7 +60,7 @@ func (cg *CRDGenerator) Generate(cfg *config.Resource) (string, error) {
 		wrapper.WithHeaderPath(cg.LicenseHeaderPath),
 	)
 
-	deleteOmittedFields(cfg.TerraformResource.Schema, cfg.ExternalName.OmittedFields)
+	deleteOmittedFields(cfg.TerraformResource.Schema, append(cfg.ExternalName.OmittedFields, cfg.AttributesToPopulateWithMetadataName...))
 	cfg.TerraformResource.Schema["id"] = &schema.Schema{
 		Type:     schema.TypeString,
 		Computed: true,

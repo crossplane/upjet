@@ -118,7 +118,7 @@ func (eg *Generator) StoreExamples() error { // nolint:gocyclo
 func paveCRManifest(exampleParams map[string]any, r *config.Resource, eName, group, version, eGroup string) *reference.PavedWithManifest {
 	delete(exampleParams, "depends_on")
 	delete(exampleParams, "lifecycle")
-	transformFields(r, exampleParams, r.ExternalName.OmittedFields, "")
+	transformFields(r, exampleParams, append(r.ExternalName.OmittedFields, r.AttributesToPopulateWithMetadataName...), "")
 	metadata := map[string]any{
 		"labels": map[string]string{
 			labelExampleName: eName,

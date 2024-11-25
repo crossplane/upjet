@@ -101,6 +101,9 @@ func NewFileProducer(ctx context.Context, client resource.SecretClient, dir stri
 		return nil, errors.Wrap(err, "cannot get sensitive parameters")
 	}
 	fp.Config.ExternalName.SetIdentifierArgumentFn(params, meta.GetExternalName(tr))
+	for _, a := range cfg.AttributesToPopulateWithMetadataName {
+		params[a] = tr.GetName()
+	}
 	fp.parameters = params
 
 	obs, err := tr.GetObservation()
