@@ -11,8 +11,8 @@ PROJECT_REPO := github.com/crossplane/$(PROJECT_NAME)
 
 # GOLANGCILINT_VERSION is inherited from build submodule by default.
 # Uncomment below if you need to override the version.
-GOLANGCILINT_VERSION ?= 1.55.2
-GO_REQUIRED_VERSION ?= 1.21
+# GOLANGCILINT_VERSION ?= 1.61.0
+# GO_REQUIRED_VERSION ?= 1.22
 
 PLATFORMS ?= linux_amd64 linux_arm64
 # -include will silently skip missing files, which allows us

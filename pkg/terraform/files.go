@@ -239,7 +239,7 @@ func (fp *FileProducer) EnsureTFState(_ context.Context, tfID string) error {
 			ProviderConfig: fmt.Sprintf(`provider["registry.terraform.io/%s"]`, fp.Setup.Requirement.Source),
 			Instances: []json.InstanceObjectStateV4{
 				{
-					SchemaVersion: uint64(fp.Resource.GetTerraformSchemaVersion()),
+					SchemaVersion: uint64(fp.Resource.GetTerraformSchemaVersion()), //nolint:gosec
 					PrivateRaw:    privateRaw,
 					AttributesRaw: attr,
 				},

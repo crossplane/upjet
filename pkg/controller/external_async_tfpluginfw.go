@@ -158,7 +158,7 @@ func (ph *panicHandler) recoverIfPanic() {
 	}
 }
 
-func (n *terraformPluginFrameworkAsyncExternalClient) Create(_ context.Context, mg xpresource.Managed) (managed.ExternalCreation, error) {
+func (n *terraformPluginFrameworkAsyncExternalClient) Create(_ context.Context, mg xpresource.Managed) (managed.ExternalCreation, error) { //nolint:contextcheck // we intentionally use a fresh context for the async operation
 	if !n.opTracker.LastOperation.MarkStart("create") {
 		return managed.ExternalCreation{}, errors.Errorf("%s operation that started at %s is still running", n.opTracker.LastOperation.Type, n.opTracker.LastOperation.StartTime().String())
 	}
@@ -191,7 +191,7 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Create(_ context.Context, 
 	return managed.ExternalCreation{}, n.opTracker.LastOperation.Error()
 }
 
-func (n *terraformPluginFrameworkAsyncExternalClient) Update(_ context.Context, mg xpresource.Managed) (managed.ExternalUpdate, error) {
+func (n *terraformPluginFrameworkAsyncExternalClient) Update(_ context.Context, mg xpresource.Managed) (managed.ExternalUpdate, error) { //nolint:contextcheck // we intentionally use a fresh context for the async operation
 	if !n.opTracker.LastOperation.MarkStart("update") {
 		return managed.ExternalUpdate{}, errors.Errorf("%s operation that started at %s is still running", n.opTracker.LastOperation.Type, n.opTracker.LastOperation.StartTime().String())
 	}
@@ -224,7 +224,7 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Update(_ context.Context, 
 	return managed.ExternalUpdate{}, n.opTracker.LastOperation.Error()
 }
 
-func (n *terraformPluginFrameworkAsyncExternalClient) Delete(_ context.Context, mg xpresource.Managed) error {
+func (n *terraformPluginFrameworkAsyncExternalClient) Delete(_ context.Context, mg xpresource.Managed) error { //nolint:contextcheck // we intentionally use a fresh context for the async operation
 	switch {
 	case n.opTracker.LastOperation.Type == "delete":
 		n.opTracker.logger.Debug("The previous delete operation is still ongoing")
