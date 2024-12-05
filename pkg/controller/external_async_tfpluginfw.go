@@ -148,10 +148,10 @@ type panicHandler struct {
 // run. The implementation follows the outline of panic recovery
 // mechanism in controller-runtime:
 // https://github.com/kubernetes-sigs/controller-runtime/blob/v0.17.3/pkg/internal/controller/controller.go#L105-L112
-func (ph *panicHandler) recoverIfPanic() {
+func (ph *panicHandler) recoverIfPanic(ctx context.Context) {
 	if r := recover(); r != nil {
 		for _, fn := range utilruntime.PanicHandlers {
-			fn(r)
+			fn(ctx, r)
 		}
 
 		ph.err = fmt.Errorf("recovered from panic: %v", r)
@@ -182,7 +182,7 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Create(_ context.Context, 
 				n.opTracker.logger.Info("Async create callback failed", "error", cErr.Error())
 			}
 		}()
-		defer ph.recoverIfPanic()
+		defer ph.recoverIfPanic(ctx)
 
 		n.opTracker.logger.Debug("Async create starting...")
 		_, ph.err = n.terraformPluginFrameworkExternalClient.Create(ctx, mg)
@@ -215,7 +215,7 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Update(_ context.Context, 
 				n.opTracker.logger.Info("Async update callback failed", "error", cErr.Error())
 			}
 		}()
-		defer ph.recoverIfPanic()
+		defer ph.recoverIfPanic(ctx)
 
 		n.opTracker.logger.Debug("Async update starting...")
 		_, ph.err = n.terraformPluginFrameworkExternalClient.Update(ctx, mg)
@@ -224,13 +224,13 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Update(_ context.Context, 
 	return managed.ExternalUpdate{}, n.opTracker.LastOperation.Error()
 }
 
-func (n *terraformPluginFrameworkAsyncExternalClient) Delete(_ context.Context, mg xpresource.Managed) error {
+func (n *terraformPluginFrameworkAsyncExternalClient) Delete(_ context.Context, mg xpresource.Managed) (managed.ExternalDelete, error) {
 	switch {
 	case n.opTracker.LastOperation.Type == "delete":
 		n.opTracker.logger.Debug("The previous delete operation is still ongoing")
-		return nil
+		return managed.ExternalDelete{}, nil
 	case !n.opTracker.LastOperation.MarkStart("delete"):
-		return errors.Errorf("%s operation that started at %s is still running", n.opTracker.LastOperation.Type, n.opTracker.LastOperation.StartTime().String())
+		return managed.ExternalDelete{}, errors.Errorf("%s operation that started at %s is still running", n.opTracker.LastOperation.Type, n.opTracker.LastOperation.StartTime().String())
 	}
 
 	ctx, cancel := context.WithDeadline(context.Background(), n.opTracker.LastOperation.StartTime().Add(defaultAsyncTimeout))
@@ -252,11 +252,15 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Delete(_ context.Context, 
 				n.opTracker.logger.Info("Async delete callback failed", "error", cErr.Error())
 			}
 		}()
-		defer ph.recoverIfPanic()
+		defer ph.recoverIfPanic(ctx)
 
 		n.opTracker.logger.Debug("Async delete starting...")
-		ph.err = n.terraformPluginFrameworkExternalClient.Delete(ctx, mg)
+		_, ph.err = n.terraformPluginFrameworkExternalClient.Delete(ctx, mg)
 	}()
 
-	return n.opTracker.LastOperation.Error()
+	return managed.ExternalDelete{}, n.opTracker.LastOperation.Error()
+}
+
+func (n *terraformPluginFrameworkAsyncExternalClient) Disconnect(_ context.Context) error {
+	return nil
 }

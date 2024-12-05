@@ -160,7 +160,7 @@ func (n *terraformPluginSDKAsyncExternal) Create(_ context.Context, mg xpresourc
 				n.opTracker.logger.Info("Async create callback failed", "error", cErr.Error())
 			}
 		}()
-		defer ph.recoverIfPanic()
+		defer ph.recoverIfPanic(ctx)
 
 		n.opTracker.logger.Debug("Async create starting...", "tfID", n.opTracker.GetTfID())
 		_, ph.err = n.terraformPluginSDKExternal.Create(ctx, mg)
@@ -193,7 +193,7 @@ func (n *terraformPluginSDKAsyncExternal) Update(_ context.Context, mg xpresourc
 				n.opTracker.logger.Info("Async update callback failed", "error", cErr.Error())
 			}
 		}()
-		defer ph.recoverIfPanic()
+		defer ph.recoverIfPanic(ctx)
 
 		n.opTracker.logger.Debug("Async update starting...", "tfID", n.opTracker.GetTfID())
 		_, ph.err = n.terraformPluginSDKExternal.Update(ctx, mg)
@@ -202,13 +202,13 @@ func (n *terraformPluginSDKAsyncExternal) Update(_ context.Context, mg xpresourc
 	return managed.ExternalUpdate{}, n.opTracker.LastOperation.Error()
 }
 
-func (n *terraformPluginSDKAsyncExternal) Delete(_ context.Context, mg xpresource.Managed) error {
+func (n *terraformPluginSDKAsyncExternal) Delete(_ context.Context, mg xpresource.Managed) (managed.ExternalDelete, error) {
 	switch {
 	case n.opTracker.LastOperation.Type == "delete":
 		n.opTracker.logger.Debug("The previous delete operation is still ongoing", "tfID", n.opTracker.GetTfID())
-		return nil
+		return managed.ExternalDelete{}, nil
 	case !n.opTracker.LastOperation.MarkStart("delete"):
-		return errors.Errorf("%s operation that started at %s is still running", n.opTracker.LastOperation.Type, n.opTracker.LastOperation.StartTime().String())
+		return managed.ExternalDelete{}, errors.Errorf("%s operation that started at %s is still running", n.opTracker.LastOperation.Type, n.opTracker.LastOperation.StartTime().String())
 	}
 
 	ctx, cancel := context.WithDeadline(context.Background(), n.opTracker.LastOperation.StartTime().Add(defaultAsyncTimeout))
@@ -230,11 +230,15 @@ func (n *terraformPluginSDKAsyncExternal) Delete(_ context.Context, mg xpresourc
 				n.opTracker.logger.Info("Async delete callback failed", "error", cErr.Error())
 			}
 		}()
-		defer ph.recoverIfPanic()
+		defer ph.recoverIfPanic(ctx)
 
 		n.opTracker.logger.Debug("Async delete starting...", "tfID", n.opTracker.GetTfID())
-		ph.err = n.terraformPluginSDKExternal.Delete(ctx, mg)
+		_, ph.err = n.terraformPluginSDKExternal.Delete(ctx, mg)
 	}()
 
-	return n.opTracker.LastOperation.Error()
+	return managed.ExternalDelete{}, n.opTracker.LastOperation.Error()
+}
+
+func (n *terraformPluginSDKAsyncExternal) Disconnect(_ context.Context) error {
+	return nil
 }
