@@ -527,7 +527,7 @@ func resourceName() config.ExternalName{
 		if !ok {
 			return "", errors.New("id in tfstate cannot be empty")
 		}
-		w := strings.Split(s.(string), ":")
+		w := strings.Split(id.(string), ":")
 		return w[len(w)-1], nil
 	}
 }
