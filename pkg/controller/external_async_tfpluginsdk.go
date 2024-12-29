@@ -136,7 +136,7 @@ func (n *terraformPluginSDKAsyncExternal) Observe(ctx context.Context, mg xpreso
 	return o, err
 }
 
-func (n *terraformPluginSDKAsyncExternal) Create(_ context.Context, mg xpresource.Managed) (managed.ExternalCreation, error) {
+func (n *terraformPluginSDKAsyncExternal) Create(_ context.Context, mg xpresource.Managed) (managed.ExternalCreation, error) { //nolint:contextcheck // we intentionally use a fresh context for the async operation
 	if !n.opTracker.LastOperation.MarkStart("create") {
 		return managed.ExternalCreation{}, errors.Errorf("%s operation that started at %s is still running", n.opTracker.LastOperation.Type, n.opTracker.LastOperation.StartTime().String())
 	}
@@ -169,7 +169,7 @@ func (n *terraformPluginSDKAsyncExternal) Create(_ context.Context, mg xpresourc
 	return managed.ExternalCreation{}, n.opTracker.LastOperation.Error()
 }
 
-func (n *terraformPluginSDKAsyncExternal) Update(_ context.Context, mg xpresource.Managed) (managed.ExternalUpdate, error) {
+func (n *terraformPluginSDKAsyncExternal) Update(_ context.Context, mg xpresource.Managed) (managed.ExternalUpdate, error) { //nolint:contextcheck // we intentionally use a fresh context for the async operation
 	if !n.opTracker.LastOperation.MarkStart("update") {
 		return managed.ExternalUpdate{}, errors.Errorf("%s operation that started at %s is still running", n.opTracker.LastOperation.Type, n.opTracker.LastOperation.StartTime().String())
 	}
@@ -202,7 +202,7 @@ func (n *terraformPluginSDKAsyncExternal) Update(_ context.Context, mg xpresourc
 	return managed.ExternalUpdate{}, n.opTracker.LastOperation.Error()
 }
 
-func (n *terraformPluginSDKAsyncExternal) Delete(_ context.Context, mg xpresource.Managed) error {
+func (n *terraformPluginSDKAsyncExternal) Delete(_ context.Context, mg xpresource.Managed) error { //nolint:contextcheck // we intentionally use a fresh context for the async operation
 	switch {
 	case n.opTracker.LastOperation.Type == "delete":
 		n.opTracker.logger.Debug("The previous delete operation is still ongoing", "tfID", n.opTracker.GetTfID())
