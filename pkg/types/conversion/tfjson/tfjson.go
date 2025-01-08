@@ -34,7 +34,7 @@ func GetV2ResourceMap(resourceSchemas map[string]*tfjson.Schema) map[string]*sch
 }
 
 func v2ResourceFromTFJSONSchema(s *tfjson.Schema) *schemav2.Resource {
-	v2Res := &schemav2.Resource{SchemaVersion: int(s.Version)}
+	v2Res := &schemav2.Resource{SchemaVersion: int(s.Version)} //nolint:gosec
 	if s.Block == nil {
 		return v2Res
 	}
@@ -78,8 +78,8 @@ func tfJSONAttributeToV2Schema(attr *tfjson.SchemaAttribute) *schemav2.Schema {
 
 func tfJSONBlockTypeToV2Schema(nb *tfjson.SchemaBlockType) *schemav2.Schema { //nolint:gocyclo
 	v2sch := &schemav2.Schema{
-		MinItems: int(nb.MinItems),
-		MaxItems: int(nb.MaxItems),
+		MinItems: int(nb.MinItems), //nolint:gosec
+		MaxItems: int(nb.MaxItems), //nolint:gosec
 	}
 	// Note(turkenh): Schema representation returned by the cli for block types
 	// does not have optional or computed fields. So, we are trying to infer
