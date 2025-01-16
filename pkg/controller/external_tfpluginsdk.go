@@ -510,7 +510,7 @@ func (n *terraformPluginSDKExternal) Observe(ctx context.Context, mg xpresource.
 		n.instanceDiff = tf.NewInstanceDiff()
 	}
 
-	noDiff := n.instanceDiff.Empty()
+	hasDiff := !n.instanceDiff.Empty()
 
 	if !resourceExists && mg.GetDeletionTimestamp() != nil {
 		gvk := mg.GetObjectKind().GroupVersionKind()
@@ -556,11 +556,11 @@ func (n *terraformPluginSDKExternal) Observe(ctx context.Context, mg xpresource.
 			return managed.ExternalObservation{}, errors.Errorf("could not set observation: %v", err)
 		}
 
-		if noDiff {
+		if !hasDiff {
 			n.metricRecorder.SetReconcileTime(mg.GetName())
 		}
 		if !specUpdateRequired {
-			resource.SetUpToDateCondition(mg, noDiff)
+			resource.SetUpToDateCondition(mg, !hasDiff)
 		}
 		// check for an external-name change
 		if nameChanged, err := n.setExternalName(mg, stateValueMap); err != nil {
@@ -572,7 +572,7 @@ func (n *terraformPluginSDKExternal) Observe(ctx context.Context, mg xpresource.
 
 	return managed.ExternalObservation{
 		ResourceExists:          resourceExists,
-		ResourceUpToDate:        noDiff,
+		ResourceUpToDate:        !hasDiff,
 		ConnectionDetails:       connDetails,
 		ResourceLateInitialized: specUpdateRequired,
 	}, nil
