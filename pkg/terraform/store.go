@@ -47,6 +47,9 @@ type ProviderRequirement struct {
 
 	// Version of the provider. An example value is "4.0"
 	Version string
+
+	// Registry of the provider. An example value is `provider["registry.terraform.io/%s"]`
+	Registry string
 }
 
 // ProviderConfiguration holds the setup configuration body

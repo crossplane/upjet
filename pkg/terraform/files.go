@@ -34,6 +34,8 @@ const (
 	errUnmarshalTFState  = "cannot unmarshal tfstate file"
 	errFmtNonString      = "cannot work with a non-string id: %s"
 	errReadMainTF        = "cannot read main.tf.json file"
+
+	defaultRegistry = `provider["registry.terraform.io/%s"]`
 )
 
 // FileProducerOption allows you to configure FileProducer
@@ -190,7 +192,7 @@ func (fp *FileProducer) WriteMainTF() (ProviderHandle, error) {
 
 // EnsureTFState writes the Terraform state that should exist in the filesystem
 // to start any Terraform operation.
-func (fp *FileProducer) EnsureTFState(_ context.Context, tfID string) error {
+func (fp *FileProducer) EnsureTFState(_ context.Context, tfID string) error { //nolint:gocyclo // easier to follow as a unit
 	// TODO(muvaf): Reduce the cyclomatic complexity by separating the attributes
 	// generation into its own function/interface.
 	empty, err := fp.isStateEmpty()
@@ -229,14 +231,19 @@ func (fp *FileProducer) EnsureTFState(_ context.Context, tfID string) error {
 	s := json.NewStateV4()
 	s.TerraformVersion = fp.Setup.Version
 	s.Lineage = string(fp.Resource.GetUID())
+
+	registry := fp.Setup.Requirement.Registry
+	if registry == "" {
+		registry = defaultRegistry
+	}
+
 	s.Resources = []json.ResourceStateV4{
 		{
 			Mode: "managed",
 			Type: fp.Resource.GetTerraformResourceType(),
 			Name: fp.Resource.GetName(),
-			// TODO(muvaf): we should get the full URL from Dockerfile since
-			// providers don't have to be hosted in registry.terraform.io
-			ProviderConfig: fmt.Sprintf(`provider["registry.terraform.io/%s"]`, fp.Setup.Requirement.Source),
+			// Support for private/non-default registries
+			ProviderConfig: fmt.Sprintf(registry, fp.Setup.Requirement.Source),
 			Instances: []json.InstanceObjectStateV4{
 				{
 					SchemaVersion: uint64(fp.Resource.GetTerraformSchemaVersion()), //nolint:gosec
