@@ -330,6 +330,10 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 		if e.eventHandler != nil {
 			e.eventHandler.Forget(rateLimiterStatus, mg.GetName())
 		}
+
+		// TODO(cem): Consider skipping diff calculation (terraform plan) to
+		// avoid potential config validation errors in the import path. See
+		// https://github.com/crossplane/upjet/pull/461
 		plan, err := e.workspace.Plan(ctx)
 		if err != nil {
 			return managed.ExternalObservation{}, errors.Wrap(err, errPlan)

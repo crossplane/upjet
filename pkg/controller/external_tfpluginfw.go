@@ -330,6 +330,9 @@ func (n *terraformPluginFrameworkExternalClient) Observe(ctx context.Context, mg
 		}
 	}
 
+	// TODO(cem): Consider skipping diff calculation to avoid potential config
+	// validation errors in the import path. See
+	// https://github.com/crossplane/upjet/pull/461
 	planResponse, hasDiff, err := n.getDiffPlanResponse(ctx, tfStateValue)
 	if err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot calculate diff")

@@ -111,15 +111,16 @@ type Resource interface {
 }
 
 type terraformPluginSDKExternal struct {
-	ts             terraform.Setup
-	resourceSchema Resource
-	config         *config.Resource
-	instanceDiff   *tf.InstanceDiff
-	params         map[string]any
-	rawConfig      cty.Value
-	logger         logging.Logger
-	metricRecorder *metrics.MetricRecorder
-	opTracker      *AsyncTracker
+	ts                          terraform.Setup
+	resourceSchema              Resource
+	config                      *config.Resource
+	instanceDiff                *tf.InstanceDiff
+	params                      map[string]any
+	rawConfig                   cty.Value
+	logger                      logging.Logger
+	metricRecorder              *metrics.MetricRecorder
+	opTracker                   *AsyncTracker
+	isManagementPoliciesEnabled bool
 }
 
 func getExtendedParameters(ctx context.Context, tr resource.Terraformed, externalName string, cfg *config.Resource, ts terraform.Setup, initParamsMerged bool, kube client.Client) (map[string]any, error) {
@@ -294,14 +295,15 @@ func (c *TerraformPluginSDKConnector) Connect(ctx context.Context, mg xpresource
 	}
 
 	return &terraformPluginSDKExternal{
-		ts:             ts,
-		resourceSchema: c.config.TerraformResource,
-		config:         c.config,
-		params:         params,
-		rawConfig:      rawConfig,
-		logger:         logger,
-		metricRecorder: c.metricRecorder,
-		opTracker:      opTracker,
+		ts:                          ts,
+		resourceSchema:              c.config.TerraformResource,
+		config:                      c.config,
+		params:                      params,
+		rawConfig:                   rawConfig,
+		logger:                      logger,
+		metricRecorder:              c.metricRecorder,
+		opTracker:                   opTracker,
+		isManagementPoliciesEnabled: c.isManagementPoliciesEnabled,
 	}, nil
 }
 
@@ -460,6 +462,7 @@ func (n *terraformPluginSDKExternal) getResourceDataDiff(tr resource.Terraformed
 }
 
 func (n *terraformPluginSDKExternal) Observe(ctx context.Context, mg xpresource.Managed) (managed.ExternalObservation, error) { //nolint:gocyclo
+	var err error
 	n.logger.Debug("Observing the external resource")
 
 	if meta.WasDeleted(mg) && n.opTracker.IsDeleted() {
@@ -492,15 +495,22 @@ func (n *terraformPluginSDKExternal) Observe(ctx context.Context, mg xpresource.
 		diffState.Attributes = nil
 		diffState.ID = ""
 	}
-	instanceDiff, err := n.getResourceDataDiff(mg.(resource.Terraformed), ctx, diffState, resourceExists)
-	if err != nil {
-		return managed.ExternalObservation{}, errors.Wrap(err, "cannot compute the instance diff")
+
+	n.instanceDiff = nil
+	policySet := sets.New[xpv1.ManagementAction](mg.(resource.Terraformed).GetManagementPolicies()...)
+	observeOnlyPolicy := sets.New(xpv1.ManagementActionObserve)
+	isObserveOnlyPolicy := policySet.Equal(observeOnlyPolicy)
+	if !isObserveOnlyPolicy || !n.isManagementPoliciesEnabled {
+		n.instanceDiff, err = n.getResourceDataDiff(mg.(resource.Terraformed), ctx, diffState, resourceExists)
+		if err != nil {
+			return managed.ExternalObservation{}, errors.Wrap(err, "cannot compute the instance diff")
+		}
 	}
-	if instanceDiff == nil {
-		instanceDiff = tf.NewInstanceDiff()
+	if n.instanceDiff == nil {
+		n.instanceDiff = tf.NewInstanceDiff()
 	}
-	n.instanceDiff = instanceDiff
-	noDiff := instanceDiff.Empty()
+
+	hasDiff := !n.instanceDiff.Empty()
 
 	if !resourceExists && mg.GetDeletionTimestamp() != nil {
 		gvk := mg.GetObjectKind().GroupVersionKind()
@@ -533,7 +543,6 @@ func (n *terraformPluginSDKExternal) Observe(ctx context.Context, mg xpresource.
 			return managed.ExternalObservation{}, errors.Wrap(err, "cannot marshal the attributes of the new state for late-initialization")
 		}
 
-		policySet := sets.New[xpv1.ManagementAction](mg.(resource.Terraformed).GetManagementPolicies()...)
 		policyHasLateInit := policySet.HasAny(xpv1.ManagementActionLateInitialize, xpv1.ManagementActionAll)
 		if policyHasLateInit {
 			specUpdateRequired, err = mg.(resource.Terraformed).LateInitialize(buff)
@@ -547,11 +556,11 @@ func (n *terraformPluginSDKExternal) Observe(ctx context.Context, mg xpresource.
 			return managed.ExternalObservation{}, errors.Errorf("could not set observation: %v", err)
 		}
 
-		if noDiff {
+		if !hasDiff {
 			n.metricRecorder.SetReconcileTime(mg.GetName())
 		}
 		if !specUpdateRequired {
-			resource.SetUpToDateCondition(mg, noDiff)
+			resource.SetUpToDateCondition(mg, !hasDiff)
 		}
 		// check for an external-name change
 		if nameChanged, err := n.setExternalName(mg, stateValueMap); err != nil {
@@ -563,7 +572,7 @@ func (n *terraformPluginSDKExternal) Observe(ctx context.Context, mg xpresource.
 
 	return managed.ExternalObservation{
 		ResourceExists:          resourceExists,
-		ResourceUpToDate:        noDiff,
+		ResourceUpToDate:        !hasDiff,
 		ConnectionDetails:       connDetails,
 		ResourceLateInitialized: specUpdateRequired,
 	}, nil
