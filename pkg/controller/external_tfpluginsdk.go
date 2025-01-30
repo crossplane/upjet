@@ -497,7 +497,7 @@ func (n *terraformPluginSDKExternal) Observe(ctx context.Context, mg xpresource.
 	}
 
 	n.instanceDiff = nil
-	policySet := sets.New(mg.(resource.Terraformed).GetManagementPolicies()...)
+	policySet := sets.New[xpv1.ManagementAction](mg.(resource.Terraformed).GetManagementPolicies()...)
 	observeOnlyPolicy := sets.New(xpv1.ManagementActionObserve)
 	isObserveOnlyPolicy := policySet.Equal(observeOnlyPolicy)
 	if !isObserveOnlyPolicy || !n.isManagementPoliciesEnabled {
