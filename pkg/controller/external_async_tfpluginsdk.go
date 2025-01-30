@@ -160,7 +160,7 @@ func (n *terraformPluginSDKAsyncExternal) Create(_ context.Context, mg xpresourc
 				n.opTracker.logger.Info("Async create callback failed", "error", cErr.Error())
 			}
 		}()
-		defer ph.recoverIfPanic()
+		defer ph.recoverIfPanic(ctx)
 
 		n.opTracker.logger.Debug("Async create starting...", "tfID", n.opTracker.GetTfID())
 		_, ph.err = n.terraformPluginSDKExternal.Create(ctx, mg)
@@ -193,7 +193,7 @@ func (n *terraformPluginSDKAsyncExternal) Update(_ context.Context, mg xpresourc
 				n.opTracker.logger.Info("Async update callback failed", "error", cErr.Error())
 			}
 		}()
-		defer ph.recoverIfPanic()
+		defer ph.recoverIfPanic(ctx)
 
 		n.opTracker.logger.Debug("Async update starting...", "tfID", n.opTracker.GetTfID())
 		_, ph.err = n.terraformPluginSDKExternal.Update(ctx, mg)
@@ -230,7 +230,7 @@ func (n *terraformPluginSDKAsyncExternal) Delete(_ context.Context, mg xpresourc
 				n.opTracker.logger.Info("Async delete callback failed", "error", cErr.Error())
 			}
 		}()
-		defer ph.recoverIfPanic()
+		defer ph.recoverIfPanic(ctx)
 
 		n.opTracker.logger.Debug("Async delete starting...", "tfID", n.opTracker.GetTfID())
 		_, ph.err = n.terraformPluginSDKExternal.Delete(ctx, mg)

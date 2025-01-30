@@ -23,8 +23,8 @@ const NoRateLimiter = ""
 // objects and allows upjet components to queue reconcile requests.
 type EventHandler struct {
 	innerHandler   handler.EventHandler
-	queue          workqueue.RateLimitingInterface
-	rateLimiterMap map[string]workqueue.RateLimiter
+	queue          workqueue.TypedRateLimitingInterface[reconcile.Request]
+	rateLimiterMap map[string]workqueue.TypedRateLimiter[reconcile.Request]
 	logger         logging.Logger
 	mu             *sync.RWMutex
 }
@@ -44,7 +44,7 @@ func NewEventHandler(opts ...Option) *EventHandler {
 	eh := &EventHandler{
 		innerHandler:   &handler.EnqueueRequestForObject{},
 		mu:             &sync.RWMutex{},
-		rateLimiterMap: make(map[string]workqueue.RateLimiter),
+		rateLimiterMap: make(map[string]workqueue.TypedRateLimiter[reconcile.Request]),
 	}
 	for _, o := range opts {
 		o(eh)
@@ -70,7 +70,7 @@ func (e *EventHandler) RequestReconcile(rateLimiterName, name string, failureLim
 	if rateLimiterName != NoRateLimiter {
 		rateLimiter := e.rateLimiterMap[rateLimiterName]
 		if rateLimiter == nil {
-			rateLimiter = workqueue.DefaultControllerRateLimiter()
+			rateLimiter = workqueue.DefaultTypedControllerRateLimiter[reconcile.Request]()
 			e.rateLimiterMap[rateLimiterName] = rateLimiter
 		}
 		if failureLimit != nil && rateLimiter.NumRequeues(item) > *failureLimit {
@@ -100,7 +100,7 @@ func (e *EventHandler) Forget(rateLimiterName, name string) {
 	})
 }
 
-func (e *EventHandler) setQueue(limitingInterface workqueue.RateLimitingInterface) {
+func (e *EventHandler) setQueue(limitingInterface workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.queue == nil {
@@ -108,25 +108,25 @@ func (e *EventHandler) setQueue(limitingInterface workqueue.RateLimitingInterfac
 	}
 }
 
-func (e *EventHandler) Create(ctx context.Context, ev event.CreateEvent, limitingInterface workqueue.RateLimitingInterface) {
+func (e *EventHandler) Create(ctx context.Context, ev event.CreateEvent, limitingInterface workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 	e.setQueue(limitingInterface)
 	e.logger.Debug("Calling the inner handler for Create event.", "name", ev.Object.GetName(), "queueLength", limitingInterface.Len())
 	e.innerHandler.Create(ctx, ev, limitingInterface)
 }
 
-func (e *EventHandler) Update(ctx context.Context, ev event.UpdateEvent, limitingInterface workqueue.RateLimitingInterface) {
+func (e *EventHandler) Update(ctx context.Context, ev event.UpdateEvent, limitingInterface workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 	e.setQueue(limitingInterface)
 	e.logger.Debug("Calling the inner handler for Update event.", "name", ev.ObjectOld.GetName(), "queueLength", limitingInterface.Len())
 	e.innerHandler.Update(ctx, ev, limitingInterface)
 }
 
-func (e *EventHandler) Delete(ctx context.Context, ev event.DeleteEvent, limitingInterface workqueue.RateLimitingInterface) {
+func (e *EventHandler) Delete(ctx context.Context, ev event.DeleteEvent, limitingInterface workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 	e.setQueue(limitingInterface)
 	e.logger.Debug("Calling the inner handler for Delete event.", "name", ev.Object.GetName(), "queueLength", limitingInterface.Len())
 	e.innerHandler.Delete(ctx, ev, limitingInterface)
 }
 
-func (e *EventHandler) Generic(ctx context.Context, ev event.GenericEvent, limitingInterface workqueue.RateLimitingInterface) {
+func (e *EventHandler) Generic(ctx context.Context, ev event.GenericEvent, limitingInterface workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 	e.setQueue(limitingInterface)
 	e.logger.Debug("Calling the inner handler for Generic event.", "name", ev.Object.GetName(), "queueLength", limitingInterface.Len())
 	e.innerHandler.Generic(ctx, ev, limitingInterface)
