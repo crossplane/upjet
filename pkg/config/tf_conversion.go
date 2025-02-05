@@ -64,9 +64,9 @@ func (s singletonListConversion) Convert(params map[string]any, r *Resource, mod
 	var m map[string]any
 	switch mode {
 	case FromTerraform:
-		m, err = conversion.Convert(params, r.TFListConversionPaths(), conversion.ToEmbeddedObject)
+		m, err = conversion.Convert(params, r.TFListConversionPaths(), conversion.ToEmbeddedObject, nil)
 	case ToTerraform:
-		m, err = conversion.Convert(params, r.TFListConversionPaths(), conversion.ToSingletonList)
+		m, err = conversion.Convert(params, r.TFListConversionPaths(), conversion.ToSingletonList, nil)
 	}
 	return m, errors.Wrapf(err, "failed to convert between Crossplane and Terraform layers in mode %q", mode)
 }
