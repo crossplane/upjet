@@ -72,6 +72,17 @@ func setValue(pv *fieldpath.Paved, v any, fp string) error {
 	return nil
 }
 
+type SingletonListInjectKey struct {
+	Key   string
+	Value string
+}
+
+type ConvertOptions struct {
+	// ListInjectKeys is used to inject a key with a default value into the
+	// singleton list for a given path.
+	ListInjectKeys map[string]SingletonListInjectKey
+}
+
 // Convert performs conversion between singleton lists and embedded objects
 // while passing the CRD parameters to the Terraform layer and while reading
 // state from the Terraform layer at runtime. The paths where the conversion
@@ -79,7 +90,7 @@ func setValue(pv *fieldpath.Paved, v any, fp string) error {
 // an embedded object will be converted into a singleton list or a singleton
 // list will be converted into an embedded object) is determined by the mode
 // parameter.
-func Convert(params map[string]any, paths []string, mode ListConversionMode) (map[string]any, error) { //nolint:gocyclo // easier to follow as a unit
+func Convert(params map[string]any, paths []string, mode ListConversionMode, opts *ConvertOptions) (map[string]any, error) { //nolint:gocyclo // easier to follow as a unit
 	switch mode {
 	case ToSingletonList:
 		slices.Sort(paths)
@@ -102,6 +113,15 @@ func Convert(params map[string]any, paths []string, mode ListConversionMode) (ma
 			}
 			switch mode {
 			case ToSingletonList:
+				if opts != nil {
+					// We replace 0th index with "*" to be able to stay consistent
+					// with the paths parameter in the keys of opts.ListInjectKeys.
+					if inj, ok := opts.ListInjectKeys[strings.ReplaceAll(e, "0", "*")]; ok && inj.Key != "" && inj.Value != "" {
+						if m, ok := v.(map[string]any); ok {
+							m[inj.Key] = inj.Value
+						}
+					}
+				}
 				if err := setValue(pv, []any{v}, e); err != nil {
 					return nil, errors.Wrapf(err, "cannot set the singleton list's value at the field path %s", e)
 				}
@@ -121,11 +141,19 @@ func Convert(params map[string]any, paths []string, mode ListConversionMode) (ma
 						newVal = s[0]
 					}
 				}
+				if opts != nil {
+					// We replace 0th index with "*" to be able to stay consistent
+					// with the paths parameter in the keys of opts.ListInjectKeys.
+					if inj, ok := opts.ListInjectKeys[strings.ReplaceAll(e, "0", "*")]; ok && inj.Key != "" && inj.Value != "" {
+						delete(newVal.(map[string]any), inj.Key)
+					}
+				}
 				if err := setValue(pv, newVal, e); err != nil {
 					return nil, errors.Wrapf(err, "cannot set the embedded object's value at the field path %s", e)
 				}
 			}
 		}
 	}
+
 	return params, nil
 }
