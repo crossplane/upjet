@@ -19,6 +19,7 @@ func TestConvert(t *testing.T) {
 		params map[string]any
 		paths  []string
 		mode   ListConversionMode
+		opts   *ConvertOptions
 	}
 	type want struct {
 		err    error
@@ -269,6 +270,147 @@ func TestConvert(t *testing.T) {
 				},
 			},
 		},
+		"WithInjectedKeySingletonListToEmbeddedObject": {
+			reason: "Should successfully convert a singleton list at the root level to an embedded object.",
+			args: args{
+				params: map[string]any{
+					"l": []map[string]any{
+						{
+							"k":     "v",
+							"index": "0",
+						},
+					},
+				},
+				paths: []string{"l"},
+				mode:  ToEmbeddedObject,
+				opts: &ConvertOptions{
+					ListInjectKeys: map[string]SingletonListInjectKey{
+						"l": {
+							Key:   "index",
+							Value: "0",
+						},
+					},
+				}},
+			want: want{
+				params: map[string]any{
+					"l": map[string]any{
+						"k": "v",
+					},
+				},
+			},
+		},
+		"WithInjectedKeyEmbeddedObjectToSingletonList": {
+			reason: "Should successfully convert an embedded object at the root level to a singleton list.",
+			args: args{
+				params: map[string]any{
+					"l": map[string]any{
+						"k": "v",
+					},
+				},
+				paths: []string{"l"},
+				mode:  ToSingletonList,
+				opts: &ConvertOptions{
+					ListInjectKeys: map[string]SingletonListInjectKey{
+						"l": {
+							Key:   "index",
+							Value: "0",
+						},
+					},
+				},
+			},
+			want: want{
+				params: map[string]any{
+					"l": []map[string]any{
+						{
+							"k":     "v",
+							"index": "0",
+						},
+					},
+				},
+			},
+		},
+		"WithInjectedKeyNestedEmbeddedObjectsToSingletonListInLexicalOrder": {
+			reason: "Should successfully convert the parent & nested embedded objects to singleton lists. Paths are specified in lexical order.",
+			args: args{
+				params: map[string]any{
+					"parent": map[string]any{
+						"child": map[string]any{
+							"k": "v",
+						},
+					},
+				},
+				paths: []string{"parent", "parent[*].child"},
+				mode:  ToSingletonList,
+				opts: &ConvertOptions{
+					ListInjectKeys: map[string]SingletonListInjectKey{
+						"parent": {
+							Key:   "index",
+							Value: "0",
+						},
+						"parent[*].child": {
+							Key:   "another",
+							Value: "0",
+						},
+					},
+				},
+			},
+			want: want{
+				params: map[string]any{
+					"parent": []map[string]any{
+						{
+							"index": "0",
+							"child": []map[string]any{
+								{
+									"k":       "v",
+									"another": "0",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		"WithInjectedKeyNestedSingletonListsToEmbeddedObjectsPathsInLexicalOrder": {
+			reason: "Should successfully convert the parent & nested singleton lists to embedded objects. Paths specified in lexical order.",
+			args: args{
+				params: map[string]any{
+					"parent": []map[string]any{
+						{
+							"index": "0",
+							"child": []map[string]any{
+								{
+									"k":       "v",
+									"another": "0",
+								},
+							},
+						},
+					},
+				},
+				paths: []string{"parent", "parent[*].child"},
+				mode:  ToEmbeddedObject,
+				opts: &ConvertOptions{
+					ListInjectKeys: map[string]SingletonListInjectKey{
+						"parent": {
+							Key:   "index",
+							Value: "0",
+						},
+						"parent[*].child": {
+							Key:   "another",
+							Value: "0",
+						},
+					},
+				},
+			},
+			want: want{
+				params: map[string]any{
+					"parent": map[string]any{
+						"child": map[string]any{
+							"k": "v",
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for n, tt := range tests {
@@ -281,7 +423,7 @@ func TestConvert(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to preprocess tt.want.params: %v", err)
 			}
-			got, err := Convert(params, tt.args.paths, tt.args.mode)
+			got, err := Convert(params, tt.args.paths, tt.args.mode, tt.args.opts)
 			if diff := cmp.Diff(tt.want.err, err, test.EquateErrors()); diff != "" {
 				t.Fatalf("\n%s\nConvert(tt.args.params, tt.args.paths): -wantErr, +gotErr:\n%s", tt.reason, diff)
 			}

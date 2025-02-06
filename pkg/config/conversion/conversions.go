@@ -178,22 +178,38 @@ func NewCustomConverter(sourceVersion, targetVersion string, converter func(src,
 
 type singletonListConverter struct {
 	baseConversion
-	pathPrefixes []string
-	crdPaths     []string
-	mode         ListConversionMode
+	pathPrefixes   []string
+	crdPaths       []string
+	mode           ListConversionMode
+	convertOptions *ConvertOptions
+}
+
+type SingletonListConversionOption func(*singletonListConverter)
+
+// WithConvertOptions sets the ConvertOptions for the singleton list conversion.
+func WithConvertOptions(opts *ConvertOptions) SingletonListConversionOption {
+	return func(s *singletonListConverter) {
+		s.convertOptions = opts
+	}
 }
 
 // NewSingletonListConversion returns a new Conversion from the specified
 // sourceVersion of an API to the specified targetVersion and uses the
 // CRD field paths given in crdPaths to convert between the singleton
 // lists and embedded objects in the given conversion mode.
-func NewSingletonListConversion(sourceVersion, targetVersion string, pathPrefixes []string, crdPaths []string, mode ListConversionMode) Conversion {
-	return &singletonListConverter{
+func NewSingletonListConversion(sourceVersion, targetVersion string, pathPrefixes []string, crdPaths []string, mode ListConversionMode, opts ...SingletonListConversionOption) Conversion {
+	s := &singletonListConverter{
 		baseConversion: newBaseConversion(sourceVersion, targetVersion),
 		pathPrefixes:   pathPrefixes,
 		crdPaths:       crdPaths,
 		mode:           mode,
 	}
+
+	for _, o := range opts {
+		o(s)
+	}
+
+	return s
 }
 
 func (s *singletonListConverter) ConvertPaved(src, target *fieldpath.Paved) (bool, error) {
@@ -214,7 +230,7 @@ func (s *singletonListConverter) ConvertPaved(src, target *fieldpath.Paved) (boo
 		if !ok {
 			return true, errors.Errorf("value at path %s is not a map[string]any", p)
 		}
-		if _, err := Convert(m, s.crdPaths, s.mode); err != nil {
+		if _, err := Convert(m, s.crdPaths, s.mode, s.convertOptions); err != nil {
 			return true, errors.Wrapf(err, "failed to convert the source map in mode %q with %s", s.mode, s.baseConversion.String())
 		}
 		if err := target.SetValue(p, m); err != nil {

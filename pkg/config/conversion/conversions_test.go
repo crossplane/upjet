@@ -366,6 +366,7 @@ func TestSingletonListConversion(t *testing.T) {
 		targetMap     map[string]any
 		crdPaths      []string
 		mode          ListConversionMode
+		opts          []SingletonListConversionOption
 	}
 	type want struct {
 		converted bool
@@ -465,10 +466,55 @@ func TestSingletonListConversion(t *testing.T) {
 				targetMap: map[string]any{},
 			},
 		},
+		"SuccessfulToSingletonListConversionWithInjectedKey": {
+			reason: "Successful conversion from an embedded object to a singleton list.",
+			args: args{
+				sourceVersion: AllVersions,
+				sourceMap: map[string]any{
+					"spec": map[string]any{
+						"initProvider": map[string]any{
+							"o": map[string]any{
+								"k": "v",
+							},
+						},
+					},
+				},
+				targetVersion: AllVersions,
+				targetMap:     map[string]any{},
+				crdPaths:      []string{"o"},
+				mode:          ToSingletonList,
+				opts: []SingletonListConversionOption{
+					WithConvertOptions(&ConvertOptions{
+						ListInjectKeys: map[string]SingletonListInjectKey{
+							"o": {
+								Key:   "index",
+								Value: "0",
+							},
+						},
+					}),
+				},
+			},
+			want: want{
+				converted: true,
+				targetMap: map[string]any{
+					"spec": map[string]any{
+						"initProvider": map[string]any{
+							"o": []map[string]any{
+								{
+									"k":     "v",
+									"index": "0",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 	for n, tc := range tests {
 		t.Run(n, func(t *testing.T) {
-			c := NewSingletonListConversion(tc.args.sourceVersion, tc.args.targetVersion, []string{pathInitProvider}, tc.args.crdPaths, tc.args.mode)
+
+			c := NewSingletonListConversion(tc.args.sourceVersion, tc.args.targetVersion, []string{pathInitProvider}, tc.args.crdPaths, tc.args.mode, tc.args.opts...)
 			sourceMap, err := roundTrip(tc.args.sourceMap)
 			if err != nil {
 				t.Fatalf("Failed to preprocess tc.args.sourceMap: %v", err)
