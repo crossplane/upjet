@@ -79,7 +79,7 @@ func ConvertSingletonListToEmbeddedObject(pc *config.Provider, startPath, licens
 							// spec.
 							conversionPaths[i] = "spec.forProvider." + cp
 						}
-						converted, err := conversion.Convert(e.Object, conversionPaths, conversion.ToEmbeddedObject)
+						converted, err := conversion.Convert(e.Object, conversionPaths, conversion.ToEmbeddedObject, nil)
 						if err != nil {
 							return errors.Wrapf(err, "failed to convert example to embedded object in manifest %s", path)
 						}
