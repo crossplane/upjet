@@ -575,6 +575,10 @@ type Resource struct {
 	// requiredFields are the fields that will be marked as required in the
 	// generated CRD schema, although they are not required in the TF schema.
 	requiredFields []string
+
+	// AttributesToPopulateWithMetadataName defines Terraform attributes that
+	// should be populated with the resources metadata.name
+	AttributesToPopulateWithMetadataName []string
 }
 
 // RequiredFields returns slice of the marked as required fieldpaths.
