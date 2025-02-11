@@ -575,6 +575,43 @@ type Resource struct {
 	// requiredFields are the fields that will be marked as required in the
 	// generated CRD schema, although they are not required in the TF schema.
 	requiredFields []string
+
+	// UpdateLoopPrevention is a mechanism to prevent infinite reconciliation
+	// loops. This is especially useful in cases where external services,
+	// silently modify resource data without notifying the management layer
+	// (e.g., sanitized XML fields).
+	UpdateLoopPrevention UpdateLoopPrevention
+}
+
+// UpdateLoopPrevention is an interface that defines the behavior to prevent
+// update loops. Implementations of this interface are responsible for analyzing
+// diffs and determining whether an update should be blocked or allowed.
+type UpdateLoopPrevention interface {
+	// UpdateLoopPreventionFunc analyzes a diff and decides whether the update
+	// should be blocked. It returns a result containing a reason for blocking
+	// the update if a loop is detected, or nil if the update can proceed.
+	//
+	// Parameters:
+	// - diff: The diff object representing changes between the desired and
+	// current state.
+	// - mg: The managed resource that is being reconciled.
+	//
+	// Returns:
+	// - *UpdateLoopPreventResult: Contains the reason for blocking the update
+	// if a loop is detected.
+	// - error: An error if there are issues analyzing the diff
+	// (e.g., invalid data).
+	UpdateLoopPreventionFunc(diff *terraform.InstanceDiff, mg xpresource.Managed) (*UpdateLoopPreventResult, error)
+}
+
+// UpdateLoopPreventResult provides the result of an update loop prevention
+// check. If a loop is detected, it includes a reason explaining why the update
+// was blocked.
+type UpdateLoopPreventResult struct {
+	// Reason provides a human-readable explanation of why the update was
+	// blocked. This message can be displayed to the user or logged for
+	// debugging purposes.
+	Reason string
 }
 
 // RequiredFields returns slice of the marked as required fieldpaths.

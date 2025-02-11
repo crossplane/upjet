@@ -686,6 +686,16 @@ func (n *terraformPluginSDKExternal) assertNoForceNew() error {
 }
 
 func (n *terraformPluginSDKExternal) Update(ctx context.Context, mg xpresource.Managed) (managed.ExternalUpdate, error) {
+	if n.config.UpdateLoopPrevention != nil {
+		preventResult, err := n.config.UpdateLoopPrevention.UpdateLoopPreventionFunc(n.instanceDiff, mg)
+		if err != nil {
+			return managed.ExternalUpdate{}, errors.Wrapf(err, "failed to apply the update loop prevention function for %s", n.config.Name)
+		}
+		if preventResult != nil {
+			return managed.ExternalUpdate{}, errors.Errorf("update operation was blocked because of a possible update loop: %s", preventResult.Reason)
+		}
+	}
+
 	n.logger.Debug("Updating the external resource")
 
 	if err := n.assertNoForceNew(); err != nil {
