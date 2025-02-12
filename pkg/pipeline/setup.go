@@ -15,98 +15,90 @@ import (
 	"github.com/muvaf/typewriter/pkg/wrapper"
 	"github.com/pkg/errors"
 
-	"github.com/crossplane/upjet/pkg/config"
 	"github.com/crossplane/upjet/pkg/pipeline/templates"
 )
 
-// NewProviderGenerator returns a new ProviderGenerator.
-func NewProviderGenerator(rootDir, modulePath string) *ProviderGenerator {
-	return &ProviderGenerator{
-		ProviderPath:       filepath.Join(rootDir, "cmd", "provider"),
-		LocalDirectoryPath: filepath.Join(rootDir, "internal", "controller"),
-		LicenseHeaderPath:  filepath.Join(rootDir, "hack", "boilerplate.go.txt"),
-		ModulePath:         modulePath,
+// NewSetupGenerator returns a new generator that sets up controllers.
+func NewSetupGenerator(ctrlDir, hackDir, apiModulePath string) *SetupGenerator {
+	return &SetupGenerator{
+		LocalDirectoryPath: ctrlDir,
+		LicenseHeaderPath:  filepath.Join(hackDir, "boilerplate.go.txt"),
+		ModulePath:         apiModulePath,
 	}
 }
 
-// ProviderGenerator generates controller setup file.
-type ProviderGenerator struct {
-	ProviderPath       string
+// SetupGenerator generates controller setup file.
+type SetupGenerator struct {
 	LocalDirectoryPath string
 	LicenseHeaderPath  string
 	ModulePath         string
 }
 
-// Generate writes the setup file and the corresponding provider main file
-// using the given list of version packages.
-func (sg *ProviderGenerator) Generate(versionPkgMap map[string][]string, mainTemplate string) error {
-	var t *template.Template
-	if len(mainTemplate) != 0 {
-		tmpl, err := template.New("main").Parse(mainTemplate)
-		if err != nil {
-			return errors.Wrap(err, "failed to parse the provider main program template")
+// Generate writes the setup file given list of version packages.
+func (sg *SetupGenerator) Generate(versionPkgMap map[string][]string) error {
+	for group, versionPkgList := range versionPkgMap {
+		// TODO(negz): Should this really be apis? They're not imported for setup...
+		setupFile := wrapper.NewFile(sg.ModulePath, "apis", templates.SetupTemplate,
+			wrapper.WithGenStatement(GenStatement),
+			wrapper.WithHeaderPath(sg.LicenseHeaderPath),
+		)
+		sort.Strings(versionPkgList)
+		aliases := make([]string, len(versionPkgList))
+		for i, pkgPath := range versionPkgList {
+			aliases[i] = setupFile.Imports.UsePackage(pkgPath)
 		}
-		t = tmpl
-	}
-	if t == nil {
-		return errors.Wrap(sg.generate("", versionPkgMap[config.PackageNameMonolith]), "failed to generate the controller setup file")
-	}
-	for g, versionPkgList := range versionPkgMap {
-		if err := sg.generate(g, versionPkgList); err != nil {
-			return errors.Wrapf(err, "failed to generate the controller setup file for group: %s", g)
+		g := ""
+		filePath := filepath.Join(sg.LocalDirectoryPath, "zz_setup.go")
+		if group != "" {
+			filePath = filepath.Join(sg.LocalDirectoryPath, fmt.Sprintf("zz_%s_setup.go", group))
+			g = "_" + group
 		}
-		if err := generateProviderMain(sg.ProviderPath, g, t); err != nil {
-			return errors.Wrapf(err, "failed to write main program for group: %s", g)
+		vars := map[string]any{
+			"Aliases": aliases,
+			"Group":   g,
+		}
+		if err := setupFile.Write(filePath, vars, os.ModePerm); err != nil {
+			return errors.Wrap(err, "cannot write setup file")
 		}
 	}
 	return nil
 }
 
-func generateProviderMain(providerPath, group string, t *template.Template) error {
-	f := filepath.Join(providerPath, group)
-	if err := os.MkdirAll(f, 0750); err != nil {
-		return errors.Wrapf(err, "failed to mkdir provider main program path: %s", f)
-	}
-	m, err := os.OpenFile(filepath.Join(filepath.Clean(f), "zz_main.go"), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+func NewMainGenerator(cmdDir, template string) *MainGenerator {
+	return &MainGenerator{ProviderPath: cmdDir, Template: template}
+}
+
+type MainGenerator struct {
+	ProviderPath string
+	Template     string
+}
+
+// Generate writes the setup file given list of version packages.
+func (mg *MainGenerator) Generate(groups []string) error {
+	t, err := template.New("main").Parse(mg.Template)
 	if err != nil {
-		return errors.Wrap(err, "failed to open provider main program file")
+		return errors.Wrap(err, "failed to parse the provider main program template")
 	}
-	defer func() {
-		if err := m.Close(); err != nil {
-			log.Fatalf("Failed to close the templated main %q: %s", f, err.Error())
+
+	for _, g := range groups {
+		f := filepath.Join(mg.ProviderPath, g)
+		if err := os.MkdirAll(f, 0750); err != nil {
+			return errors.Wrapf(err, "failed to mkdir provider main program path: %s", f)
 		}
-	}()
-	if err := t.Execute(m, map[string]any{
-		"Group": group,
-	}); err != nil {
-		return errors.Wrap(err, "failed to execute provider main program template")
+		m, err := os.OpenFile(filepath.Join(filepath.Clean(f), "zz_main.go"), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+		if err != nil {
+			return errors.Wrap(err, "failed to open provider main program file")
+		}
+		defer func() {
+			if err := m.Close(); err != nil {
+				log.Fatalf("Failed to close the templated main %q: %s", f, err.Error())
+			}
+		}()
+		if err := t.Execute(m, map[string]any{
+			"Group": g,
+		}); err != nil {
+			return errors.Wrap(err, "failed to execute provider main program template")
+		}
 	}
 	return nil
-}
-
-func (sg *ProviderGenerator) generate(group string, versionPkgList []string) error {
-	setupFile := wrapper.NewFile(filepath.Join(sg.ModulePath, "apis"), "apis", templates.SetupTemplate,
-		wrapper.WithGenStatement(GenStatement),
-		wrapper.WithHeaderPath(sg.LicenseHeaderPath),
-	)
-	sort.Strings(versionPkgList)
-	aliases := make([]string, len(versionPkgList))
-	for i, pkgPath := range versionPkgList {
-		aliases[i] = setupFile.Imports.UsePackage(pkgPath)
-	}
-	g := ""
-	if len(group) != 0 {
-		g = "_" + group
-	}
-	vars := map[string]any{
-		"Aliases": aliases,
-		"Group":   g,
-	}
-	filePath := ""
-	if len(group) == 0 {
-		filePath = filepath.Join(sg.LocalDirectoryPath, "zz_setup.go")
-	} else {
-		filePath = filepath.Join(sg.LocalDirectoryPath, fmt.Sprintf("zz_%s_setup.go", group))
-	}
-	return errors.Wrap(setupFile.Write(filePath, vars, os.ModePerm), "cannot write setup file")
 }

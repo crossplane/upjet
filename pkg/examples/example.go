@@ -42,19 +42,19 @@ const (
 // Generates example manifests for Terraform resources under examples-generated.
 type Generator struct {
 	reference.Injector
-	rootDir         string
+	exampleDir      string
 	configResources map[string]*config.Resource
 	resources       map[string]*reference.PavedWithManifest
 }
 
 // NewGenerator returns a configured Generator
-func NewGenerator(rootDir, modulePath, shortName string, configResources map[string]*config.Resource) *Generator {
+func NewGenerator(exampleDir, apisModulePath, shortName string, configResources map[string]*config.Resource) *Generator {
 	return &Generator{
 		Injector: reference.Injector{
-			ModulePath:        modulePath,
+			ModulePath:        apisModulePath,
 			ProviderShortName: shortName,
 		},
-		rootDir:         rootDir,
+		exampleDir:      exampleDir,
 		configResources: configResources,
 		resources:       make(map[string]*reference.PavedWithManifest),
 	}
@@ -62,7 +62,7 @@ func NewGenerator(rootDir, modulePath, shortName string, configResources map[str
 
 // StoreExamples stores the generated example manifests under examples-generated in
 // their respective API groups.
-func (eg *Generator) StoreExamples() error { // nolint:gocyclo
+func (eg *Generator) StoreExamples() error { //nolint:gocyclo
 	for rn, pm := range eg.resources {
 		manifestDir := filepath.Dir(pm.ManifestPath)
 		if err := os.MkdirAll(manifestDir, 0750); err != nil {
@@ -185,7 +185,7 @@ func (eg *Generator) Generate(group, version string, r *config.Resource) error {
 	// e.g. gvk = ec2/v1beta1/instance
 	gvk := fmt.Sprintf("%s/%s/%s", groupPrefix, version, strings.ToLower(r.Kind))
 	pm := paveCRManifest(rm.Examples[0].Paved.UnstructuredContent(), r, rm.Examples[0].Name, group, version, gvk)
-	manifestDir := filepath.Join(eg.rootDir, "examples-generated", groupPrefix, r.Version)
+	manifestDir := filepath.Join(eg.exampleDir, groupPrefix, r.Version)
 	pm.ManifestPath = filepath.Join(manifestDir, fmt.Sprintf("%s.yaml", strings.ToLower(r.Kind)))
 	eg.resources[fmt.Sprintf("%s.%s", r.Name, reference.Wildcard)] = pm
 	return nil
@@ -206,7 +206,7 @@ func isStatus(r *config.Resource, attr string) bool {
 	return tjtypes.IsObservation(s)
 }
 
-func transformFields(r *config.Resource, params map[string]any, omittedFields []string, namePrefix string) { // nolint:gocyclo
+func transformFields(r *config.Resource, params map[string]any, omittedFields []string, namePrefix string) { //nolint:gocyclo
 	for n := range params {
 		hName := getHierarchicalName(namePrefix, n)
 		if isStatus(r, hName) {
