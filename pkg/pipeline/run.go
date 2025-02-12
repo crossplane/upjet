@@ -24,7 +24,43 @@ type terraformedInput struct {
 }
 
 // Run runs the Upjet code generation pipelines.
-func Run(pc *config.Provider, rootDir string) { //nolint:gocyclo
+func Run(pc *config.Provider, rootDir string) {
+	// TODO(negz): Another one for namespaced controllers...
+	cluster := &PipelineRunner{
+		DirAPIs:        filepath.Join(rootDir, "apis"),
+		DirControllers: filepath.Join(rootDir, "internal", "controller"),
+		DirExamples:    filepath.Join(rootDir, "examples-generated"),
+		DirHack:        filepath.Join(rootDir, "hack"),
+
+		ModulePathAPIs:        filepath.Join(pc.ModulePath, "apis"),
+		ModulePathControllers: filepath.Join(pc.ModulePath, "internal", "controller"),
+
+		Scope: "Cluster",
+	}
+
+	// Map of service name (e.g. ec2) to resource controller packages.
+	groups := cluster.Run(pc)
+
+	if err := NewMainGenerator(filepath.Join(rootDir, "cmd", "provider"), pc.MainTemplate).Generate(groups); err != nil {
+		panic(errors.Wrap(err, "cannot generate main.go"))
+	}
+}
+
+type PipelineRunner struct {
+	DirAPIs        string
+	DirControllers string
+	DirExamples    string
+	DirHack        string
+
+	ModulePathAPIs        string
+	ModulePathControllers string
+
+	// TODO(negz): Eventually I think we'll need a different template for
+	// namespace scoped resources too, e.g. without namespaces in secret refs.
+	Scope string
+}
+
+func (r *PipelineRunner) Run(pc *config.Provider) []string { //nolint:gocyclo
 	// Note(turkenh): nolint reasoning - this is the main function of the code
 	// generation pipeline. We didn't want to split it into multiple functions
 	// for better readability considering the straightforward logic here.
@@ -47,7 +83,7 @@ func Run(pc *config.Provider, rootDir string) { //nolint:gocyclo
 		resourcesGroups[group][resource.Version][name] = resource
 	}
 
-	exampleGen := examples.NewGenerator(rootDir, pc.ModulePath, pc.ShortName, pc.Resources)
+	exampleGen := examples.NewGenerator(r.DirExamples, r.ModulePathAPIs, pc.ShortName, pc.Resources)
 	if err := exampleGen.SetReferenceTypes(pc.Resources); err != nil {
 		panic(errors.Wrap(err, "cannot set reference types for resources"))
 	}
@@ -88,20 +124,21 @@ func Run(pc *config.Provider, rootDir string) { //nolint:gocyclo
 			controllerPkgMap[config.PackageNameMonolith] = append(controllerPkgMap[config.PackageNameMonolith], path)
 		}
 	}
+
 	count := 0
 	for group, versions := range resourcesGroups {
 		shortGroup := strings.Split(group, ".")[0]
 		for version, resources := range versions {
-			var tfResources []*terraformedInput
-			versionGen := NewVersionGenerator(rootDir, pc.ModulePath, group, version)
-			crdGen := NewCRDGenerator(versionGen.Package(), rootDir, pc.ShortName, group, version)
-			tfGen := NewTerraformedGenerator(versionGen.Package(), rootDir, group, version)
-			ctrlGen := NewControllerGenerator(rootDir, pc.ModulePath, group)
+			versionGen := NewVersionGenerator(r.DirAPIs, r.DirHack, r.ModulePathAPIs, group, version)
+			crdGen := NewCRDGenerator(versionGen.Package(), r.DirAPIs, r.DirHack, pc.ShortName, group, version, r.Scope)
+			tfGen := NewTerraformedGenerator(versionGen.Package(), r.DirAPIs, r.DirHack, group, version)
+			ctrlGen := NewControllerGenerator(r.DirControllers, r.DirHack, r.ModulePathControllers, group)
 
 			if err := versionGen.InsertPreviousObjects(versions); err != nil {
 				panic(errors.Wrapf(err, "cannot insert type definitions from the previous versions into the package scope for group %q", group))
 			}
 
+			var tfResources []*terraformedInput
 			for _, name := range sortedResources(resources) {
 				paramTypeName, err := crdGen.Generate(resources[name])
 				if err != nil {
@@ -118,7 +155,7 @@ func Run(pc *config.Provider, rootDir string) { //nolint:gocyclo
 				}
 				watchVersionGen := versionGen
 				if len(resources[name].ControllerReconcileVersion) != 0 {
-					watchVersionGen = NewVersionGenerator(rootDir, pc.ModulePath, group, resources[name].ControllerReconcileVersion)
+					watchVersionGen = NewVersionGenerator(r.DirAPIs, r.DirHack, r.ModulePathAPIs, group, resources[name].ControllerReconcileVersion)
 				}
 				ctrlPkgPath, err := ctrlGen.Generate(resources[name], watchVersionGen.Package().Path(), featuresPkgPath)
 				if err != nil {
@@ -141,7 +178,7 @@ func Run(pc *config.Provider, rootDir string) { //nolint:gocyclo
 			p := versionGen.Package().Path()
 			apiVersionPkgList = append(apiVersionPkgList, p)
 		}
-		conversionHubGen := NewConversionNodeGenerator(pc.ModulePath, rootDir, group, "zz_generated.conversion_hubs.go", templates.ConversionHubTemplate,
+		conversionHubGen := NewConversionNodeGenerator(r.DirAPIs, r.DirHack, r.ModulePathAPIs, group, "zz_generated.conversion_hubs.go", templates.ConversionHubTemplate,
 			func(c *config.Resource, fileAPIVersion string) bool {
 				// if this is the hub version, then mark it as a hub
 				return c.CRDHubVersion() == fileAPIVersion
@@ -149,7 +186,7 @@ func Run(pc *config.Provider, rootDir string) { //nolint:gocyclo
 		if err := conversionHubGen.Generate(versions); err != nil {
 			panic(errors.Wrapf(err, "cannot generate the conversion.Hub function for the resource group %q", group))
 		}
-		conversionSpokeGen := NewConversionNodeGenerator(pc.ModulePath, rootDir, group, "zz_generated.conversion_spokes.go", templates.ConversionSpokeTemplate,
+		conversionSpokeGen := NewConversionNodeGenerator(r.DirAPIs, r.DirHack, r.ModulePathAPIs, group, "zz_generated.conversion_spokes.go", templates.ConversionSpokeTemplate,
 			func(c *config.Resource, fileAPIVersion string) bool {
 				// if not the hub version, mark it as a spoke
 				return c.CRDHubVersion() != fileAPIVersion
@@ -183,12 +220,11 @@ func Run(pc *config.Provider, rootDir string) { //nolint:gocyclo
 		panic(errors.Wrapf(err, "cannot store examples"))
 	}
 
-	if err := NewRegisterGenerator(rootDir, pc.ModulePath).Generate(apiVersionPkgList); err != nil {
+	if err := NewRegisterGenerator(r.DirAPIs, r.DirHack, r.ModulePathAPIs).Generate(apiVersionPkgList); err != nil {
 		panic(errors.Wrap(err, "cannot generate register file"))
 	}
-	// Generate the provider,
-	// i.e. the setup function and optionally the provider's main program.
-	if err := NewProviderGenerator(rootDir, pc.ModulePath).Generate(controllerPkgMap, pc.MainTemplate); err != nil {
+
+	if err := NewSetupGenerator(r.DirControllers, r.DirHack, r.ModulePathAPIs).Generate(controllerPkgMap); err != nil {
 		panic(errors.Wrap(err, "cannot generate setup file"))
 	}
 
@@ -196,18 +232,24 @@ func Run(pc *config.Provider, rootDir string) { //nolint:gocyclo
 	// So, we set the directory of the command instead of passing in the directory
 	// as an argument to "find".
 	apisCmd := exec.Command("bash", "-c", "goimports -w $(find . -iname 'zz_*')")
-	apisCmd.Dir = filepath.Clean(filepath.Join(rootDir, "apis"))
+	apisCmd.Dir = filepath.Clean(r.DirAPIs)
 	if out, err := apisCmd.CombinedOutput(); err != nil {
 		panic(errors.Wrap(err, "cannot run goimports for apis folder: "+string(out)))
 	}
 
-	internalCmd := exec.Command("bash", "-c", "goimports -w $(find . -iname 'zz_*')")
-	internalCmd.Dir = filepath.Clean(filepath.Join(rootDir, "internal"))
-	if out, err := internalCmd.CombinedOutput(); err != nil {
-		panic(errors.Wrap(err, "cannot run goimports for internal folder: "+string(out)))
+	ctrlCmd := exec.Command("bash", "-c", "goimports -w $(find . -iname 'zz_*')")
+	ctrlCmd.Dir = filepath.Clean(r.DirControllers)
+	if out, err := ctrlCmd.CombinedOutput(); err != nil {
+		panic(errors.Wrap(err, "cannot run goimports for controller folder: "+string(out)))
 	}
 
 	fmt.Printf("\nGenerated %d resources!\n", count)
+
+	groups := make([]string, 0, len(controllerPkgMap))
+	for g := range controllerPkgMap {
+		groups = append(groups, g)
+	}
+	return groups
 }
 
 func sortedResources(m map[string]*config.Resource) []string {
