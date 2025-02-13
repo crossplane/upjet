@@ -38,7 +38,7 @@ type SetupGenerator struct {
 func (sg *SetupGenerator) Generate(versionPkgMap map[string][]string) error {
 	for group, versionPkgList := range versionPkgMap {
 		// TODO(negz): Should this really be apis? They're not imported for setup...
-		setupFile := wrapper.NewFile(sg.ModulePath, "apis", templates.SetupTemplate,
+		setupFile := wrapper.NewFile(sg.ModulePath, filepath.Base(sg.ModulePath), templates.SetupTemplate,
 			wrapper.WithGenStatement(GenStatement),
 			wrapper.WithHeaderPath(sg.LicenseHeaderPath),
 		)
