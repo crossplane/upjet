@@ -25,21 +25,34 @@ type terraformedInput struct {
 
 // Run runs the Upjet code generation pipelines.
 func Run(pc *config.Provider, rootDir string) {
-	// TODO(negz): Another one for namespaced controllers...
 	cluster := &PipelineRunner{
-		DirAPIs:        filepath.Join(rootDir, "apis"),
-		DirControllers: filepath.Join(rootDir, "internal", "controller"),
-		DirExamples:    filepath.Join(rootDir, "examples-generated"),
+		DirAPIs:        filepath.Join(rootDir, "apis", "cluster"),
+		DirControllers: filepath.Join(rootDir, "internal", "controller", "cluster"),
+		DirExamples:    filepath.Join(rootDir, "examples-generated", "cluster"),
 		DirHack:        filepath.Join(rootDir, "hack"),
 
-		ModulePathAPIs:        filepath.Join(pc.ModulePath, "apis"),
-		ModulePathControllers: filepath.Join(pc.ModulePath, "internal", "controller"),
+		ModulePathAPIs:        filepath.Join(pc.ModulePath, "apis", "cluster"),
+		ModulePathControllers: filepath.Join(pc.ModulePath, "internal", "controller", "cluster"),
 
 		Scope: "Cluster",
 	}
 
-	// Map of service name (e.g. ec2) to resource controller packages.
+	namespaced := &PipelineRunner{
+		DirAPIs:        filepath.Join(rootDir, "apis", "namespaced"),
+		DirControllers: filepath.Join(rootDir, "internal", "controller", "namespaced"),
+		DirExamples:    filepath.Join(rootDir, "examples-generated", "namespaced"),
+		DirHack:        filepath.Join(rootDir, "hack"),
+
+		ModulePathAPIs:        filepath.Join(pc.ModulePath, "apis", "namespaced"),
+		ModulePathControllers: filepath.Join(pc.ModulePath, "internal", "controller", "namespaced"),
+
+		Scope: "Namespaced",
+	}
+
+	// Map of service name (e.g. ec2) to resource controller packages. Should be
+	// the same for cluster and namespaced, so we only save one.
 	groups := cluster.Run(pc)
+	_ = namespaced.Run(pc)
 
 	if err := NewMainGenerator(filepath.Join(rootDir, "cmd", "provider"), pc.MainTemplate).Generate(groups); err != nil {
 		panic(errors.Wrap(err, "cannot generate main.go"))
@@ -90,19 +103,19 @@ func (r *PipelineRunner) Run(pc *config.Provider) []string { //nolint:gocyclo
 	// Add ProviderConfig API package to the list of API version packages.
 	apiVersionPkgList := make([]string, 0)
 	for _, p := range pc.BasePackages.APIVersion {
-		apiVersionPkgList = append(apiVersionPkgList, filepath.Join(pc.ModulePath, p))
+		apiVersionPkgList = append(apiVersionPkgList, filepath.Join(r.ModulePathAPIs, p))
 	}
 	// Add ProviderConfig controller package to the list of controller packages.
 	controllerPkgMap := make(map[string][]string)
 	// new API takes precedence
 	for p, g := range pc.BasePackages.ControllerMap {
-		path := filepath.Join(pc.ModulePath, p)
+		path := filepath.Join(r.ModulePathControllers, p)
 		controllerPkgMap[g] = append(controllerPkgMap[g], path)
 		controllerPkgMap[config.PackageNameMonolith] = append(controllerPkgMap[config.PackageNameMonolith], path)
 	}
 	//nolint:staticcheck
 	for _, p := range pc.BasePackages.Controller {
-		path := filepath.Join(pc.ModulePath, p)
+		path := filepath.Join(r.ModulePathControllers, p)
 		found := false
 		for _, p := range controllerPkgMap[config.PackageNameConfig] {
 			if path == p {
@@ -135,7 +148,7 @@ func (r *PipelineRunner) Run(pc *config.Provider) []string { //nolint:gocyclo
 			ctrlGen := NewControllerGenerator(r.DirControllers, r.DirHack, r.ModulePathControllers, group)
 
 			if err := versionGen.InsertPreviousObjects(versions); err != nil {
-				panic(errors.Wrapf(err, "cannot insert type definitions from the previous versions into the package scope for group %q", group))
+				fmt.Println(errors.Wrapf(err, "cannot insert type definitions from the previous versions into the package scope for group %q", group))
 			}
 
 			var tfResources []*terraformedInput
@@ -195,7 +208,7 @@ func (r *PipelineRunner) Run(pc *config.Provider) []string { //nolint:gocyclo
 			panic(errors.Wrapf(err, "cannot generate the conversion.Convertible functions for the resource group %q", group))
 		}
 
-		base := filepath.Join(pc.ModulePath, "apis", shortGroup)
+		base := filepath.Join(r.ModulePathAPIs, shortGroup)
 		for _, versions := range resourcesGroups {
 			for _, resources := range versions {
 				for _, r := range resources {
@@ -251,6 +264,8 @@ func (r *PipelineRunner) Run(pc *config.Provider) []string { //nolint:gocyclo
 	}
 	return groups
 }
+
+// TODO(negz): This could be slices.Sorted(maps.Keys(m)) with Go v1.24+
 
 func sortedResources(m map[string]*config.Resource) []string {
 	result := make([]string, len(m))

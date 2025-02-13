@@ -2,8 +2,8 @@
 
 {{ .GenStatement }}
 
-// Package apis contains Kubernetes API for the provider.
-package apis
+// Package {{ .Package }} contains Kubernetes API for the provider.
+package {{ .Package }}
 
 import (
 	"k8s.io/apimachinery/pkg/runtime"

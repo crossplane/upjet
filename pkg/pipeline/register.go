@@ -34,7 +34,7 @@ type RegisterGenerator struct {
 // Generate writes the register file with the content produced using given
 // list of version packages.
 func (rg *RegisterGenerator) Generate(versionPkgList []string) error {
-	registerFile := wrapper.NewFile(rg.ModulePath, "apis", templates.RegisterTemplate,
+	registerFile := wrapper.NewFile(rg.ModulePath, filepath.Base(rg.ModulePath), templates.RegisterTemplate,
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath(rg.LicenseHeaderPath),
 	)
@@ -45,6 +45,7 @@ func (rg *RegisterGenerator) Generate(versionPkgList []string) error {
 		aliases[i] = registerFile.Imports.UsePackage(pkgPath)
 	}
 	vars := map[string]any{
+		"Package": filepath.Base(rg.ModulePath),
 		"Aliases": aliases,
 	}
 	filePath := filepath.Join(rg.LocalDirectoryPath, "zz_register.go")
