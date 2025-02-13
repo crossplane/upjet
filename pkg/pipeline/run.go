@@ -25,7 +25,6 @@ type terraformedInput struct {
 
 // Run runs the Upjet code generation pipelines.
 func Run(pc *config.Provider, rootDir string) {
-	// TODO(negz): Another one for namespaced controllers...
 	cluster := &PipelineRunner{
 		DirAPIs:        filepath.Join(rootDir, "apis"),
 		DirControllers: filepath.Join(rootDir, "internal", "controller"),
@@ -38,8 +37,25 @@ func Run(pc *config.Provider, rootDir string) {
 		Scope: "Cluster",
 	}
 
-	// Map of service name (e.g. ec2) to resource controller packages.
+	// TODO(negz): I'd prefer e.g. apis/namespaced/... and apis/cluster/..., but
+	// that would result in a huge and possibly breaking diff moving code around
+	// for existing repos.
+	namespaced := &PipelineRunner{
+		DirAPIs:        filepath.Join(rootDir, "apis-namespaced"),
+		DirControllers: filepath.Join(rootDir, "internal", "controller-namespaced"),
+		DirExamples:    filepath.Join(rootDir, "examples-generated-namespaced"),
+		DirHack:        filepath.Join(rootDir, "hack"),
+
+		ModulePathAPIs:        filepath.Join(pc.ModulePath, "apis-namespaced"),
+		ModulePathControllers: filepath.Join(pc.ModulePath, "internal", "controller-namespaced"),
+
+		Scope: "Namespaced",
+	}
+
+	// Map of service name (e.g. ec2) to resource controller packages. Should be
+	// the same for cluster and namespaced, so we only save one.
 	groups := cluster.Run(pc)
+	_ = namespaced.Run(pc)
 
 	if err := NewMainGenerator(filepath.Join(rootDir, "cmd", "provider"), pc.MainTemplate).Generate(groups); err != nil {
 		panic(errors.Wrap(err, "cannot generate main.go"))
@@ -135,7 +151,7 @@ func (r *PipelineRunner) Run(pc *config.Provider) []string { //nolint:gocyclo
 			ctrlGen := NewControllerGenerator(r.DirControllers, r.DirHack, r.ModulePathControllers, group)
 
 			if err := versionGen.InsertPreviousObjects(versions); err != nil {
-				panic(errors.Wrapf(err, "cannot insert type definitions from the previous versions into the package scope for group %q", group))
+				fmt.Println(errors.Wrapf(err, "cannot insert type definitions from the previous versions into the package scope for group %q", group))
 			}
 
 			var tfResources []*terraformedInput
@@ -251,6 +267,8 @@ func (r *PipelineRunner) Run(pc *config.Provider) []string { //nolint:gocyclo
 	}
 	return groups
 }
+
+// TODO(negz): This could be slices.Sorted(maps.Keys(m)) with Go v1.24+
 
 func sortedResources(m map[string]*config.Resource) []string {
 	result := make([]string, len(m))
