@@ -18,10 +18,10 @@ import (
 )
 
 // NewTerraformedGenerator returns a new TerraformedGenerator.
-func NewTerraformedGenerator(pkg *types.Package, rootDir, group, version string) *TerraformedGenerator {
+func NewTerraformedGenerator(pkg *types.Package, apiDir, hackDir, group, version string) *TerraformedGenerator {
 	return &TerraformedGenerator{
-		LocalDirectoryPath: filepath.Join(rootDir, "apis", strings.ToLower(strings.Split(group, ".")[0]), version),
-		LicenseHeaderPath:  filepath.Join(rootDir, "hack", "boilerplate.go.txt"),
+		LocalDirectoryPath: filepath.Join(apiDir, strings.ToLower(strings.Split(group, ".")[0]), version),
+		LicenseHeaderPath:  filepath.Join(hackDir, "boilerplate.go.txt"),
 		pkg:                pkg,
 	}
 }

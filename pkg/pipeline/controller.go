@@ -17,12 +17,12 @@ import (
 )
 
 // NewControllerGenerator returns a new ControllerGenerator.
-func NewControllerGenerator(rootDir, modulePath, group string) *ControllerGenerator {
+func NewControllerGenerator(ctrlDir, hackDir, ctrlModulePath, group string) *ControllerGenerator {
 	return &ControllerGenerator{
 		Group:              group,
-		ControllerGroupDir: filepath.Join(rootDir, "internal", "controller", strings.Split(group, ".")[0]),
-		ModulePath:         modulePath,
-		LicenseHeaderPath:  filepath.Join(rootDir, "hack", "boilerplate.go.txt"),
+		ControllerGroupDir: filepath.Join(ctrlDir, strings.Split(group, ".")[0]),
+		ModulePath:         ctrlModulePath,
+		LicenseHeaderPath:  filepath.Join(hackDir, "boilerplate.go.txt"),
 	}
 }
 
@@ -36,7 +36,7 @@ type ControllerGenerator struct {
 
 // Generate writes controller setup functions.
 func (cg *ControllerGenerator) Generate(cfg *config.Resource, typesPkgPath string, featuresPkgPath string) (pkgPath string, err error) {
-	controllerPkgPath := filepath.Join(cg.ModulePath, "internal", "controller", strings.ToLower(strings.Split(cg.Group, ".")[0]), strings.ToLower(cfg.Kind))
+	controllerPkgPath := filepath.Join(cg.ModulePath, strings.ToLower(strings.Split(cg.Group, ".")[0]), strings.ToLower(cfg.Kind))
 	ctrlFile := wrapper.NewFile(controllerPkgPath, strings.ToLower(cfg.Kind), templates.ControllerTemplate,
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath(cg.LicenseHeaderPath),

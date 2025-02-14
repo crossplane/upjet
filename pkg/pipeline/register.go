@@ -16,11 +16,11 @@ import (
 )
 
 // NewRegisterGenerator returns a new RegisterGenerator.
-func NewRegisterGenerator(rootDir, modulePath string) *RegisterGenerator {
+func NewRegisterGenerator(apiDir, hackDir, apiModulePath string) *RegisterGenerator {
 	return &RegisterGenerator{
-		LocalDirectoryPath: filepath.Join(rootDir, "apis"),
-		LicenseHeaderPath:  filepath.Join(rootDir, "hack", "boilerplate.go.txt"),
-		ModulePath:         modulePath,
+		LocalDirectoryPath: apiDir,
+		LicenseHeaderPath:  filepath.Join(hackDir, "boilerplate.go.txt"),
+		ModulePath:         apiModulePath,
 	}
 }
 
@@ -34,7 +34,7 @@ type RegisterGenerator struct {
 // Generate writes the register file with the content produced using given
 // list of version packages.
 func (rg *RegisterGenerator) Generate(versionPkgList []string) error {
-	registerFile := wrapper.NewFile(filepath.Join(rg.ModulePath, "apis"), "apis", templates.RegisterTemplate,
+	registerFile := wrapper.NewFile(rg.ModulePath, "apis", templates.RegisterTemplate,
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath(rg.LicenseHeaderPath),
 	)

@@ -27,12 +27,12 @@ var (
 type generationPredicate func(c *config.Resource, fileAPIVersion string) bool
 
 // NewConversionNodeGenerator returns a new ConversionNodeGenerator.
-func NewConversionNodeGenerator(pcModulePath, rootDir, group, generatedFileName, fileTemplate string, p generationPredicate) *ConversionNodeGenerator {
+func NewConversionNodeGenerator(apiDir, hackDir, apiModulePath, group, generatedFileName, fileTemplate string, p generationPredicate) *ConversionNodeGenerator {
 	shortGroup := strings.ToLower(strings.Split(group, ".")[0])
 	return &ConversionNodeGenerator{
-		apiGroupModule:    filepath.Join(pcModulePath, "apis", shortGroup),
-		apiGroupDir:       filepath.Join(rootDir, "apis", shortGroup),
-		licenseHeaderPath: filepath.Join(rootDir, "hack", "boilerplate.go.txt"),
+		apiGroupModule:    filepath.Join(apiModulePath, shortGroup),
+		apiGroupDir:       filepath.Join(apiDir, shortGroup),
+		licenseHeaderPath: filepath.Join(hackDir, "boilerplate.go.txt"),
 		nodeVersionsMap:   make(map[string][]string),
 		generatedFileName: generatedFileName,
 		fileTemplate:      fileTemplate,
