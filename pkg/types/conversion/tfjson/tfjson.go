@@ -123,8 +123,8 @@ func tfJSONNestedAttributeTypeToV2Schema(na *tfjson.SchemaNestedAttributeType) *
 	return v2sch
 }
 
-// checks whether the given tfjson.SchemaBlockType has any required children.
-// Children which are themselves blocks (nested blocks) are
+// checks whether the given tfjson.SchemaNestedAttributeType has any required children.
+// Children which are themselves nested attributes are
 // checked recursively.
 func hasNestedAttributeRequiredChild(na *tfjson.SchemaNestedAttributeType) bool {
 	if na.Attributes == nil {
