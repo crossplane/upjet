@@ -25,37 +25,58 @@ type terraformedInput struct {
 
 // Run runs the Upjet code generation pipelines.
 func Run(pc *config.Provider, rootDir string) {
-	cluster := &PipelineRunner{
-		DirAPIs:        filepath.Join(rootDir, "apis", "cluster"),
-		DirControllers: filepath.Join(rootDir, "internal", "controller", "cluster"),
-		DirExamples:    filepath.Join(rootDir, "examples-generated", "cluster"),
-		DirHack:        filepath.Join(rootDir, "hack"),
+	var groups []string
+	if !pc.EnableNamespacedResources {
+		// namespaced resource generation is not enabled, generate only cluster scoped resources
+		cluster := &PipelineRunner{
+			DirAPIs:        filepath.Join(rootDir, "apis"),
+			DirControllers: filepath.Join(rootDir, "internal", "controller"),
+			DirExamples:    filepath.Join(rootDir, "examples-generated"),
+			DirHack:        filepath.Join(rootDir, "hack"),
 
-		ModulePathAPIs:        filepath.Join(pc.ModulePath, "apis", "cluster"),
-		ModulePathControllers: filepath.Join(pc.ModulePath, "internal", "controller", "cluster"),
+			ModulePathAPIs:        filepath.Join(pc.ModulePath, "apis"),
+			ModulePathControllers: filepath.Join(pc.ModulePath, "internal", "controller"),
 
-		Scope: "Cluster",
+			Scope: "Cluster",
+		}
+
+		groups = cluster.Run(pc)
+	} else {
+		// generate both cluster scoped and namespaced resources
+		cluster := &PipelineRunner{
+			DirAPIs:        filepath.Join(rootDir, "apis", "cluster"),
+			DirControllers: filepath.Join(rootDir, "internal", "controller", "cluster"),
+			DirExamples:    filepath.Join(rootDir, "examples-generated", "cluster"),
+			DirHack:        filepath.Join(rootDir, "hack"),
+
+			ModulePathAPIs:        filepath.Join(pc.ModulePath, "apis", "cluster"),
+			ModulePathControllers: filepath.Join(pc.ModulePath, "internal", "controller", "cluster"),
+
+			Scope: "Cluster",
+		}
+
+		namespaced := &PipelineRunner{
+			DirAPIs:        filepath.Join(rootDir, "apis", "namespaced"),
+			DirControllers: filepath.Join(rootDir, "internal", "controller", "namespaced"),
+			DirExamples:    filepath.Join(rootDir, "examples-generated", "namespaced"),
+			DirHack:        filepath.Join(rootDir, "hack"),
+
+			ModulePathAPIs:        filepath.Join(pc.ModulePath, "apis", "namespaced"),
+			ModulePathControllers: filepath.Join(pc.ModulePath, "internal", "controller", "namespaced"),
+
+			Scope: "Namespaced",
+		}
+
+		// Map of service name (e.g. ec2) to resource controller packages. Should be
+		// the same for cluster and namespaced, so we only save one.
+		groups = cluster.Run(pc)
+		_ = namespaced.Run(pc)
 	}
 
-	namespaced := &PipelineRunner{
-		DirAPIs:        filepath.Join(rootDir, "apis", "namespaced"),
-		DirControllers: filepath.Join(rootDir, "internal", "controller", "namespaced"),
-		DirExamples:    filepath.Join(rootDir, "examples-generated", "namespaced"),
-		DirHack:        filepath.Join(rootDir, "hack"),
-
-		ModulePathAPIs:        filepath.Join(pc.ModulePath, "apis", "namespaced"),
-		ModulePathControllers: filepath.Join(pc.ModulePath, "internal", "controller", "namespaced"),
-
-		Scope: "Namespaced",
-	}
-
-	// Map of service name (e.g. ec2) to resource controller packages. Should be
-	// the same for cluster and namespaced, so we only save one.
-	groups := cluster.Run(pc)
-	_ = namespaced.Run(pc)
-
-	if err := NewMainGenerator(filepath.Join(rootDir, "cmd", "provider"), pc.MainTemplate).Generate(groups); err != nil {
-		panic(errors.Wrap(err, "cannot generate main.go"))
+	if len(pc.MainTemplate) > 0 {
+		if err := NewMainGenerator(filepath.Join(rootDir, "cmd", "provider"), pc.MainTemplate).Generate(groups); err != nil {
+			panic(errors.Wrap(err, "cannot generate main.go"))
+		}
 	}
 }
 
@@ -237,26 +258,29 @@ func (r *PipelineRunner) Run(pc *config.Provider) []string { //nolint:gocyclo
 		panic(errors.Wrap(err, "cannot generate register file"))
 	}
 
-	if err := NewSetupGenerator(r.DirControllers, r.DirHack, r.ModulePathAPIs).Generate(controllerPkgMap); err != nil {
+	monolith := len(pc.MainTemplate) == 0
+	if err := NewSetupGenerator(r.DirControllers, r.DirHack, r.ModulePathAPIs).Generate(controllerPkgMap, monolith); err != nil {
 		panic(errors.Wrap(err, "cannot generate setup file"))
 	}
 
 	// NOTE(muvaf): gosec linter requires that the whole command is hard-coded.
 	// So, we set the directory of the command instead of passing in the directory
 	// as an argument to "find".
+	fmt.Printf("Running goimports on apis folder with scope %s\n", r.Scope)
 	apisCmd := exec.Command("bash", "-c", "goimports -w $(find . -iname 'zz_*')")
 	apisCmd.Dir = filepath.Clean(r.DirAPIs)
 	if out, err := apisCmd.CombinedOutput(); err != nil {
 		panic(errors.Wrap(err, "cannot run goimports for apis folder: "+string(out)))
 	}
 
+	fmt.Printf("Running goimports on controller folder with scope %s\n", r.Scope)
 	ctrlCmd := exec.Command("bash", "-c", "goimports -w $(find . -iname 'zz_*')")
 	ctrlCmd.Dir = filepath.Clean(r.DirControllers)
 	if out, err := ctrlCmd.CombinedOutput(); err != nil {
 		panic(errors.Wrap(err, "cannot run goimports for controller folder: "+string(out)))
 	}
 
-	fmt.Printf("\nGenerated %d resources!\n", count)
+	fmt.Printf("\nGenerated %d resources with scope %s!\n", count, r.Scope)
 
 	groups := make([]string, 0, len(controllerPkgMap))
 	for g := range controllerPkgMap {
