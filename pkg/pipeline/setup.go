@@ -15,6 +15,7 @@ import (
 	"github.com/muvaf/typewriter/pkg/wrapper"
 	"github.com/pkg/errors"
 
+	"github.com/crossplane/upjet/pkg/config"
 	"github.com/crossplane/upjet/pkg/pipeline/templates"
 )
 
@@ -35,31 +36,42 @@ type SetupGenerator struct {
 }
 
 // Generate writes the setup file given list of version packages.
-func (sg *SetupGenerator) Generate(versionPkgMap map[string][]string) error {
+func (sg *SetupGenerator) Generate(versionPkgMap map[string][]string, monolith bool) error {
+	if monolith {
+		return errors.Wrap(sg.generate("", versionPkgMap[config.PackageNameMonolith]), "failed to generate the controller setup file")
+	}
+
 	for group, versionPkgList := range versionPkgMap {
-		// TODO(negz): Should this really be apis? They're not imported for setup...
-		setupFile := wrapper.NewFile(sg.ModulePath, filepath.Base(sg.ModulePath), templates.SetupTemplate,
-			wrapper.WithGenStatement(GenStatement),
-			wrapper.WithHeaderPath(sg.LicenseHeaderPath),
-		)
-		sort.Strings(versionPkgList)
-		aliases := make([]string, len(versionPkgList))
-		for i, pkgPath := range versionPkgList {
-			aliases[i] = setupFile.Imports.UsePackage(pkgPath)
+		if err := sg.generate(group, versionPkgList); err != nil {
+			return errors.Wrapf(err, "failed to generate the controller setup file for group: %s", group)
 		}
-		g := ""
-		filePath := filepath.Join(sg.LocalDirectoryPath, "zz_setup.go")
-		if group != "" {
-			filePath = filepath.Join(sg.LocalDirectoryPath, fmt.Sprintf("zz_%s_setup.go", group))
-			g = "_" + group
-		}
-		vars := map[string]any{
-			"Aliases": aliases,
-			"Group":   g,
-		}
-		if err := setupFile.Write(filePath, vars, os.ModePerm); err != nil {
-			return errors.Wrap(err, "cannot write setup file")
-		}
+	}
+	return nil
+}
+
+func (sg *SetupGenerator) generate(group string, versionPkgList []string) error {
+	// TODO(negz): Should this really be apis? They're not imported for setup...
+	setupFile := wrapper.NewFile(sg.ModulePath, filepath.Base(sg.ModulePath), templates.SetupTemplate,
+		wrapper.WithGenStatement(GenStatement),
+		wrapper.WithHeaderPath(sg.LicenseHeaderPath),
+	)
+	sort.Strings(versionPkgList)
+	aliases := make([]string, len(versionPkgList))
+	for i, pkgPath := range versionPkgList {
+		aliases[i] = setupFile.Imports.UsePackage(pkgPath)
+	}
+	g := ""
+	filePath := filepath.Join(sg.LocalDirectoryPath, "zz_setup.go")
+	if group != "" {
+		filePath = filepath.Join(sg.LocalDirectoryPath, fmt.Sprintf("zz_%s_setup.go", group))
+		g = "_" + group
+	}
+	vars := map[string]any{
+		"Aliases": aliases,
+		"Group":   g,
+	}
+	if err := setupFile.Write(filePath, vars, os.ModePerm); err != nil {
+		return errors.Wrap(err, "cannot write setup file")
 	}
 	return nil
 }
@@ -82,10 +94,10 @@ func (mg *MainGenerator) Generate(groups []string) error {
 
 	for _, g := range groups {
 		f := filepath.Join(mg.ProviderPath, g)
-		if err := os.MkdirAll(f, 0750); err != nil {
+		if err := os.MkdirAll(f, 0o750); err != nil {
 			return errors.Wrapf(err, "failed to mkdir provider main program path: %s", f)
 		}
-		m, err := os.OpenFile(filepath.Join(filepath.Clean(f), "zz_main.go"), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+		m, err := os.OpenFile(filepath.Join(filepath.Clean(f), "zz_main.go"), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 		if err != nil {
 			return errors.Wrap(err, "failed to open provider main program file")
 		}

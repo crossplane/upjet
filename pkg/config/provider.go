@@ -119,6 +119,10 @@ type Provider struct {
 	// Defaults to []string{".+"} which would include all resources.
 	IncludeList []string
 
+	// EnableNamespacedResources enables the generation of namespaced resources,
+	// in addition to cluster scoped resources.
+	EnableNamespacedResources bool
+
 	// TerraformPluginSDKIncludeList is a list of regex for the Terraform resources
 	// implemented with Terraform Plugin SDKv2 to be included and reconciled
 	// in the no-fork architecture (without the Terraform CLI).
@@ -280,6 +284,14 @@ func WithMainTemplate(template string) ProviderOption {
 func WithSchemaTraversers(traversers ...traverser.SchemaTraverser) ProviderOption {
 	return func(p *Provider) {
 		p.schemaTraversers = traversers
+	}
+}
+
+// WithEnableNamespacedResources configures the Provider to generate namespaced
+// resources in addition to cluster scoped resources.
+func WithEnableNamespacedResources() ProviderOption {
+	return func(p *Provider) {
+		p.EnableNamespacedResources = true
 	}
 }
 
