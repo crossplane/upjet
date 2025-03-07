@@ -20,7 +20,6 @@ import (
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/crossplane/upjet/pkg/config/conversion"
@@ -334,10 +333,10 @@ func (t *Tagger) Initialize(ctx context.Context, mg xpresource.Managed) error {
 	return nil
 }
 
-func tagsUpToDate(tags map[string]*string, paved *fieldpath.Paved, tagField string) bool {
+func tagsUpToDate(tags map[string]string, paved *fieldpath.Paved, tagField string) bool {
 	curTags, _ := paved.GetStringObject(tagField)
 	for k, v := range tags {
-		if curTags[k] != *v {
+		if curTags[k] != v {
 			return false
 		}
 	}
@@ -346,17 +345,12 @@ func tagsUpToDate(tags map[string]*string, paved *fieldpath.Paved, tagField stri
 
 func setExternalTagsWithPaved(externalTags map[string]string, paved *fieldpath.Paved, fieldName string) ([]byte, bool, error) {
 	tagField := fmt.Sprintf("spec.forProvider.%s", fieldName)
-	tags := map[string]*string{
-		xpresource.ExternalResourceTagKeyKind:     ptr.To(externalTags[xpresource.ExternalResourceTagKeyKind]),
-		xpresource.ExternalResourceTagKeyName:     ptr.To(externalTags[xpresource.ExternalResourceTagKeyName]),
-		xpresource.ExternalResourceTagKeyProvider: ptr.To(externalTags[xpresource.ExternalResourceTagKeyProvider]),
-	}
 
-	if tagsUpToDate(tags, paved, tagField) {
+	if tagsUpToDate(externalTags, paved, tagField) {
 		return nil, false, nil
 	}
 
-	if err := paved.SetValue(tagField, tags); err != nil {
+	if err := paved.SetValue(tagField, externalTags); err != nil {
 		return nil, false, err
 	}
 	pavedByte, err := paved.MarshalJSON()
