@@ -23,10 +23,13 @@ type terraformedInput struct {
 	ParametersTypeName string
 }
 
-// Run runs the Upjet code generation pipelines.
-func Run(pc *config.Provider, rootDir string) {
+// Run runs the Upjet code generation pipelines, using the given provider
+// configurations for cluster scoped and namespaced resources. The provider
+// configuration for namespaced resources is optional, if it isn't provided then
+// this function will only generate cluster scoped resources.
+func Run(pcCluster, pcNamespace *config.Provider, rootDir string) {
 	var groups []string
-	if !pc.EnableNamespacedResources {
+	if pcNamespace == nil {
 		// namespaced resource generation is not enabled, generate only cluster scoped resources
 		cluster := &PipelineRunner{
 			DirAPIs:        filepath.Join(rootDir, "apis"),
@@ -34,13 +37,13 @@ func Run(pc *config.Provider, rootDir string) {
 			DirExamples:    filepath.Join(rootDir, "examples-generated"),
 			DirHack:        filepath.Join(rootDir, "hack"),
 
-			ModulePathAPIs:        filepath.Join(pc.ModulePath, "apis"),
-			ModulePathControllers: filepath.Join(pc.ModulePath, "internal", "controller"),
+			ModulePathAPIs:        filepath.Join(pcCluster.ModulePath, "apis"),
+			ModulePathControllers: filepath.Join(pcCluster.ModulePath, "internal", "controller"),
 
 			Scope: "Cluster",
 		}
 
-		groups = cluster.Run(pc)
+		groups = cluster.Run(pcCluster)
 	} else {
 		// generate both cluster scoped and namespaced resources
 		cluster := &PipelineRunner{
@@ -49,8 +52,8 @@ func Run(pc *config.Provider, rootDir string) {
 			DirExamples:    filepath.Join(rootDir, "examples-generated", "cluster"),
 			DirHack:        filepath.Join(rootDir, "hack"),
 
-			ModulePathAPIs:        filepath.Join(pc.ModulePath, "apis", "cluster"),
-			ModulePathControllers: filepath.Join(pc.ModulePath, "internal", "controller", "cluster"),
+			ModulePathAPIs:        filepath.Join(pcCluster.ModulePath, "apis", "cluster"),
+			ModulePathControllers: filepath.Join(pcCluster.ModulePath, "internal", "controller", "cluster"),
 
 			Scope: "Cluster",
 		}
@@ -61,20 +64,20 @@ func Run(pc *config.Provider, rootDir string) {
 			DirExamples:    filepath.Join(rootDir, "examples-generated", "namespaced"),
 			DirHack:        filepath.Join(rootDir, "hack"),
 
-			ModulePathAPIs:        filepath.Join(pc.ModulePath, "apis", "namespaced"),
-			ModulePathControllers: filepath.Join(pc.ModulePath, "internal", "controller", "namespaced"),
+			ModulePathAPIs:        filepath.Join(pcNamespace.ModulePath, "apis", "namespaced"),
+			ModulePathControllers: filepath.Join(pcNamespace.ModulePath, "internal", "controller", "namespaced"),
 
 			Scope: "Namespaced",
 		}
 
 		// Map of service name (e.g. ec2) to resource controller packages. Should be
 		// the same for cluster and namespaced, so we only save one.
-		groups = cluster.Run(pc)
-		_ = namespaced.Run(pc)
+		groups = cluster.Run(pcCluster)
+		_ = namespaced.Run(pcNamespace)
 	}
 
-	if len(pc.MainTemplate) > 0 {
-		if err := NewMainGenerator(filepath.Join(rootDir, "cmd", "provider"), pc.MainTemplate).Generate(groups); err != nil {
+	if len(pcCluster.MainTemplate) > 0 {
+		if err := NewMainGenerator(filepath.Join(rootDir, "cmd", "provider"), pcCluster.MainTemplate).Generate(groups); err != nil {
 			panic(errors.Wrap(err, "cannot generate main.go"))
 		}
 	}
