@@ -21,17 +21,19 @@ var instance *registry
 
 // registry represents the conversion hook registry for a provider.
 type registry struct {
-	provider *config.Provider
-	scheme   *runtime.Scheme
+	providerCluster    *config.Provider
+	providerNamespaced *config.Provider
+	scheme             *runtime.Scheme
 }
 
 // RegisterConversions registers the API version conversions from the specified
 // provider configuration with this registry.
-func (r *registry) RegisterConversions(provider *config.Provider) error {
-	if r.provider != nil {
+func (r *registry) RegisterConversions(providerCluster, providerNamespaced *config.Provider) error {
+	if r.providerCluster != nil || r.providerNamespaced != nil {
 		return errors.New(errAlreadyRegistered)
 	}
-	r.provider = provider
+	r.providerCluster = providerCluster
+	r.providerNamespaced = providerNamespaced
 	return nil
 }
 
@@ -39,10 +41,17 @@ func (r *registry) RegisterConversions(provider *config.Provider) error {
 // registry for the specified Terraformed resource.
 func (r *registry) GetConversions(tr resource.Terraformed) []conversion.Conversion {
 	t := tr.GetTerraformResourceType()
-	if r == nil || r.provider == nil || r.provider.Resources[t] == nil {
+
+	p := r.providerCluster
+	if tr.GetNamespace() != "" {
+		p = r.providerNamespaced
+	}
+
+	if p == nil || p.Resources[t] == nil {
 		return nil
 	}
-	return r.provider.Resources[t].Conversions
+
+	return p.Resources[t].Conversions
 }
 
 // GetConversions returns the conversion.Conversions registered for the
@@ -56,12 +65,12 @@ func GetConversions(tr resource.Terraformed) []conversion.Conversion {
 // for the types whose versions are to be converted. If a registration for a
 // Go schema is not found in the specified registry, RoundTrip does not error
 // but only wildcard conversions must be used with the registry.
-func RegisterConversions(provider *config.Provider, scheme *runtime.Scheme) error {
+func RegisterConversions(providerCluster, providerNamespaced *config.Provider, scheme *runtime.Scheme) error {
 	if instance != nil {
 		return errors.New(errAlreadyRegistered)
 	}
 	instance = &registry{
 		scheme: scheme,
 	}
-	return instance.RegisterConversions(provider)
+	return instance.RegisterConversions(providerCluster, providerNamespaced)
 }
