@@ -13,6 +13,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrl "sigs.k8s.io/controller-runtime/pkg/manager"
 
@@ -95,7 +96,7 @@ func TestAPICallbacksCreate(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			e := NewAPICallbacks(tc.args.mgr, tc.args.mg)
-			err := e.Create("name")(tc.args.err, context.TODO())
+			err := e.Create(types.NamespacedName{Name: "name"})(tc.args.err, context.TODO())
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nCreate(...): -want error, +got error:\n%s", tc.reason, diff)
 			}
@@ -177,7 +178,7 @@ func TestAPICallbacksUpdate(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			e := NewAPICallbacks(tc.args.mgr, tc.args.mg)
-			err := e.Update("name")(tc.args.err, context.TODO())
+			err := e.Update(types.NamespacedName{Name: "name"})(tc.args.err, context.TODO())
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nUpdate(...): -want error, +got error:\n%s", tc.reason, diff)
 			}
@@ -259,7 +260,7 @@ func TestAPICallbacks_Destroy(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			e := NewAPICallbacks(tc.args.mgr, tc.args.mg)
-			err := e.Destroy("name")(tc.args.err, context.TODO())
+			err := e.Destroy(types.NamespacedName{Name: "name"})(tc.args.err, context.TODO())
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nDestroy(...): -want error, +got error:\n%s", tc.reason, diff)
 			}

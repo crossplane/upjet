@@ -54,7 +54,7 @@ func NewEventHandler(opts ...Option) *EventHandler {
 
 // RequestReconcile requeues a reconciliation request for the specified name.
 // Returns true if the reconcile request was successfully queued.
-func (e *EventHandler) RequestReconcile(rateLimiterName, name string, failureLimit *int) bool {
+func (e *EventHandler) RequestReconcile(rateLimiterName string, name types.NamespacedName, failureLimit *int) bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.queue == nil {
@@ -62,9 +62,7 @@ func (e *EventHandler) RequestReconcile(rateLimiterName, name string, failureLim
 	}
 	logger := e.logger.WithValues("name", name)
 	item := reconcile.Request{
-		NamespacedName: types.NamespacedName{
-			Name: name,
-		},
+		NamespacedName: name,
 	}
 	var when time.Duration = 0
 	if rateLimiterName != NoRateLimiter {
@@ -86,7 +84,7 @@ func (e *EventHandler) RequestReconcile(rateLimiterName, name string, failureLim
 
 // Forget indicates that the reconcile retries is finished for
 // the specified name.
-func (e *EventHandler) Forget(rateLimiterName, name string) {
+func (e *EventHandler) Forget(rateLimiterName string, name types.NamespacedName) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	rateLimiter := e.rateLimiterMap[rateLimiterName]
@@ -94,9 +92,7 @@ func (e *EventHandler) Forget(rateLimiterName, name string) {
 		return
 	}
 	rateLimiter.Forget(reconcile.Request{
-		NamespacedName: types.NamespacedName{
-			Name: name,
-		},
+		NamespacedName: name,
 	})
 }
 
