@@ -14,6 +14,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/pkg/errors"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/crossplane/upjet/pkg/config"
@@ -156,7 +157,11 @@ func (n *terraformPluginSDKAsyncExternal) Create(_ context.Context, mg xpresourc
 			n.opTracker.logger.Debug("Async create ended.", "error", err, "tfID", n.opTracker.GetTfID())
 
 			n.opTracker.LastOperation.MarkEnd()
-			if cErr := n.callback.Create(mg.GetName())(err, ctx); cErr != nil {
+			name := types.NamespacedName{
+				Namespace: mg.GetNamespace(),
+				Name:      mg.GetName(),
+			}
+			if cErr := n.callback.Create(name)(err, ctx); cErr != nil {
 				n.opTracker.logger.Info("Async create callback failed", "error", cErr.Error())
 			}
 		}()
@@ -189,7 +194,11 @@ func (n *terraformPluginSDKAsyncExternal) Update(_ context.Context, mg xpresourc
 			n.opTracker.logger.Debug("Async update ended.", "error", err, "tfID", n.opTracker.GetTfID())
 
 			n.opTracker.LastOperation.MarkEnd()
-			if cErr := n.callback.Update(mg.GetName())(err, ctx); cErr != nil {
+			name := types.NamespacedName{
+				Namespace: mg.GetNamespace(),
+				Name:      mg.GetName(),
+			}
+			if cErr := n.callback.Update(name)(err, ctx); cErr != nil {
 				n.opTracker.logger.Info("Async update callback failed", "error", cErr.Error())
 			}
 		}()
@@ -226,7 +235,11 @@ func (n *terraformPluginSDKAsyncExternal) Delete(_ context.Context, mg xpresourc
 			n.opTracker.logger.Debug("Async delete ended.", "error", err, "tfID", n.opTracker.GetTfID())
 
 			n.opTracker.LastOperation.MarkEnd()
-			if cErr := n.callback.Destroy(mg.GetName())(err, ctx); cErr != nil {
+			name := types.NamespacedName{
+				Namespace: mg.GetNamespace(),
+				Name:      mg.GetName(),
+			}
+			if cErr := n.callback.Destroy(name)(err, ctx); cErr != nil {
 				n.opTracker.logger.Info("Async delete callback failed", "error", cErr.Error())
 			}
 		}()
