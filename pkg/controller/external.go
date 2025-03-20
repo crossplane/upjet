@@ -13,6 +13,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/pkg/errors"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -125,7 +126,7 @@ func (c *Connector) Connect(ctx context.Context, mg xpresource.Managed) (managed
 		providerHandle:    ws.ProviderHandle,
 		eventHandler:      c.eventHandler,
 		kube:              c.kube,
-		logger:            c.logger.WithValues("uid", mg.GetUID(), "name", mg.GetName(), "gvk", mg.GetObjectKind().GroupVersionKind().String()),
+		logger:            c.logger.WithValues("uid", mg.GetUID(), "namespace", mg.GetNamespace(), "name", mg.GetName(), "gvk", mg.GetObjectKind().GroupVersionKind().String()),
 	}, nil
 }
 
@@ -140,7 +141,7 @@ type external struct {
 	logger            logging.Logger
 }
 
-func (e *external) scheduleProvider(name string) (bool, error) {
+func (e *external) scheduleProvider(name types.NamespacedName) (bool, error) {
 	if e.providerScheduler == nil || e.workspace == nil {
 		return false, nil
 	}
@@ -176,7 +177,11 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 	// and serial.
 	// TODO(muvaf): Look for ways to reduce the cyclomatic complexity without
 	// increasing the difficulty of understanding the flow.
-	requeued, err := e.scheduleProvider(mg.GetName())
+	name := types.NamespacedName{
+		Namespace: mg.GetNamespace(),
+		Name:      mg.GetName(),
+	}
+	requeued, err := e.scheduleProvider(name)
 	if err != nil {
 		return managed.ExternalObservation{}, errors.Wrapf(err, "cannot schedule a native provider during observe: %s", mg.GetUID())
 	}
@@ -308,7 +313,11 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 		tr.SetConditions(xpv1.Available())
 		e.logger.Debug("Resource is marked as available.")
 		if e.eventHandler != nil {
-			e.eventHandler.RequestReconcile(rateLimiterStatus, mg.GetName(), nil)
+			name := types.NamespacedName{
+				Namespace: mg.GetNamespace(),
+				Name:      mg.GetName(),
+			}
+			e.eventHandler.RequestReconcile(rateLimiterStatus, name, nil)
 		}
 		return managed.ExternalObservation{
 			ResourceExists:    true,
@@ -328,7 +337,11 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 	// now we do a Workspace.Refresh
 	default:
 		if e.eventHandler != nil {
-			e.eventHandler.Forget(rateLimiterStatus, mg.GetName())
+			name := types.NamespacedName{
+				Namespace: mg.GetNamespace(),
+				Name:      mg.GetName(),
+			}
+			e.eventHandler.Forget(rateLimiterStatus, name)
 		}
 
 		// TODO(cem): Consider skipping diff calculation (terraform plan) to
@@ -356,7 +369,11 @@ func addTTR(mg xpresource.Managed) {
 }
 
 func (e *external) Create(ctx context.Context, mg xpresource.Managed) (managed.ExternalCreation, error) {
-	requeued, err := e.scheduleProvider(mg.GetName())
+	name := types.NamespacedName{
+		Namespace: mg.GetNamespace(),
+		Name:      mg.GetName(),
+	}
+	requeued, err := e.scheduleProvider(name)
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrapf(err, "cannot schedule a native provider during create: %s", mg.GetUID())
 	}
@@ -365,7 +382,7 @@ func (e *external) Create(ctx context.Context, mg xpresource.Managed) (managed.E
 	}
 	defer e.stopProvider()
 	if e.config.UseAsync {
-		return managed.ExternalCreation{}, errors.Wrap(e.workspace.ApplyAsync(e.callback.Create(mg.GetName())), errStartAsyncApply)
+		return managed.ExternalCreation{}, errors.Wrap(e.workspace.ApplyAsync(e.callback.Create(name)), errStartAsyncApply)
 	}
 	tr, ok := mg.(resource.Terraformed)
 	if !ok {
@@ -391,7 +408,11 @@ func (e *external) Create(ctx context.Context, mg xpresource.Managed) (managed.E
 }
 
 func (e *external) Update(ctx context.Context, mg xpresource.Managed) (managed.ExternalUpdate, error) {
-	requeued, err := e.scheduleProvider(mg.GetName())
+	name := types.NamespacedName{
+		Namespace: mg.GetNamespace(),
+		Name:      mg.GetName(),
+	}
+	requeued, err := e.scheduleProvider(name)
 	if err != nil {
 		return managed.ExternalUpdate{}, errors.Wrapf(err, "cannot schedule a native provider during update: %s", mg.GetUID())
 	}
@@ -400,7 +421,7 @@ func (e *external) Update(ctx context.Context, mg xpresource.Managed) (managed.E
 	}
 	defer e.stopProvider()
 	if e.config.UseAsync {
-		return managed.ExternalUpdate{}, errors.Wrap(e.workspace.ApplyAsync(e.callback.Update(mg.GetName())), errStartAsyncApply)
+		return managed.ExternalUpdate{}, errors.Wrap(e.workspace.ApplyAsync(e.callback.Update(name)), errStartAsyncApply)
 	}
 	tr, ok := mg.(resource.Terraformed)
 	if !ok {
@@ -418,7 +439,11 @@ func (e *external) Update(ctx context.Context, mg xpresource.Managed) (managed.E
 }
 
 func (e *external) Delete(ctx context.Context, mg xpresource.Managed) (managed.ExternalDelete, error) {
-	requeued, err := e.scheduleProvider(mg.GetName())
+	name := types.NamespacedName{
+		Namespace: mg.GetNamespace(),
+		Name:      mg.GetName(),
+	}
+	requeued, err := e.scheduleProvider(name)
 	if err != nil {
 		return managed.ExternalDelete{}, errors.Wrapf(err, "cannot schedule a native provider during delete: %s", mg.GetUID())
 	}
@@ -427,7 +452,7 @@ func (e *external) Delete(ctx context.Context, mg xpresource.Managed) (managed.E
 	}
 	defer e.stopProvider()
 	if e.config.UseAsync {
-		return managed.ExternalDelete{}, errors.Wrap(e.workspace.DestroyAsync(e.callback.Destroy(mg.GetName())), errStartAsyncDestroy)
+		return managed.ExternalDelete{}, errors.Wrap(e.workspace.DestroyAsync(e.callback.Destroy(name)), errStartAsyncDestroy)
 	}
 	return managed.ExternalDelete{}, errors.Wrap(e.workspace.Destroy(ctx), errDestroy)
 }

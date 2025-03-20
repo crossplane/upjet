@@ -14,6 +14,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/pkg/errors"
+	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -42,7 +43,8 @@ func NewTerraformPluginFrameworkAsyncConnector(kube client.Client,
 	ots *OperationTrackerStore,
 	sf terraform.SetupFn,
 	cfg *config.Resource,
-	opts ...TerraformPluginFrameworkAsyncOption) *TerraformPluginFrameworkAsyncConnector {
+	opts ...TerraformPluginFrameworkAsyncOption,
+) *TerraformPluginFrameworkAsyncConnector {
 	nfac := &TerraformPluginFrameworkAsyncConnector{
 		TerraformPluginFrameworkConnector: NewTerraformPluginFrameworkConnector(kube, sf, cfg, ots),
 	}
@@ -178,7 +180,11 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Create(_ context.Context, 
 			n.opTracker.logger.Debug("Async create ended.", "error", err)
 
 			n.opTracker.LastOperation.MarkEnd()
-			if cErr := n.callback.Create(mg.GetName())(err, ctx); cErr != nil {
+			name := types.NamespacedName{
+				Namespace: mg.GetNamespace(),
+				Name:      mg.GetName(),
+			}
+			if cErr := n.callback.Create(name)(err, ctx); cErr != nil {
 				n.opTracker.logger.Info("Async create callback failed", "error", cErr.Error())
 			}
 		}()
@@ -211,7 +217,11 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Update(_ context.Context, 
 			n.opTracker.logger.Debug("Async update ended.", "error", err)
 
 			n.opTracker.LastOperation.MarkEnd()
-			if cErr := n.callback.Update(mg.GetName())(err, ctx); cErr != nil {
+			name := types.NamespacedName{
+				Namespace: mg.GetNamespace(),
+				Name:      mg.GetName(),
+			}
+			if cErr := n.callback.Update(name)(err, ctx); cErr != nil {
 				n.opTracker.logger.Info("Async update callback failed", "error", cErr.Error())
 			}
 		}()
@@ -248,7 +258,11 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Delete(_ context.Context, 
 			n.opTracker.logger.Debug("Async delete ended.", "error", err)
 
 			n.opTracker.LastOperation.MarkEnd()
-			if cErr := n.callback.Destroy(mg.GetName())(err, ctx); cErr != nil {
+			name := types.NamespacedName{
+				Namespace: mg.GetNamespace(),
+				Name:      mg.GetName(),
+			}
+			if cErr := n.callback.Destroy(name)(err, ctx); cErr != nil {
 				n.opTracker.logger.Info("Async delete callback failed", "error", cErr.Error())
 			}
 		}()

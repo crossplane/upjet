@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	tf "github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/crossplane/upjet/pkg/config"
@@ -227,7 +228,7 @@ func TestAsyncTerraformPluginSDKCreate(t *testing.T) {
 				cfg: cfgAsync,
 				obj: objAsync,
 				fns: CallbackFns{
-					CreateFn: func(s string) terraform.CallbackFn {
+					CreateFn: func(nn types.NamespacedName) terraform.CallbackFn {
 						return func(err error, ctx context.Context) error {
 							return nil
 						}
@@ -271,7 +272,7 @@ func TestAsyncTerraformPluginSDKUpdate(t *testing.T) {
 				cfg: cfgAsync,
 				obj: objAsync,
 				fns: CallbackFns{
-					UpdateFn: func(s string) terraform.CallbackFn {
+					UpdateFn: func(nn types.NamespacedName) terraform.CallbackFn {
 						return func(err error, ctx context.Context) error {
 							return nil
 						}
@@ -315,7 +316,7 @@ func TestAsyncTerraformPluginSDKDelete(t *testing.T) {
 				cfg: cfgAsync,
 				obj: objAsync,
 				fns: CallbackFns{
-					DestroyFn: func(s string) terraform.CallbackFn {
+					DestroyFn: func(nn types.NamespacedName) terraform.CallbackFn {
 						return func(err error, ctx context.Context) error {
 							return nil
 						}

@@ -19,6 +19,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/crossplane/upjet/pkg/config"
@@ -98,20 +99,20 @@ func (s StoreFns) Workspace(ctx context.Context, c resource.SecretClient, tr res
 }
 
 type CallbackFns struct {
-	CreateFn  func(string) terraform.CallbackFn
-	UpdateFn  func(string) terraform.CallbackFn
-	DestroyFn func(string) terraform.CallbackFn
+	CreateFn  func(types.NamespacedName) terraform.CallbackFn
+	UpdateFn  func(types.NamespacedName) terraform.CallbackFn
+	DestroyFn func(types.NamespacedName) terraform.CallbackFn
 }
 
-func (c CallbackFns) Create(name string) terraform.CallbackFn {
+func (c CallbackFns) Create(name types.NamespacedName) terraform.CallbackFn {
 	return c.CreateFn(name)
 }
 
-func (c CallbackFns) Update(name string) terraform.CallbackFn {
+func (c CallbackFns) Update(name types.NamespacedName) terraform.CallbackFn {
 	return c.UpdateFn(name)
 }
 
-func (c CallbackFns) Destroy(name string) terraform.CallbackFn {
+func (c CallbackFns) Destroy(name types.NamespacedName) terraform.CallbackFn {
 	return c.DestroyFn(name)
 }
 
@@ -645,7 +646,7 @@ func TestCreate(t *testing.T) {
 					UseAsync: true,
 				},
 				c: CallbackFns{
-					CreateFn: func(s string) terraform.CallbackFn {
+					CreateFn: func(nn types.NamespacedName) terraform.CallbackFn {
 						return nil
 					},
 				},
@@ -718,7 +719,7 @@ func TestUpdate(t *testing.T) {
 					UseAsync: true,
 				},
 				c: CallbackFns{
-					UpdateFn: func(s string) terraform.CallbackFn {
+					UpdateFn: func(nn types.NamespacedName) terraform.CallbackFn {
 						return nil
 					},
 				},
@@ -782,7 +783,7 @@ func TestDelete(t *testing.T) {
 					UseAsync: true,
 				},
 				c: CallbackFns{
-					DestroyFn: func(_ string) terraform.CallbackFn {
+					DestroyFn: func(_ types.NamespacedName) terraform.CallbackFn {
 						return nil
 					},
 				},

@@ -113,12 +113,11 @@ type APICallbacks struct {
 	enableStatusUpdates bool
 }
 
-func (ac *APICallbacks) callbackFn(name, op string) terraform.CallbackFn {
+func (ac *APICallbacks) callbackFn(nn types.NamespacedName, op string) terraform.CallbackFn {
 	return func(err error, ctx context.Context) error {
-		nn := types.NamespacedName{Name: name}
 		tr := ac.newTerraformed()
 		if kErr := ac.kube.Get(ctx, nn, tr); kErr != nil {
-			return errors.Wrapf(kErr, errGetFmt, tr.GetObjectKind().GroupVersionKind().String(), name, op)
+			return errors.Wrapf(kErr, errGetFmt, tr.GetObjectKind().GroupVersionKind().String(), nn, op)
 		}
 		// For the no-fork architecture, we will need to be able to report
 		// reconciliation errors. The proper place is the `Synced`
@@ -143,19 +142,19 @@ func (ac *APICallbacks) callbackFn(name, op string) terraform.CallbackFn {
 		if ac.enableStatusUpdates {
 			tr.SetConditions(resource.AsyncOperationFinishedCondition())
 		}
-		uErr := errors.Wrapf(ac.kube.Status().Update(ctx, tr), errUpdateStatusFmt, tr.GetObjectKind().GroupVersionKind().String(), name, op)
+		uErr := errors.Wrapf(ac.kube.Status().Update(ctx, tr), errUpdateStatusFmt, tr.GetObjectKind().GroupVersionKind().String(), nn, op)
 		if ac.eventHandler != nil {
 			rateLimiter := handler.NoRateLimiter
 			switch {
 			case err != nil:
 				rateLimiter = rateLimiterCallback
 			default:
-				ac.eventHandler.Forget(rateLimiterCallback, name)
+				ac.eventHandler.Forget(rateLimiterCallback, nn)
 			}
 			// TODO: use the errors.Join from
 			// github.com/crossplane/crossplane-runtime.
-			if ok := ac.eventHandler.RequestReconcile(rateLimiter, name, nil); !ok {
-				return errors.Errorf(errReconcileRequestFmt, tr.GetObjectKind().GroupVersionKind().String(), name, op)
+			if ok := ac.eventHandler.RequestReconcile(rateLimiter, nn, nil); !ok {
+				return errors.Errorf(errReconcileRequestFmt, tr.GetObjectKind().GroupVersionKind().String(), nn, op)
 			}
 		}
 		return uErr
@@ -163,7 +162,7 @@ func (ac *APICallbacks) callbackFn(name, op string) terraform.CallbackFn {
 }
 
 // Create makes sure the error is saved in async operation condition.
-func (ac *APICallbacks) Create(name string) terraform.CallbackFn {
+func (ac *APICallbacks) Create(name types.NamespacedName) terraform.CallbackFn {
 	// request will be requeued although the managed reconciler already
 	// requeues with exponential back-off during the creation phase
 	// because the upjet external client returns ResourceExists &
@@ -175,12 +174,12 @@ func (ac *APICallbacks) Create(name string) terraform.CallbackFn {
 }
 
 // Update makes sure the error is saved in async operation condition.
-func (ac *APICallbacks) Update(name string) terraform.CallbackFn {
+func (ac *APICallbacks) Update(name types.NamespacedName) terraform.CallbackFn {
 	return ac.callbackFn(name, "update")
 }
 
 // Destroy makes sure the error is saved in async operation condition.
-func (ac *APICallbacks) Destroy(name string) terraform.CallbackFn {
+func (ac *APICallbacks) Destroy(name types.NamespacedName) terraform.CallbackFn {
 	// request will be requeued although the managed reconciler requeues
 	// with exponential back-off during the deletion phase because
 	// during the async deletion operation, external client's
