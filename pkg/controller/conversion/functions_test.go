@@ -170,7 +170,7 @@ func TestRoundTrip(t *testing.T) {
 			r := &registry{
 				scheme: s,
 			}
-			if err := r.RegisterConversions(p); err != nil {
+			if err := r.RegisterConversions(p, nil); err != nil {
 				t.Fatalf("\n%s\nRegisterConversions(p): Failed to register the conversions with the registry.\n", tc.reason)
 			}
 			err := r.RoundTrip(tc.args.dst, tc.args.src)

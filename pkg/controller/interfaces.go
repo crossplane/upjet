@@ -7,10 +7,11 @@ package controller
 import (
 	"context"
 
+	"k8s.io/apimachinery/pkg/types"
+
 	"github.com/crossplane/upjet/pkg/config"
 	"github.com/crossplane/upjet/pkg/resource"
 	"github.com/crossplane/upjet/pkg/terraform"
-	"k8s.io/apimachinery/pkg/types"
 )
 
 // TODO(muvaf): It's a bit weird that the functions return the struct of a

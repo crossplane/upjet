@@ -89,7 +89,7 @@ func TestAPICallbacksCreate(t *testing.T) {
 				},
 			},
 			want: want{
-				err: errors.Wrapf(errBoom, errGetFmt, "", ", Kind=/name", "create"),
+				err: errors.Wrapf(errBoom, errGetFmt, "", ", Kind=//name", "create"),
 			},
 		},
 	}
@@ -171,7 +171,7 @@ func TestAPICallbacksUpdate(t *testing.T) {
 				},
 			},
 			want: want{
-				err: errors.Wrapf(errBoom, errGetFmt, "", ", Kind=/name", "update"),
+				err: errors.Wrapf(errBoom, errGetFmt, "", ", Kind=//name", "update"),
 			},
 		},
 	}
@@ -253,7 +253,7 @@ func TestAPICallbacks_Destroy(t *testing.T) {
 				},
 			},
 			want: want{
-				err: errors.Wrapf(errBoom, errGetFmt, "", ", Kind=/name", "destroy"),
+				err: errors.Wrapf(errBoom, errGetFmt, "", ", Kind=//name", "destroy"),
 			},
 		},
 	}
