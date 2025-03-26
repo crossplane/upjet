@@ -44,38 +44,43 @@ func Run(pcCluster, pcNamespace *config.Provider, rootDir string) {
 		}
 
 		groups = cluster.Run(pcCluster)
-	} else {
-		// generate both cluster scoped and namespaced resources
-		cluster := &PipelineRunner{
-			DirAPIs:        filepath.Join(rootDir, "apis", "cluster"),
-			DirControllers: filepath.Join(rootDir, "internal", "controller", "cluster"),
-			DirExamples:    filepath.Join(rootDir, "examples-generated", "cluster"),
-			DirHack:        filepath.Join(rootDir, "hack"),
-
-			ModulePathAPIs:        filepath.Join(pcCluster.ModulePath, "apis", "cluster"),
-			ModulePathControllers: filepath.Join(pcCluster.ModulePath, "internal", "controller", "cluster"),
-
-			Scope: "Cluster",
+		if len(pcCluster.MainTemplate) > 0 {
+			if err := NewMainGenerator(filepath.Join(rootDir, "cmd", "provider"), pcCluster.MainTemplate).Generate(groups); err != nil {
+				panic(errors.Wrap(err, "cannot generate main.go"))
+			}
 		}
-
-		namespaced := &PipelineRunner{
-			DirAPIs:        filepath.Join(rootDir, "apis", "namespaced"),
-			DirControllers: filepath.Join(rootDir, "internal", "controller", "namespaced"),
-			DirExamples:    filepath.Join(rootDir, "examples-generated", "namespaced"),
-			DirHack:        filepath.Join(rootDir, "hack"),
-
-			ModulePathAPIs:        filepath.Join(pcNamespace.ModulePath, "apis", "namespaced"),
-			ModulePathControllers: filepath.Join(pcNamespace.ModulePath, "internal", "controller", "namespaced"),
-
-			Scope: "Namespaced",
-		}
-
-		// Map of service name (e.g. ec2) to resource controller packages. Should be
-		// the same for cluster and namespaced, so we only save one.
-		groups = cluster.Run(pcCluster)
-		_ = namespaced.Run(pcNamespace)
+		return
 	}
 
+	// generate both cluster scoped and namespaced resources
+	cluster := &PipelineRunner{
+		DirAPIs:        filepath.Join(rootDir, "apis", "cluster"),
+		DirControllers: filepath.Join(rootDir, "internal", "controller", "cluster"),
+		DirExamples:    filepath.Join(rootDir, "examples-generated", "cluster"),
+		DirHack:        filepath.Join(rootDir, "hack"),
+
+		ModulePathAPIs:        filepath.Join(pcCluster.ModulePath, "apis", "cluster"),
+		ModulePathControllers: filepath.Join(pcCluster.ModulePath, "internal", "controller", "cluster"),
+
+		Scope: "Cluster",
+	}
+
+	namespaced := &PipelineRunner{
+		DirAPIs:        filepath.Join(rootDir, "apis", "namespaced"),
+		DirControllers: filepath.Join(rootDir, "internal", "controller", "namespaced"),
+		DirExamples:    filepath.Join(rootDir, "examples-generated", "namespaced"),
+		DirHack:        filepath.Join(rootDir, "hack"),
+
+		ModulePathAPIs:        filepath.Join(pcNamespace.ModulePath, "apis", "namespaced"),
+		ModulePathControllers: filepath.Join(pcNamespace.ModulePath, "internal", "controller", "namespaced"),
+
+		Scope: "Namespaced",
+	}
+
+	// Map of service name (e.g. ec2) to resource controller packages. Should be
+	// the same for cluster and namespaced, so we only save one.
+	groups = cluster.Run(pcCluster)
+	_ = namespaced.Run(pcNamespace)
 	if len(pcCluster.MainTemplate) > 0 {
 		if err := NewMainGenerator(filepath.Join(rootDir, "cmd", "provider"), pcCluster.MainTemplate).Generate(groups); err != nil {
 			panic(errors.Wrap(err, "cannot generate main.go"))
