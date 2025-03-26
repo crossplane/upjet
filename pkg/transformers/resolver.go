@@ -187,7 +187,7 @@ func (r *Resolver) TransformPackages(resolverFilePattern string, patterns ...str
 			if !r.ignorePackageLoadErrors {
 				return errors.Wrapf(err, "failed to load the package %q", p.Name)
 			}
-			r.logger.Info("Encounter the following issues when loading a package", "package", p.Name, "issues", err.Error())
+			r.logger.Info("Encounter the following issues when loading a package", "name", p.Name, "pkgPath", p.PkgPath, "issues", err.Error())
 		}
 		for i, f := range p.GoFiles {
 			if filepath.Base(f) != resolverFilePattern {
