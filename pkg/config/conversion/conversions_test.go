@@ -411,6 +411,98 @@ func TestSingletonListConversion(t *testing.T) {
 				},
 			},
 		},
+		"SuccessfulNestedToEmbeddedObjectConversion": {
+			reason: "Successful conversion from a nested singleton list to an embedded object.",
+			args: args{
+				sourceVersion: AllVersions,
+				sourceMap: map[string]any{
+					"spec": map[string]any{
+						"initProvider": map[string]any{
+							"o": []map[string]any{
+								{
+									"n": []map[string]any{
+										{
+											"k": "v",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				targetVersion: AllVersions,
+				targetMap:     map[string]any{},
+				crdPaths:      []string{"o", "o[*].n"},
+				mode:          ToEmbeddedObject,
+			},
+			want: want{
+				converted: true,
+				targetMap: map[string]any{
+					"spec": map[string]any{
+						"initProvider": map[string]any{
+							"o": map[string]any{
+								"n": map[string]any{
+									"k": "v",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		"SuccessfulNestedToEmbeddedObjectConversionPartial": {
+			reason: "Successful conversion from an singleton list nested in a non-singleton list to an embedded object nested in a list.",
+			args: args{
+				sourceVersion: AllVersions,
+				sourceMap: map[string]any{
+					"spec": map[string]any{
+						"initProvider": map[string]any{
+							"o": []map[string]any{
+								{
+									"n": []map[string]any{
+										{
+											"k": "v",
+										},
+									},
+								},
+								{
+									"n": []map[string]any{
+										{
+											"k": "v2",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				targetVersion: AllVersions,
+				targetMap:     map[string]any{},
+				crdPaths:      []string{"o[*].n"},
+				mode:          ToEmbeddedObject,
+			},
+			want: want{
+				converted: true,
+				targetMap: map[string]any{
+					"spec": map[string]any{
+						"initProvider": map[string]any{
+							"o": []map[string]any{
+								{
+									"n": map[string]any{
+										"k": "v",
+									},
+								},
+								{
+									"n": map[string]any{
+										"k": "v2",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 		"SuccessfulToSingletonListConversion": {
 			reason: "Successful conversion from an embedded object to a singleton list.",
 			args: args{
@@ -437,6 +529,98 @@ func TestSingletonListConversion(t *testing.T) {
 							"o": []map[string]any{
 								{
 									"k": "v",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		"SuccessfulNestedToSingletonListConversion": {
+			reason: "Successful conversion from a nested embedded object to a singleton list.",
+			args: args{
+				sourceVersion: AllVersions,
+				sourceMap: map[string]any{
+					"spec": map[string]any{
+						"initProvider": map[string]any{
+							"o": map[string]any{
+								"n": map[string]any{
+									"k": "v",
+								},
+							},
+						},
+					},
+				},
+				targetVersion: AllVersions,
+				targetMap:     map[string]any{},
+				crdPaths:      []string{"o", "o[*].n"},
+				mode:          ToSingletonList,
+			},
+			want: want{
+				converted: true,
+				targetMap: map[string]any{
+					"spec": map[string]any{
+						"initProvider": map[string]any{
+							"o": []map[string]any{
+								{
+									"n": []map[string]any{
+										{
+											"k": "v",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		"SuccessfulNestedToSingletonListConversionPartial": {
+			reason: "Successful conversion from an embedded object nested in a non-singleton list to a nested list.",
+			args: args{
+				sourceVersion: AllVersions,
+				sourceMap: map[string]any{
+					"spec": map[string]any{
+						"initProvider": map[string]any{
+							"o": []map[string]any{
+								{
+									"n": map[string]any{
+										"k": "v",
+									},
+								},
+								{
+									"n": map[string]any{
+										"k": "v2",
+									},
+								},
+							},
+						},
+					},
+				},
+				targetVersion: AllVersions,
+				targetMap:     map[string]any{},
+				crdPaths:      []string{"o[*].n"},
+				mode:          ToSingletonList,
+			},
+			want: want{
+				converted: true,
+				targetMap: map[string]any{
+					"spec": map[string]any{
+						"initProvider": map[string]any{
+							"o": []map[string]any{
+								{
+									"n": []map[string]any{
+										{
+											"k": "v",
+										},
+									},
+								},
+								{
+									"n": []map[string]any{
+										{
+											"k": "v2",
+										},
+									},
 								},
 							},
 						},

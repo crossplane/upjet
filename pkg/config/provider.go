@@ -337,7 +337,7 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadata []byt
 		if (isTerraformPluginSDK && isPluginFrameworkResource) || (isTerraformPluginSDK && isCLIResource) || (isPluginFrameworkResource && isCLIResource) {
 			panic(errors.Errorf(`resource %q is specified in more than one include list. It should appear in at most one of the lists "IncludeList", "TerraformPluginSDKIncludeList" or "TerraformPluginFrameworkIncludeList"`, name))
 		}
-		if len(terraformResource.Schema) == 0 || matches(name, p.SkipList) || (!matches(name, p.IncludeList) && !isTerraformPluginSDK && !isPluginFrameworkResource) {
+		if len(terraformResource.Schema) == 0 || matches(name, p.SkipList) || (!isCLIResource && !isTerraformPluginSDK && !isPluginFrameworkResource) {
 			p.skippedResourceNames = append(p.skippedResourceNames, name)
 			continue
 		}

@@ -12,6 +12,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/pkg/errors"
+	kjson "sigs.k8s.io/json"
 )
 
 func TestConvert(t *testing.T) {
@@ -470,5 +471,5 @@ func roundTrip(m map[string]any) (map[string]any, error) {
 		return nil, err
 	}
 	var r map[string]any
-	return r, jsoniter.ConfigCompatibleWithStandardLibrary.Unmarshal(buff, &r)
+	return r, kjson.UnmarshalCaseSensitivePreserveInts(buff, &r)
 }
