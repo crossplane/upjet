@@ -52,9 +52,34 @@ func getRefParts(ref string) *Parts {
 	if len(parts) < 3 {
 		return nil
 	}
+
+	resource := parts[0]
+	exampleName := parts[1]
+
+	// cover this: <resource type>.<resource name>.<number_of_index>.<field_name>
+	// There is `count` usage in the some examples in registry and the index
+	// reference is passed to the examples. This checks for supporting them.
+	// If the parts[2] is a number, then attribute starts with parts[3] and
+	// ignore the number because it refers the count index.
+	if _, err := strconv.Atoi(parts[2]); err == nil {
+		// there is count index but not a real attribute name
+		// <resource type>.<resource name>.<number>
+		if len(parts) <= 3 {
+			return nil
+		}
+		// <resource type>.<resource name>.<number>.<field_name>
+		return &Parts{
+			Resource:    resource,
+			ExampleName: exampleName,
+			Attribute:   strings.Join(parts[3:], "."),
+		}
+	}
+
+	// If the parts[2] is not a number, then attribute starts with parts[2].
+	// <resource type>.<resource name>.<number>.<field_name_part_1>.<field_name_part_2>
 	return &Parts{
-		Resource:    parts[0],
-		ExampleName: parts[1],
+		Resource:    resource,
+		ExampleName: exampleName,
 		Attribute:   strings.Join(parts[2:], "."),
 	}
 }
