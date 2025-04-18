@@ -6,7 +6,8 @@ module github.com/crossplane/upjet
 
 go 1.23.6
 
-replace github.com/crossplane/crossplane-tools => ../../crossplane/crossplane-tools
+// Upstream PR https://github.com/crossplane/crossplane-tools/pull/86
+replace github.com/crossplane/crossplane-tools => github.com/ldalorion/crossplane-tools v0.0.0-20250325210356-6507791903ca
 
 require (
 	dario.cat/mergo v1.0.1
