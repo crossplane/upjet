@@ -27,10 +27,6 @@ linters-settings:
       - io/ioutil.ReadDir
       - io/ioutil.ReadAll
 
-  govet:
-    # report about shadowed variables
-    check-shadowing: false
-
   revive:
     # confidence for issues, default is 0.8
     confidence: 0.8
