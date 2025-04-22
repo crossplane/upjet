@@ -148,10 +148,10 @@ type panicHandler struct {
 // run. The implementation follows the outline of panic recovery
 // mechanism in controller-runtime:
 // https://github.com/kubernetes-sigs/controller-runtime/blob/v0.17.3/pkg/internal/controller/controller.go#L105-L112
-func (ph *panicHandler) recoverIfPanic() {
+func (ph *panicHandler) recoverIfPanic(ctx context.Context) {
 	if r := recover(); r != nil {
 		for _, fn := range utilruntime.PanicHandlers {
-			fn(r)
+			fn(ctx, r)
 		}
 
 		ph.err = fmt.Errorf("recovered from panic: %v", r)
@@ -182,7 +182,7 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Create(_ context.Context, 
 				n.opTracker.logger.Info("Async create callback failed", "error", cErr.Error())
 			}
 		}()
-		defer ph.recoverIfPanic()
+		defer ph.recoverIfPanic(ctx)
 
 		n.opTracker.logger.Debug("Async create starting...")
 		_, ph.err = n.terraformPluginFrameworkExternalClient.Create(ctx, mg)
@@ -215,7 +215,7 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Update(_ context.Context, 
 				n.opTracker.logger.Info("Async update callback failed", "error", cErr.Error())
 			}
 		}()
-		defer ph.recoverIfPanic()
+		defer ph.recoverIfPanic(ctx)
 
 		n.opTracker.logger.Debug("Async update starting...")
 		_, ph.err = n.terraformPluginFrameworkExternalClient.Update(ctx, mg)
@@ -252,7 +252,7 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Delete(_ context.Context, 
 				n.opTracker.logger.Info("Async delete callback failed", "error", cErr.Error())
 			}
 		}()
-		defer ph.recoverIfPanic()
+		defer ph.recoverIfPanic(ctx)
 
 		n.opTracker.logger.Debug("Async delete starting...")
 		_, ph.err = n.terraformPluginFrameworkExternalClient.Delete(ctx, mg)

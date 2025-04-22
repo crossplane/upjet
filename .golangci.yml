@@ -181,6 +181,16 @@ issues:
       linters:
         - musttag
 
+    # This exclusion is necessary because this package relies on deprecated
+    # functions and fields to maintain compatibility with older versions. This
+    # package acts as a migration framework, supporting users coming from
+    # previous versions. In the future, we may extract this package into a
+    # separate module and decouple its dependencies from upjet.
+    - path: pkg/migration/
+      linters:
+        - staticcheck
+      text: "SA1019:"
+
   # Independently from option `exclude` we use default exclude patterns,
   # it can be disabled by this option. To list all
   # excluded by default patterns execute `golangci-lint run --help`.
