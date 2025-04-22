@@ -268,7 +268,7 @@ func ConvertComposedTemplatePatchesMap(sourceTemplate xpv1.ComposedTemplate, con
 	var patchesToAdd []xpv1.Patch
 	for _, p := range sourceTemplate.Patches {
 		switch p.Type { //nolint:exhaustive
-		case xpv1.PatchTypeFromCompositeFieldPath, xpv1.PatchTypeCombineFromComposite, xpv1.PatchTypeFromEnvironmentFieldPath, xpv1.PatchTypeCombineFromEnvironment, "":
+		case xpv1.PatchTypeFromCompositeFieldPath, xpv1.PatchTypeCombineFromComposite, "":
 			{
 				if p.ToFieldPath != nil {
 					if to, ok := conversionMap[*p.ToFieldPath]; ok {
@@ -283,7 +283,7 @@ func ConvertComposedTemplatePatchesMap(sourceTemplate xpv1.ComposedTemplate, con
 					}
 				}
 			}
-		case xpv1.PatchTypeToCompositeFieldPath, xpv1.PatchTypeCombineToComposite, xpv1.PatchTypeToEnvironmentFieldPath, xpv1.PatchTypeCombineToEnvironment:
+		case xpv1.PatchTypeToCompositeFieldPath, xpv1.PatchTypeCombineToComposite:
 			{
 				if p.FromFieldPath != nil {
 					if to, ok := conversionMap[*p.FromFieldPath]; ok {
