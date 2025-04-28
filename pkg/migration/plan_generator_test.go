@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/yaml"
+	"k8s.io/utils/ptr"
 	k8syaml "sigs.k8s.io/yaml"
 
 	"github.com/crossplane/upjet/pkg/migration/fake"
@@ -628,7 +629,7 @@ type lockConverter struct{}
 func (p *lockConverter) PackageLockV1Beta1(lock *xppkgv1beta1.Lock) error {
 	lock.Packages = append(lock.Packages, xppkgv1beta1.LockPackage{
 		Name:    "test-provider",
-		Type:    xppkgv1beta1.ProviderPackageType,
+		Type:    ptr.To(xppkgv1beta1.ProviderPackageType),
 		Source:  "xpkg.upbound.io/upbound/test-provider",
 		Version: "vX.Y.Z",
 	})
