@@ -11,7 +11,7 @@ require (
 	github.com/alecthomas/kingpin/v2 v2.4.0
 	github.com/antchfx/htmlquery v1.2.4
 	github.com/crossplane/crossplane v1.19.1
-	github.com/crossplane/crossplane-runtime v1.19.0
+	github.com/crossplane/crossplane-runtime v1.20.0-rc.0.0.20250509113121-26da25aff65f
 	github.com/fatih/camelcase v1.0.0
 	github.com/golang/mock v1.6.0
 	github.com/google/go-cmp v0.7.0
@@ -57,7 +57,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/emicklei/go-restful/v3 v3.12.1 // indirect
-	github.com/evanphx/json-patch v5.9.0+incompatible // indirect
+	github.com/evanphx/json-patch v5.9.11+incompatible // indirect
 	github.com/evanphx/json-patch/v5 v5.9.0 // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
