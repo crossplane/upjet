@@ -202,6 +202,10 @@ func (c *TerraformPluginFrameworkConnector) getResourceSchema(ctx context.Contex
 // at the terraform setup layer with the relevant provider meta if needed
 // by the provider implementation.
 func (c *TerraformPluginFrameworkConnector) configureProvider(ctx context.Context, ts terraform.Setup) (tfprotov5.ProviderServer, error) {
+	if ts.FrameworkProvider == nil {
+		return nil, fmt.Errorf("cannot retrieve framework provider")
+	}
+
 	var schemaResp fwprovider.SchemaResponse
 	ts.FrameworkProvider.Schema(ctx, fwprovider.SchemaRequest{}, &schemaResp)
 	if schemaResp.Diagnostics.HasError() {
