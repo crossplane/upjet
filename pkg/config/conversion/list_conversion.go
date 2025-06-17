@@ -103,7 +103,7 @@ func Convert(params map[string]any, paths []string, mode ListConversionMode, opt
 	pv := fieldpath.Pave(params)
 	for _, fp := range paths {
 		exp, err := pv.ExpandWildcards(fp)
-		if err != nil {
+		if err != nil && !fieldpath.IsNotFound(err) {
 			return nil, errors.Wrapf(err, "cannot expand wildcards for the field path expression %s", fp)
 		}
 		for _, e := range exp {
