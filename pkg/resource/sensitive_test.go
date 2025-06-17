@@ -1480,3 +1480,162 @@ func Test_fieldPathToSecretKey(t *testing.T) {
 		})
 	}
 }
+
+func TestExpandedTFPath(t *testing.T) {
+	type args struct {
+		expandedXP string
+		mapping    map[string]string
+	}
+	type want struct {
+		expandedTF string
+		err        error
+	}
+	cases := map[string]struct {
+		args
+		want
+	}{
+		"SameLengthWithAllWildcards": {
+			args: args{
+				expandedXP: "jobCluster[0].newCluster[0].dockerImage[0].basicAuth[0].passwordSecretRef",
+				mapping: map[string]string{
+					"job_cluster[*].new_cluster[*].docker_image[*].basic_auth[*].password": "jobCluster[*].newCluster[*].dockerImage[*].basicAuth[*].passwordSecretRef",
+				},
+			},
+			want: want{
+				expandedTF: "job_cluster[0].new_cluster[0].docker_image[0].basic_auth[0].password",
+				err:        nil,
+			},
+		},
+		"SameLengthWithSameMiddleWildcards": {
+			args: args{
+				expandedXP: "jobCluster.newCluster[0].dockerImage.basicAuth[0].passwordSecretRef",
+				mapping: map[string]string{
+					"job_cluster.new_cluster[*].docker_image.basic_auth[*].password": "jobCluster.newCluster[*].dockerImage.basicAuth[*].passwordSecretRef",
+				},
+			},
+			want: want{
+				expandedTF: "job_cluster.new_cluster[0].docker_image.basic_auth[0].password",
+				err:        nil,
+			},
+		},
+		"DifferentLengthWithStartWildcard": {
+			args: args{
+				expandedXP: "jobCluster[0].newCluster.dockerImage.basicAuth.passwordSecretRef",
+				mapping: map[string]string{
+					"job_cluster[*].new_cluster[*].docker_image[*].basic_auth[*].password": "jobCluster[*].newCluster.dockerImage.basicAuth.passwordSecretRef",
+				},
+			},
+			want: want{
+				expandedTF: "job_cluster[0].new_cluster[0].docker_image[0].basic_auth[0].password",
+				err:        nil,
+			},
+		},
+		"DifferentLengthWithMiddleWildcard-1": {
+			args: args{
+				expandedXP: "jobCluster[0].newCluster.dockerImage.basicAuth.passwordSecretRef",
+				mapping: map[string]string{
+					"job_cluster[*].new_cluster.docker_image[*].basic_auth[*].password": "jobCluster[*].newCluster.dockerImage.basicAuth.passwordSecretRef",
+				},
+			},
+			want: want{
+				expandedTF: "job_cluster[0].new_cluster.docker_image[0].basic_auth[0].password",
+				err:        nil,
+			},
+		},
+		"DifferentLengthWithMiddleWildcard-2": {
+			args: args{
+				expandedXP: "jobCluster.newCluster.dockerImage.basicAuth.passwordSecretRef",
+				mapping: map[string]string{
+					"job_cluster.new_cluster.docker_image[*].basic_auth.password": "jobCluster.newCluster.dockerImage.basicAuth.passwordSecretRef",
+				},
+			},
+			want: want{
+				expandedTF: "job_cluster.new_cluster.docker_image[0].basic_auth.password",
+				err:        nil,
+			},
+		},
+		"DifferentLengthWithMiddleWildcard-3": {
+			args: args{
+				expandedXP: "jobCluster.newCluster.dockerImage[0].basicAuth.passwordSecretRef",
+				mapping: map[string]string{
+					"job_cluster[*].new_cluster.docker_image[*].basic_auth.password": "jobCluster.newCluster.dockerImage[*].basicAuth.passwordSecretRef",
+				},
+			},
+			want: want{
+				expandedTF: "job_cluster[0].new_cluster.docker_image[0].basic_auth.password",
+				err:        nil,
+			},
+		},
+		"DifferentLengthWithMiddleWildcard-4": {
+			args: args{
+				expandedXP: "jobCluster.newCluster[0].dockerImage.basicAuth[0].passwordSecretRef",
+				mapping: map[string]string{
+					"job_cluster[*].new_cluster[*].docker_image.basic_auth[*].password": "jobCluster.newCluster[*].dockerImage.basicAuth[*].passwordSecretRef",
+				},
+			},
+			want: want{
+				expandedTF: "job_cluster[0].new_cluster[0].docker_image.basic_auth[0].password",
+				err:        nil,
+			},
+		},
+		"DifferentLengthWithAllWildcard": {
+			args: args{
+				expandedXP: "jobCluster.newCluster.dockerImage.basicAuth.passwordSecretRef",
+				mapping: map[string]string{
+					"job_cluster[*].new_cluster[*].docker_image[*].basic_auth[*].password": "jobCluster.newCluster.dockerImage.basicAuth.passwordSecretRef",
+				},
+			},
+			want: want{
+				expandedTF: "job_cluster[0].new_cluster[0].docker_image[0].basic_auth[0].password",
+				err:        nil,
+			},
+		},
+		"DifferentLengthWithNoWildcard": {
+			args: args{
+				expandedXP: "jobCluster.newCluster.dockerImage.basicAuth.passwordSecretRef",
+				mapping: map[string]string{
+					"job_cluster.new_cluster.docker_image.basic_auth.password": "jobCluster.newCluster.dockerImage.basicAuth.passwordSecretRef",
+				},
+			},
+			want: want{
+				expandedTF: "job_cluster.new_cluster.docker_image.basic_auth.password",
+				err:        nil,
+			},
+		},
+		"WrongMapping": {
+			args: args{
+				expandedXP: "jobCluster.newCluster.passwordSecretRef",
+				mapping: map[string]string{
+					"job_cluster.new_cluster[*].docker_image[*].basic_auth.password": "jobCluster.newCluster.passwordSecretRef",
+				},
+			},
+			want: want{
+				expandedTF: "",
+				err:        errors.New("wrong mapping configuration, xp path is too short"),
+			},
+		},
+		"ShorterTfPath": {
+			args: args{
+				expandedXP: "jobCluster.newCluster.dockerImage.basicAuth.passwordSecretRef",
+				mapping: map[string]string{
+					"job_cluster.basic_auth.password": "jobCluster.newCluster.dockerImage.basicAuth.passwordSecretRef",
+				},
+			},
+			want: want{
+				expandedTF: "",
+				err:        errors.New("tf path must be longer than xp path"),
+			},
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			expandedTF, gotErr := expandedTFPath(tc.args.expandedXP, tc.args.mapping)
+			if diff := cmp.Diff(tc.want.err, gotErr, test.EquateErrors()); diff != "" {
+				t.Fatalf("secretKeyToFieldPath(...): -want error, +got error: %s", diff)
+			}
+			if diff := cmp.Diff(tc.want.expandedTF, expandedTF); diff != "" {
+				t.Errorf("secretKeyToFieldPath(...) out = %v, want %v", expandedTF, tc.want.expandedTF)
+			}
+		})
+	}
+}

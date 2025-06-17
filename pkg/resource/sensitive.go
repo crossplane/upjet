@@ -95,7 +95,7 @@ func GetConnectionDetails(attr map[string]any, tr Terraformed, cfg *config.Resou
 // GetSensitiveAttributes returns strings matching provided field paths in the
 // input data.
 // See the unit tests for examples.
-func GetSensitiveAttributes(from map[string]any, mapping map[string]string) (map[string][]byte, error) { //nolint: gocyclo
+func GetSensitiveAttributes(from map[string]any, mapping map[string]string) (map[string][]byte, error) { // nolint: gocyclo
 	if len(mapping) == 0 {
 		return nil, nil
 	}
@@ -195,7 +195,7 @@ func GetSensitiveParameters(ctx context.Context, client SecretClient, from runti
 	return nil
 }
 
-func storeSensitiveData(ctx context.Context, client SecretClient, tfPath, jsonPath string, pavedTF, pavedJSON *fieldpath.Paved, mapping map[string]string) error { //nolint: gocyclo // for better readability and not to split the logic
+func storeSensitiveData(ctx context.Context, client SecretClient, tfPath, jsonPath string, pavedTF, pavedJSON *fieldpath.Paved, mapping map[string]string) error { // nolint: gocyclo // for better readability and not to split the logic
 	jsonPathSet, err := pavedJSON.ExpandWildcards(jsonPath)
 	if err != nil {
 		return errors.Wrapf(err, "cannot expand wildcard for xp resource")
@@ -338,9 +338,40 @@ func expandedTFPath(expandedXP string, mapping map[string]string) (string, error
 	if err != nil {
 		return "", err
 	}
-	for i, s := range sTF {
-		if s.Field == "*" {
-			sTF[i] = sExp[i]
+	if len(sTF) == len(sExp) {
+		for i, s := range sTF {
+			if s.Field == "*" {
+				sTF[i] = sExp[i]
+			}
+		}
+	} else {
+		sExpIndex := 0
+		needToFill := len(sTF) - len(sExp)
+		if needToFill < 0 {
+			return "", errors.New("tf path must be longer than xp path")
+		}
+		filled := 0
+		for i := range sTF {
+			if sTF[i].Field == "*" {
+				if sExpIndex >= len(sExp) {
+					return "", errors.New("wrong mapping configuration, xp path is too short")
+				}
+				if sExp[sExpIndex].Field == "" && sExp[sExpIndex].Type == fieldpath.SegmentIndex {
+					sTF[i] = sExp[sExpIndex]
+				} else {
+					sTF[i] = fieldpath.Segment{
+						Type:  fieldpath.SegmentIndex,
+						Field: "",
+						Index: 0,
+					}
+					filled++
+					continue
+				}
+			}
+			sExpIndex++
+		}
+		if needToFill != filled {
+			return "", errors.New("wrong mapping configuration, xp path is too short")
 		}
 	}
 

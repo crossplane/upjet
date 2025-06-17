@@ -223,7 +223,9 @@ func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, cp
 			// the type of XP field. In this case, we want to have a one-to-many relationship which is handled at
 			// runtime in the controller.
 			f.TerraformPaths = append(f.TerraformPaths, wildcard)
-			f.CRDPaths = append(f.CRDPaths, wildcard)
+			if !cfg.SchemaElementOptions.EmbeddedObject(cpath) {
+				f.CRDPaths = append(f.CRDPaths, wildcard)
+			}
 		}
 		var elemType types.Type
 		var initElemType types.Type
