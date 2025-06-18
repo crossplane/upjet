@@ -95,7 +95,7 @@ func GetConnectionDetails(attr map[string]any, tr Terraformed, cfg *config.Resou
 // GetSensitiveAttributes returns strings matching provided field paths in the
 // input data.
 // See the unit tests for examples.
-func GetSensitiveAttributes(from map[string]any, mapping map[string]string) (map[string][]byte, error) { // nolint: gocyclo
+func GetSensitiveAttributes(from map[string]any, mapping map[string]string) (map[string][]byte, error) { //nolint:gocyclo
 	if len(mapping) == 0 {
 		return nil, nil
 	}
@@ -195,7 +195,7 @@ func GetSensitiveParameters(ctx context.Context, client SecretClient, from runti
 	return nil
 }
 
-func storeSensitiveData(ctx context.Context, client SecretClient, tfPath, jsonPath string, pavedTF, pavedJSON *fieldpath.Paved, mapping map[string]string) error { // nolint: gocyclo // for better readability and not to split the logic
+func storeSensitiveData(ctx context.Context, client SecretClient, tfPath, jsonPath string, pavedTF, pavedJSON *fieldpath.Paved, mapping map[string]string) error { //nolint:gocyclo // for better readability and not to split the logic
 	jsonPathSet, err := pavedJSON.ExpandWildcards(jsonPath)
 	if err != nil {
 		return errors.Wrapf(err, "cannot expand wildcard for xp resource")
@@ -315,7 +315,7 @@ func GetSensitiveObservation(ctx context.Context, client SecretClient, from *v1.
 	return nil
 }
 
-func expandedTFPath(expandedXP string, mapping map[string]string) (string, error) {
+func expandedTFPath(expandedXP string, mapping map[string]string) (string, error) { //nolint:gocyclo // easier to follow as a unit
 	sExp, err := fieldpath.Parse(normalizeJSONPath(expandedXP))
 	if err != nil {
 		return "", err
