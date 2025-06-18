@@ -128,6 +128,10 @@ func getExtendedParameters(ctx context.Context, tr resource.Terraformed, externa
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot get merged parameters")
 	}
+	params, err = cfg.ApplyTFConversions(params, config.ToTerraform)
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot apply tf conversions")
+	}
 	if err = resource.GetSensitiveParameters(ctx, &APISecretClient{kube: kube}, tr, params, tr.GetConnectionDetailsMapping()); err != nil {
 		return nil, errors.Wrap(err, "cannot store sensitive parameters into params")
 	}
@@ -156,7 +160,7 @@ func getExtendedParameters(ctx context.Context, tr resource.Terraformed, externa
 			params["tags_all"] = params["tags"]
 		}
 	}
-	return cfg.ApplyTFConversions(params, config.ToTerraform)
+	return params, nil
 }
 
 func (c *TerraformPluginSDKConnector) processParamsWithHCLParser(schemaMap map[string]*schema.Schema, params map[string]any) map[string]any {
