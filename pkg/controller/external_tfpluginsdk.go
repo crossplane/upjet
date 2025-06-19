@@ -447,7 +447,17 @@ func (n *terraformPluginSDKExternal) getResourceDataDiff(tr resource.Terraformed
 		instanceDiff.RawPlan = v
 	}
 	if instanceDiff != nil && !instanceDiff.Empty() {
-		n.logger.Debug("Diff detected", "instanceDiff", instanceDiff.GoString())
+		encodedDiff, err := json.TFParser.Marshal(map[string]any{
+			"attributes":     instanceDiff.Attributes,
+			"destroy":        instanceDiff.Destroy,
+			"destroyTainted": instanceDiff.DestroyTainted,
+			"destroyDeposed": instanceDiff.DestroyDeposed,
+		})
+		if err != nil {
+			n.logger.Debug("Diff detected", "instanceDiff", instanceDiff.GoString())
+		} else {
+			n.logger.Debug("Diff detected", "instanceDiff", string(encodedDiff))
+		}
 		// Assumption: Source of truth when applying diffs, for instance on updates, is instanceDiff.Attributes.
 		// Setting instanceDiff.RawConfig has no effect on diff application.
 		instanceDiff.RawConfig = n.rawConfig
