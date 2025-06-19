@@ -568,13 +568,9 @@ func (n *terraformPluginFrameworkExternalClient) Delete(ctx context.Context, _ x
 }
 
 func (n *terraformPluginFrameworkExternalClient) setExternalName(mg xpresource.Managed, stateValueMap map[string]interface{}) (bool, error) {
-	id, ok := stateValueMap["id"]
-	if !ok || id.(string) == "" {
-		return false, nil
-	}
 	newName, err := n.config.ExternalName.GetExternalNameFn(stateValueMap)
 	if err != nil {
-		return false, errors.Wrapf(err, "failed to compute the external-name from the state map of the resource with the ID %s", id)
+		return false, errors.Wrap(err, "failed to compute the external-name from the state map")
 	}
 	oldName := meta.GetExternalName(mg)
 	// we have to make sure the newly set external-name is recorded
