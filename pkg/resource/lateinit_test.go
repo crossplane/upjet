@@ -478,13 +478,24 @@ func TestLateInitialize(t *testing.T) {
 			wantModified: false,
 			wantCRObject: &nestedStruct4{},
 		},
-		"TestSkipOmitemptyTaggedPtrElem": {
+		"TestIncludeZeroValuePtrElem": {
 			args: args{
 				desiredObject: &nestedStruct4{},
 				observedObject: &nestedStruct4{
 					F1: &testStringEmpty,
 				},
 				opts: []GenericLateInitializerOption{WithZeroValueJSONOmitEmptyFilter(CNameWildcard)},
+			},
+			wantModified: true,
+			wantCRObject: &nestedStruct4{
+				F1: &testStringEmpty,
+			},
+		},
+		"TestSkipNilPtrElem": {
+			args: args{
+				desiredObject:  &nestedStruct4{},
+				observedObject: &nestedStruct4{},
+				opts:           []GenericLateInitializerOption{WithZeroValueJSONOmitEmptyFilter(CNameWildcard)},
 			},
 			wantModified: false,
 			wantCRObject: &nestedStruct4{},
