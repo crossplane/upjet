@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	gopath "path"
 	"path/filepath"
 
 	"github.com/pkg/errors"
@@ -24,9 +25,11 @@ var (
 
 // FileSystemSource is a source implementation to read resources from filesystem
 type FileSystemSource struct {
-	index int
-	items []UnstructuredWithMetadata
-	afero afero.Afero
+	index              int
+	items              []UnstructuredWithMetadata
+	afero              afero.Afero
+	excludedFiles      map[string]struct{}
+	excludedExtensions map[string]struct{}
 }
 
 // FileSystemSourceOption allows you to configure FileSystemSource
@@ -36,6 +39,20 @@ type FileSystemSourceOption func(*FileSystemSource)
 func FsWithFileSystem(f afero.Fs) FileSystemSourceOption {
 	return func(fs *FileSystemSource) {
 		fs.afero = afero.Afero{Fs: f}
+	}
+}
+
+// WithExcludedFiles configures the excludedFiles.
+func WithExcludedFiles(ef map[string]struct{}) FileSystemSourceOption {
+	return func(fs *FileSystemSource) {
+		fs.excludedFiles = ef
+	}
+}
+
+// WithExcludedExtensions configures the excludedExtensions.
+func WithExcludedExtensions(ee map[string]struct{}) FileSystemSourceOption {
+	return func(fs *FileSystemSource) {
+		fs.excludedExtensions = ee
 	}
 }
 
@@ -54,6 +71,10 @@ func NewFileSystemSource(dir string, opts ...FileSystemSourceOption) (*FileSyste
 		}
 
 		if info.IsDir() {
+			return nil
+		}
+
+		if isExcluded(path, fs.excludedFiles, fs.excludedExtensions) {
 			return nil
 		}
 
@@ -82,6 +103,16 @@ func NewFileSystemSource(dir string, opts ...FileSystemSourceOption) (*FileSyste
 	}
 
 	return fs, nil
+}
+
+func isExcluded(path string, excludedFiles, excludedExtensions map[string]struct{}) bool {
+	if _, ok := excludedFiles[path]; ok {
+		return true
+	}
+	if _, ok := excludedExtensions[gopath.Ext(path)]; ok {
+		return true
+	}
+	return false
 }
 
 // HasNext checks the next item
