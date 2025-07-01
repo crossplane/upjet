@@ -5,11 +5,9 @@
 package controller
 
 import (
-	"crypto/tls"
 	"time"
 
 	"github.com/crossplane/crossplane-runtime/pkg/controller"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/crossplane/upjet/pkg/config"
 	"github.com/crossplane/upjet/pkg/terraform"
@@ -34,14 +32,6 @@ type Options struct {
 	// preparing the auth token for Terraform CLI.
 	SetupFn terraform.SetupFn
 
-	// SecretStoreConfigGVK is the GroupVersionKind for the Secret StoreConfig
-	// resource. Setting this enables External Secret Stores for the controller
-	// by adding connection.DetailsManager as a ConnectionPublisher.
-	SecretStoreConfigGVK *schema.GroupVersionKind
-
-	// ESSOptions for External Secret Stores.
-	ESSOptions *ESSOptions
-
 	// PollJitter adds the specified jitter to the configured reconcile period
 	// of the up-to-date resources in managed.Reconciler.
 	PollJitter time.Duration
@@ -49,10 +39,4 @@ type Options struct {
 	// StartWebhooks enables starting of the conversion webhooks by the
 	// provider's controllerruntime.Manager.
 	StartWebhooks bool
-}
-
-// ESSOptions for External Secret Stores.
-type ESSOptions struct {
-	TLSConfig     *tls.Config
-	TLSSecretName *string
 }
