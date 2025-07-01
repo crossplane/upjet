@@ -7,7 +7,6 @@ package {{ .Package }}
 import (
 	"time"
 
-	"github.com/crossplane/crossplane-runtime/pkg/connection"
 	"github.com/crossplane/crossplane-runtime/pkg/event"
 	xpfeature "github.com/crossplane/crossplane-runtime/pkg/feature"
 	"github.com/crossplane/crossplane-runtime/pkg/ratelimiter"
@@ -36,9 +35,6 @@ func Setup(mgr ctrl.Manager, o tjcontroller.Options) error {
 	initializers = append(initializers, managed.NewNameAsExternalName(mgr.GetClient()))
 	{{- end}}
 	cps := []managed.ConnectionPublisher{managed.NewAPISecretPublisher(mgr.GetClient(), mgr.GetScheme())}
-	if o.SecretStoreConfigGVK != nil {
-		cps = append(cps, connection.NewDetailsManager(mgr.GetClient(), *o.SecretStoreConfigGVK, connection.WithTLSConfig(o.ESSOptions.TLSConfig)))
-	}
 	eventHandler := handler.NewEventHandler(handler.WithLogger(o.Logger.WithValues("gvk", {{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind)))
 	{{- if .UseAsync }}
 	ac := tjcontroller.NewAPICallbacks(mgr, xpresource.ManagedKind({{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind), tjcontroller.WithEventHandler(eventHandler){{ if or .UseTerraformPluginSDKClient .UseTerraformPluginFrameworkClient }}, tjcontroller.WithStatusUpdates(false){{ end }})
