@@ -59,6 +59,17 @@ var (
 		types.NewStruct(nil, nil),
 		nil,
 	)
+	typeNamespacedReferenceField types.Type = types.NewNamed(
+		types.NewTypeName(token.NoPos, types.NewPackage(PackagePathXPCommonAPIs, "v1"), "NamespacedReference", nil),
+		types.NewStruct(nil, nil),
+		nil,
+	)
+
+	typeNamespacedSelectorField types.Type = types.NewNamed(
+		types.NewTypeName(token.NoPos, types.NewPackage(PackagePathXPCommonAPIs, "v1"), "NamespacedSelector", nil),
+		types.NewStruct(nil, nil),
+		nil,
+	)
 	commentOptional = &comments.Comment{
 		Options: markers.Options{
 			KubebuilderOptions: markers.KubebuilderOptions{
@@ -78,20 +89,31 @@ func (g *Builder) generateReferenceFields(t *types.TypeName, f *Field) (fields [
 	selTag := fmt.Sprintf(`json:"%s,omitempty" tf:"-"`, sfn.LowerCamelComputed)
 
 	var tr types.Type
-	tr = types.NewPointer(typeReferenceField)
+	if g.scope == CRDScopeCluster {
+		tr = types.NewPointer(typeReferenceField)
+	} else {
+		tr = types.NewPointer(typeNamespacedReferenceField)
+	}
 	refComment := fmt.Sprintf("// Reference to a %s to populate %s.\n%s",
 		friendlyTypeDescription(f.Reference.Type), f.Name.LowerCamelComputed, commentOptional.Build())
 	selComment := fmt.Sprintf("// Selector for a %s to populate %s.\n%s",
 		friendlyTypeDescription(f.Reference.Type), f.Name.LowerCamelComputed, commentOptional.Build())
 	if isSlice {
-		tr = types.NewSlice(typeReferenceField)
+		tr = types.NewSlice(typeNamespacedReferenceField)
+		if g.scope == CRDScopeCluster {
+			tr = types.NewSlice(typeReferenceField)
+		}
 		refComment = fmt.Sprintf("// References to %s to populate %s.\n%s",
 			friendlyTypeDescription(f.Reference.Type), f.Name.LowerCamelComputed, commentOptional.Build())
 		selComment = fmt.Sprintf("// Selector for a list of %s to populate %s.\n%s",
 			friendlyTypeDescription(f.Reference.Type), f.Name.LowerCamelComputed, commentOptional.Build())
 	}
 	ref := types.NewField(token.NoPos, g.Package, rfn.Camel, tr, false)
-	sel := types.NewField(token.NoPos, g.Package, sfn.Camel, types.NewPointer(typeSelectorField), false)
+	tsel := types.NewPointer(typeNamespacedSelectorField)
+	if g.scope == CRDScopeCluster {
+		tsel = types.NewPointer(typeSelectorField)
+	}
+	sel := types.NewField(token.NoPos, g.Package, sfn.Camel, tsel, false)
 
 	g.comments.AddFieldComment(t, rfn.Camel, refComment)
 	g.comments.AddFieldComment(t, sfn.Camel, selComment)
