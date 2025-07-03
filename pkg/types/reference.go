@@ -22,6 +22,9 @@ const (
 	// PackagePathXPCommonAPIs is the go path for the Crossplane Runtime package
 	// with common APIs
 	PackagePathXPCommonAPIs = "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	// PackagePathXPV2CommonAPIs is the go path for the Crossplane Runtime package
+	// with common v2 APIs
+	PackagePathXPV2CommonAPIs = "github.com/crossplane/crossplane-runtime/apis/common/v2"
 )
 
 // Types to use from by reference generator.

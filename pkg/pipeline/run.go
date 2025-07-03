@@ -16,6 +16,7 @@ import (
 	"github.com/crossplane/upjet/pkg/config"
 	"github.com/crossplane/upjet/pkg/examples"
 	"github.com/crossplane/upjet/pkg/pipeline/templates"
+	tjtypes "github.com/crossplane/upjet/pkg/types"
 )
 
 type terraformedInput struct {
@@ -40,7 +41,7 @@ func Run(pcCluster, pcNamespace *config.Provider, rootDir string) {
 			ModulePathAPIs:        filepath.Join(pcCluster.ModulePath, "apis"),
 			ModulePathControllers: filepath.Join(pcCluster.ModulePath, "internal", "controller"),
 
-			Scope: "Cluster",
+			Scope: tjtypes.CRDScopeCluster,
 		}
 
 		groups = cluster.Run(pcCluster)
@@ -62,7 +63,7 @@ func Run(pcCluster, pcNamespace *config.Provider, rootDir string) {
 		ModulePathAPIs:        filepath.Join(pcCluster.ModulePath, "apis", "cluster"),
 		ModulePathControllers: filepath.Join(pcCluster.ModulePath, "internal", "controller", "cluster"),
 
-		Scope: "Cluster",
+		Scope: tjtypes.CRDScopeCluster,
 	}
 
 	namespaced := &PipelineRunner{
@@ -74,7 +75,7 @@ func Run(pcCluster, pcNamespace *config.Provider, rootDir string) {
 		ModulePathAPIs:        filepath.Join(pcNamespace.ModulePath, "apis", "namespaced"),
 		ModulePathControllers: filepath.Join(pcNamespace.ModulePath, "internal", "controller", "namespaced"),
 
-		Scope: "Namespaced",
+		Scope: tjtypes.CRDScopeNamespaced,
 	}
 
 	// Map of service name (e.g. ec2) to resource controller packages. Should be
@@ -97,9 +98,7 @@ type PipelineRunner struct {
 	ModulePathAPIs        string
 	ModulePathControllers string
 
-	// TODO(negz): Eventually I think we'll need a different template for
-	// namespace scoped resources too, e.g. without namespaces in secret refs.
-	Scope string
+	Scope tjtypes.CRDScope
 }
 
 func (r *PipelineRunner) Run(pc *config.Provider) []string { //nolint:gocyclo
