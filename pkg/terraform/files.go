@@ -82,7 +82,7 @@ func NewFileProducer(ctx context.Context, client resource.SecretClient, dir stri
 	if fp.features.Enabled(feature.EnableBetaManagementPolicies) {
 		initParams, err := tr.GetInitParameters()
 		if err != nil {
-			return nil, errors.Wrapf(err, "cannot get the init parameters for the resource %q", tr.GetName())
+			return nil, errors.Wrapf(err, "cannot get the init parameters for the resource \"%s/%s\"", tr.GetNamespace(), tr.GetName())
 		}
 
 		// get fields which should be in the ignore_changes lifecycle block
@@ -97,7 +97,7 @@ func NewFileProducer(ctx context.Context, client resource.SecretClient, dir stri
 			c.Overwrite = false
 		})
 		if err != nil {
-			return nil, errors.Wrapf(err, "cannot merge the spec.initProvider and spec.forProvider parameters for the resource %q", tr.GetName())
+			return nil, errors.Wrapf(err, "cannot merge the spec.initProvider and spec.forProvider parameters for the resource \"%s/%s\"", tr.GetNamespace(), tr.GetName())
 		}
 	}
 

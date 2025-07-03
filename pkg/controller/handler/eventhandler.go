@@ -106,24 +106,24 @@ func (e *EventHandler) setQueue(limitingInterface workqueue.TypedRateLimitingInt
 
 func (e *EventHandler) Create(ctx context.Context, ev event.CreateEvent, limitingInterface workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 	e.setQueue(limitingInterface)
-	e.logger.Debug("Calling the inner handler for Create event.", "name", ev.Object.GetName(), "queueLength", limitingInterface.Len())
+	e.logger.Debug("Calling the inner handler for Create event.", "name", ev.Object.GetName(), "namespace", ev.Object.GetNamespace(), "queueLength", limitingInterface.Len())
 	e.innerHandler.Create(ctx, ev, limitingInterface)
 }
 
 func (e *EventHandler) Update(ctx context.Context, ev event.UpdateEvent, limitingInterface workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 	e.setQueue(limitingInterface)
-	e.logger.Debug("Calling the inner handler for Update event.", "name", ev.ObjectOld.GetName(), "queueLength", limitingInterface.Len())
+	e.logger.Debug("Calling the inner handler for Update event.", "name", ev.ObjectOld.GetName(), "namespace", ev.ObjectOld.GetNamespace(), "queueLength", limitingInterface.Len())
 	e.innerHandler.Update(ctx, ev, limitingInterface)
 }
 
 func (e *EventHandler) Delete(ctx context.Context, ev event.DeleteEvent, limitingInterface workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 	e.setQueue(limitingInterface)
-	e.logger.Debug("Calling the inner handler for Delete event.", "name", ev.Object.GetName(), "queueLength", limitingInterface.Len())
+	e.logger.Debug("Calling the inner handler for Delete event.", "name", ev.Object.GetName(), "namespace", ev.Object.GetNamespace(), "queueLength", limitingInterface.Len())
 	e.innerHandler.Delete(ctx, ev, limitingInterface)
 }
 
 func (e *EventHandler) Generic(ctx context.Context, ev event.GenericEvent, limitingInterface workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 	e.setQueue(limitingInterface)
-	e.logger.Debug("Calling the inner handler for Generic event.", "name", ev.Object.GetName(), "queueLength", limitingInterface.Len())
+	e.logger.Debug("Calling the inner handler for Generic event.", "name", ev.Object.GetName(), "namespace", ev.Object.GetNamespace(), "queueLength", limitingInterface.Len())
 	e.innerHandler.Generic(ctx, ev, limitingInterface)
 }

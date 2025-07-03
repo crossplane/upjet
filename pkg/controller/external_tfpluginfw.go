@@ -110,7 +110,7 @@ type terraformPluginFrameworkExternalClient struct {
 // provider API.
 func (c *TerraformPluginFrameworkConnector) Connect(ctx context.Context, mg xpresource.Managed) (managed.ExternalClient, error) { //nolint:gocyclo
 	c.metricRecorder.ObserveReconcileDelay(mg.GetObjectKind().GroupVersionKind(), mg.GetName())
-	logger := c.logger.WithValues("uid", mg.GetUID(), "name", mg.GetName(), "gvk", mg.GetObjectKind().GroupVersionKind().String())
+	logger := c.logger.WithValues("uid", mg.GetUID(), "name", mg.GetName(), "namespace", mg.GetNamespace(), "gvk", mg.GetObjectKind().GroupVersionKind().String())
 	logger.Debug("Connecting to the service provider")
 	start := time.Now()
 	ts, err := c.getTerraformSetup(ctx, c.kube, mg)
@@ -124,7 +124,7 @@ func (c *TerraformPluginFrameworkConnector) Connect(ctx context.Context, mg xpre
 	externalName := meta.GetExternalName(tr)
 	params, err := getExtendedParameters(ctx, tr, externalName, c.config, ts, c.isManagementPoliciesEnabled, c.kube)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to get the extended parameters for resource %q", mg.GetName())
+		return nil, errors.Wrapf(err, "failed to get the extended parameters for resource %q", client.ObjectKeyFromObject(mg))
 	}
 
 	resourceSchema, err := c.getResourceSchema(ctx)
