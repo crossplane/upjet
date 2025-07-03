@@ -229,7 +229,7 @@ func (c *TerraformPluginSDKConnector) applyHCLParserToParam(sc *schema.Schema, p
 }
 
 func (c *TerraformPluginSDKConnector) Connect(ctx context.Context, mg xpresource.Managed) (managed.ExternalClient, error) { //nolint:gocyclo
-	c.metricRecorder.ObserveReconcileDelay(mg.GetObjectKind().GroupVersionKind(), mg.GetName())
+	c.metricRecorder.ObserveReconcileDelay(mg.GetObjectKind().GroupVersionKind(), metrics.NameForManaged(mg))
 	logger := c.logger.WithValues("uid", mg.GetUID(), "name", mg.GetName(), "namespace", mg.GetNamespace(), "gvk", mg.GetObjectKind().GroupVersionKind().String())
 	logger.Debug("Connecting to the service provider")
 	start := time.Now()
@@ -566,7 +566,7 @@ func (n *terraformPluginSDKExternal) Observe(ctx context.Context, mg xpresource.
 		}
 
 		if !hasDiff {
-			n.metricRecorder.SetReconcileTime(mg.GetName())
+			n.metricRecorder.SetReconcileTime(metrics.NameForManaged(mg))
 		}
 		if !specUpdateRequired {
 			resource.SetUpToDateCondition(mg, !hasDiff)
