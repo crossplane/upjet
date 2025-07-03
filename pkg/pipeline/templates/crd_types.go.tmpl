@@ -15,7 +15,11 @@ import (
 
 // {{ .CRD.Kind }}Spec defines the desired state of {{ .CRD.Kind }}
 type {{ .CRD.Kind }}Spec struct {
+  {{- if (eq .CRD.Scope "Namespaced") }}
+	{{ .XPV2CommonAPIsPackageAlias }}ManagedResourceSpec `json:",inline"`
+  {{- else }}
 	{{ .XPCommonAPIsPackageAlias }}ResourceSpec `json:",inline"`
+  {{- end }}
 	ForProvider       {{ .CRD.ForProviderType }} `json:"forProvider"`
 	// THIS IS A BETA FIELD. It will be honored
 	// unless the Management Policies feature flag is disabled.
