@@ -30,6 +30,9 @@ const (
 	// description for an injected list map key field in the context of the
 	// server-side apply object list merging
 	descriptionInjectedKey = "This is an injected field with a default value for being able to merge items of the parent object list."
+
+	CRDScopeNamespaced CRDScope = "Namespaced"
+	CRDScopeCluster    CRDScope = "Cluster"
 )
 
 var (
@@ -51,6 +54,8 @@ type Generated struct {
 	ValidationRules string
 }
 
+type CRDScope string
+
 // Builder is used to generate Go type equivalence of given Terraform schema.
 type Builder struct {
 	Package *types.Package
@@ -58,13 +63,16 @@ type Builder struct {
 	genTypes        []*types.Named
 	comments        twtypes.Comments
 	validationRules string
+
+	scope CRDScope
 }
 
 // NewBuilder returns a new Builder.
-func NewBuilder(pkg *types.Package) *Builder {
+func NewBuilder(pkg *types.Package, scope CRDScope) *Builder {
 	return &Builder{
 		Package:  pkg,
 		comments: twtypes.Comments{},
+		scope:    scope,
 	}
 }
 

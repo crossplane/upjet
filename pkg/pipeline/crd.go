@@ -29,7 +29,7 @@ const (
 )
 
 // NewCRDGenerator returns a new CRDGenerator.
-func NewCRDGenerator(pkg *types.Package, apiDir, hackDir, providerShortName, group, version, scope string) *CRDGenerator {
+func NewCRDGenerator(pkg *types.Package, apiDir, hackDir, providerShortName, group, version string, scope tjtypes.CRDScope) *CRDGenerator {
 	return &CRDGenerator{
 		LocalDirectoryPath: filepath.Join(apiDir, strings.ToLower(strings.Split(group, ".")[0]), version),
 		LicenseHeaderPath:  filepath.Join(hackDir, "boilerplate.go.txt"),
@@ -45,7 +45,7 @@ func NewCRDGenerator(pkg *types.Package, apiDir, hackDir, providerShortName, gro
 type CRDGenerator struct {
 	LocalDirectoryPath string
 	Group              string
-	Scope              string // TODO(negz): Make this a constant.
+	Scope              tjtypes.CRDScope
 	ProviderShortName  string
 	LicenseHeaderPath  string
 	Generated          *tjtypes.Generated
@@ -66,7 +66,7 @@ func (cg *CRDGenerator) Generate(cfg *config.Resource) (string, error) {
 		Computed: true,
 	}
 
-	gen, err := tjtypes.NewBuilder(cg.pkg).Build(cfg)
+	gen, err := tjtypes.NewBuilder(cg.pkg, cg.Scope).Build(cfg)
 	if err != nil {
 		return "", errors.Wrapf(err, "cannot build types for %s", cfg.Kind)
 	}
@@ -95,12 +95,13 @@ func (cg *CRDGenerator) Generate(cfg *config.Resource) (string, error) {
 			"AtProviderType":     gen.AtProviderType.Obj().Name(),
 			"ValidationRules":    gen.ValidationRules,
 			"Path":               cfg.Path,
-			"Scope":              cg.Scope,
+			"Scope":              string(cg.Scope),
 		},
 		"Provider": map[string]string{
 			"ShortName": cg.ProviderShortName,
 		},
-		"XPCommonAPIsPackageAlias": file.Imports.UsePackage(tjtypes.PackagePathXPCommonAPIs),
+		"XPCommonAPIsPackageAlias":   file.Imports.UsePackage(tjtypes.PackagePathXPCommonAPIs),
+		"XPV2CommonAPIsPackageAlias": file.Imports.UsePackage(tjtypes.PackagePathXPV2CommonAPIs),
 	}
 	if cfg.MetaResource != nil {
 		// remove sentences with the `terraform` keyword in them
