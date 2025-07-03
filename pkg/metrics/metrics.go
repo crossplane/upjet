@@ -6,6 +6,7 @@ package metrics
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -124,6 +125,13 @@ type Observations struct {
 	observeReconcileDelay bool
 }
 
+func NameForManaged(mg resource.Managed) string {
+	if mg.GetNamespace() == "" {
+		return mg.GetName()
+	}
+	return fmt.Sprintf("%s/%s", mg.GetNamespace(), mg.GetName())
+}
+
 func NewMetricRecorder(gvk schema.GroupVersionKind, c cluster.Cluster, pollInterval time.Duration) *MetricRecorder {
 	return &MetricRecorder{
 		gvk:          gvk,
@@ -174,7 +182,7 @@ func (r *MetricRecorder) Start(ctx context.Context) error {
 				obj = final.Obj
 			}
 			managed := obj.(resource.Managed)
-			r.observations.Delete(managed.GetName())
+			r.observations.Delete(NameForManaged(managed))
 		},
 	})
 	if err != nil {
