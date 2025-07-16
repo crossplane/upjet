@@ -10,6 +10,8 @@ import (
 
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
+	"github.com/crossplane/crossplane-runtime/pkg/resource"
+	xpfake "github.com/crossplane/crossplane-runtime/pkg/resource/fake"
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	"github.com/golang/mock/gomock"
 	"github.com/google/go-cmp/cmp"
@@ -17,7 +19,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/crossplane/upjet/pkg/config"
 	"github.com/crossplane/upjet/pkg/resource/fake"
@@ -91,6 +92,12 @@ func secretKeySelector(sm ...secretKeySelectorModifier) *xpv1.SecretKeySelector 
 		m(s)
 	}
 	return s
+}
+
+type fakeManaged struct {
+	*unstructured.Unstructured
+	xpfake.Manageable
+	xpv1.ConditionedStatus
 }
 
 func TestGetConnectionDetails(t *testing.T) {
@@ -426,7 +433,7 @@ func TestGetSensitiveAttributes(t *testing.T) {
 func TestGetSensitiveParameters(t *testing.T) {
 	type args struct {
 		clientFn func(client *mocks.MockSecretClient)
-		from     runtime.Object
+		from     resource.Managed
 		into     map[string]any
 		mapping  map[string]string
 	}
@@ -441,11 +448,13 @@ func TestGetSensitiveParameters(t *testing.T) {
 		"NoSensitiveData": {
 			args: args{
 				clientFn: func(client *mocks.MockSecretClient) {},
-				from: &unstructured.Unstructured{
-					Object: map[string]any{
-						"spec": map[string]any{
-							"forProvider": map[string]any{
-								"adminPasswordSecretRef": nil,
+				from: &fakeManaged{
+					Unstructured: &unstructured.Unstructured{
+						Object: map[string]any{
+							"spec": map[string]any{
+								"forProvider": map[string]any{
+									"adminPasswordSecretRef": nil,
+								},
 							},
 						},
 					},
@@ -474,14 +483,16 @@ func TestGetSensitiveParameters(t *testing.T) {
 						Key: "pass",
 					})).Return([]byte("foo"), nil)
 				},
-				from: &unstructured.Unstructured{
-					Object: map[string]any{
-						"spec": map[string]any{
-							"forProvider": map[string]any{
-								"adminPasswordSecretRef": map[string]any{
-									"key":       "pass",
-									"name":      "admin-password",
-									"namespace": "crossplane-system",
+				from: &fakeManaged{
+					Unstructured: &unstructured.Unstructured{
+						Object: map[string]any{
+							"spec": map[string]any{
+								"forProvider": map[string]any{
+									"adminPasswordSecretRef": map[string]any{
+										"key":       "pass",
+										"name":      "admin-password",
+										"namespace": "crossplane-system",
+									},
 								},
 							},
 						},
@@ -512,14 +523,16 @@ func TestGetSensitiveParameters(t *testing.T) {
 						Key: "pass",
 					})).Return([]byte(""), kerrors.NewNotFound(v1.Resource("secret"), "admin-password"))
 				},
-				from: &unstructured.Unstructured{
-					Object: map[string]any{
-						"spec": map[string]any{
-							"forProvider": map[string]any{
-								"adminPasswordSecretRef": map[string]any{
-									"key":       "pass",
-									"name":      "admin-password",
-									"namespace": "crossplane-system",
+				from: &fakeManaged{
+					Unstructured: &unstructured.Unstructured{
+						Object: map[string]any{
+							"spec": map[string]any{
+								"forProvider": map[string]any{
+									"adminPasswordSecretRef": map[string]any{
+										"key":       "pass",
+										"name":      "admin-password",
+										"namespace": "crossplane-system",
+									},
 								},
 							},
 						},
@@ -557,25 +570,27 @@ func TestGetSensitiveParameters(t *testing.T) {
 						Key: "system",
 					})).Return([]byte("system_pwd"), nil)
 				},
-				from: &unstructured.Unstructured{
-					Object: map[string]any{
-						"spec": map[string]any{
-							"forProvider": map[string]any{
-								"passwordsSecretRef": []any{
-									secretKeySelector(
-										secretKeySelectorWithKey("admin"),
-										secretKeySelectorWithSecretReference(xpv1.SecretReference{
-											Name:      "db-passwords",
-											Namespace: "crossplane-system",
-										}),
-									),
-									secretKeySelector(
-										secretKeySelectorWithKey("system"),
-										secretKeySelectorWithSecretReference(xpv1.SecretReference{
-											Name:      "db-passwords",
-											Namespace: "crossplane-system",
-										}),
-									),
+				from: &fakeManaged{
+					Unstructured: &unstructured.Unstructured{
+						Object: map[string]any{
+							"spec": map[string]any{
+								"forProvider": map[string]any{
+									"passwordsSecretRef": []any{
+										secretKeySelector(
+											secretKeySelectorWithKey("admin"),
+											secretKeySelectorWithSecretReference(xpv1.SecretReference{
+												Name:      "db-passwords",
+												Namespace: "crossplane-system",
+											}),
+										),
+										secretKeySelector(
+											secretKeySelectorWithKey("system"),
+											secretKeySelectorWithSecretReference(xpv1.SecretReference{
+												Name:      "db-passwords",
+												Namespace: "crossplane-system",
+											}),
+										),
+									},
 								},
 							},
 						},
@@ -606,13 +621,15 @@ func TestGetSensitiveParameters(t *testing.T) {
 						Namespace: "crossplane-system",
 					})).Return(map[string][]byte{"admin": []byte("admin_pwd"), "system": []byte("system_pwd")}, nil)
 				},
-				from: &unstructured.Unstructured{
-					Object: map[string]any{
-						"spec": map[string]any{
-							"forProvider": map[string]any{
-								"dbPasswordsSecretRef": map[string]any{
-									"name":      "db-passwords",
-									"namespace": "crossplane-system",
+				from: &fakeManaged{
+					Unstructured: &unstructured.Unstructured{
+						Object: map[string]any{
+							"spec": map[string]any{
+								"forProvider": map[string]any{
+									"dbPasswordsSecretRef": map[string]any{
+										"name":      "db-passwords",
+										"namespace": "crossplane-system",
+									},
 								},
 							},
 						},
@@ -646,14 +663,16 @@ func TestGetSensitiveParameters(t *testing.T) {
 						Key: "pass",
 					})).Return([]byte("foo"), nil)
 				},
-				from: &unstructured.Unstructured{
-					Object: map[string]any{
-						"spec": map[string]any{
-							"forProvider": map[string]any{
-								"adminPasswordSecretRef": map[string]any{
-									"key":       "pass",
-									"name":      "admin-password",
-									"namespace": "crossplane-system",
+				from: &fakeManaged{
+					Unstructured: &unstructured.Unstructured{
+						Object: map[string]any{
+							"spec": map[string]any{
+								"forProvider": map[string]any{
+									"adminPasswordSecretRef": map[string]any{
+										"key":       "pass",
+										"name":      "admin-password",
+										"namespace": "crossplane-system",
+									},
 								},
 							},
 						},
@@ -692,40 +711,42 @@ func TestGetSensitiveParameters(t *testing.T) {
 						Key: "pass",
 					})).Return([]byte("baz"), nil)
 				},
-				from: &unstructured.Unstructured{
-					Object: map[string]any{
-						"spec": map[string]any{
-							"forProvider": map[string]any{
-								"databaseUsers": []any{
-									map[string]any{
-										"name": "admin",
-										"passwordSecretRef": map[string]any{
-											"key":       "pass",
-											"name":      "admin-password",
-											"namespace": "crossplane-system",
+				from: &fakeManaged{
+					Unstructured: &unstructured.Unstructured{
+						Object: map[string]any{
+							"spec": map[string]any{
+								"forProvider": map[string]any{
+									"databaseUsers": []any{
+										map[string]any{
+											"name": "admin",
+											"passwordSecretRef": map[string]any{
+												"key":       "pass",
+												"name":      "admin-password",
+												"namespace": "crossplane-system",
+											},
+											"displayName": "Administrator",
 										},
-										"displayName": "Administrator",
-									},
-									map[string]any{
-										"name": "system",
-										// Intentionally skip providing this optional parameter
-										// to test the behaviour when an optional parameter
-										// not provided.
-										/*"passwordSecretRef": map[string]any{
-											"name":      "system-password",
-											"namespace": "crossplane-system",
-											"key":       "pass",
-										},*/
-										"displayName": "System",
-									},
-									map[string]any{
-										"name": "maintenance",
-										"passwordSecretRef": map[string]any{
-											"key":       "pass",
-											"name":      "maintenance-password",
-											"namespace": "crossplane-system",
+										map[string]any{
+											"name": "system",
+											// Intentionally skip providing this optional parameter
+											// to test the behaviour when an optional parameter
+											// not provided.
+											/*"passwordSecretRef": map[string]any{
+												"name":      "system-password",
+												"namespace": "crossplane-system",
+												"key":       "pass",
+											},*/
+											"displayName": "System",
 										},
-										"displayName": "Maintenance",
+										map[string]any{
+											"name": "maintenance",
+											"passwordSecretRef": map[string]any{
+												"key":       "pass",
+												"name":      "maintenance-password",
+												"namespace": "crossplane-system",
+											},
+											"displayName": "Maintenance",
+										},
 									},
 								},
 							},
@@ -779,11 +800,13 @@ func TestGetSensitiveParameters(t *testing.T) {
 		"NoSensitiveDataInitProvider": {
 			args: args{
 				clientFn: func(client *mocks.MockSecretClient) {},
-				from: &unstructured.Unstructured{
-					Object: map[string]any{
-						"spec": map[string]any{
-							"initProvider": map[string]any{
-								"adminPasswordSecretRef": nil,
+				from: &fakeManaged{
+					Unstructured: &unstructured.Unstructured{
+						Object: map[string]any{
+							"spec": map[string]any{
+								"initProvider": map[string]any{
+									"adminPasswordSecretRef": nil,
+								},
 							},
 						},
 					},
@@ -812,14 +835,16 @@ func TestGetSensitiveParameters(t *testing.T) {
 						Key: "pass",
 					})).Return([]byte("foo"), nil)
 				},
-				from: &unstructured.Unstructured{
-					Object: map[string]any{
-						"spec": map[string]any{
-							"initProvider": map[string]any{
-								"adminPasswordSecretRef": map[string]any{
-									"key":       "pass",
-									"name":      "admin-password",
-									"namespace": "crossplane-system",
+				from: &fakeManaged{
+					Unstructured: &unstructured.Unstructured{
+						Object: map[string]any{
+							"spec": map[string]any{
+								"initProvider": map[string]any{
+									"adminPasswordSecretRef": map[string]any{
+										"key":       "pass",
+										"name":      "admin-password",
+										"namespace": "crossplane-system",
+									},
 								},
 							},
 						},
@@ -850,14 +875,16 @@ func TestGetSensitiveParameters(t *testing.T) {
 						Key: "pass",
 					})).Return([]byte(""), kerrors.NewNotFound(v1.Resource("secret"), "admin-password"))
 				},
-				from: &unstructured.Unstructured{
-					Object: map[string]any{
-						"spec": map[string]any{
-							"initProvider": map[string]any{
-								"adminPasswordSecretRef": map[string]any{
-									"key":       "pass",
-									"name":      "admin-password",
-									"namespace": "crossplane-system",
+				from: &fakeManaged{
+					Unstructured: &unstructured.Unstructured{
+						Object: map[string]any{
+							"spec": map[string]any{
+								"initProvider": map[string]any{
+									"adminPasswordSecretRef": map[string]any{
+										"key":       "pass",
+										"name":      "admin-password",
+										"namespace": "crossplane-system",
+									},
 								},
 							},
 						},
@@ -895,25 +922,27 @@ func TestGetSensitiveParameters(t *testing.T) {
 						Key: "system",
 					})).Return([]byte("system_pwd"), nil)
 				},
-				from: &unstructured.Unstructured{
-					Object: map[string]any{
-						"spec": map[string]any{
-							"initProvider": map[string]any{
-								"passwordsSecretRef": []any{
-									secretKeySelector(
-										secretKeySelectorWithKey("admin"),
-										secretKeySelectorWithSecretReference(xpv1.SecretReference{
-											Name:      "db-passwords",
-											Namespace: "crossplane-system",
-										}),
-									),
-									secretKeySelector(
-										secretKeySelectorWithKey("system"),
-										secretKeySelectorWithSecretReference(xpv1.SecretReference{
-											Name:      "db-passwords",
-											Namespace: "crossplane-system",
-										}),
-									),
+				from: &fakeManaged{
+					Unstructured: &unstructured.Unstructured{
+						Object: map[string]any{
+							"spec": map[string]any{
+								"initProvider": map[string]any{
+									"passwordsSecretRef": []any{
+										secretKeySelector(
+											secretKeySelectorWithKey("admin"),
+											secretKeySelectorWithSecretReference(xpv1.SecretReference{
+												Name:      "db-passwords",
+												Namespace: "crossplane-system",
+											}),
+										),
+										secretKeySelector(
+											secretKeySelectorWithKey("system"),
+											secretKeySelectorWithSecretReference(xpv1.SecretReference{
+												Name:      "db-passwords",
+												Namespace: "crossplane-system",
+											}),
+										),
+									},
 								},
 							},
 						},
@@ -944,13 +973,15 @@ func TestGetSensitiveParameters(t *testing.T) {
 						Namespace: "crossplane-system",
 					})).Return(map[string][]byte{"admin": []byte("admin_pwd"), "system": []byte("system_pwd")}, nil)
 				},
-				from: &unstructured.Unstructured{
-					Object: map[string]any{
-						"spec": map[string]any{
-							"initProvider": map[string]any{
-								"dbPasswordsSecretRef": map[string]any{
-									"name":      "db-passwords",
-									"namespace": "crossplane-system",
+				from: &fakeManaged{
+					Unstructured: &unstructured.Unstructured{
+						Object: map[string]any{
+							"spec": map[string]any{
+								"initProvider": map[string]any{
+									"dbPasswordsSecretRef": map[string]any{
+										"name":      "db-passwords",
+										"namespace": "crossplane-system",
+									},
 								},
 							},
 						},
@@ -984,14 +1015,16 @@ func TestGetSensitiveParameters(t *testing.T) {
 						Key: "pass",
 					})).Return([]byte("foo"), nil)
 				},
-				from: &unstructured.Unstructured{
-					Object: map[string]any{
-						"spec": map[string]any{
-							"initProvider": map[string]any{
-								"adminPasswordSecretRef": map[string]any{
-									"key":       "pass",
-									"name":      "admin-password",
-									"namespace": "crossplane-system",
+				from: &fakeManaged{
+					Unstructured: &unstructured.Unstructured{
+						Object: map[string]any{
+							"spec": map[string]any{
+								"initProvider": map[string]any{
+									"adminPasswordSecretRef": map[string]any{
+										"key":       "pass",
+										"name":      "admin-password",
+										"namespace": "crossplane-system",
+									},
 								},
 							},
 						},
@@ -1030,40 +1063,42 @@ func TestGetSensitiveParameters(t *testing.T) {
 						Key: "pass",
 					})).Return([]byte("baz"), nil)
 				},
-				from: &unstructured.Unstructured{
-					Object: map[string]any{
-						"spec": map[string]any{
-							"initProvider": map[string]any{
-								"databaseUsers": []any{
-									map[string]any{
-										"name": "admin",
-										"passwordSecretRef": map[string]any{
-											"key":       "pass",
-											"name":      "admin-password",
-											"namespace": "crossplane-system",
+				from: &fakeManaged{
+					Unstructured: &unstructured.Unstructured{
+						Object: map[string]any{
+							"spec": map[string]any{
+								"initProvider": map[string]any{
+									"databaseUsers": []any{
+										map[string]any{
+											"name": "admin",
+											"passwordSecretRef": map[string]any{
+												"key":       "pass",
+												"name":      "admin-password",
+												"namespace": "crossplane-system",
+											},
+											"displayName": "Administrator",
 										},
-										"displayName": "Administrator",
-									},
-									map[string]any{
-										"name": "system",
-										// Intentionally skip providing this optional parameter
-										// to test the behaviour when an optional parameter
-										// not provided.
-										/*"passwordSecretRef": map[string]any{
-											"name":      "system-password",
-											"namespace": "crossplane-system",
-											"key":       "pass",
-										},*/
-										"displayName": "System",
-									},
-									map[string]any{
-										"name": "maintenance",
-										"passwordSecretRef": map[string]any{
-											"key":       "pass",
-											"name":      "maintenance-password",
-											"namespace": "crossplane-system",
+										map[string]any{
+											"name": "system",
+											// Intentionally skip providing this optional parameter
+											// to test the behaviour when an optional parameter
+											// not provided.
+											/*"passwordSecretRef": map[string]any{
+												"name":      "system-password",
+												"namespace": "crossplane-system",
+												"key":       "pass",
+											},*/
+											"displayName": "System",
 										},
-										"displayName": "Maintenance",
+										map[string]any{
+											"name": "maintenance",
+											"passwordSecretRef": map[string]any{
+												"key":       "pass",
+												"name":      "maintenance-password",
+												"namespace": "crossplane-system",
+											},
+											"displayName": "Maintenance",
+										},
 									},
 								},
 							},
@@ -1131,21 +1166,23 @@ func TestGetSensitiveParameters(t *testing.T) {
 						Key: "pass-initprovider",
 					})).Return([]byte("sensitive-initprovider"), nil)
 				},
-				from: &unstructured.Unstructured{
-					Object: map[string]any{
-						"spec": map[string]any{
-							"forProvider": map[string]any{
-								"adminPasswordSecretRef": map[string]any{
-									"key":       "pass-forprovider",
-									"name":      "admin-password",
-									"namespace": "crossplane-system",
+				from: &fakeManaged{
+					Unstructured: &unstructured.Unstructured{
+						Object: map[string]any{
+							"spec": map[string]any{
+								"forProvider": map[string]any{
+									"adminPasswordSecretRef": map[string]any{
+										"key":       "pass-forprovider",
+										"name":      "admin-password",
+										"namespace": "crossplane-system",
+									},
 								},
-							},
-							"initProvider": map[string]any{
-								"adminPasswordSecretRef": map[string]any{
-									"key":       "pass-initprovider",
-									"name":      "admin-password",
-									"namespace": "crossplane-system",
+								"initProvider": map[string]any{
+									"adminPasswordSecretRef": map[string]any{
+										"key":       "pass-initprovider",
+										"name":      "admin-password",
+										"namespace": "crossplane-system",
+									},
 								},
 							},
 						},
@@ -1162,6 +1199,253 @@ func TestGetSensitiveParameters(t *testing.T) {
 				out: map[string]any{
 					"some_other_key": "some_other_value",
 					"admin_password": "sensitive-forprovider",
+				},
+			},
+		},
+		// namespaced MRs test
+		"NoSensitiveData_NamespacedMR": {
+			args: args{
+				clientFn: func(client *mocks.MockSecretClient) {},
+				from: &fakeManaged{
+					Unstructured: &unstructured.Unstructured{
+						Object: map[string]any{
+							"metadata": map[string]any{
+								"name":      "some-mr",
+								"namespace": "foo-ns",
+							},
+							"spec": map[string]any{
+								"forProvider": map[string]any{
+									"adminPasswordSecretRef": nil,
+								},
+							},
+						},
+					},
+				},
+				into: map[string]any{
+					"some_other_key": "some_other_value",
+				},
+				mapping: map[string]string{
+					"admin_password": "spec.forProvider.adminPasswordSecretRef",
+				},
+			},
+			want: want{
+				out: map[string]any{
+					"some_other_key": "some_other_value",
+				},
+			},
+		},
+		"SingleNoWildcardWithSecretReference_NamespacedMR": {
+			args: args{
+				clientFn: func(client *mocks.MockSecretClient) {
+					client.EXPECT().GetSecretData(gomock.Any(), gomock.Eq(&xpv1.SecretReference{
+						Name:      "db-passwords",
+						Namespace: "foo-ns",
+					})).Return(map[string][]byte{"admin": []byte("admin_pwd"), "system": []byte("system_pwd")}, nil)
+					// other namespaces should return not found
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Not(gomock.Eq(xpv1.SecretKeySelector{
+						SecretReference: xpv1.SecretReference{
+							Name:      "admin-password",
+							Namespace: "crossplane-system",
+						},
+						Key: "pass",
+					}))).Return([]byte(""), kerrors.NewNotFound(v1.Resource("secret"), "admin-password")).AnyTimes()
+				},
+				from: &fakeManaged{
+					Unstructured: &unstructured.Unstructured{
+						Object: map[string]any{
+							"metadata": map[string]any{
+								"name":      "some-mr",
+								"namespace": "foo-ns",
+							},
+							"spec": map[string]any{
+								"forProvider": map[string]any{
+									"dbPasswordsSecretRef": map[string]any{
+										"name": "db-passwords",
+										// no namespace ref
+									},
+								},
+							},
+						},
+					},
+				},
+				into: map[string]any{
+					"some_other_key": "some_other_value",
+				},
+				mapping: map[string]string{
+					"db_passwords": "spec.forProvider.dbPasswordsSecretRef",
+				},
+			},
+			want: want{
+				out: map[string]any{
+					"some_other_key": "some_other_value",
+					"db_passwords": map[string]any{
+						"admin":  "admin_pwd",
+						"system": "system_pwd",
+					},
+				},
+			},
+		},
+		"MultipleWithWildcardNamespacedMR": {
+			args: args{
+				clientFn: func(client *mocks.MockSecretClient) {
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
+						SecretReference: xpv1.SecretReference{
+							Name:      "admin-password",
+							Namespace: "foo-ns",
+						},
+						Key: "pass",
+					})).Return([]byte("foo"), nil)
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
+						SecretReference: xpv1.SecretReference{
+							Name:      "maintenance-password",
+							Namespace: "foo-ns",
+						},
+						Key: "pass",
+					})).Return([]byte("baz"), nil)
+				},
+				from: &fakeManaged{
+					Unstructured: &unstructured.Unstructured{
+						Object: map[string]any{
+							"metadata": map[string]any{
+								"name":      "some-mr",
+								"namespace": "foo-ns",
+							},
+							"spec": map[string]any{
+								"forProvider": map[string]any{
+									"databaseUsers": []any{
+										map[string]any{
+											"name": "admin",
+											"passwordSecretRef": map[string]any{
+												"key":  "pass",
+												"name": "admin-password",
+											},
+											"displayName": "Administrator",
+										},
+										map[string]any{
+											"name": "system",
+											// Intentionally skip providing this optional parameter
+											// to test the behaviour when an optional parameter
+											// not provided.
+											/*"passwordSecretRef": map[string]any{
+												"name":      "system-password",
+												"namespace": "crossplane-system",
+												"key":       "pass",
+											},*/
+											"displayName": "System",
+										},
+										map[string]any{
+											"name": "maintenance",
+											"passwordSecretRef": map[string]any{
+												"key":  "pass",
+												"name": "maintenance-password",
+											},
+											"displayName": "Maintenance",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				into: map[string]any{
+					"some_other_key": "some_other_value",
+					"database_users": []any{
+						map[string]any{
+							"name":         "admin",
+							"display_name": "Administrator",
+						},
+						map[string]any{
+							"name":         "system",
+							"display_name": "System",
+						},
+						map[string]any{
+							"name":         "maintenance",
+							"display_name": "Maintenance",
+						},
+					},
+				},
+				mapping: map[string]string{
+					"database_users[*].password": "spec.forProvider.databaseUsers[*].passwordSecretRef",
+				},
+			},
+			want: want{
+				out: map[string]any{
+					"some_other_key": "some_other_value",
+					"database_users": []any{
+						map[string]any{
+							"name":         "admin",
+							"password":     "foo",
+							"display_name": "Administrator",
+						},
+						map[string]any{
+							"name":         "system",
+							"display_name": "System",
+						},
+						map[string]any{
+							"name":         "maintenance",
+							"password":     "baz",
+							"display_name": "Maintenance",
+						},
+					},
+				},
+			},
+		},
+		"SingleNoWildcardWithSliceNamespacedMR": {
+			args: args{
+				clientFn: func(client *mocks.MockSecretClient) {
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
+						SecretReference: xpv1.SecretReference{
+							Name:      "db-passwords",
+							Namespace: "foo-ns",
+						},
+						Key: "admin",
+					})).Return([]byte("admin_pwd"), nil)
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
+						SecretReference: xpv1.SecretReference{
+							Name:      "db-passwords",
+							Namespace: "foo-ns",
+						},
+						Key: "system",
+					})).Return([]byte("system_pwd"), nil)
+				},
+				from: &fakeManaged{
+					Unstructured: &unstructured.Unstructured{
+						Object: map[string]any{
+							"metadata": map[string]any{
+								"name":      "some-mr",
+								"namespace": "foo-ns",
+							},
+							"spec": map[string]any{
+								"forProvider": map[string]any{
+									"passwordsSecretRef": []any{
+										map[string]any{
+											"name": "db-passwords",
+											"key":  "admin",
+										},
+										map[string]any{
+											"name": "db-passwords",
+											"key":  "system",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				into: map[string]any{
+					"some_other_key": "some_other_value",
+				},
+				mapping: map[string]string{
+					"db_passwords": "spec.forProvider.passwordsSecretRef",
+				},
+			},
+			want: want{
+				out: map[string]any{
+					"some_other_key": "some_other_value",
+					"db_passwords": []any{
+						"admin_pwd",
+						"system_pwd",
+					},
 				},
 			},
 		},
