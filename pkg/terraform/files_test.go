@@ -11,10 +11,12 @@ import (
 	"testing"
 	"time"
 
+	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/feature"
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	xpfake "github.com/crossplane/crossplane-runtime/pkg/resource/fake"
 	"github.com/crossplane/crossplane-runtime/pkg/test"
+	"github.com/golang/mock/gomock"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"github.com/spf13/afero"
@@ -23,6 +25,7 @@ import (
 	"github.com/crossplane/upjet/pkg/config"
 	"github.com/crossplane/upjet/pkg/resource"
 	"github.com/crossplane/upjet/pkg/resource/fake"
+	"github.com/crossplane/upjet/pkg/resource/fake/mocks"
 	"github.com/crossplane/upjet/pkg/resource/json"
 )
 
@@ -51,8 +54,8 @@ func TestEnsureTFState(t *testing.T) {
 		"SuccessWrite": {
 			reason: "Standard resources should be able to write everything it has into tfstate file when state is empty",
 			args: args{
-				tr: &fake.Terraformed{
-					Managed: xpfake.Managed{
+				tr: &fake.LegacyTerraformed{
+					LegacyManaged: xpfake.LegacyManaged{
 						ObjectMeta: metav1.ObjectMeta{
 							Annotations: map[string]string{
 								resource.AnnotationKeyPrivateRawAttribute: "privateraw",
@@ -79,8 +82,8 @@ func TestEnsureTFState(t *testing.T) {
 		"SuccessWithTimeout": {
 			reason: "Configured timeouts should be reflected tfstate as private meta",
 			args: args{
-				tr: &fake.Terraformed{
-					Managed: xpfake.Managed{
+				tr: &fake.LegacyTerraformed{
+					LegacyManaged: xpfake.LegacyManaged{
 						ObjectMeta: metav1.ObjectMeta{
 							Annotations: map[string]string{
 								resource.AnnotationKeyPrivateRawAttribute: "{}",
@@ -109,8 +112,8 @@ func TestEnsureTFState(t *testing.T) {
 		"SuccessSkipDuringDeletion": {
 			reason: "During an ongoing deletion, tfstate file should not be touched since its emptiness signals success.",
 			args: args{
-				tr: &fake.Terraformed{
-					Managed: xpfake.Managed{
+				tr: &fake.LegacyTerraformed{
+					LegacyManaged: xpfake.LegacyManaged{
 						ObjectMeta: metav1.ObjectMeta{
 							DeletionTimestamp: &now,
 							Annotations: map[string]string{
@@ -274,7 +277,7 @@ func TestIsStateEmpty(t *testing.T) {
 				context.TODO(),
 				nil,
 				dir,
-				&fake.Terraformed{
+				&fake.LegacyTerraformed{
 					Parameterizable: fake.Parameterizable{Parameters: map[string]any{}},
 				},
 				Setup{},
@@ -310,8 +313,8 @@ func TestWriteMainTF(t *testing.T) {
 		"TimeoutsConfigured": {
 			reason: "Configured resources should be able to write everything it has into maintf file",
 			args: args{
-				tr: &fake.Terraformed{
-					Managed: xpfake.Managed{
+				tr: &fake.LegacyTerraformed{
+					LegacyManaged: xpfake.LegacyManaged{
 						ObjectMeta: metav1.ObjectMeta{
 							Annotations: map[string]string{
 								resource.AnnotationKeyPrivateRawAttribute: "privateraw",
@@ -347,8 +350,8 @@ func TestWriteMainTF(t *testing.T) {
 		"Success": {
 			reason: "Standard resources should be able to write everything it has into maintf file",
 			args: args{
-				tr: &fake.Terraformed{
-					Managed: xpfake.Managed{
+				tr: &fake.LegacyTerraformed{
+					LegacyManaged: xpfake.LegacyManaged{
 						ObjectMeta: metav1.ObjectMeta{
 							Annotations: map[string]string{
 								resource.AnnotationKeyPrivateRawAttribute: "privateraw",
@@ -379,8 +382,8 @@ func TestWriteMainTF(t *testing.T) {
 		"Custom Source": {
 			reason: "Custom source like my-company/namespace/provider-test resources should be able to write everything it has into maintf file",
 			args: args{
-				tr: &fake.Terraformed{
-					Managed: xpfake.Managed{
+				tr: &fake.LegacyTerraformed{
+					LegacyManaged: xpfake.LegacyManaged{
 						ObjectMeta: metav1.ObjectMeta{
 							Annotations: map[string]string{
 								resource.AnnotationKeyPrivateRawAttribute: "privateraw",
@@ -411,8 +414,8 @@ func TestWriteMainTF(t *testing.T) {
 		"SuccessManagementPolicies": {
 			reason: "Management policies enabled with ignore changes resources and merging initProvider should be able to write everything it has into maintf file",
 			args: args{
-				tr: &fake.Terraformed{
-					Managed: xpfake.Managed{
+				tr: &fake.LegacyTerraformed{
+					LegacyManaged: xpfake.LegacyManaged{
 						ObjectMeta: metav1.ObjectMeta{
 							Annotations: map[string]string{
 								resource.AnnotationKeyPrivateRawAttribute: "privateraw",
@@ -490,6 +493,232 @@ func TestWriteMainTF(t *testing.T) {
 			}
 			if diff := cmp.Diff(res, wantJson, test.EquateConditions()); diff != "" {
 				t.Errorf("\n%s\nWriteMainTF(...): -want error, +got error:\n%s", tc.reason, diff)
+			}
+		})
+	}
+}
+
+func TestConnectionSecretRefResolution(t *testing.T) {
+	type args struct {
+		tr       resource.Terraformed
+		cfg      *config.Resource
+		clientFn func(client *mocks.MockSecretClient)
+		s        Setup
+		fs       func() afero.Afero
+	}
+	type want struct {
+		parameters map[string]any
+		err        error
+	}
+	cases := map[string]struct {
+		reason string
+		args
+		want
+	}{
+		"NoSecretRef_LegacyMR": {
+			reason: "Standard resources should be able to write everything it has into tfstate file when state is empty",
+			args: args{
+				tr: &fake.LegacyTerraformed{
+					LegacyManaged: xpfake.LegacyManaged{
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: map[string]string{
+								resource.AnnotationKeyPrivateRawAttribute: "privateraw",
+								meta.AnnotationKeyExternalName:            "some-id",
+							},
+						},
+					},
+					Parameterizable: fake.Parameterizable{Parameters: map[string]any{
+						"param": "paramval",
+					}},
+					Observable: fake.Observable{Observation: map[string]any{
+						"obs": "obsval",
+					}},
+				},
+				cfg:      config.DefaultResource("upjet_resource", nil, nil, nil),
+				clientFn: func(client *mocks.MockSecretClient) {},
+				fs: func() afero.Afero {
+					return afero.Afero{Fs: afero.NewMemMapFs()}
+				},
+			},
+			want: want{
+				parameters: map[string]any{
+					"name":  "some-id",
+					"param": "paramval",
+				},
+			},
+		},
+		"SecretRef_LegacyMR": {
+			reason: "Standard resources should be able to write everything it has into tfstate file when state is empty",
+			args: args{
+				tr: &fake.LegacyTerraformed{
+					LegacyManaged: xpfake.LegacyManaged{
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: map[string]string{
+								resource.AnnotationKeyPrivateRawAttribute: "privateraw",
+								meta.AnnotationKeyExternalName:            "some-id",
+							},
+						},
+						ConnectionSecretWriterTo: xpfake.ConnectionSecretWriterTo{
+							Ref: &xpv1.SecretReference{
+								Name:      "some-legacy-mr-connection",
+								Namespace: "crossplane-system",
+							},
+						},
+					},
+					Parameterizable: fake.Parameterizable{Parameters: map[string]any{
+						"param": "paramval",
+					}},
+					Observable: fake.Observable{Observation: map[string]any{
+						"obs": "obsval",
+					}},
+				},
+				cfg: config.DefaultResource("upjet_resource", nil, nil, nil),
+				clientFn: func(client *mocks.MockSecretClient) {
+					client.EXPECT().GetSecretData(gomock.Any(), gomock.Eq(&xpv1.SecretReference{
+						Name:      "some-legacy-mr-connection",
+						Namespace: "crossplane-system",
+					})).Return(map[string][]byte{
+						"sensitive_foo": []byte("sensitive-data"),
+					}, nil)
+				},
+				fs: func() afero.Afero {
+					return afero.Afero{Fs: afero.NewMemMapFs()}
+				},
+			},
+			want: want{
+				parameters: map[string]any{
+					"name":  "some-id",
+					"param": "paramval",
+				},
+			},
+		},
+		"NoSecretRef_namespacedMR": {
+			reason: "Standard resources should be able to write everything it has into tfstate file when state is empty",
+			args: args{
+				tr: &fake.ModernTerraformed{
+					ModernManaged: xpfake.ModernManaged{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "some-modern-mr",
+							Namespace: "foo-namespace",
+							Annotations: map[string]string{
+								resource.AnnotationKeyPrivateRawAttribute: "privateraw",
+								meta.AnnotationKeyExternalName:            "some-id",
+							},
+						},
+					},
+					Parameterizable: fake.Parameterizable{Parameters: map[string]any{
+						"param": "paramval",
+					}},
+					Observable: fake.Observable{Observation: map[string]any{
+						"obs": "obsval",
+					}},
+				},
+				clientFn: func(client *mocks.MockSecretClient) {},
+				cfg:      config.DefaultResource("upjet_resource", nil, nil, nil),
+				fs: func() afero.Afero {
+					return afero.Afero{Fs: afero.NewMemMapFs()}
+				},
+			},
+			want: want{
+				parameters: map[string]any{
+					"name":  "some-id",
+					"param": "paramval",
+				},
+			},
+		},
+		"WithSecretRef_namespacedMR": {
+			reason: "Standard resources should be able to write everything it has into tfstate file when state is empty",
+			args: args{
+				tr: &fake.ModernTerraformed{
+					ModernManaged: xpfake.ModernManaged{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "some-modern-mr",
+							Namespace: "foo-namespace",
+							Annotations: map[string]string{
+								resource.AnnotationKeyPrivateRawAttribute: "privateraw",
+								meta.AnnotationKeyExternalName:            "some-id",
+							},
+						},
+						LocalConnectionSecretWriterTo: xpfake.LocalConnectionSecretWriterTo{
+							Ref: &xpv1.LocalSecretReference{
+								Name: "some-modern-mr-connection",
+							},
+						},
+					},
+					Parameterizable: fake.Parameterizable{Parameters: map[string]any{
+						"param": "paramval",
+					}},
+					Observable: fake.Observable{Observation: map[string]any{
+						"obs": "obsval",
+					}},
+				},
+				cfg: config.DefaultResource("upjet_resource", nil, nil, nil),
+				clientFn: func(client *mocks.MockSecretClient) {
+					client.EXPECT().GetSecretData(gomock.Any(), gomock.Eq(&xpv1.SecretReference{
+						Name:      "some-modern-mr-connection",
+						Namespace: "foo-namespace",
+					})).Return(map[string][]byte{
+						"sensitive_foo": []byte("sensitive-data"),
+					}, nil)
+				},
+				fs: func() afero.Afero {
+					return afero.Afero{Fs: afero.NewMemMapFs()}
+				},
+			},
+			want: want{
+				parameters: map[string]any{
+					"name":  "some-id",
+					"param": "paramval",
+				},
+			},
+		},
+		"WithSecretRef_notAnMR": {
+			reason: "Standard resources should be able to write everything it has into tfstate file when state is empty",
+			args: args{
+				tr: &fake.Terraformed{
+					Managed: xpfake.Managed{
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: map[string]string{
+								resource.AnnotationKeyPrivateRawAttribute: "privateraw",
+								meta.AnnotationKeyExternalName:            "some-id",
+							},
+						},
+					},
+					Parameterizable: fake.Parameterizable{Parameters: map[string]any{
+						"param": "paramval",
+					}},
+					Observable: fake.Observable{Observation: map[string]any{
+						"obs": "obsval",
+					}},
+				},
+				cfg:      config.DefaultResource("upjet_resource", nil, nil, nil),
+				clientFn: func(client *mocks.MockSecretClient) {},
+				fs: func() afero.Afero {
+					return afero.Afero{Fs: afero.NewMemMapFs()}
+				},
+			},
+			want: want{
+				parameters: map[string]any{},
+				err:        errors.Wrap(errors.New("unknown managed resource type"), "cannot get connection secret ref"),
+			},
+		},
+	}
+	for name, tc := range cases {
+		ctrl := gomock.NewController(t)
+		m := mocks.NewMockSecretClient(ctrl)
+		tc.args.clientFn(m)
+		t.Run(name, func(t *testing.T) {
+			ctx := context.TODO()
+			files := tc.args.fs()
+			fp, err := NewFileProducer(ctx, m, dir, tc.args.tr, tc.args.s, tc.args.cfg, WithFileSystem(files))
+			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
+				t.Fatalf("\n%s\nNewFileProducer(...): -want error, +got error:\n%s", tc.reason, diff)
+			}
+			if tc.want.err != nil && fp == nil {
+				return
+			}
+			if diff := cmp.Diff(tc.want.parameters, fp.parameters); diff != "" {
+				t.Errorf("\n%s\nNewFileProducer(...): -want parameters, +got parameters:\n%s", tc.reason, diff)
 			}
 		})
 	}
