@@ -24,3 +24,18 @@ func Setup{{ .Group }}(mgr ctrl.Manager, o controller.Options) error {
 	}
 	return nil
 }
+
+// SetupGated{{ .Group }} creates all controllers with the supplied logger and adds them to
+// the supplied manager gated.
+func SetupGated{{ .Group }}(mgr ctrl.Manager, o controller.Options) error {
+	for _, setup := range []func(ctrl.Manager, controller.Options) error{
+		{{- range $alias := .Aliases }}
+		{{ $alias }}SetupGated,
+		{{- end }}
+	} {
+		if err := setup(mgr, o); err != nil {
+			return err
+		}
+	}
+	return nil
+}
