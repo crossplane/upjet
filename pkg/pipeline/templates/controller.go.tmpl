@@ -22,6 +22,16 @@ import (
 	{{ .Imports }}
 )
 
+// SetupGated adds a controller that reconciles {{ .CRD.Kind }} managed resources.
+func SetupGated(mgr ctrl.Manager, o tjcontroller.Options) error {
+	o.Options.Gate.Register(func() {
+		if err := Setup(mgr, o); err != nil {
+			mgr.GetLogger().Error(err, "unable to setup reconciler", "gvk", {{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind.String())
+		}
+	}, {{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind)
+	return nil
+}
+
 // Setup adds a controller that reconciles {{ .CRD.Kind }} managed resources.
 func Setup(mgr ctrl.Manager, o tjcontroller.Options) error {
 	name := managed.ControllerName({{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind.String())
