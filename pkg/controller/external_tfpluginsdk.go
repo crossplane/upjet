@@ -426,6 +426,11 @@ func (n *terraformPluginSDKExternal) getResourceDataDiff(tr resource.Terraformed
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get *terraform.InstanceDiff")
 	}
+	// Sanitize Identity field in Diff.
+	// This causes continuos diff loop.
+	if instanceDiff != nil {
+		instanceDiff.Identity = nil
+	}
 	if n.config.TerraformCustomDiff != nil {
 		instanceDiff, err = n.config.TerraformCustomDiff(instanceDiff, s, resourceConfig)
 		if err != nil {
