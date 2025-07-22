@@ -44,7 +44,6 @@ func Setup(mgr ctrl.Manager, o tjcontroller.Options) error {
 	{{- if not .DisableNameInitializer }}
 	initializers = append(initializers, managed.NewNameAsExternalName(mgr.GetClient()))
 	{{- end}}
-	cps := []managed.ConnectionPublisher{managed.NewAPISecretPublisher(mgr.GetClient(), mgr.GetScheme())}
 	eventHandler := handler.NewEventHandler(handler.WithLogger(o.Logger.WithValues("gvk", {{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind)))
 	{{- if .UseAsync }}
 	ac := tjcontroller.NewAPICallbacks(mgr, xpresource.ManagedKind({{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind), tjcontroller.WithEventHandler(eventHandler){{ if or .UseTerraformPluginSDKClient .UseTerraformPluginFrameworkClient }}, tjcontroller.WithStatusUpdates(false){{ end }})
@@ -108,7 +107,6 @@ func Setup(mgr ctrl.Manager, o tjcontroller.Options) error {
     {{- end }}
 		managed.WithTimeout(3*time.Minute),
 		managed.WithInitializers(initializers),
-		managed.WithConnectionPublishers(cps...),
 		managed.WithPollInterval(o.PollInterval),
 	}
 	if o.PollJitter != 0 {
