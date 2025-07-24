@@ -323,7 +323,31 @@ func (n *terraformPluginFrameworkExternalClient) Observe(ctx context.Context, mg
 	}
 
 	n.opTracker.SetFrameworkTFState(readResponse.NewState)
-	resourceExists := !tfStateValue.IsNull()
+
+	// Determine if the resource exists based on Terraform state
+	var resourceExists bool
+	if !tfStateValue.IsNull() {
+		// Resource state is not null, assume it exists
+		resourceExists = true
+		// If a custom empty state check function is configured, use it to verify existence
+		if n.config.TerraformPluginFrameworkStateEmptyCheckFn != nil {
+			isEmpty, err := n.config.TerraformPluginFrameworkStateEmptyCheckFn(ctx, tfStateValue, n.resourceSchema)
+			if err != nil {
+				return managed.ExternalObservation{}, errors.Wrap(err, "cannot check if TF State is empty")
+			}
+			// Override existence based on custom check result
+			resourceExists = !isEmpty
+			// If custom check determines resource doesn't exist, reset state to nil
+			if !resourceExists {
+				nilTfValue := tftypes.NewValue(n.resourceValueTerraformType, nil)
+				nildynamicValue, err := tfprotov5.NewDynamicValue(n.resourceValueTerraformType, nilTfValue)
+				if err != nil {
+					return managed.ExternalObservation{}, errors.Wrap(err, "cannot create nil dynamic value")
+				}
+				n.opTracker.SetFrameworkTFState(&nildynamicValue)
+			}
+		}
+	}
 
 	var stateValueMap map[string]any
 	if resourceExists {
