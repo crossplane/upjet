@@ -45,11 +45,33 @@ type Generator struct {
 	exampleDir      string
 	configResources map[string]*config.Resource
 	resources       map[string]*reference.PavedWithManifest
+
+	exampleNamespace string
+	localSecretRefs  bool
+}
+
+type GeneratorOption func(*Generator)
+
+// WithLocalSecretRefs configures the example generator to
+// generate examples with local secret references,
+// i.e. no namespace specified.
+func WithLocalSecretRefs() GeneratorOption {
+	return func(g *Generator) {
+		g.localSecretRefs = true
+	}
+}
+
+// WithNamespacedExamples configures the example generator to
+// generate examples with the default namespace
+func WithNamespacedExamples() GeneratorOption {
+	return func(g *Generator) {
+		g.exampleNamespace = defaultNamespace
+	}
 }
 
 // NewGenerator returns a configured Generator
-func NewGenerator(exampleDir, apisModulePath, shortName string, configResources map[string]*config.Resource) *Generator {
-	return &Generator{
+func NewGenerator(exampleDir, apisModulePath, shortName string, configResources map[string]*config.Resource, opts ...GeneratorOption) *Generator {
+	g := &Generator{
 		Injector: reference.Injector{
 			ModulePath:        apisModulePath,
 			ProviderShortName: shortName,
@@ -58,6 +80,10 @@ func NewGenerator(exampleDir, apisModulePath, shortName string, configResources 
 		configResources: configResources,
 		resources:       make(map[string]*reference.PavedWithManifest),
 	}
+	for _, opt := range opts {
+		opt(g)
+	}
+	return g
 }
 
 // StoreExamples stores the generated example manifests under examples-generated in
@@ -98,7 +124,7 @@ func (eg *Generator) StoreExamples() error { //nolint:gocyclo
 				// e.g. meta.upbound.io/example-id: ec2/v1beta1/instance
 				eGroup := fmt.Sprintf("%s/%s/%s", strings.ToLower(r.ShortGroup), r.Version, strings.ToLower(r.Kind))
 				pmd := paveCRManifest(exampleParams, dr.Config,
-					reference.NewRefPartsFromResourceName(dn).ExampleName, dr.Group, dr.Version, eGroup)
+					reference.NewRefPartsFromResourceName(dn).ExampleName, dr.Group, dr.Version, eGroup, eg.exampleNamespace, eg.localSecretRefs)
 				if err := eg.writeManifest(&buff, pmd, context); err != nil {
 					return errors.Wrapf(err, "cannot store example manifest for %s dependency: %s", rn, dn)
 				}
@@ -115,10 +141,10 @@ func (eg *Generator) StoreExamples() error { //nolint:gocyclo
 	return nil
 }
 
-func paveCRManifest(exampleParams map[string]any, r *config.Resource, eName, group, version, eGroup string) *reference.PavedWithManifest {
+func paveCRManifest(exampleParams map[string]any, r *config.Resource, eName, group, version, eGroup, namespace string, localSecretRefs bool) *reference.PavedWithManifest {
 	delete(exampleParams, "depends_on")
 	delete(exampleParams, "lifecycle")
-	transformFields(r, exampleParams, r.ExternalName.OmittedFields, "")
+	transformFields(r, exampleParams, r.ExternalName.OmittedFields, "", localSecretRefs)
 	metadata := map[string]any{
 		"labels": map[string]string{
 			labelExampleName: eName,
@@ -126,6 +152,9 @@ func paveCRManifest(exampleParams map[string]any, r *config.Resource, eName, gro
 		"annotations": map[string]string{
 			annotationExampleGroup: eGroup,
 		},
+	}
+	if namespace != "" {
+		metadata["namespace"] = namespace
 	}
 	example := map[string]any{
 		"apiVersion": fmt.Sprintf("%s/%s", group, version),
@@ -184,7 +213,7 @@ func (eg *Generator) Generate(group, version string, r *config.Resource) error {
 	groupPrefix := strings.ToLower(strings.Split(group, ".")[0])
 	// e.g. gvk = ec2/v1beta1/instance
 	gvk := fmt.Sprintf("%s/%s/%s", groupPrefix, version, strings.ToLower(r.Kind))
-	pm := paveCRManifest(rm.Examples[0].Paved.UnstructuredContent(), r, rm.Examples[0].Name, group, version, gvk)
+	pm := paveCRManifest(rm.Examples[0].Paved.UnstructuredContent(), r, rm.Examples[0].Name, group, version, gvk, eg.exampleNamespace, eg.localSecretRefs)
 	manifestDir := filepath.Join(eg.exampleDir, groupPrefix, r.Version)
 	pm.ManifestPath = filepath.Join(manifestDir, fmt.Sprintf("%s.yaml", strings.ToLower(r.Kind)))
 	eg.resources[fmt.Sprintf("%s.%s", r.Name, reference.Wildcard)] = pm
@@ -206,7 +235,7 @@ func isStatus(r *config.Resource, attr string) bool {
 	return tjtypes.IsObservation(s)
 }
 
-func transformFields(r *config.Resource, params map[string]any, omittedFields []string, namePrefix string) { //nolint:gocyclo
+func transformFields(r *config.Resource, params map[string]any, omittedFields []string, namePrefix string, localSecretRefs bool) { //nolint:gocyclo
 	for n := range params {
 		hName := getHierarchicalName(namePrefix, n)
 		if isStatus(r, hName) {
@@ -224,7 +253,7 @@ func transformFields(r *config.Resource, params map[string]any, omittedFields []
 	for n, v := range params {
 		switch pT := v.(type) {
 		case map[string]any:
-			transformFields(r, pT, omittedFields, getHierarchicalName(namePrefix, n))
+			transformFields(r, pT, omittedFields, getHierarchicalName(namePrefix, n), localSecretRefs)
 
 		case []any:
 			for _, e := range pT {
@@ -232,7 +261,7 @@ func transformFields(r *config.Resource, params map[string]any, omittedFields []
 				if !ok {
 					continue
 				}
-				transformFields(r, eM, omittedFields, getHierarchicalName(namePrefix, n))
+				transformFields(r, eM, omittedFields, getHierarchicalName(namePrefix, n), localSecretRefs)
 			}
 		}
 	}
@@ -250,11 +279,14 @@ func transformFields(r *config.Resource, params map[string]any, omittedFields []
 		switch {
 		case sch.Sensitive:
 			secretName, secretKey := getSecretRef(v)
-			params[fn.LowerCamelComputed+"SecretRef"] = getRefField(v, map[string]any{
-				"name":      secretName,
-				"namespace": defaultNamespace,
-				"key":       secretKey,
-			})
+			ref := map[string]any{
+				"name": secretName,
+				"key":  secretKey,
+			}
+			if !localSecretRefs {
+				ref["namespace"] = defaultNamespace
+			}
+			params[fn.LowerCamelComputed+"SecretRef"] = getRefField(v, ref)
 		case r.References[fieldPath] != config.Reference{}:
 			switch v.(type) {
 			case []any:
