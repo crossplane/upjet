@@ -124,7 +124,11 @@ func (r *PipelineRunner) Run(pc *config.Provider) []string { //nolint:gocyclo
 		resourcesGroups[group][resource.Version][name] = resource
 	}
 
-	exampleGen := examples.NewGenerator(r.DirExamples, r.ModulePathAPIs, pc.ShortName, pc.Resources)
+	var exampleGeneratorOpts []examples.GeneratorOption
+	if r.Scope == tjtypes.CRDScopeNamespaced {
+		exampleGeneratorOpts = append(exampleGeneratorOpts, examples.WithLocalSecretRefs(), examples.WithNamespacedExamples())
+	}
+	exampleGen := examples.NewGenerator(r.DirExamples, r.ModulePathAPIs, pc.ShortName, pc.Resources, exampleGeneratorOpts...)
 	if err := exampleGen.SetReferenceTypes(pc.Resources); err != nil {
 		panic(errors.Wrap(err, "cannot set reference types for resources"))
 	}
