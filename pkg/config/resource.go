@@ -15,6 +15,8 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	fwresource "github.com/hashicorp/terraform-plugin-framework/resource"
+	rschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 	"github.com/pkg/errors"
@@ -517,6 +519,12 @@ type Resource struct {
 	// Terraform InstanceDiff is computed during reconciliation.
 	TerraformCustomDiff CustomDiff
 
+	// TerraformPluginFrameworkIsStateEmptyFn allows customizing the logic
+	// for determining whether a Terraform Plugin Framework state value should
+	// be considered empty/nil for resource existence checks. If not set, the
+	// default behavior uses tfStateValue.IsNull().
+	TerraformPluginFrameworkIsStateEmptyFn TerraformPluginFrameworkIsStateEmptyFn
+
 	// ServerSideApplyMergeStrategies configures the server-side apply merge
 	// strategy for the fields at the given map keys. The map key is
 	// a Terraform configuration argument path such as a.b.c, without any
@@ -641,6 +649,13 @@ type CustomDiff func(diff *terraform.InstanceDiff, state *terraform.InstanceStat
 // map. jsonMap is the map obtained by converting the `spec.forProvider` using
 // the JSON tags and tfMap is obtained by using the TF tags.
 type ConfigurationInjector func(jsonMap map[string]any, tfMap map[string]any) error
+
+// TerraformPluginFrameworkIsStateEmptyFn is a function that determines whether
+// a Terraform Plugin Framework state value should be considered empty/nil for the
+// purpose of determining resource existence. This allows providers to implement
+// custom logic to handle cases where the standard IsNull() check is insufficient,
+// such as when provider interceptors add fields like region to all state values.
+type TerraformPluginFrameworkIsStateEmptyFn func(ctx context.Context, tfStateValue tftypes.Value, resourceSchema rschema.Schema) (bool, error)
 
 // SchemaElementOptions represents schema element options for the
 // schema elements of a Resource.
