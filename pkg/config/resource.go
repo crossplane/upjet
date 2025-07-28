@@ -519,11 +519,11 @@ type Resource struct {
 	// Terraform InstanceDiff is computed during reconciliation.
 	TerraformCustomDiff CustomDiff
 
-	// TerraformPluginFrameworkStateEmptyCheckFn allows customizing the logic
+	// TerraformPluginFrameworkIsStateEmptyFn allows customizing the logic
 	// for determining whether a Terraform Plugin Framework state value should
 	// be considered empty/nil for resource existence checks. If not set, the
 	// default behavior uses tfStateValue.IsNull().
-	TerraformPluginFrameworkStateEmptyCheckFn TerraformPluginFrameworkStateEmptyCheckFn
+	TerraformPluginFrameworkIsStateEmptyFn TerraformPluginFrameworkIsStateEmptyFn
 
 	// ServerSideApplyMergeStrategies configures the server-side apply merge
 	// strategy for the fields at the given map keys. The map key is
@@ -650,12 +650,12 @@ type CustomDiff func(diff *terraform.InstanceDiff, state *terraform.InstanceStat
 // the JSON tags and tfMap is obtained by using the TF tags.
 type ConfigurationInjector func(jsonMap map[string]any, tfMap map[string]any) error
 
-// TerraformPluginFrameworkStateEmptyCheckFn is a function that determines whether
+// TerraformPluginFrameworkIsStateEmptyFn is a function that determines whether
 // a Terraform Plugin Framework state value should be considered empty/nil for the
 // purpose of determining resource existence. This allows providers to implement
 // custom logic to handle cases where the standard IsNull() check is insufficient,
 // such as when provider interceptors add fields like region to all state values.
-type TerraformPluginFrameworkStateEmptyCheckFn func(ctx context.Context, tfStateValue tftypes.Value, resourceSchema rschema.Schema) (bool, error)
+type TerraformPluginFrameworkIsStateEmptyFn func(ctx context.Context, tfStateValue tftypes.Value, resourceSchema rschema.Schema) (bool, error)
 
 // SchemaElementOptions represents schema element options for the
 // schema elements of a Resource.

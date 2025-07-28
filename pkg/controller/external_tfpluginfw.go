@@ -330,8 +330,8 @@ func (n *terraformPluginFrameworkExternalClient) Observe(ctx context.Context, mg
 		// Resource state is not null, assume it exists
 		resourceExists = true
 		// If a custom empty state check function is configured, use it to verify existence
-		if n.config.TerraformPluginFrameworkStateEmptyCheckFn != nil {
-			isEmpty, err := n.config.TerraformPluginFrameworkStateEmptyCheckFn(ctx, tfStateValue, n.resourceSchema)
+		if n.config.TerraformPluginFrameworkIsStateEmptyFn != nil {
+			isEmpty, err := n.config.TerraformPluginFrameworkIsStateEmptyFn(ctx, tfStateValue, n.resourceSchema)
 			if err != nil {
 				return managed.ExternalObservation{}, errors.Wrap(err, "cannot check if TF State is empty")
 			}
