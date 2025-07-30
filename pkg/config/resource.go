@@ -22,7 +22,6 @@ import (
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/crossplane/upjet/pkg/config/conversion"
@@ -320,9 +319,12 @@ func (t *Tagger) Initialize(ctx context.Context, mg xpresource.Managed) error {
 	if err != nil {
 		return err
 	}
-	pavedByte, err := setExternalTagsWithPaved(xpresource.GetExternalTags(mg), paved, t.fieldName)
+	pavedByte, changed, err := setExternalTagsWithPaved(xpresource.GetExternalTags(mg), paved, t.fieldName)
 	if err != nil {
 		return err
+	}
+	if !changed {
+		return nil
 	}
 	if err := json.Unmarshal(pavedByte, mg); err != nil {
 		return err
@@ -333,21 +335,31 @@ func (t *Tagger) Initialize(ctx context.Context, mg xpresource.Managed) error {
 	return nil
 }
 
-func setExternalTagsWithPaved(externalTags map[string]string, paved *fieldpath.Paved, fieldName string) ([]byte, error) {
-	tags := map[string]*string{
-		xpresource.ExternalResourceTagKeyKind:     ptr.To(externalTags[xpresource.ExternalResourceTagKeyKind]),
-		xpresource.ExternalResourceTagKeyName:     ptr.To(externalTags[xpresource.ExternalResourceTagKeyName]),
-		xpresource.ExternalResourceTagKeyProvider: ptr.To(externalTags[xpresource.ExternalResourceTagKeyProvider]),
+func tagsUpToDate(tags map[string]string, paved *fieldpath.Paved, tagField string) bool {
+	curTags, _ := paved.GetStringObject(tagField)
+	for k, v := range tags {
+		if curTags[k] != v {
+			return false
+		}
+	}
+	return true
+}
+
+func setExternalTagsWithPaved(externalTags map[string]string, paved *fieldpath.Paved, fieldName string) ([]byte, bool, error) {
+	tagField := fmt.Sprintf("spec.forProvider.%s", fieldName)
+
+	if tagsUpToDate(externalTags, paved, tagField) {
+		return nil, false, nil
 	}
 
-	if err := paved.SetValue(fmt.Sprintf("spec.forProvider.%s", fieldName), tags); err != nil {
-		return nil, err
+	if err := paved.SetValue(tagField, externalTags); err != nil {
+		return nil, false, err
 	}
 	pavedByte, err := paved.MarshalJSON()
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	return pavedByte, nil
+	return pavedByte, true, nil
 }
 
 type InjectedKey struct {
