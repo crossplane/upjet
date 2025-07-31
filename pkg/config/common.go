@@ -10,9 +10,9 @@ import (
 	fwresource "github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 
-	"github.com/crossplane/upjet/pkg/config/conversion"
-	"github.com/crossplane/upjet/pkg/registry"
-	tjname "github.com/crossplane/upjet/pkg/types/name"
+	"github.com/crossplane/upjet/v2/pkg/config/conversion"
+	"github.com/crossplane/upjet/v2/pkg/registry"
+	tjname "github.com/crossplane/upjet/v2/pkg/types/name"
 )
 
 const (

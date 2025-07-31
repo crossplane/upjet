@@ -141,7 +141,7 @@ variables in the `Makefile`:
     cat <<EOF > config/repository/config.go
     package repository
 
-    import "github.com/crossplane/upjet/pkg/config"
+    import "github.com/crossplane/upjet/v2/pkg/config"
 
     // Configure configures individual resources by adding custom ResourceConfigurators.
     func Configure(p *config.Provider) {
@@ -163,7 +163,7 @@ variables in the `Makefile`:
     cat <<EOF > config/branch/config.go
     package branch
 
-    import "github.com/crossplane/upjet/pkg/config"
+    import "github.com/crossplane/upjet/v2/pkg/config"
 
     func Configure(p *config.Provider) {
         p.AddResourceConfigurator("github_branch", func(r *config.Resource) {
