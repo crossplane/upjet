@@ -8,9 +8,9 @@ import (
 	"context"
 	"testing"
 
-	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
-	xpfake "github.com/crossplane/crossplane-runtime/pkg/resource/fake"
-	"github.com/crossplane/crossplane-runtime/pkg/test"
+	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
+	xpfake "github.com/crossplane/crossplane-runtime/v2/pkg/resource/fake"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/test"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/types"

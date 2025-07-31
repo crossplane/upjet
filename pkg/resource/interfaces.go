@@ -5,7 +5,7 @@
 package resource
 
 import (
-	"github.com/crossplane/crossplane-runtime/pkg/resource"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 )
 
 // Observable structs can get and set observations in the form of Terraform JSON.

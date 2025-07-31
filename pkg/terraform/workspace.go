@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/crossplane/crossplane-runtime/pkg/logging"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/logging"
 	"github.com/pkg/errors"
 	"github.com/spf13/afero"
 	k8sExec "k8s.io/utils/exec"

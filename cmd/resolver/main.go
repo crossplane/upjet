@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/alecthomas/kingpin/v2"
-	"github.com/crossplane/crossplane-runtime/pkg/logging"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/logging"
 	"github.com/spf13/afero"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 

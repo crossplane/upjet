@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/crossplane/crossplane-runtime/pkg/logging"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/logging"
 	"github.com/pkg/errors"
 	"k8s.io/utils/clock"
 	"k8s.io/utils/exec"
