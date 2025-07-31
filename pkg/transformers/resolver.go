@@ -6,18 +6,16 @@ package transformers
 
 import (
 	"fmt"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/logging"
+	"github.com/pkg/errors"
+	"github.com/spf13/afero"
 	"go/ast"
 	"go/format"
 	"go/token"
-	"path/filepath"
-	"slices"
-	"strings"
-
-	"github.com/crossplane/crossplane-runtime/pkg/logging"
-	"github.com/pkg/errors"
-	"github.com/spf13/afero"
 	"golang.org/x/tools/go/ast/astutil"
 	"golang.org/x/tools/go/packages"
+	"path/filepath"
+	"strings"
 )
 
 const (
@@ -442,42 +440,24 @@ func (r *Resolver) transformResolverFile(fset *token.FileSet, node *ast.File, fi
 	}
 
 	// remove the imports that are no longer used.
-	for _, decl := range node.Decls {
-		if gd, ok := decl.(*ast.GenDecl); ok && gd.Tok == token.IMPORT {
-			var newSpecs []ast.Spec
-			for _, spec := range gd.Specs {
-				if imp, ok := spec.(*ast.ImportSpec); ok {
-					var name string
-					if imp.Name != nil {
-						name = imp.Name.Name
-					} else {
-						name = imp.Path.Value
-					}
-					if usage, exists := importsUsed[name]; !exists || usage.used {
-						newSpecs = append(newSpecs, spec)
-					}
+	imps := astutil.Imports(fset, node)
+	for _, paragraph := range imps {
+		for _, imp := range paragraph {
+			if imp.Name != nil {
+				if usage, exists := importsUsed[imp.Name.Name]; exists && !usage.used {
+					astutil.DeleteNamedImport(fset, node, imp.Name.Name, strings.Trim(imp.Path.Value, `"`))
+				}
+			} else {
+				if usage, exists := importsUsed[imp.Path.Value]; exists && !usage.used {
+					astutil.DeleteImport(fset, node, strings.Trim(imp.Path.Value, `"`))
 				}
 			}
-			gd.Specs = newSpecs
-
-			newImportKeys := make([]string, 0, len(importMap))
-			for k := range importMap {
-				newImportKeys = append(newImportKeys, k)
-			}
-			slices.Sort(newImportKeys)
-
-			for _, path := range newImportKeys {
-				gd.Specs = append(gd.Specs, &ast.ImportSpec{
-					Name: &ast.Ident{
-						Name: importMap[path],
-					},
-					Path: &ast.BasicLit{
-						Kind:  token.STRING,
-						Value: path,
-					},
-				})
-			}
 		}
+	}
+
+	// add new imports
+	for path, name := range importMap {
+		astutil.AddNamedImport(fset, node, name, strings.Trim(path, `"`))
 	}
 	return r.dumpTransformed(fset, node, filePath)
 }
@@ -559,7 +539,7 @@ func addMRVariableDeclarations(f *ast.File) map[string]string {
 		return true
 	})
 	return map[string]string{
-		`"github.com/crossplane/crossplane-runtime/pkg/resource"`: "xpresource",
+		`"github.com/crossplane/crossplane-runtime/v2/pkg/resource"`: "xpresource",
 	}
 }
 
