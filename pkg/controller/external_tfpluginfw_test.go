@@ -532,6 +532,51 @@ type mockTPFProviderServer struct {
 	ReadDataSourceFn             func(ctx context.Context, request *tfprotov5.ReadDataSourceRequest) (*tfprotov5.ReadDataSourceResponse, error)
 }
 
+func (m *mockTPFProviderServer) UpgradeResourceIdentity(_ context.Context, _ *tfprotov5.UpgradeResourceIdentityRequest) (*tfprotov5.UpgradeResourceIdentityResponse, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *mockTPFProviderServer) GetResourceIdentitySchemas(_ context.Context, _ *tfprotov5.GetResourceIdentitySchemasRequest) (*tfprotov5.GetResourceIdentitySchemasResponse, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *mockTPFProviderServer) MoveResourceState(_ context.Context, _ *tfprotov5.MoveResourceStateRequest) (*tfprotov5.MoveResourceStateResponse, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *mockTPFProviderServer) CallFunction(_ context.Context, _ *tfprotov5.CallFunctionRequest) (*tfprotov5.CallFunctionResponse, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *mockTPFProviderServer) GetFunctions(_ context.Context, _ *tfprotov5.GetFunctionsRequest) (*tfprotov5.GetFunctionsResponse, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *mockTPFProviderServer) ValidateEphemeralResourceConfig(_ context.Context, _ *tfprotov5.ValidateEphemeralResourceConfigRequest) (*tfprotov5.ValidateEphemeralResourceConfigResponse, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *mockTPFProviderServer) OpenEphemeralResource(_ context.Context, _ *tfprotov5.OpenEphemeralResourceRequest) (*tfprotov5.OpenEphemeralResourceResponse, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *mockTPFProviderServer) RenewEphemeralResource(_ context.Context, _ *tfprotov5.RenewEphemeralResourceRequest) (*tfprotov5.RenewEphemeralResourceResponse, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *mockTPFProviderServer) CloseEphemeralResource(_ context.Context, _ *tfprotov5.CloseEphemeralResourceRequest) (*tfprotov5.CloseEphemeralResourceResponse, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
 func (m *mockTPFProviderServer) GetMetadata(_ context.Context, _ *tfprotov5.GetMetadataRequest) (*tfprotov5.GetMetadataResponse, error) {
 	// TODO implement me
 	panic("implement me")
