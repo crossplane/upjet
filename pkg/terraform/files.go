@@ -12,8 +12,10 @@ import (
 	"strings"
 
 	"dario.cat/mergo"
-	"github.com/crossplane/crossplane-runtime/pkg/feature"
-	"github.com/crossplane/crossplane-runtime/pkg/meta"
+	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/feature"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
+	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/pkg/errors"
 	"github.com/spf13/afero"
 
@@ -80,7 +82,7 @@ func NewFileProducer(ctx context.Context, client resource.SecretClient, dir stri
 	if fp.features.Enabled(feature.EnableBetaManagementPolicies) {
 		initParams, err := tr.GetInitParameters()
 		if err != nil {
-			return nil, errors.Wrapf(err, "cannot get the init parameters for the resource %q", tr.GetName())
+			return nil, errors.Wrapf(err, "cannot get the init parameters for the resource \"%s/%s\"", tr.GetNamespace(), tr.GetName())
 		}
 
 		// get fields which should be in the ignore_changes lifecycle block
@@ -95,7 +97,7 @@ func NewFileProducer(ctx context.Context, client resource.SecretClient, dir stri
 			c.Overwrite = false
 		})
 		if err != nil {
-			return nil, errors.Wrapf(err, "cannot merge the spec.initProvider and spec.forProvider parameters for the resource %q", tr.GetName())
+			return nil, errors.Wrapf(err, "cannot merge the spec.initProvider and spec.forProvider parameters for the resource \"%s/%s\"", tr.GetNamespace(), tr.GetName())
 		}
 	}
 
@@ -109,12 +111,33 @@ func NewFileProducer(ctx context.Context, client resource.SecretClient, dir stri
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot get observation")
 	}
-	if err = resource.GetSensitiveObservation(ctx, client, tr.GetWriteConnectionSecretToReference(), obs); err != nil {
+
+	secretRef, err := getConnectionSecretRef(tr)
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot get connection secret ref")
+	}
+	if err = resource.GetSensitiveObservation(ctx, client, secretRef, obs); err != nil {
 		return nil, errors.Wrap(err, "cannot get sensitive observation")
 	}
 	fp.observation = obs
 
 	return fp, nil
+}
+
+func getConnectionSecretRef(tr resource.Terraformed) (*xpv1.SecretReference, error) {
+	switch trt := tr.(type) {
+	case xpresource.ConnectionSecretWriterTo:
+		return trt.GetWriteConnectionSecretToReference(), nil
+	case xpresource.LocalConnectionSecretWriterTo:
+		if trt.GetWriteConnectionSecretToReference() == nil {
+			return nil, nil
+		}
+		return &xpv1.SecretReference{
+			Name:      trt.GetWriteConnectionSecretToReference().Name,
+			Namespace: tr.GetNamespace(),
+		}, nil
+	}
+	return nil, errors.New("unknown managed resource type")
 }
 
 // FileProducer exist to serve as cache for the data that is costly to produce

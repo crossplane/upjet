@@ -7,7 +7,7 @@ package fake
 import (
 	"reflect"
 
-	"github.com/crossplane/crossplane-runtime/pkg/resource/fake"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/resource/fake"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -126,6 +126,66 @@ func (t *Terraformed) DeepCopyObject() runtime.Object {
 	}
 	_ = json.Unmarshal(j, out)
 	return out
+}
+
+// LegacyTerraformed is a mock that implements Terraformed interface.
+type LegacyTerraformed struct {
+	metav1.TypeMeta `json:",inline"`
+	fake.LegacyManaged
+	Observable
+	Parameterizable
+	MetadataProvider
+	LateInitializer
+}
+
+// GetObjectKind returns schema.ObjectKind.
+func (t *LegacyTerraformed) GetObjectKind() schema.ObjectKind {
+	return &t.TypeMeta
+}
+
+// DeepCopyObject returns a copy of the object as runtime.Object
+func (t *LegacyTerraformed) DeepCopyObject() runtime.Object {
+	out := &LegacyTerraformed{}
+	j, err := json.Marshal(t)
+	if err != nil {
+		panic(err)
+	}
+	_ = json.Unmarshal(j, out)
+	return out
+}
+
+func (t *LegacyTerraformed) GetMergedParameters(_ bool) (map[string]any, error) {
+	return t.Parameters, nil
+}
+
+// ModernTerraformed is a mock that implements Terraformed interface.
+type ModernTerraformed struct {
+	metav1.TypeMeta `json:",inline"`
+	fake.ModernManaged
+	Observable
+	Parameterizable
+	MetadataProvider
+	LateInitializer
+}
+
+// GetObjectKind returns schema.ObjectKind.
+func (t *ModernTerraformed) GetObjectKind() schema.ObjectKind {
+	return &t.TypeMeta
+}
+
+// DeepCopyObject returns a copy of the object as runtime.Object
+func (t *ModernTerraformed) DeepCopyObject() runtime.Object {
+	out := &ModernTerraformed{}
+	j, err := json.Marshal(t)
+	if err != nil {
+		panic(err)
+	}
+	_ = json.Unmarshal(j, out)
+	return out
+}
+
+func (t *ModernTerraformed) GetMergedParameters(_ bool) (map[string]any, error) {
+	return t.Parameters, nil
 }
 
 // Option is an option to modify the properties of a Terraformed object.

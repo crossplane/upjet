@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 
-	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
-	"github.com/crossplane/crossplane-runtime/pkg/logging"
-	"github.com/crossplane/crossplane-runtime/pkg/meta"
-	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
-	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
+	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/logging"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
+	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	fwdiag "github.com/hashicorp/terraform-plugin-framework/diag"
 	fwprovider "github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
@@ -109,8 +109,8 @@ type terraformPluginFrameworkExternalClient struct {
 // Connect makes sure the underlying client is ready to issue requests to the
 // provider API.
 func (c *TerraformPluginFrameworkConnector) Connect(ctx context.Context, mg xpresource.Managed) (managed.ExternalClient, error) { //nolint:gocyclo
-	c.metricRecorder.ObserveReconcileDelay(mg.GetObjectKind().GroupVersionKind(), mg.GetName())
-	logger := c.logger.WithValues("uid", mg.GetUID(), "name", mg.GetName(), "gvk", mg.GetObjectKind().GroupVersionKind().String())
+	c.metricRecorder.ObserveReconcileDelay(mg.GetObjectKind().GroupVersionKind(), metrics.NameForManaged(mg))
+	logger := c.logger.WithValues("uid", mg.GetUID(), "name", mg.GetName(), "namespace", mg.GetNamespace(), "gvk", mg.GetObjectKind().GroupVersionKind().String())
 	logger.Debug("Connecting to the service provider")
 	start := time.Now()
 	ts, err := c.getTerraformSetup(ctx, c.kube, mg)
@@ -124,7 +124,7 @@ func (c *TerraformPluginFrameworkConnector) Connect(ctx context.Context, mg xpre
 	externalName := meta.GetExternalName(tr)
 	params, err := getExtendedParameters(ctx, tr, externalName, c.config, ts, c.isManagementPoliciesEnabled, c.kube)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to get the extended parameters for resource %q", mg.GetName())
+		return nil, errors.Wrapf(err, "failed to get the extended parameters for resource %q", client.ObjectKeyFromObject(mg))
 	}
 
 	resourceSchema, err := c.getResourceSchema(ctx)
@@ -404,7 +404,7 @@ func (n *terraformPluginFrameworkExternalClient) Observe(ctx context.Context, mg
 			return managed.ExternalObservation{}, errors.Wrap(err, "cannot get connection details")
 		}
 		if !hasDiff {
-			n.metricRecorder.SetReconcileTime(mg.GetName())
+			n.metricRecorder.SetReconcileTime(metrics.NameForManaged(mg))
 		}
 		if !specUpdateRequired {
 			resource.SetUpToDateCondition(mg, !hasDiff)

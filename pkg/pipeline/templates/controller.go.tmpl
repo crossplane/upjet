@@ -7,13 +7,12 @@ package {{ .Package }}
 import (
 	"time"
 
-	"github.com/crossplane/crossplane-runtime/pkg/connection"
-	"github.com/crossplane/crossplane-runtime/pkg/event"
-	xpfeature "github.com/crossplane/crossplane-runtime/pkg/feature"
-	"github.com/crossplane/crossplane-runtime/pkg/ratelimiter"
-	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
-	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
-	"github.com/crossplane/crossplane-runtime/pkg/statemetrics"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/event"
+	xpfeature "github.com/crossplane/crossplane-runtime/v2/pkg/feature"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/ratelimiter"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
+	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/statemetrics"
 	"github.com/crossplane/upjet/pkg/controller/handler"
 	tjcontroller "github.com/crossplane/upjet/pkg/controller"
 	"github.com/crossplane/upjet/pkg/terraform"
@@ -22,6 +21,16 @@ import (
 
 	{{ .Imports }}
 )
+
+// SetupGated adds a controller that reconciles {{ .CRD.Kind }} managed resources.
+func SetupGated(mgr ctrl.Manager, o tjcontroller.Options) error {
+	o.Options.Gate.Register(func() {
+		if err := Setup(mgr, o); err != nil {
+			mgr.GetLogger().Error(err, "unable to setup reconciler", "gvk", {{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind.String())
+		}
+	}, {{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind)
+	return nil
+}
 
 // Setup adds a controller that reconciles {{ .CRD.Kind }} managed resources.
 func Setup(mgr ctrl.Manager, o tjcontroller.Options) error {
@@ -35,10 +44,6 @@ func Setup(mgr ctrl.Manager, o tjcontroller.Options) error {
 	{{- if not .DisableNameInitializer }}
 	initializers = append(initializers, managed.NewNameAsExternalName(mgr.GetClient()))
 	{{- end}}
-	cps := []managed.ConnectionPublisher{managed.NewAPISecretPublisher(mgr.GetClient(), mgr.GetScheme())}
-	if o.SecretStoreConfigGVK != nil {
-		cps = append(cps, connection.NewDetailsManager(mgr.GetClient(), *o.SecretStoreConfigGVK, connection.WithTLSConfig(o.ESSOptions.TLSConfig)))
-	}
 	eventHandler := handler.NewEventHandler(handler.WithLogger(o.Logger.WithValues("gvk", {{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind)))
 	{{- if .UseAsync }}
 	ac := tjcontroller.NewAPICallbacks(mgr, xpresource.ManagedKind({{ .TypePackageAlias }}{{ .CRD.Kind }}_GroupVersionKind), tjcontroller.WithEventHandler(eventHandler){{ if or .UseTerraformPluginSDKClient .UseTerraformPluginFrameworkClient }}, tjcontroller.WithStatusUpdates(false){{ end }})
@@ -102,7 +107,6 @@ func Setup(mgr ctrl.Manager, o tjcontroller.Options) error {
     {{- end }}
 		managed.WithTimeout(3*time.Minute),
 		managed.WithInitializers(initializers),
-		managed.WithConnectionPublishers(cps...),
 		managed.WithPollInterval(o.PollInterval),
 	}
 	if o.PollJitter != 0 {

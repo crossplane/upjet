@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/crossplane/crossplane-runtime/pkg/test"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/test"
 	"github.com/google/go-cmp/cmp"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/pkg/errors"

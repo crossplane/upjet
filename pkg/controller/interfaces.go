@@ -7,6 +7,8 @@ package controller
 import (
 	"context"
 
+	"k8s.io/apimachinery/pkg/types"
+
 	"github.com/crossplane/upjet/pkg/config"
 	"github.com/crossplane/upjet/pkg/resource"
 	"github.com/crossplane/upjet/pkg/terraform"
@@ -40,7 +42,7 @@ type Store interface {
 // CallbackProvider provides functions that can be called with the result of
 // async operations.
 type CallbackProvider interface {
-	Create(name string) terraform.CallbackFn
-	Update(name string) terraform.CallbackFn
-	Destroy(name string) terraform.CallbackFn
+	Create(name types.NamespacedName) terraform.CallbackFn
+	Update(name types.NamespacedName) terraform.CallbackFn
+	Destroy(name types.NamespacedName) terraform.CallbackFn
 }

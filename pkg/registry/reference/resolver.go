@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/fieldpath"
 	"github.com/pkg/errors"
 
 	"github.com/crossplane/upjet/pkg/config"

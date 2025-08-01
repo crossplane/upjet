@@ -8,8 +8,8 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/crossplane/crossplane-runtime/pkg/logging"
-	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/logging"
+	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov5"
 	tfsdk "github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 	"k8s.io/apimachinery/pkg/types"
@@ -189,7 +189,7 @@ func (ops *OperationTrackerStore) Tracker(tr resource.Terraformed) *AsyncTracker
 	defer ops.mu.Unlock()
 	tracker, ok := ops.store[tr.GetUID()]
 	if !ok {
-		l := ops.logger.WithValues("trackerUID", tr.GetUID(), "resourceName", tr.GetName(), "gvk", tr.GetObjectKind().GroupVersionKind().String())
+		l := ops.logger.WithValues("trackerUID", tr.GetUID(), "resourceName", tr.GetName(), "resourceNamespace", tr.GetNamespace(), "gvk", tr.GetObjectKind().GroupVersionKind().String())
 		ops.store[tr.GetUID()] = NewAsyncTracker(WithAsyncTrackerLogger(l))
 		tracker = ops.store[tr.GetUID()]
 	}
