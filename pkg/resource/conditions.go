@@ -10,7 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	tferrors "github.com/crossplane/upjet/pkg/terraform/errors"
+	tferrors "github.com/crossplane/upjet/v2/pkg/terraform/errors"
 )
 
 // Condition constants.

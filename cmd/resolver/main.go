@@ -13,7 +13,7 @@ import (
 	"github.com/spf13/afero"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	"github.com/crossplane/upjet/pkg/transformers"
+	"github.com/crossplane/upjet/v2/pkg/transformers"
 )
 
 func main() {

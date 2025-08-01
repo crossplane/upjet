@@ -8,7 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/pkg/errors"
 
-	"github.com/crossplane/upjet/pkg/schema/traverser"
+	"github.com/crossplane/upjet/v2/pkg/schema/traverser"
 )
 
 var _ ResourceSetter = &SingletonListEmbedder{}

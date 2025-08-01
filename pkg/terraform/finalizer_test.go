@@ -14,7 +14,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	"github.com/crossplane/upjet/pkg/resource"
+	"github.com/crossplane/upjet/v2/pkg/resource"
 )
 
 var (

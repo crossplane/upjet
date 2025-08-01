@@ -30,11 +30,11 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/crossplane/upjet/pkg/config"
-	"github.com/crossplane/upjet/pkg/metrics"
-	"github.com/crossplane/upjet/pkg/resource"
-	upjson "github.com/crossplane/upjet/pkg/resource/json"
-	"github.com/crossplane/upjet/pkg/terraform"
+	"github.com/crossplane/upjet/v2/pkg/config"
+	"github.com/crossplane/upjet/v2/pkg/metrics"
+	"github.com/crossplane/upjet/v2/pkg/resource"
+	upjson "github.com/crossplane/upjet/v2/pkg/resource/json"
+	"github.com/crossplane/upjet/v2/pkg/terraform"
 )
 
 // TerraformPluginFrameworkConnector is an external client, with credentials and

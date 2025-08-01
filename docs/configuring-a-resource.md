@@ -116,7 +116,7 @@ conditions:
 
 ```go
 import (
- "github.com/crossplane/upjet/pkg/config"
+ "github.com/crossplane/upjet/v2/pkg/config"
  ...
 )
 
@@ -143,7 +143,7 @@ also omit `bucket` and `bucket_prefix` arguments from the spec with
 
 ```go
 import (
- "github.com/crossplane/upjet/pkg/config"
+ "github.com/crossplane/upjet/v2/pkg/config"
  ...
 )
 
@@ -175,7 +175,7 @@ Here, we can just use [IdentifierFromProvider] configuration:
 
 ```go
 import (
- "github.com/crossplane/upjet/pkg/config"
+ "github.com/crossplane/upjet/v2/pkg/config"
  ...
 )
 
@@ -206,7 +206,7 @@ this id back (`GetIDFn`).
 
 ```go
 import (
- "github.com/crossplane/upjet/pkg/config"
+ "github.com/crossplane/upjet/v2/pkg/config"
  ...
 )
 
