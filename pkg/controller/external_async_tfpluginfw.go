@@ -121,6 +121,50 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Observe(ctx context.Contex
 			ResourceUpToDate: true,
 		}, nil
 	}
+
+
+	// When observing for the first time, just after an async create
+	// operation has finished, we check if the provider
+	// returns a partial state and try to extract the external name out of it.
+	// Then return early without making any external API calls, and requeue.
+	//
+	// Some TF resources might return a partial state even if their creation
+	// fails. The partial state potentially can include the non-deterministic
+	// identifier(s) of the resource. We try to record it as early as possible.
+	//
+	// An example scenario that we try to prevent is:
+	// - In the TF provider, resource involves multiple steps to create.
+	// - MR reconciler, calls async Create, which invokes TF ApplyResource RPC.
+	//   - External resource is created, but some steps fail for whatever reason
+	//   - ApplyResource returns some error diags, but also a partial state
+	//   - Partial state is saved to in-memory cache (in opTracker)
+	//   - Async Create ends, triggering a reconcile
+	// - MR reconciler observes the resource using the partial state as prior state
+	//   - in the happy path, Reading the resource succeeds. 
+	// - TF resource Read might return error diagnostics and an empty state
+	//   even if they exist.
+	// - We never get to record the external name, from the previous
+	//   async create.
+	//
+	if lastErr := n.opTracker.LastOperation.Error(); lastErr != nil && n.opTracker.LastOperation.IsEnded() && n.opTracker.LastOperation.Type == "create"{
+		if n.recoverExternalName(mg) {
+			defer n.opTracker.LastOperation.Clear(true)
+			n.logger.Debug("recovered external name from last failed async operation", "external-name", meta.GetExternalName(mg))
+			// TODO(erhan): ideally, the external-name update should be handled
+			// by a dedicated observation response at crossplane-runtime
+			// managed reconciler.
+			// We try to signal for an annotation update (not a status update)
+			// then requeue again (which will implicitly happen).
+			// so, we hackily return "late-initialized" to true.
+			// This might not work if the late initialization management policy
+			// is disabled.
+			return managed.ExternalObservation{
+				ResourceExists:          true,
+				ResourceUpToDate:        true,
+				ResourceLateInitialized: true,
+			}, nil
+		}
+	}
 	n.opTracker.LastOperation.Clear(true)
 
 	o, err := n.terraformPluginFrameworkExternalClient.Observe(ctx, mg)

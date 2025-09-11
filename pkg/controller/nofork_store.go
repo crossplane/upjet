@@ -10,7 +10,7 @@ import (
 
 	"github.com/crossplane/crossplane-runtime/v2/pkg/logging"
 	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
-	"github.com/hashicorp/terraform-plugin-go/tfprotov5"
+	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	tfsdk "github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -47,7 +47,7 @@ type AsyncTracker struct {
 	// TF Plugin SDKv2 instance state for TF Plugin SDKv2-based resources
 	tfState *tfsdk.InstanceState
 	// TF Plugin Framework instance state for TF Plugin Framework-based resources
-	fwState *tfprotov5.DynamicValue
+	fwState *tfprotov6.DynamicValue
 	// lifecycle of certain external resources are bound to a parent resource's
 	// lifecycle, and they cannot be deleted without actually deleting
 	// the owning external resource (e.g.,  a database resource as the parent
@@ -133,9 +133,9 @@ func (a *AsyncTracker) SetDeleted(deleted bool) {
 }
 
 // GetFrameworkTFState returns the stored Terraform Plugin Framework external
-// resource state in this AsyncTracker as *tfprotov5.DynamicValue
+// resource state in this AsyncTracker as *tfprotov6.DynamicValue
 // MUST be used only for Terraform Plugin Framework resources
-func (a *AsyncTracker) GetFrameworkTFState() *tfprotov5.DynamicValue {
+func (a *AsyncTracker) GetFrameworkTFState() *tfprotov6.DynamicValue {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return a.fwState
@@ -150,10 +150,10 @@ func (a *AsyncTracker) HasFrameworkTFState() bool {
 	return a.fwState != nil
 }
 
-// SetFrameworkTFState stores the given *tfprotov5.DynamicValue Terraform Plugin Framework external
+// SetFrameworkTFState stores the given *tfprotov6.DynamicValue Terraform Plugin Framework external
 // resource state into this AsyncTracker's fwstate
 // MUST be used only for Terraform Plugin Framework resources
-func (a *AsyncTracker) SetFrameworkTFState(state *tfprotov5.DynamicValue) {
+func (a *AsyncTracker) SetFrameworkTFState(state *tfprotov6.DynamicValue) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.fwState = state

@@ -11,6 +11,21 @@ import (
 	"github.com/zclconf/go-cty/cty"
 )
 
+// NOTE: these are custom workaround additions to the terraform SDK schema.ValueType
+// to support generating TF plugin framework nested attribute and dynamic pseudo-types.
+// Those are not utilized during runtime, just for facilitating CRD generation.
+// https://github.com/hashicorp/terraform-plugin-sdk/blob/42d3ce13b57d6e3696687d59c39f31f07edf6c79/helper/schema/valuetype.go#L14
+// TODO: remove these when we generate the types directly from JSON schema
+// or framework schemas
+const (
+	// SchemaTypeObject is the custom schema.ValueType used for
+	// distinguishing FW nested attribute types
+	SchemaTypeObject = schemav2.ValueType(9)
+	// SchemaTypeDynamic is the custom schema.ValueType used for
+	// distinguishing dynamic-pseudo value types
+	SchemaTypeDynamic = schemav2.ValueType(10)
+)
+
 // GetV2ResourceMap converts input resource schemas with
 // "terraform-json" representation to terraform-plugin-sdk representation which
 // is what Upjet expects today.
@@ -42,7 +57,11 @@ func v2ResourceFromTFJSONSchema(s *tfjson.Schema) *schemav2.Resource {
 	toSchemaMap := make(map[string]*schemav2.Schema, len(s.Block.Attributes)+len(s.Block.NestedBlocks))
 
 	for k, v := range s.Block.Attributes {
-		toSchemaMap[k] = tfJSONAttributeToV2Schema(v)
+		if v.AttributeNestedType != nil {
+			toSchemaMap[k] = tfJSONNestedAttributeTypeToV2Schema(v)
+		} else {
+			toSchemaMap[k] = tfJSONAttributeToV2Schema(v)
+		}
 	}
 	for k, v := range s.Block.NestedBlocks {
 		// CRUD timeouts are not part of the generated MR API,
@@ -76,6 +95,44 @@ func tfJSONAttributeToV2Schema(attr *tfjson.SchemaAttribute) *schemav2.Schema {
 	return v2sch
 }
 
+func tfJSONNestedAttributeTypeToV2Schema(nestedAttr *tfjson.SchemaAttribute) *schemav2.Schema {
+	na := nestedAttr.AttributeNestedType
+	v2sch := &schemav2.Schema{
+		MinItems: int(na.MinItems),
+		MaxItems: int(na.MaxItems),
+		Required: nestedAttr.Required,
+		Optional: nestedAttr.Optional,
+	}
+	switch na.NestingMode { //nolint:exhaustive
+	case tfjson.SchemaNestingModeSet:
+		v2sch.Type = schemav2.TypeSet
+	case tfjson.SchemaNestingModeList:
+		v2sch.Type = schemav2.TypeList
+	case tfjson.SchemaNestingModeMap:
+		v2sch.Type = schemav2.TypeMap
+	case tfjson.SchemaNestingModeSingle, tfjson.SchemaNestingModeGroup:
+		v2sch.Type = SchemaTypeObject
+		v2sch.MinItems = 0
+		if v2sch.Required {
+			v2sch.MinItems = 1
+		}
+		v2sch.MaxItems = 1
+	default:
+		panic("unhandled nesting mode: " + na.NestingMode)
+	}
+	res := &schemav2.Resource{}
+	res.Schema = make(map[string]*schemav2.Schema, len(na.Attributes))
+	for key, attr := range na.Attributes {
+		if attr.AttributeNestedType != nil {
+			res.Schema[key] = tfJSONNestedAttributeTypeToV2Schema(attr)
+		} else {
+			res.Schema[key] = tfJSONAttributeToV2Schema(attr)
+		}
+	}
+	v2sch.Elem = res
+	return v2sch
+}
+
 func tfJSONBlockTypeToV2Schema(nb *tfjson.SchemaBlockType) *schemav2.Schema { //nolint:gocyclo
 	v2sch := &schemav2.Schema{
 		MinItems: int(nb.MinItems), //nolint:gosec
@@ -104,6 +161,9 @@ func tfJSONBlockTypeToV2Schema(nb *tfjson.SchemaBlockType) *schemav2.Schema { //
 	case tfjson.SchemaNestingModeSingle:
 		v2sch.Type = schemav2.TypeList
 		v2sch.MinItems = 0
+		// TODO(erhan): not sure whether we need this
+		// the block itself can be optional, even if some child attribute
+		// or block is required
 		v2sch.Required = hasRequiredChild(nb)
 		v2sch.Optional = !v2sch.Required
 		if v2sch.Required {
@@ -216,8 +276,27 @@ func schemaV2TypeFromCtyType(typ cty.Type, schema *schemav2.Schema) error { //no
 		schema.Elem = elemType
 	case typ.IsTupleType():
 		return errors.New("cannot convert cty TupleType to schema v2 type")
+	case typ.IsObjectType():
+		res := &schemav2.Resource{}
+		res.Schema = make(map[string]*schemav2.Schema, len(typ.AttributeTypes()))
+		for key, attrTyp := range typ.AttributeTypes() {
+			sch := &schemav2.Schema{
+				Computed: schema.Computed,
+				Optional: schema.Optional,
+				Required: schema.Required,
+			}
+			if err := schemaV2TypeFromCtyType(attrTyp, sch); err != nil {
+				return err
+			}
+			res.Schema[key] = sch
+		}
+		schema.ConfigMode = configMode
+		schema.Type = SchemaTypeObject
+		schema.Elem = res
+		schema.MaxItems = 1
+		schema.MinItems = 0
 	case typ.Equals(cty.DynamicPseudoType):
-		return errors.New("cannot convert cty DynamicPseudoType to schema v2 type")
+		schema.Type = SchemaTypeDynamic
 	}
 
 	return nil

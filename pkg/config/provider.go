@@ -376,6 +376,19 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadata []byt
 		if err := TraverseSchemas(name, p.Resources[name], p.schemaTraversers...); err != nil {
 			panic(errors.Wrap(err, "failed to execute the Terraform schema traverser chain"))
 		}
+		// traverse the Terraform Framework resource schema to register conversions
+		// PseudoDynamicType attributes
+		if isPluginFrameworkResource {
+			paths, err := frameworkDynamicTypeAttributePaths(name, p.Resources[name].TerraformPluginFrameworkResource)
+			if err != nil {
+				panic(errors.Wrapf(err, "failed to traverse the framework resource %q for dynamic attributes", name))
+			}
+			if len(paths) > 0 {
+				p.Resources[name].dynamicAttributeConversionPaths = paths
+				p.Resources[name].TerraformConversions = append(p.Resources[name].TerraformConversions, NewTFDynamicValueConversion())
+			}
+
+		}
 	}
 	for i, refInjector := range p.refInjectors {
 		if err := refInjector.InjectReferences(p.Resources); err != nil {

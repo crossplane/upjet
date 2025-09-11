@@ -5,6 +5,12 @@
 package config
 
 import (
+	"fmt"
+	"reflect"
+	"slices"
+
+	"github.com/crossplane/crossplane-runtime/v2/pkg/fieldpath"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 	"github.com/pkg/errors"
 
 	"github.com/crossplane/upjet/v2/pkg/config/conversion"
@@ -69,4 +75,111 @@ func (s singletonListConversion) Convert(params map[string]any, r *Resource, mod
 		m, err = conversion.Convert(params, r.TFListConversionPaths(), conversion.ToSingletonList, nil)
 	}
 	return m, errors.Wrapf(err, "failed to convert between Crossplane and Terraform layers in mode %q", mode)
+}
+
+type dynamicValueConversion struct{}
+
+// NewTFDynamicValueConversion initializes a new TerraformConversion to convert
+// MR parameters that are DynamicPseudoType to their correct representation in
+// the Terraform layer at runtime
+func NewTFDynamicValueConversion() TerraformConversion {
+	return dynamicValueConversion{}
+}
+
+func (s dynamicValueConversion) Convert(params map[string]any, r *Resource, mode Mode) (map[string]any, error) {
+	if mode == FromTerraform {
+		// Terraform does not return dynamic pseudo-types in state.
+		// No conversion needed.
+		return params, nil
+	} else if mode != ToTerraform {
+		return nil, errors.Errorf("invalid conversion mode %s", mode.String())
+	}
+	paths := r.TFDynamicAttributeConversionPaths()
+	slices.Sort(paths)
+	pv := fieldpath.Pave(params)
+	for _, fp := range paths {
+		exp, err := pv.ExpandWildcards(fp)
+		if err != nil && !fieldpath.IsNotFound(err) {
+			return nil, errors.Wrapf(err, "cannot expand wildcards for the field path expression %s", fp)
+		}
+		for _, e := range exp {
+			val, err := pv.GetValue(e)
+			if err != nil {
+				return nil, errors.Wrapf(err, "cannot get the value at the field path %s with the conversion mode set to %q", e, mode)
+			}
+			tt, err := inferTFTypeFromValue(val)
+			if err != nil {
+				return nil, errors.Wrapf(err, "cannot infer dynamic value type at the field path %s with the conversion mode set to %q", e, mode)
+			}
+			newVal := map[string]any{"value": val, "type": tt}
+			if err := pv.SetValue(e, newVal); err != nil {
+				return nil, errors.Wrapf(err, "cannot set the value at the field path %s with the conversion mode set to %q", e, mode)
+			}
+		}
+	}
+	return params, nil
+}
+
+// inferTFTypeFromValue infers a tftypes.Type for a given MR parameter.
+func inferTFTypeFromValue(value interface{}) (tftypes.Type, error) {
+	switch v := value.(type) {
+	case nil:
+		// We can't infer null's type, so just return empty Object for default
+		return tftypes.Object{}, nil
+	case string, *string:
+		return tftypes.String, nil
+	case bool, *bool:
+		return tftypes.Bool, nil
+	case int, int64, float64, *int, *int64, *float64:
+		return tftypes.Number, nil
+	case []interface{}:
+		if len(v) == 0 {
+			// Default to list of empty Object if empty
+			return tftypes.List{ElementType: tftypes.Object{}}, nil
+		}
+		elemType, err := inferTFTypeFromValue(v[0])
+		if err != nil {
+			return nil, err
+		}
+		return tftypes.List{ElementType: elemType}, nil
+	case map[string]interface{}:
+		attrTypes := make(map[string]tftypes.Type)
+		for k, val := range v {
+			inferred, err := inferTFTypeFromValue(val)
+			if err != nil {
+				return nil, err
+			}
+			attrTypes[k] = inferred
+		}
+		return tftypes.Object{AttributeTypes: attrTypes}, nil
+	default:
+		rv := reflect.ValueOf(v)
+		switch rv.Kind() {
+		case reflect.Slice:
+			if rv.Len() == 0 {
+				return tftypes.List{ElementType: tftypes.String}, nil
+			}
+			elemType, err := inferTFTypeFromValue(rv.Index(0).Interface())
+			if err != nil {
+				return nil, err
+			}
+			return tftypes.List{ElementType: elemType}, nil
+		case reflect.Map:
+			if rv.Type().Key().Kind() != reflect.String {
+				return nil, fmt.Errorf("only map[string] keys are supported")
+			}
+			attrTypes := make(map[string]tftypes.Type)
+			for _, k := range rv.MapKeys() {
+				val := rv.MapIndex(k).Interface()
+				inferred, err := inferTFTypeFromValue(val)
+				if err != nil {
+					return nil, err
+				}
+				attrTypes[k.String()] = inferred
+			}
+			return tftypes.Object{AttributeTypes: attrTypes}, nil
+		default:
+			return nil, fmt.Errorf("unsupported type: %T", v)
+		}
+	}
 }

@@ -20,7 +20,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-go/tfprotov5"
+	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 	"github.com/pkg/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -108,13 +108,13 @@ type testConfiguration struct {
 	newStateMap     map[string]any
 
 	readErr   error
-	readDiags []*tfprotov5.Diagnostic
+	readDiags []*tfprotov6.Diagnostic
 
 	applyErr   error
-	applyDiags []*tfprotov5.Diagnostic
+	applyDiags []*tfprotov6.Diagnostic
 
 	planErr   error
-	planDiags []*tfprotov5.Diagnostic
+	planDiags []*tfprotov6.Diagnostic
 }
 
 func prepareTPFExternalWithTestConfig(testConfig testConfiguration) *terraformPluginFrameworkExternalClient {
@@ -123,15 +123,15 @@ func prepareTPFExternalWithTestConfig(testConfig testConfiguration) *terraformPl
 	testConfig.r.Schema(context.TODO(), resource.SchemaRequest{}, schemaResp)
 	tfValueType := schemaResp.Schema.Type().TerraformType(context.TODO())
 
-	currentStateVal, err := protov5DynamicValueFromMap(testConfig.currentStateMap, tfValueType)
+	currentStateVal, err := protov6DynamicValueFromMap(testConfig.currentStateMap, tfValueType)
 	if err != nil {
 		panic("cannot prepare TPF")
 	}
-	plannedStateVal, err := protov5DynamicValueFromMap(testConfig.plannedStateMap, tfValueType)
+	plannedStateVal, err := protov6DynamicValueFromMap(testConfig.plannedStateMap, tfValueType)
 	if err != nil {
 		panic("cannot prepare TPF")
 	}
-	newStateAfterApplyVal, err := protov5DynamicValueFromMap(testConfig.newStateMap, tfValueType)
+	newStateAfterApplyVal, err := protov6DynamicValueFromMap(testConfig.newStateMap, tfValueType)
 	if err != nil {
 		panic("cannot prepare TPF")
 	}
@@ -145,27 +145,27 @@ func prepareTPFExternalWithTestConfig(testConfig testConfiguration) *terraformPl
 		opTracker: NewAsyncTracker(),
 		resource:  testConfig.r,
 		server: &mockTPFProviderServer{
-			ReadResourceFn: func(ctx context.Context, request *tfprotov5.ReadResourceRequest) (*tfprotov5.ReadResourceResponse, error) {
-				return &tfprotov5.ReadResourceResponse{
+			ReadResourceFn: func(ctx context.Context, request *tfprotov6.ReadResourceRequest) (*tfprotov6.ReadResourceResponse, error) {
+				return &tfprotov6.ReadResourceResponse{
 					NewState:    currentStateVal,
 					Diagnostics: testConfig.readDiags,
 				}, testConfig.readErr
 			},
-			PlanResourceChangeFn: func(ctx context.Context, request *tfprotov5.PlanResourceChangeRequest) (*tfprotov5.PlanResourceChangeResponse, error) {
-				return &tfprotov5.PlanResourceChangeResponse{
+			PlanResourceChangeFn: func(ctx context.Context, request *tfprotov6.PlanResourceChangeRequest) (*tfprotov6.PlanResourceChangeResponse, error) {
+				return &tfprotov6.PlanResourceChangeResponse{
 					PlannedState: plannedStateVal,
 					Diagnostics:  testConfig.planDiags,
 				}, testConfig.planErr
 			},
-			ApplyResourceChangeFn: func(ctx context.Context, request *tfprotov5.ApplyResourceChangeRequest) (*tfprotov5.ApplyResourceChangeResponse, error) {
-				return &tfprotov5.ApplyResourceChangeResponse{
+			ApplyResourceChangeFn: func(ctx context.Context, request *tfprotov6.ApplyResourceChangeRequest) (*tfprotov6.ApplyResourceChangeResponse, error) {
+				return &tfprotov6.ApplyResourceChangeResponse{
 					NewState:    newStateAfterApplyVal,
 					Diagnostics: testConfig.applyDiags,
 				}, testConfig.applyErr
 			},
 		},
 		params:                     testConfig.params,
-		planResponse:               &tfprotov5.PlanResourceChangeResponse{PlannedState: plannedStateVal},
+		planResponse:               &tfprotov6.PlanResourceChangeResponse{PlannedState: plannedStateVal},
 		resourceSchema:             schemaResp.Schema,
 		resourceValueTerraformType: tfValueType,
 	}
@@ -407,9 +407,9 @@ func TestTPFCreate(t *testing.T) {
 					"name": "example",
 				},
 				newStateMap: nil,
-				applyDiags: []*tfprotov5.Diagnostic{
+				applyDiags: []*tfprotov6.Diagnostic{
 					{
-						Severity: tfprotov5.DiagnosticSeverityError,
+						Severity: tfprotov6.DiagnosticSeverityError,
 						Summary:  "foo summary",
 						Detail:   "foo detail",
 					},
@@ -513,137 +513,134 @@ func TestTPFDelete(t *testing.T) {
 // Mocks
 
 var _ resource.Resource = &mockTPFResource{}
-var _ tfprotov5.ProviderServer = &mockTPFProviderServer{}
+var _ tfprotov6.ProviderServer = &mockTPFProviderServer{}
 var _ provider.Provider = &mockTPFProvider{}
 
 type mockTPFProviderServer struct {
-	GetMetadataFn                func(ctx context.Context, request *tfprotov5.GetMetadataRequest) (*tfprotov5.GetMetadataResponse, error)
-	GetProviderSchemaFn          func(ctx context.Context, request *tfprotov5.GetProviderSchemaRequest) (*tfprotov5.GetProviderSchemaResponse, error)
-	PrepareProviderConfigFn      func(ctx context.Context, request *tfprotov5.PrepareProviderConfigRequest) (*tfprotov5.PrepareProviderConfigResponse, error)
-	ConfigureProviderFn          func(ctx context.Context, request *tfprotov5.ConfigureProviderRequest) (*tfprotov5.ConfigureProviderResponse, error)
-	StopProviderFn               func(ctx context.Context, request *tfprotov5.StopProviderRequest) (*tfprotov5.StopProviderResponse, error)
-	ValidateResourceTypeConfigFn func(ctx context.Context, request *tfprotov5.ValidateResourceTypeConfigRequest) (*tfprotov5.ValidateResourceTypeConfigResponse, error)
-	UpgradeResourceStateFn       func(ctx context.Context, request *tfprotov5.UpgradeResourceStateRequest) (*tfprotov5.UpgradeResourceStateResponse, error)
-	ReadResourceFn               func(ctx context.Context, request *tfprotov5.ReadResourceRequest) (*tfprotov5.ReadResourceResponse, error)
-	PlanResourceChangeFn         func(ctx context.Context, request *tfprotov5.PlanResourceChangeRequest) (*tfprotov5.PlanResourceChangeResponse, error)
-	ApplyResourceChangeFn        func(ctx context.Context, request *tfprotov5.ApplyResourceChangeRequest) (*tfprotov5.ApplyResourceChangeResponse, error)
-	ImportResourceStateFn        func(ctx context.Context, request *tfprotov5.ImportResourceStateRequest) (*tfprotov5.ImportResourceStateResponse, error)
-	ValidateDataSourceConfigFn   func(ctx context.Context, request *tfprotov5.ValidateDataSourceConfigRequest) (*tfprotov5.ValidateDataSourceConfigResponse, error)
-	ReadDataSourceFn             func(ctx context.Context, request *tfprotov5.ReadDataSourceRequest) (*tfprotov5.ReadDataSourceResponse, error)
+	GetMetadataFn          func(ctx context.Context, request *tfprotov6.GetMetadataRequest) (*tfprotov6.GetMetadataResponse, error)
+	GetProviderSchemaFn    func(ctx context.Context, request *tfprotov6.GetProviderSchemaRequest) (*tfprotov6.GetProviderSchemaResponse, error)
+	ConfigureProviderFn    func(ctx context.Context, request *tfprotov6.ConfigureProviderRequest) (*tfprotov6.ConfigureProviderResponse, error)
+	StopProviderFn         func(ctx context.Context, request *tfprotov6.StopProviderRequest) (*tfprotov6.StopProviderResponse, error)
+	UpgradeResourceStateFn func(ctx context.Context, request *tfprotov6.UpgradeResourceStateRequest) (*tfprotov6.UpgradeResourceStateResponse, error)
+	ReadResourceFn         func(ctx context.Context, request *tfprotov6.ReadResourceRequest) (*tfprotov6.ReadResourceResponse, error)
+	PlanResourceChangeFn   func(ctx context.Context, request *tfprotov6.PlanResourceChangeRequest) (*tfprotov6.PlanResourceChangeResponse, error)
+	ApplyResourceChangeFn  func(ctx context.Context, request *tfprotov6.ApplyResourceChangeRequest) (*tfprotov6.ApplyResourceChangeResponse, error)
+	ImportResourceStateFn  func(ctx context.Context, request *tfprotov6.ImportResourceStateRequest) (*tfprotov6.ImportResourceStateResponse, error)
+	ReadDataSourceFn       func(ctx context.Context, request *tfprotov6.ReadDataSourceRequest) (*tfprotov6.ReadDataSourceResponse, error)
 }
 
-func (m *mockTPFProviderServer) UpgradeResourceIdentity(_ context.Context, _ *tfprotov5.UpgradeResourceIdentityRequest) (*tfprotov5.UpgradeResourceIdentityResponse, error) {
+func (m *mockTPFProviderServer) ValidateProviderConfig(ctx context.Context, request *tfprotov6.ValidateProviderConfigRequest) (*tfprotov6.ValidateProviderConfigResponse, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (m *mockTPFProviderServer) ValidateResourceConfig(ctx context.Context, request *tfprotov6.ValidateResourceConfigRequest) (*tfprotov6.ValidateResourceConfigResponse, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (m *mockTPFProviderServer) ValidateDataResourceConfig(ctx context.Context, request *tfprotov6.ValidateDataResourceConfigRequest) (*tfprotov6.ValidateDataResourceConfigResponse, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (m *mockTPFProviderServer) UpgradeResourceIdentity(_ context.Context, _ *tfprotov6.UpgradeResourceIdentityRequest) (*tfprotov6.UpgradeResourceIdentityResponse, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *mockTPFProviderServer) GetResourceIdentitySchemas(_ context.Context, _ *tfprotov5.GetResourceIdentitySchemasRequest) (*tfprotov5.GetResourceIdentitySchemasResponse, error) {
+func (m *mockTPFProviderServer) GetResourceIdentitySchemas(_ context.Context, _ *tfprotov6.GetResourceIdentitySchemasRequest) (*tfprotov6.GetResourceIdentitySchemasResponse, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *mockTPFProviderServer) MoveResourceState(_ context.Context, _ *tfprotov5.MoveResourceStateRequest) (*tfprotov5.MoveResourceStateResponse, error) {
+func (m *mockTPFProviderServer) MoveResourceState(_ context.Context, _ *tfprotov6.MoveResourceStateRequest) (*tfprotov6.MoveResourceStateResponse, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *mockTPFProviderServer) CallFunction(_ context.Context, _ *tfprotov5.CallFunctionRequest) (*tfprotov5.CallFunctionResponse, error) {
+func (m *mockTPFProviderServer) CallFunction(_ context.Context, _ *tfprotov6.CallFunctionRequest) (*tfprotov6.CallFunctionResponse, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *mockTPFProviderServer) GetFunctions(_ context.Context, _ *tfprotov5.GetFunctionsRequest) (*tfprotov5.GetFunctionsResponse, error) {
+func (m *mockTPFProviderServer) GetFunctions(_ context.Context, _ *tfprotov6.GetFunctionsRequest) (*tfprotov6.GetFunctionsResponse, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *mockTPFProviderServer) ValidateEphemeralResourceConfig(_ context.Context, _ *tfprotov5.ValidateEphemeralResourceConfigRequest) (*tfprotov5.ValidateEphemeralResourceConfigResponse, error) {
+func (m *mockTPFProviderServer) ValidateEphemeralResourceConfig(_ context.Context, _ *tfprotov6.ValidateEphemeralResourceConfigRequest) (*tfprotov6.ValidateEphemeralResourceConfigResponse, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *mockTPFProviderServer) OpenEphemeralResource(_ context.Context, _ *tfprotov5.OpenEphemeralResourceRequest) (*tfprotov5.OpenEphemeralResourceResponse, error) {
+func (m *mockTPFProviderServer) OpenEphemeralResource(_ context.Context, _ *tfprotov6.OpenEphemeralResourceRequest) (*tfprotov6.OpenEphemeralResourceResponse, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *mockTPFProviderServer) RenewEphemeralResource(_ context.Context, _ *tfprotov5.RenewEphemeralResourceRequest) (*tfprotov5.RenewEphemeralResourceResponse, error) {
+func (m *mockTPFProviderServer) RenewEphemeralResource(_ context.Context, _ *tfprotov6.RenewEphemeralResourceRequest) (*tfprotov6.RenewEphemeralResourceResponse, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *mockTPFProviderServer) CloseEphemeralResource(_ context.Context, _ *tfprotov5.CloseEphemeralResourceRequest) (*tfprotov5.CloseEphemeralResourceResponse, error) {
+func (m *mockTPFProviderServer) CloseEphemeralResource(_ context.Context, _ *tfprotov6.CloseEphemeralResourceRequest) (*tfprotov6.CloseEphemeralResourceResponse, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *mockTPFProviderServer) GetMetadata(_ context.Context, _ *tfprotov5.GetMetadataRequest) (*tfprotov5.GetMetadataResponse, error) {
+func (m *mockTPFProviderServer) GetMetadata(_ context.Context, _ *tfprotov6.GetMetadataRequest) (*tfprotov6.GetMetadataResponse, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *mockTPFProviderServer) GetProviderSchema(_ context.Context, _ *tfprotov5.GetProviderSchemaRequest) (*tfprotov5.GetProviderSchemaResponse, error) {
+func (m *mockTPFProviderServer) GetProviderSchema(_ context.Context, _ *tfprotov6.GetProviderSchemaRequest) (*tfprotov6.GetProviderSchemaResponse, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *mockTPFProviderServer) PrepareProviderConfig(_ context.Context, _ *tfprotov5.PrepareProviderConfigRequest) (*tfprotov5.PrepareProviderConfigResponse, error) {
+func (m *mockTPFProviderServer) ConfigureProvider(_ context.Context, _ *tfprotov6.ConfigureProviderRequest) (*tfprotov6.ConfigureProviderResponse, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *mockTPFProviderServer) ConfigureProvider(_ context.Context, _ *tfprotov5.ConfigureProviderRequest) (*tfprotov5.ConfigureProviderResponse, error) {
+func (m *mockTPFProviderServer) StopProvider(_ context.Context, _ *tfprotov6.StopProviderRequest) (*tfprotov6.StopProviderResponse, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *mockTPFProviderServer) StopProvider(_ context.Context, _ *tfprotov5.StopProviderRequest) (*tfprotov5.StopProviderResponse, error) {
+func (m *mockTPFProviderServer) UpgradeResourceState(_ context.Context, _ *tfprotov6.UpgradeResourceStateRequest) (*tfprotov6.UpgradeResourceStateResponse, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *mockTPFProviderServer) ValidateResourceTypeConfig(_ context.Context, _ *tfprotov5.ValidateResourceTypeConfigRequest) (*tfprotov5.ValidateResourceTypeConfigResponse, error) {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (m *mockTPFProviderServer) UpgradeResourceState(_ context.Context, _ *tfprotov5.UpgradeResourceStateRequest) (*tfprotov5.UpgradeResourceStateResponse, error) {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (m *mockTPFProviderServer) ReadResource(ctx context.Context, request *tfprotov5.ReadResourceRequest) (*tfprotov5.ReadResourceResponse, error) {
+func (m *mockTPFProviderServer) ReadResource(ctx context.Context, request *tfprotov6.ReadResourceRequest) (*tfprotov6.ReadResourceResponse, error) {
 	if m.ReadResourceFn == nil {
 		return nil, nil
 	}
 	return m.ReadResourceFn(ctx, request)
 }
 
-func (m *mockTPFProviderServer) PlanResourceChange(ctx context.Context, request *tfprotov5.PlanResourceChangeRequest) (*tfprotov5.PlanResourceChangeResponse, error) {
+func (m *mockTPFProviderServer) PlanResourceChange(ctx context.Context, request *tfprotov6.PlanResourceChangeRequest) (*tfprotov6.PlanResourceChangeResponse, error) {
 	if m.PlanResourceChangeFn == nil {
 		return nil, nil
 	}
 	return m.PlanResourceChangeFn(ctx, request)
 }
 
-func (m *mockTPFProviderServer) ApplyResourceChange(ctx context.Context, request *tfprotov5.ApplyResourceChangeRequest) (*tfprotov5.ApplyResourceChangeResponse, error) {
+func (m *mockTPFProviderServer) ApplyResourceChange(ctx context.Context, request *tfprotov6.ApplyResourceChangeRequest) (*tfprotov6.ApplyResourceChangeResponse, error) {
 	if m.ApplyResourceChangeFn == nil {
 		return nil, nil
 	}
 	return m.ApplyResourceChangeFn(ctx, request)
 }
 
-func (m *mockTPFProviderServer) ImportResourceState(_ context.Context, _ *tfprotov5.ImportResourceStateRequest) (*tfprotov5.ImportResourceStateResponse, error) {
+func (m *mockTPFProviderServer) ImportResourceState(_ context.Context, _ *tfprotov6.ImportResourceStateRequest) (*tfprotov6.ImportResourceStateResponse, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *mockTPFProviderServer) ValidateDataSourceConfig(_ context.Context, _ *tfprotov5.ValidateDataSourceConfigRequest) (*tfprotov5.ValidateDataSourceConfigResponse, error) {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (m *mockTPFProviderServer) ReadDataSource(_ context.Context, _ *tfprotov5.ReadDataSourceRequest) (*tfprotov5.ReadDataSourceResponse, error) {
+func (m *mockTPFProviderServer) ReadDataSource(_ context.Context, _ *tfprotov6.ReadDataSourceRequest) (*tfprotov6.ReadDataSourceResponse, error) {
 	// TODO implement me
 	panic("implement me")
 }
