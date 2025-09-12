@@ -8,11 +8,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/crossplane/crossplane-runtime/v2/pkg/errors"
 	rschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
-
-	"github.com/crossplane/crossplane-runtime/v2/pkg/errors"
 )
 
 // adapted from https://github.com/hashicorp/terraform/blob/v1.5.5/internal/plans/objchange/objchange.go
@@ -195,15 +194,6 @@ func emptyBlock(blockS rschema.Block) tftypes.Value {
 	case BlockNestingModeSet:
 		return tftypes.NewValue(blockS.Type().TerraformType(context.TODO()), []tftypes.Value{})
 	case BlockNestingModeSingle:
-		// TODO(erhan): should traverse attributes?
-		//vals := make(map[string]tftypes.Value)
-		//for key, na := range blockS.GetNestedObject().GetAttributes() {
-		//	vals[key] = emptyAttribute(na)
-		//}
-		//for key, nb := range blockS.GetNestedObject().GetBlocks() {
-		//	vals[key] = emptyBlock(nb)
-		//}
-		//return tftypes.NewValue(blockS.Type().TerraformType(context.TODO()), vals)
 		return tftypes.NewValue(blockS.Type().TerraformType(context.TODO()), nil)
 	default:
 		return tftypes.NewValue(blockS.Type().TerraformType(context.TODO()), nil)
@@ -260,7 +250,7 @@ func proposedNewNestedBlock(schema rschema.Block, prior, config tftypes.Value) t
 	}
 
 	switch schema.GetNestingMode() {
-	case BlockNestingModeSingle: //NestingModeSinge
+	case BlockNestingModeSingle:
 		// A NestingSingle configuration block value can be null, and since it
 		// cannot be computed we can always take the configuration value.
 		if config.IsNull() {
@@ -273,7 +263,7 @@ func proposedNewNestedBlock(schema rschema.Block, prior, config tftypes.Value) t
 		newV = proposedNewNestingSet(pseudoSchema, prior, config)
 	default:
 		// Should never happen, since the above cases are comprehensive.
-		panic(fmt.Sprintf("unsupported block nesting mode %s", schema.GetNestingMode()))
+		panic(fmt.Sprintf("unsupported block nesting mode %v", schema.GetNestingMode()))
 	}
 
 	return newV
@@ -304,13 +294,13 @@ func proposedNewNestedType(schema rschema.NestedAttribute, prior, config tftypes
 		newV = proposedNewNestingSet(schema, prior, config)
 	default:
 		// Should never happen, since the above cases are comprehensive.
-		panic(fmt.Sprintf("unsupported attribute nesting mode %s", schema.GetNestingMode()))
+		panic(fmt.Sprintf("unsupported attribute nesting mode %v", schema.GetNestingMode()))
 	}
 
 	return newV
 }
 
-func proposedNewNestingList(schema nestedSchema, prior, config tftypes.Value) tftypes.Value {
+func proposedNewNestingList(schema nestedSchema, prior, config tftypes.Value) tftypes.Value { //nolint:gocyclo // logic is adapted, and easier to follow as a unit
 	newV := config
 
 	var configList []tftypes.Value
@@ -416,7 +406,7 @@ func proposedNewNestingMap(schema nestedSchema, prior, config tftypes.Value) tft
 	return newV
 }
 
-func proposedNewNestingSet(schema nestedSchema, prior, config tftypes.Value) tftypes.Value {
+func proposedNewNestingSet(schema nestedSchema, prior, config tftypes.Value) tftypes.Value { //nolint:gocyclo // logic is adapted, and easier to follow as a unit
 	if !config.Type().Is(tftypes.Set{}) {
 		panic("configschema.NestingSet value is not a set as expected")
 	}
@@ -434,7 +424,7 @@ func proposedNewNestingSet(schema nestedSchema, prior, config tftypes.Value) tft
 		_ = prior.As(&priorVals)
 	}
 
-	var newVals []tftypes.Value
+	var newVals []tftypes.Value //nolint:prealloc // we want to have it nil when not appended
 	// track which prior elements have been used
 	used := make([]bool, len(priorVals))
 
@@ -577,7 +567,7 @@ func optionalValueNotComputable(schema rschema.Attribute, val tftypes.Value) boo
 	}
 
 	foundNonComputedAttr := false
-	tftypes.Walk(val, func(path *tftypes.AttributePath, v tftypes.Value) (bool, error) {
+	_ = tftypes.Walk(val, func(path *tftypes.AttributePath, v tftypes.Value) (bool, error) {
 		if v.IsNull() {
 			return true, nil
 		}
@@ -606,7 +596,7 @@ func optionalValueNotComputable(schema rschema.Attribute, val tftypes.Value) boo
 // determine if it is a valid superset of the config, and only computable
 // values have been added. This function is only used to correlated
 // configuration with possible valid prior values within sets.
-func validPriorFromConfig(schema nestedSchema, prior, config tftypes.Value) bool {
+func validPriorFromConfig(schema nestedSchema, prior, config tftypes.Value) bool { //nolint:gocyclo // logic is adapted, and easier to follow as a unit
 	if config.Equal(prior) {
 		return true
 	}
@@ -615,7 +605,7 @@ func validPriorFromConfig(schema nestedSchema, prior, config tftypes.Value) bool
 	stop := errors.New("stop")
 
 	valid := true
-	tftypes.Walk(prior, func(path *tftypes.AttributePath, priorV tftypes.Value) (bool, error) {
+	_ = tftypes.Walk(prior, func(path *tftypes.AttributePath, priorV tftypes.Value) (bool, error) {
 		configValUntyped, _, err := tftypes.WalkAttributePath(config, path)
 		if err != nil {
 			valid = false
@@ -642,11 +632,11 @@ func validPriorFromConfig(schema nestedSchema, prior, config tftypes.Value) bool
 
 		var attr rschema.Attribute
 
-		attrI, _, err := tftypes.WalkAttributePath(schema, path) //schema.AttributeByPath(path)
+		attrI, _, err := tftypes.WalkAttributePath(schema, path)
 		if attrI == nil || err != nil {
 			// Not at a schema attribute, so we can continue until we find leaf
 			// attributes.
-			return true, nil
+			return true, nil //nolint:nilerr // intentional
 		}
 		// If we have nested object attributes we'll be descending into those
 		// to compare the individual values and determine why this level is not

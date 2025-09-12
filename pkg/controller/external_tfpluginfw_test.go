@@ -530,17 +530,14 @@ type mockTPFProviderServer struct {
 }
 
 func (m *mockTPFProviderServer) ValidateProviderConfig(ctx context.Context, request *tfprotov6.ValidateProviderConfigRequest) (*tfprotov6.ValidateProviderConfigResponse, error) {
-	//TODO implement me
 	panic("implement me")
 }
 
 func (m *mockTPFProviderServer) ValidateResourceConfig(ctx context.Context, request *tfprotov6.ValidateResourceConfigRequest) (*tfprotov6.ValidateResourceConfigResponse, error) {
-	//TODO implement me
 	panic("implement me")
 }
 
 func (m *mockTPFProviderServer) ValidateDataResourceConfig(ctx context.Context, request *tfprotov6.ValidateDataResourceConfigRequest) (*tfprotov6.ValidateDataResourceConfigResponse, error) {
-	//TODO implement me
 	panic("implement me")
 }
 

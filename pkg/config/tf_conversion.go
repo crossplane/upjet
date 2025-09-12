@@ -6,6 +6,7 @@ package config
 
 import (
 	"fmt"
+	"math/big"
 	"reflect"
 	"slices"
 
@@ -121,7 +122,7 @@ func (s dynamicValueConversion) Convert(params map[string]any, r *Resource, mode
 }
 
 // inferTFTypeFromValue infers a tftypes.Type for a given MR parameter.
-func inferTFTypeFromValue(value interface{}) (tftypes.Type, error) {
+func inferTFTypeFromValue(value interface{}) (tftypes.Type, error) { //nolint:gocyclo // easier to follow as a unit
 	switch v := value.(type) {
 	case nil:
 		// We can't infer null's type, so just return empty Object for default
@@ -130,7 +131,7 @@ func inferTFTypeFromValue(value interface{}) (tftypes.Type, error) {
 		return tftypes.String, nil
 	case bool, *bool:
 		return tftypes.Bool, nil
-	case int, int64, float64, *int, *int64, *float64:
+	case *big.Float, float64, *float64, int, *int, int8, *int8, int16, *int16, int32, *int32, int64, *int64, uint, *uint, uint8, *uint8, uint16, *uint16, uint32, *uint32, uint64, *uint64:
 		return tftypes.Number, nil
 	case []interface{}:
 		if len(v) == 0 {
@@ -154,7 +155,7 @@ func inferTFTypeFromValue(value interface{}) (tftypes.Type, error) {
 		return tftypes.Object{AttributeTypes: attrTypes}, nil
 	default:
 		rv := reflect.ValueOf(v)
-		switch rv.Kind() {
+		switch rv.Kind() { //nolint:exhaustive
 		case reflect.Slice:
 			if rv.Len() == 0 {
 				return tftypes.List{ElementType: tftypes.String}, nil

@@ -106,7 +106,7 @@ type terraformPluginFrameworkExternalClient struct {
 	resourceValueTerraformType tftypes.Type
 }
 
-func getFrameworkExtendedParameters(ctx context.Context, tr resource.Terraformed, externalName string, cfg *config.Resource, ts terraform.Setup, initParamsMerged bool, kube client.Client, fwResSchema rschema.Schema) (map[string]any, error) {
+func getFrameworkExtendedParameters(ctx context.Context, tr resource.Terraformed, externalName string, cfg *config.Resource, ts terraform.Setup, initParamsMerged bool, kube client.Client, fwResSchema rschema.Schema) (map[string]any, error) { //nolint:gocyclo // easier to follow as a unit
 	params, err := tr.GetMergedParameters(initParamsMerged)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot get merged parameters")
@@ -320,7 +320,7 @@ func (n *terraformPluginFrameworkExternalClient) getDiffPlanResponse(ctx context
 		return nil, false, errors.Wrap(err, "cannot construct dynamic value for TF Config")
 	}
 
-	proposedStateVal, err := proposedState(n.resourceSchema, n.opTracker.GetFrameworkTFState(), tfConfigDynamicVal)
+	proposedStateVal, err := proposedState(n.resourceSchema, n.opTracker.GetFrameworkTFState(), tfConfigDynamicVal) //nolint:contextcheck
 	if err != nil {
 		return nil, false, errors.Wrap(err, "failed to calculate proposed state for PlanResourceChange")
 	}
@@ -353,7 +353,7 @@ func (n *terraformPluginFrameworkExternalClient) getDiffPlanResponse(ctx context
 		return nil, false, errors.Wrap(err, "cannot compare prior state and plan")
 	}
 
-	if err := n.filterRequiresReplace(planResponse, tfStateValue, plannedStateValue); err != nil {
+	if err := n.filterRequiresReplace(ctx, planResponse, tfStateValue, plannedStateValue); err != nil {
 		return nil, false, errors.Wrap(err, "failed to check for required replacement fields")
 	}
 
@@ -363,7 +363,7 @@ func (n *terraformPluginFrameworkExternalClient) getDiffPlanResponse(ctx context
 // filterRequiresReplace checks the TF plan response for fields that require/force resource
 // replacement, and filters false-positives. The generated plan sometimes reports a field,
 // but the prior and plan values are actually the same.
-func (n *terraformPluginFrameworkExternalClient) filterRequiresReplace(planResponse *tfprotov6.PlanResourceChangeResponse, stateValue, plannedValue tftypes.Value) error {
+func (n *terraformPluginFrameworkExternalClient) filterRequiresReplace(ctx context.Context, planResponse *tfprotov6.PlanResourceChangeResponse, stateValue, plannedValue tftypes.Value) error {
 	var filteredRequiresReplace []*tftypes.AttributePath
 	for _, path := range planResponse.RequiresReplace {
 		priorValInt, _, errPrior := tftypes.WalkAttributePath(stateValue, path)
@@ -372,8 +372,7 @@ func (n *terraformPluginFrameworkExternalClient) filterRequiresReplace(planRespo
 			n.logger.Debug("upstream TF provider generated an invalid plan")
 			continue
 		}
-
-		tfType, err := n.resourceSchema.TypeAtTerraformPath(context.TODO(), path)
+		tfType, err := n.resourceSchema.TypeAtTerraformPath(ctx, path)
 		if err != nil {
 			return errors.New("cannot get the type at path from resource schema: %v")
 		}
@@ -383,7 +382,7 @@ func (n *terraformPluginFrameworkExternalClient) filterRequiresReplace(planRespo
 			if priorValInt != nil {
 				return fmt.Errorf("cannot convert prior value to tftypes.Value")
 			}
-			priorVal = tftypes.NewValue(tfType.TerraformType(context.TODO()), nil)
+			priorVal = tftypes.NewValue(tfType.TerraformType(ctx), nil)
 		}
 
 		plannedVal, ok := plannedValInt.(tftypes.Value)
@@ -391,7 +390,7 @@ func (n *terraformPluginFrameworkExternalClient) filterRequiresReplace(planRespo
 			if plannedValInt != nil {
 				return fmt.Errorf("cannot convert planned value to tftypes.Value")
 			}
-			plannedVal = tftypes.NewValue(tfType.TerraformType(context.TODO()), nil)
+			plannedVal = tftypes.NewValue(tfType.TerraformType(ctx), nil)
 		}
 		if !plannedVal.Equal(priorVal) {
 			filteredRequiresReplace = append(filteredRequiresReplace, path)
@@ -596,7 +595,7 @@ func (n *terraformPluginFrameworkExternalClient) Observe(ctx context.Context, mg
 	}, nil
 }
 
-func (n *terraformPluginFrameworkExternalClient) Create(ctx context.Context, mg xpresource.Managed) (managed.ExternalCreation, error) {
+func (n *terraformPluginFrameworkExternalClient) Create(ctx context.Context, mg xpresource.Managed) (managed.ExternalCreation, error) { //nolint:gocyclo // easier to follow as a unit
 	n.logger.Debug("Creating the external resource")
 
 	tfConfigDynamicVal, err := protov6DynamicValueFromMap(n.params, n.resourceValueTerraformType)

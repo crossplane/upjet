@@ -122,7 +122,6 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Observe(ctx context.Contex
 		}, nil
 	}
 
-
 	// When observing for the first time, just after an async create
 	// operation has finished, we check if the provider
 	// returns a partial state and try to extract the external name out of it.
@@ -140,13 +139,13 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Observe(ctx context.Contex
 	//   - Partial state is saved to in-memory cache (in opTracker)
 	//   - Async Create ends, triggering a reconcile
 	// - MR reconciler observes the resource using the partial state as prior state
-	//   - in the happy path, Reading the resource succeeds. 
+	//   - in the happy path, Reading the resource succeeds.
 	// - TF resource Read might return error diagnostics and an empty state
 	//   even if they exist.
 	// - We never get to record the external name, from the previous
 	//   async create.
 	//
-	if lastErr := n.opTracker.LastOperation.Error(); lastErr != nil && n.opTracker.LastOperation.IsEnded() && n.opTracker.LastOperation.Type == "create"{
+	if lastErr := n.opTracker.LastOperation.Error(); lastErr != nil && n.opTracker.LastOperation.IsEnded() && n.opTracker.LastOperation.Type == "create" {
 		if n.recoverExternalName(mg) {
 			defer n.opTracker.LastOperation.Clear(true)
 			n.logger.Debug("recovered external name from last failed async operation", "external-name", meta.GetExternalName(mg))
