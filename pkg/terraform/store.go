@@ -237,11 +237,20 @@ func (ws *WorkspaceStore) Workspace(ctx context.Context, c resource.SecretClient
 	if w.LastOperation.IsRunning() {
 		return w, nil
 	}
-	fp, err := NewFileProducer(ctx, c, dir, tr, ts, cfg, WithFileProducerFeatures(ws.features))
+
+	// these are guaranteed to be never nil, defensively check just in case
+	if cfg.TerraformResource == nil || cfg.TerraformResource.Schema == nil {
+		return nil, errors.New("no Terraform schema found for resource")
+	}
+	_, hasIDInSchema := cfg.TerraformResource.Schema["id"]
+	fp, err := NewFileProducer(ctx, c, dir, tr, ts, cfg, WithFileProducerFeatures(ws.features), WithHasIDAttribute(hasIDInSchema))
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot create a new file producer")
 	}
 
+	// NOTE(erhan): some TF plugin framework-style resources do not have the
+	// `id` attribute in their schema. We anyway set it here, in case we use it
+	// as import ID. In TF CRUD operations, we ignore this for id-less resources.
 	w.terraformID, err = fp.Config.ExternalName.GetIDFn(ctx, meta.GetExternalName(fp.Resource), fp.parameters, fp.Setup.Map())
 	if err != nil {
 		return nil, errors.Wrap(err, errGetID)
