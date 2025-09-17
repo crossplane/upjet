@@ -74,7 +74,7 @@ func NewFileProducer(ctx context.Context, client resource.SecretClient, dir stri
 		Config:   cfg,
 		fs:       afero.Afero{Fs: afero.NewOsFs()},
 		features: &feature.Flags{},
-		hasTFID: true,
+		hasTFID:  true,
 	}
 	for _, f := range opts {
 		f(fp)
