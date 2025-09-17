@@ -371,13 +371,23 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadata []byt
 		p.Resources[name] = DefaultResource(name, terraformResource, terraformPluginFrameworkResource, providerMetadata.Resources[name], p.DefaultResourceOptions...)
 		p.Resources[name].useTerraformPluginSDKClient = isTerraformPluginSDK
 		p.Resources[name].useTerraformPluginFrameworkClient = isPluginFrameworkResource
+		if isCLIResource {
+			// we explicitly traverse for dynamic-pseudo types for CLI-based
+			// resources and record fieldpaths with dynamic type
+			if err := TraverseSchemas(name, p.Resources[name], &dynamicPseudoTypeTraverser{}); err != nil {
+				panic(errors.Wrap(err, "failed to execute the Terraform dynamic type traverser"))
+			}
+			if len(p.Resources[name].dynamicAttributeConversionPaths) > 0 {
+				p.Resources[name].TerraformConversions = append(p.Resources[name].TerraformConversions, NewTFDynamicValueConversion())
+			}
+		}
 		// traverse the Terraform resource schema to initialize the upjet Resource
 		// configurations
 		if err := TraverseSchemas(name, p.Resources[name], p.schemaTraversers...); err != nil {
 			panic(errors.Wrap(err, "failed to execute the Terraform schema traverser chain"))
 		}
 		// traverse the Terraform Framework resource schema to register conversions
-		// PseudoDynamicType attributes
+		// PseudoDynamicType attributes. the traversal is done on the framework schema.
 		if isPluginFrameworkResource {
 			paths, err := frameworkDynamicTypeAttributePaths(name, p.Resources[name].TerraformPluginFrameworkResource)
 			if err != nil {
