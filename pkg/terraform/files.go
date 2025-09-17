@@ -66,7 +66,7 @@ func WithHasIDAttribute(hasTerraformID bool) FileProducerOption {
 }
 
 // NewFileProducer returns a new FileProducer.
-func NewFileProducer(ctx context.Context, client resource.SecretClient, dir string, tr resource.Terraformed, ts Setup, cfg *config.Resource, opts ...FileProducerOption) (*FileProducer, error) {
+func NewFileProducer(ctx context.Context, client resource.SecretClient, dir string, tr resource.Terraformed, ts Setup, cfg *config.Resource, opts ...FileProducerOption) (*FileProducer, error) { //nolint:gocyclo // easier to follow as a unit
 	fp := &FileProducer{
 		Resource: tr,
 		Setup:    ts,
@@ -74,6 +74,7 @@ func NewFileProducer(ctx context.Context, client resource.SecretClient, dir stri
 		Config:   cfg,
 		fs:       afero.Afero{Fs: afero.NewOsFs()},
 		features: &feature.Flags{},
+		hasTFID: true,
 	}
 	for _, f := range opts {
 		f(fp)

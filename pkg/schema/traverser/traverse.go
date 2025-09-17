@@ -5,10 +5,10 @@
 package traverser
 
 import (
-	"github.com/crossplane/upjet/v2/pkg/types/conversion/tfjson"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/pkg/errors"
 
+	"github.com/crossplane/upjet/v2/pkg/types/conversion/tfjson"
 	"github.com/crossplane/upjet/v2/pkg/types/name"
 )
 
