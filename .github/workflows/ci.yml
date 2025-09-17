@@ -14,9 +14,9 @@ on:
 
 env:
   # Common versions
-  GO_VERSION: "1.23"
-  GOLANGCI_VERSION: "v1.64.4"
-  DOCKER_BUILDX_VERSION: "v0.18.0"
+  GO_VERSION: "1.24"
+  GOLANGCI_VERSION: "v1.64.8"
+  DOCKER_BUILDX_VERSION: "v0.28.0"
 
   # Common users. We can't run a step 'if secrets.AWS_USR != ""' but we can run
   # a step 'if env.AWS_USR' != ""', so we copy these to succinctly test whether
@@ -89,7 +89,7 @@ jobs:
       # this action because it leaves 'annotations' (i.e. it comments on PRs to
       # point out linter violations).
       - name: Lint
-        uses: golangci/golangci-lint-action@639cd343e1d3b897ff35927a75193d57cfcba299 # v3
+        uses: golangci/golangci-lint-action@55c2c1448f86e01eaae002a5a3a9624417608d84 # v6.5.2
         with:
           version: ${{ env.GOLANGCI_VERSION }}
 
