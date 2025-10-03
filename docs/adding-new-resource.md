@@ -46,59 +46,73 @@ in many different cases of Terraform ID.
 4. Check if the resource is an Terraform Plugin SDK resource or Terraform Plugin
 Framework resource from the [source code].
 
-- For SDK resources, you will see a comment line like `// @SDKResource` in the
-source code.
-The `aws_redshift_endpoint_access` resource is an SDK resource, go to
-`config/externalname.go` and add the following line to the
-`TerraformPluginSDKExternalNameConfigs` table:
+    - For SDK resources, you will see a comment line like `// @SDKResource` in the
+    source code.
+    The `aws_redshift_endpoint_access` resource is an SDK resource, go to
+    `config/externalname.go` and add the following line to the
+    `TerraformPluginSDKExternalNameConfigs` table:
 
-  - Check the `redshift` group, if there is a group, add the external-name config below:
-  ```golang
-  // redshift
-  ...
-  // Redshift endpoint access can be imported using the endpoint_name
-  "aws_redshift_endpoint_access": config.ParameterAsIdentifier("endpoint_name"),
-  ```
-  - If there is no group, continue by adding the group name as a comment line.
+      - Check the `redshift` group, if there is a group, add the external-name config below:
 
-- For Framework resources, you will see a comment line like 
-`// @FrameworkResource` in the source code. If the resource is a Framework
-resource, add the external-name config to the
-`TerraformPluginFrameworkExternalNameConfigs` table.
+      ```golang
+      // redshift
+      ...
+      // Redshift endpoint access can be imported using the endpoint_name
+      "aws_redshift_endpoint_access": config.ParameterAsIdentifier("endpoint_name"),
+      ```
 
-*Note: Look at the `config/externalnamenottested.go` file and check if there is
-a configuration for the resource and remove it from there.*
+      - If there is no group, continue by adding the group name as a comment line.
+    - For Framework resources, you will see a comment line like
+    `// @FrameworkResource` in the source code. If the resource is a Framework
+    resource, add the external-name config to the
+    `TerraformPluginFrameworkExternalNameConfigs` table.
 
-5. Run `make submodules` to initialize the build submodule and run 
+    > [!TIP]
+    > Look at the `config/externalnamenottested.go` file and check if there is
+    > a configuration for the resource and remove it from there.
+
+5. Run `make submodules` to initialize the build submodule and run
 `make generate`. When the command process is completed, you will see that the
 controller, CRD, generated example, and other necessary files for the resource
 have been created and modified.
 
-```bash
-> git status
-On branch add-redshift-endpoint-access
-Changes not staged for commit:
-  (use "git add <file>..." to update what will be committed)
-  (use "git restore <file>..." to discard changes in working directory)
-	modified:   apis/redshift/v1beta1/zz_generated.conversion_hubs.go
-	modified:   apis/redshift/v1beta1/zz_generated.deepcopy.go
-	modified:   apis/redshift/v1beta1/zz_generated.managed.go
-	modified:   apis/redshift/v1beta1/zz_generated.managedlist.go
-	modified:   apis/redshift/v1beta1/zz_generated.resolvers.go
-	modified:   config/externalname.go
-	modified:   config/externalnamenottested.go
-	modified:   config/generated.lst
-	modified:   internal/controller/zz_monolith_setup.go
-	modified:   internal/controller/zz_redshift_setup.go
-
-Untracked files:
-  (use "git add <file>..." to include in what will be committed)
-	apis/redshift/v1beta1/zz_endpointaccess_terraformed.go
-	apis/redshift/v1beta1/zz_endpointaccess_types.go
-	examples-generated/redshift/v1beta1/endpointaccess.yaml
-	internal/controller/redshift/endpointaccess/
-	package/crds/redshift.aws.upbound.io_endpointaccesses.yaml
-```
+    ```bash
+    $ git status
+    On branch add-redshift-endpoint-access
+    Changes not staged for commit:
+      (use "git add <file>..." to update what will be committed)
+      (use "git restore <file>..." to discard changes in working directory)
+    	modified:   apis/cluster/redshift/v1beta1/zz_generated.conversion_hubs.go
+    	modified:   apis/cluster/redshift/v1beta1/zz_generated.deepcopy.go
+    	modified:   apis/cluster/redshift/v1beta1/zz_generated.managed.go
+    	modified:   apis/cluster/redshift/v1beta1/zz_generated.managedlist.go
+    	modified:   apis/cluster/redshift/v1beta1/zz_generated.resolvers.go
+    	modified:   apis/namespaced/redshift/v1beta1/zz_generated.conversion_hubs.go
+    	modified:   apis/namespaced/redshift/v1beta1/zz_generated.deepcopy.go
+    	modified:   apis/namespaced/redshift/v1beta1/zz_generated.managed.go
+    	modified:   apis/namespaced/redshift/v1beta1/zz_generated.managedlist.go
+    	modified:   apis/namespaced/redshift/v1beta1/zz_generated.resolvers.go
+    	modified:   config/externalname.go
+    	modified:   config/externalnamenottested.go
+    	modified:   config/generated.lst
+    	modified:   internal/controller/cluster/zz_monolith_setup.go
+    	modified:   internal/controller/cluster/zz_redshift_setup.go
+    	modified:   internal/controller/namespaced/zz_monolith_setup.go
+    	modified:   internal/controller/namespaced/zz_redshift_setup.go
+    
+    Untracked files:
+      (use "git add <file>..." to include in what will be committed)
+    	apis/cluster/redshift/v1beta1/zz_endpointaccess_terraformed.go
+    	apis/cluster/redshift/v1beta1/zz_endpointaccess_types.go
+    	apis/namespaced/redshift/v1beta1/zz_endpointaccess_terraformed.go
+    	apis/namespaced/redshift/v1beta1/zz_endpointaccess_types.go
+    	examples-generated/cluster/redshift/v1beta1/endpointaccess.yaml
+    	examples-generated/namespacedredshift/v1beta1/endpointaccess.yaml
+    	internal/controller/cluster/redshift/endpointaccess/
+    	internal/controller/namespaced/redshift/endpointaccess/
+    	package/crds/redshift.aws.upbound.io_endpointaccesses.yaml
+    	package/crds/redshift.aws.m.upbound.io_endpointaccesses.yaml
+    ```
 
 6. Go through the "Warning" boxes (if any) in the Terraform Registry page to
 see whether any of the fields are represented as separate resources as well.
@@ -120,94 +134,93 @@ It usually goes like this:
     ```
 
 7. Resource configuration is largely done, so we need to prepare the example
-YAML for testing. Copy `examples-generated/redshift/v1beta1/endpointaccess.yaml`
-into `examples/redshift/v1beta1/endpointaccess.yaml` and check the dependent
-resources, if not, please add them to the YAML file.
+YAML for testing. Copy `examples-generated/cluster/redshift/v1beta1/endpointaccess.yaml`
+into `examples/redshift/cluster/v1beta1/endpointaccess.yaml` and check the dependent
+resources, if not, please add them to the YAML file. Similarly, copy `examples-generated/namespaced/redshift/v1beta1/endpointaccess.yaml` into `examples/redshift/namespaced/v1beta1/endpointaccess.yaml`.
 
-```
-NOTE: The resources that are tried to be created may have dependencies. For
-example, you might actually need resources Y and Z while trying to test resource
-X. Many of the generated examples include these dependencies. However, in some
-cases, there may be missing dependencies. In these cases, please add the
-relevant dependencies to your example manifest. This is important both for you
-to pass the tests and to provide the correct manifests.
-``` 
+    > [!INFO]
+    > The resources that are tried to be created may have dependencies. For
+    > example, you might actually need resources Y and Z while trying to test resource
+    > X. Many of the generated examples include these dependencies. However, in some
+    > cases, there may be missing dependencies. In these cases, please add the
+    > relevant dependencies to your example manifest. This is important both for you
+    > to pass the tests and to provide the correct manifests.
 
-- In our case, the generated example has required fields
-`spec.forProvider.clusterIdentifierSelector` and
-`spec.forProvider.subnetGroupNameSelector`. We need to check its argument list
-in Terraform documentation and figure out which field needs a reference to
-which resource. Let's check the [cluster_identifier] field, we see that the
-field requires a reference to the `Cluster.redshift` resource identifier.
-For the [subnet_group_name] field, we see that the field requires a reference
-to the `SubnetGroup.redshift` resource ID.
+    - In our case, the generated example has required fields
+    `spec.forProvider.clusterIdentifierSelector` and
+    `spec.forProvider.subnetGroupNameSelector`. We need to check its argument list
+    in Terraform documentation and figure out which field needs a reference to
+    which resource. Let's check the [cluster_identifier] field, we see that the
+    field requires a reference to the `Cluster.redshift` resource identifier.
+    For the [subnet_group_name] field, we see that the field requires a reference
+    to the `SubnetGroup.redshift` resource ID.
 
-Then add the `Cluster.redshift` and `SubnetGroup.redshift` resource examples
-to our YAML file and edit the annotations and labels.
+    - Then add the `Cluster.redshift` and `SubnetGroup.redshift` resource examples
+    to our YAML file and edit the annotations and labels.
 
-```yaml
-apiVersion: redshift.aws.upbound.io/v1beta1
-kind: EndpointAccess
-metadata:
-  annotations:
-    meta.upbound.io/example-id: redshift/v1beta1/endpointaccess
-  labels:
-    testing.upbound.io/example-name: example
-  name: example-endpointaccess
-spec:
-  forProvider:
-    clusterIdentifierSelector:
-      matchLabels:
+    ```yaml
+    apiVersion: redshift.aws.upbound.io/v1beta1
+    kind: EndpointAccess
+    metadata:
+      annotations:
+        meta.upbound.io/example-id: redshift/v1beta1/endpointaccess
+      labels:
+        testing.upbound.io/example-name: example
+      name: example-endpointaccess
+    spec:
+      forProvider:
+        clusterIdentifierSelector:
+          matchLabels:
+            testing.upbound.io/example-name: example-endpointaccess
+        region: us-west-1
+        subnetGroupNameSelector:
+          matchLabels:
+            testing.upbound.io/example-name: example-endpointaccess
+    ---
+    apiVersion: redshift.aws.upbound.io/v1beta1
+    kind: Cluster
+    metadata:
+      annotations:
+        meta.upbound.io/example-id: redshift/v1beta1/endpointaccess
+      labels:
         testing.upbound.io/example-name: example-endpointaccess
-    region: us-west-1
-    subnetGroupNameSelector:
-      matchLabels:
+      name: example-endpointaccess-c
+    spec:
+      forProvider:
+        clusterType: single-node
+        databaseName: mydb
+        masterPasswordSecretRef:
+          key: example-key
+          name: cluster-secret
+          namespace: upbound-system
+        masterUsername: exampleuser
+        nodeType: ra3.xlplus
+        region: us-west-1
+        skipFinalSnapshot: true
+    ---
+    apiVersion: redshift.aws.upbound.io/v1beta1
+    kind: SubnetGroup
+    metadata:
+      annotations:
+        meta.upbound.io/example-id: redshift/v1beta1/endpointaccess
+      labels:
         testing.upbound.io/example-name: example-endpointaccess
----
-apiVersion: redshift.aws.upbound.io/v1beta1
-kind: Cluster
-metadata:
-  annotations:
-    meta.upbound.io/example-id: redshift/v1beta1/endpointaccess
-  labels:
-    testing.upbound.io/example-name: example-endpointaccess
-  name: example-endpointaccess-c
-spec:
-  forProvider:
-    clusterType: single-node
-    databaseName: mydb
-    masterPasswordSecretRef:
-      key: example-key
-      name: cluster-secret
-      namespace: upbound-system
-    masterUsername: exampleuser
-    nodeType: ra3.xlplus
-    region: us-west-1
-    skipFinalSnapshot: true
----
-apiVersion: redshift.aws.upbound.io/v1beta1
-kind: SubnetGroup
-metadata:
-  annotations:
-    meta.upbound.io/example-id: redshift/v1beta1/endpointaccess
-  labels:
-    testing.upbound.io/example-name: example-endpointaccess
-  name: example-endpointaccess-sg
-spec:
-  forProvider:
-    region: us-west-1
-    subnetIdRefs:
-    - name: foo
-    - name: bar
-    tags:
-      environment: Production
-```
+      name: example-endpointaccess-sg
+    spec:
+      forProvider:
+        region: us-west-1
+        subnetIdRefs:
+        - name: foo
+        - name: bar
+        tags:
+          environment: Production
+    ```
 
-Here the references for `clusterIdentifier` and `subnetGroupName` are
-[automatically] defined.
+    Here the references for `clusterIdentifier` and `subnetGroupName` are
+    [automatically] defined.
 
-If it is not defined automatically or if you want to define a reference for
-another field, please see [Cross Resource Referencing].
+    If it is not defined automatically or if you want to define a reference for
+   another field, please see [Cross Resource Referencing].
 
 8. Create a commit to cover all changes so that it's easier for the reviewer
 with a message like the following:
@@ -229,7 +242,7 @@ an end-to-end pipeline during the resource configuration process. Together with
 the example manifest generation tool, it allows us to avoid manual interventions
 and shortens testing processes.
 
-## Automated Tests - Uptest 
+## Automated Tests - Uptest
 
 After providing all the required fields of the resource we added and added
 dependent resources, if any, we can start with automatic testing. To trigger
@@ -238,8 +251,21 @@ relevant repo. In other cases, maintainers will trigger automatic tests when
 your PR is ready. To trigger it, you can drop [a comment] on the PR containing
 the following:
 
+For cluster-scoped MR:
+
+```text
+/test-examples="examples/redshift/cluster/v1beta1/endpointaccess.yaml"
 ```
-/test-examples="examples/redshift/v1beta1/endpointaccess.yaml"
+
+After that one passed, trigger for the namespaced MR
+
+> [!WARN]
+> Since cluster-scoped MR and the namespaced MR manages the same external
+> resource, it is important to **NOT** trigger them in parallel to prevent
+> interfering.
+
+```text
+/test-examples="examples/redshift/namespaced/v1beta1/endpointaccess.yaml"
 ```
 
 Once the automated tests pass, we're good to go. All you have to do is put
@@ -252,7 +278,7 @@ If the automatic test fails, click on the uptest run details, then click
 In adding the `EndpointAccess.redshift` resource case, we see the following
 error from uptest run logs:
 
-```
+```log
     logger.go:42: 14:32:49 | case/0-apply |     - lastTransitionTime: "2024-05-20T14:25:08Z"
     logger.go:42: 14:32:49 | case/0-apply |       message: 'cannot resolve references: mg.Spec.ForProvider.SubnetGroupName: no
     logger.go:42: 14:32:49 | case/0-apply |         resources matched selector'
@@ -263,7 +289,7 @@ error from uptest run logs:
 
 Make the fixes, create a [new commit], and trigger the automated test again.
 
-**Ignoring Some Resources in Automated Tests**
+### Ignoring Some Resources in Automated Tests
 
 Some resources require manual intervention such as providing valid public keys
 or using on-the-fly values. These cases can be handled in manual tests, but in
@@ -279,11 +305,10 @@ The key is important for skipping. We are checking this
 skip the related resource. The value is also important to see why we skip this
 resource.
 
-```
-NOTE: For resources that are ignored during Automated Tests, manual testing is a
-must, because we need to make sure that all resources published in the `v1beta1`
-version is working.
-```
+> [!INFO]
+> For resources that are ignored during Automated Tests, manual testing is a
+> must, because we need to make sure that all resources published in the `v1beta1`
+> version is working.
 
 ### Running Uptest locally
 
@@ -297,7 +322,7 @@ variables to be set:
 - `UPTEST_DATASOURCE_PATH`: (optional), see [Injecting Dynamic Values (and Datasource)]
 
 You can check the e2e target in the Makefile for each provider. Let's check the [target]
-in provider-upjet-aws and run a test for the resource `examples/ec2/v1beta1/vpc.yaml`.
+in provider-upjet-aws and run a test for the resource `examples/ec2/cluster/v1beta1/vpc.yaml`.
 
 - You can either save your credentials in a file as stated in the target's [comments],
 or you can do it by adding your credentials to the command below.
@@ -309,7 +334,7 @@ aws_secret_access_key = <YOUR-ACCESS_KEY'"
 ```
 
 ```console
-export UPTEST_EXAMPLE_LIST="examples/ec2/v1beta1/vpc.yaml"
+export UPTEST_EXAMPLE_LIST="examples/ec2/cluster/v1beta1/vpc.yaml"
 ```
 
 After setting the above environment variables, run `make e2e`. If the test is
@@ -342,9 +367,9 @@ configurations and credentials for the provider. For example, to connect to the
 cloud provider, we use the credentials field of ProviderConfig. For creating the
 ProviderConfig with correct credentials, please see:
 
-- [Create a Kubernetes secret with the AWS credentials]
-- [Create a Kubernetes secret with the Azure credentials]
-- [Create a Kubernetes secret with the GCP credentials]
+    - [Create a Kubernetes secret with the AWS credentials]
+    - [Create a Kubernetes secret with the Azure credentials]
+    - [Create a Kubernetes secret with the GCP credentials]
 
 3. Start Provider: For every Custom Resource, there is a controller and these
 controllers are part of the provider. So, for starting the reconciliations for
@@ -354,23 +379,23 @@ running provider: Run `make run`
 4. Now, you can create the examples you've generated and check events/logs to
 spot problems and fix them.
 
-- Start Testing: After completing the steps above, your environment is ready for
+Start Testing: After completing the steps above, your environment is ready for
 testing. There are 3 steps we need to verify in manual tests: `Apply`, `Import`,
 `Delete`.
 
-### Apply:
+### Apply
 
 We need to apply the example manifest to the cluster.
 
 ```bash
-kubectl apply -f examples/redshift/v1beta1/endpointaccess.yaml
+kubectl apply -f examples/redshift/cluster/v1beta1/endpointaccess.yaml
 ```
 
 Successfully applying the example manifests to the cluster is only the first
 step. After successfully creating the Managed Resources, we need to check
 whether their statuses are ready or not. So we need to expect a `True` value for
 `Synced` and `Ready` conditions. To check the statuses of all created example
-manifests quickly you can run the `kubectl get managed` command. We will wait
+manifests quickly you can run the `kubectl get managed -A` command. We will wait
 for all values to be `True` in this list:
 
 ```bash
@@ -428,16 +453,18 @@ You should see the output below:
 
 When all of the fields are `True`, the `Apply` test was successfully completed!
 
-### Import
+### Import
 
 There are a few steps to perform the import test, here we will stop the provider,
 delete the status conditions, and check the conditions when we re-run the provider.
 
 - Stop `make run`
 - Delete the status conditions with the following command:
-```bash
-kubectl --subresource=status patch endpointaccess.redshift.aws.upbound.io/example-endpointaccess --type=merge -p '{"status":{"conditions":[]}}'
-```
+
+    ```bash
+    kubectl --subresource=status patch endpointaccess.redshift.aws.upbound.io/example-endpointaccess --type=merge -p '{"status":{"conditions":[]}}'
+    ```
+
 - Store the `status.atProvider.id` field for comparison
 - Run `make run`
 - Make sure that the `Ready`, `Synced`, and `UpToDate` conditions are `True`
@@ -457,18 +484,21 @@ kubectl delete endpointaccess.redshift.aws.upbound.io/example-endpointaccess
 
 When the resource is successfully deleted, the manual testing steps are completed.
 
-```
-IMPORTANT NOTE: `make generate` and `kubectl apply -f package/crds` commands
-must be run after any change that will affect the schema or controller of the
-configured/tested resource.
-
-In addition, the provider needs to be restarted after the changes in the
-controllers, because the controller change actually corresponds to the changes
-made in the running code.
-```
+> [!WARN]
+> IMPORTANT NOTE: `make generate` and `kubectl apply -f package/crds` commands
+> must be run after any change that will affect the schema or controller of the
+> configured/tested resource.
+>
+> In addition, the provider needs to be restarted after the changes in the
+> controllers, because the controller change actually corresponds to the changes
+> made in the running code.
 
 You can look at the [PR] we created for the `EndpointAccess.redshift` resource
-we added in this guide.
+we added in this guide. This PR was created when the provider was on Upjet v1.
+The instructions in this guide were updated for Upjet v2.
+
+You can also check this similar [provider Azure PR] that adds the new
+`VirtualNetworkDNSServers.network` resource on an Upjet v2 provider.
 
 ## External Name Cases
 
@@ -544,7 +574,7 @@ Use `config.TemplatedStringAsIdentifier("<name argument>", "<go template>")` in
 such cases. The following is the list of available parameters for you to use in
 your go template:
 
-```
+```text
 parameters: A tree of parameters that you'd normally see in a Terraform HCL
             file. You can use TF registry documentation of given resource to
             see what's available.
@@ -572,7 +602,6 @@ to name the resource and the import instructions read as the following:
 > $ terraform import aws_glue_user_defined_function.func
 123456789012:my_database:my_func
 
-
 Our configuration would look like the following:
 
 ```golang
@@ -583,14 +612,14 @@ Another prevalent case in AWS is the usage of Amazon Resource Name (ARN) to
 identify a resource. We can use `config.TemplatedStringAsIdentifier` in many of
 those cases like the following:
 
-```
+```golang
 "aws_glue_registry": config.TemplatedStringAsIdentifier("registry_name", "arn:aws:glue:{{ .parameters.region }}:{{ .setup.client_metadata.account_id }}:registry/{{ .external_name }}"),
 ```
 
 However, there are cases where the ARN includes random substring and that would
 fall under Case 4. The following is such an example:
 
-```
+```golang
 // arn:aws:acm-pca:eu-central-1:609897127049:certificate-authority/ba0c7989-9641-4f36-a033-dee60121d595
 	"aws_acmpca_certificate_authority_certificate": config.IdentifierFromProvider,
 ```
@@ -700,6 +729,11 @@ argument to be used as external name and both creation and import scenarios
 would work the same way even if you configured the resources with conversion
 functions between arguments and ID.
 
+### Case 9: Resources without ID in their schema
+
+Terraform resources implemented via the Terraform Plugin Framework, might not
+have a dedicated `id` attribute in their schema.
+
 ## No Matching Case
 
 If it doesn't match any of the cases above, then we'll need to implement the
@@ -711,7 +745,6 @@ One example is [`aws_route`] resource where the ID could use a different
 argument depending on which one is given. You can take a look at the
 implementation [here][route-impl]. [This section] in the
 detailed guide could also help you.
-
 
 [comment]: <> (References)
 
@@ -751,3 +784,4 @@ detailed guide could also help you.
 [target]: https://github.com/crossplane-contrib/provider-upjet-aws/blob/e4b8f222a4baf0ea37caf1d348fe109bf8235dc2/Makefile#L257
 [comments]: https://github.com/crossplane-contrib/provider-upjet-aws/blob/e4b8f222a4baf0ea37caf1d348fe109bf8235dc2/Makefile#L259
 [Uptest]: https://github.com/crossplane/uptest
+[provider Azure PR]: https://github.com/crossplane-contrib/provider-upjet-azure/pull/1069
