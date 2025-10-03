@@ -3,13 +3,13 @@ SPDX-FileCopyrightText: 2025 The Crossplane Authors <https://crossplane.io>
 
 SPDX-License-Identifier: CC-BY-4.0
 -->
-# Upgrading the provider to upjet v2
+# Upgrading the provider to Upjet v2
 
 ## Overview
 
 Upjet v2 introduces support for generating Crossplane v2 compatible providers with namespaced MRs.
 
-This guide describes how to transition an existing Crossplane v1 Upjet-based provider to support v2, using upjet v2.
+This guide describes how to transition an existing Crossplane v1 Upjet-based provider to support Crossplane v2, using Upjet v2.
 
 ### Changes in the namespaced MR APIs
 
@@ -28,7 +28,7 @@ Providers should introduce namespace-scoped `ProviderConfig.acme.m.example.org` 
 
 - Cross-resource references are generated with optional namespace parameter, that defaults to the same namespace as the MRs. You can make cross-namespace cross-resource references.
 
-- Alpha feature External Secret Store support is dropped from Crossplane V2. Therefore `spec.publishConnectionDetailsTo` is removed from **ALL** MRs.
+- Alpha feature External Secret Store support is dropped from Crossplane v2. Therefore `spec.publishConnectionDetailsTo` is removed from **ALL** MRs.
 
 ```yaml
 apiGroup: demogroup.acme.m.example.org
@@ -44,41 +44,42 @@ spec:
     name: foo-demo-conn
   forProvider:
     coolField: "I am cool"
-	passwordSecretRef: # sensitive input parameter
-	  name: very-important-secret # local k8s secret reference only
-	barRef: # cross-resource reference
-	  name: some-bar-resource
-	  namespace: other-ns # optional, defaults to same namespace as the MR.
+    passwordSecretRef: # sensitive input parameter
+      name: very-important-secret # local k8s secret reference only
+    barRef: # cross-resource reference
+      name: some-bar-resource
+      namespace: other-ns # optional, defaults to same namespace as the MR.
 ```
 
-- Crossplane V2 has introduced support for `SafeStart` capability, which starts MR controllers after their CRDs become available. This needs to be implemented by the provider, as described in this guide.
+- Crossplane c2 has introduced support for `SafeStart` capability, which starts
+MR controllers after their CRDs become available.
+This needs to be implemented by the provider, as described in this guide.
 
 ### Backward-compatibility with Crossplane v1
 
-Providers generated with upjet v2 is backward compatible with Crossplane v1 environments, with following notes:
+Providers generated with Upjet v2 is backward compatible with Crossplane v1 environments,
+with following the notes:
 
 - Providers still serve legacy cluster-scoped MRs as is.
   - After upgrade, existing cluster-scoped MRs continue to work.
-  - Only exception is the removal of `spec.publishConnectionDetailsTo` which was an alpha feature, you need to remove those before upgrading if any usage.
-  
+  - Only exception is the removal of `spec.publishConnectionDetailsTo` which was an alpha feature, you need to remove those before upgrading if any usage.  
 - `SafeStart` capability will be disabled. The guide explains the implementation details for properly implementing the safe start.
-
 - Namespaced MRs still get installed alongside cluster-scoped MRs. They can be used standalone, but you cannot compose them in Crossplane v1.
 
 ## Steps
 
-You can refer to [crossplane v2 compatibility PR](https://github.com/crossplane/upjet-provider-template/pull/115) in the [crossplane/upjet-provider-template](https://github.com/crossplane/upjet-provider-template) repo.
+You can refer to [Crossplane v2 compatibility PR](https://github.com/crossplane/upjet-provider-template/pull/115) in the [crossplane/upjet-provider-template](https://github.com/crossplane/upjet-provider-template) repo.
 
 ### Summary
 
-- update to latest upjet version that supports namespaced resources
+- update to latest Upjet version that supports namespaced resources
 - duplicate content into both cluster and namespaced copies and make some minor updates for api groups and import paths
   - config, apis, controllers
 - remove all legacy conversion/migration logic, because only the latest version needs to be supported
 - update the provider main.go template to setup both cluster and namespaced apis and controllers
 - update code generation comment markers to run on both cluster and namespaced types
 - update the generator cmd to init both cluster and namespaced config to pass to code gen pipeline
-- manually copy and update the handful of manual api and controller files to namespaced dirs
+- manually copy and update the handful of manual API and controller files to namespaced dirs
 
 ### Update your go.mod to include latest `upjet`, `crossplane-runtime` and `crossplane-tools`
 
@@ -117,7 +118,7 @@ github.com/crossplane/upjet/ => github.com/crossplane/upjet/v2/
 - in `apis/v1alpha1` remove `StoreConfig` api types and registration
 [Example commit](https://github.com/crossplane-contrib/provider-upjet-azuread/commit/2ece9b6bd4178fe280d81d401683b0ac70a81bef)
 
-### Refactor repo directory structure for upjet v2
+### Refactor repo directory structure for Upjet v2
 
 - move `apis/` to `apis/cluster`, except `generate.go`
 - create empty `apis/namespaced` directory
@@ -144,7 +145,6 @@ type ProviderConfig struct {
 }
 
 ```
-
 
 ### `apis` directory
 
@@ -211,13 +211,11 @@ UP_CHANNEL = stable
 CROSSPLANE_VERSION = 2.0.2
 ```
 
-
-
 ### `internal/controller`
 
 - Move `internal/controller` to `/internal/controller/cluster`
 - In `internal/controller/cluster/providerconfig/config.go`, ensure you pass the `Usage` kind
-[example](https://github.com/crossplane-contrib/provider-upjet-azuread/commit/b7d64d88c010f16c36ee4fed9400950b8b6a9ba3) 
+[example](https://github.com/crossplane-contrib/provider-upjet-azuread/commit/b7d64d88c010f16c36ee4fed9400950b8b6a9ba3)
 
 - In `internal/controller/namespaced/providerconfig/config.go` adjust the setup function, so that it registers controllers for both `ProviderConfig` and `ClusterProviderConfig` types.
 
@@ -245,6 +243,7 @@ func SetupGated(mgr ctrl.Manager, o controller.Options) error {
 `internal/controller/namespaced/providerconfig/config.go`
 
 Note that, we specify 3 GVKs here.
+
 ```go
 // SetupGated adds a controller that reconciles ProviderConfigs by accounting for
 // their current usage.
@@ -257,6 +256,7 @@ func SetupGated(mgr ctrl.Manager, o controller.Options) error {
 	return nil
 }
 ```
+
 [example commit](https://github.com/crossplane-contrib/provider-upjet-azuread/commit/3edaa44a35270175bd6cd7baad05c3d620d90591)
 
 ### Kind aware ProviderConfig handling
@@ -474,7 +474,9 @@ Add examples for the new API groups.
 
 ### Uptest
 
-If you have an uptest setup script and you create a default provider config for tests, make sure that you create a provider config with the new API group `ClusterProviderConfig.foo.m.crossplane.io`.
+If you have an Uptest setup script and you create a default provider config
+for tests, make sure that you create a provider config with the new
+API group `ClusterProviderConfig.foo.m.crossplane.io`.
 
 [example](https://github.com/crossplane-contrib/provider-upjet-azuread/commit/4a5c1acafe2dd2981de1e02279740e6b9a3b7d91)
 
@@ -495,4 +497,5 @@ After generating the provider:
 make local-deploy
 ```
 
-This will create a kind cluster with your provider deployed. Apply some example MRs to validate. Optionally use uptest.
+This will create a kind cluster with your provider deployed. Apply some example MRs to validate.
+Optionally use Uptest.
