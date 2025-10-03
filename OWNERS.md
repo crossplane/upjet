@@ -12,10 +12,10 @@ repository maintainers in their own `OWNERS.md` file.
 
 ## Maintainers
 
-* Alper Ulucinar <alper@upbound.com> ([ulucinar](https://github.com/ulucinar))
-* Sergen Yalcin <sergen@upbound.com> ([sergenyalcin](https://github.com/sergenyalcin))
-* Jean du Plessis <jean@upbound.com> ([jeanduplessis](https://github.com/jeanduplessis))
-* Erhan Cagirici <erhan@upbound.com> ([erhancagirici](https://github.com/erhancagirici))
-* Cem Mergenci <cem@upbound.com> ([mergenci](https://github.com/mergenci))
+* Alper Ulucinar <alper@upbound.io> ([ulucinar](https://github.com/ulucinar))
+* Sergen Yalcin <sergen@upbound.io> ([sergenyalcin](https://github.com/sergenyalcin))
+* Jean du Plessis <jean@upbound.io> ([jeanduplessis](https://github.com/jeanduplessis))
+* Erhan Cagirici <erhan@upbound.io> ([erhancagirici](https://github.com/erhancagirici))
+* Cem Mergenci <cem@upbound.io> ([mergenci](https://github.com/mergenci))
 
 See [CODEOWNERS](./CODEOWNERS) for automatic PR assignment.
