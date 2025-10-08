@@ -18,7 +18,7 @@ expected repository name is in the format `provider-<name>`. For example,
 follow a different naming convention.
 1. Clone the repository to your local environment and `cd` into the repository
 directory.
-1. Fetch the [upbound/build] submodule by running the following
+1. Fetch the [crossplane/build] submodule by running the following
 command:
 
     ```bash
@@ -51,13 +51,13 @@ variables in the `Makefile`:
   ```makefile
   export TERRAFORM_PROVIDER_SOURCE := integrations/github
   export TERRAFORM_PROVIDER_REPO := https://github.com/integrations/terraform-provider-github
-  export TERRAFORM_PROVIDER_VERSION := 5.32.0
+  export TERRAFORM_PROVIDER_VERSION := 6.6.0
   export TERRAFORM_PROVIDER_DOWNLOAD_NAME := terraform-provider-github
-  export TERRAFORM_NATIVE_PROVIDER_BINARY := terraform-provider-github_v5.32.0
+  export TERRAFORM_NATIVE_PROVIDER_BINARY := terraform-provider-github_v6.6.0
   export TERRAFORM_DOCS_PATH := website/docs/r
   ```
 
-  Refer to [the Dockerfile](https://github.com/upbound/upjet-provider-template/blob/main/cluster/images/upjet-provider-template/Dockerfile) to see the variables called when building the provider.
+  Refer to [the Dockerfile](https://github.com/crossplane/upjet-provider-template/blob/main/cluster/images/upjet-provider-template/Dockerfile) to see the variables called when building the provider.
 
 ## Configure the provider resources
 
@@ -123,22 +123,43 @@ variables in the `Makefile`:
 
 1. Next add custom configurations for these two resources as follows:
 
-    - Create custom configuration directory for whole repository group
+    - Create custom configuration directories for whole repository group, both for cluster-scoped and namespaced variant
 
     ```bash
-    mkdir config/repository    
+    mkdir config/cluster/repository
+    mkdir config/namespaced/repository
     ```
 
-    - Create custom configuration directory for whole branch group
+    - Create custom configuration directory for whole branch group, both for cluster-scoped and namespaced variant
 
     ```bash
-    mkdir config/branch
+    mkdir config/cluster/branch
+    mkdir config/namespaced/branch
     ```
 
-    - Create the repository group configuration file
+    - Create the repository group configuration file for cluster-scoped resource
 
     ```bash
-    cat <<EOF > config/repository/config.go
+    cat <<EOF > config/cluster/repository/config.go
+    package repository
+
+    import "github.com/crossplane/upjet/v2/pkg/config"
+
+    // Configure configures individual resources by adding custom ResourceConfigurators.
+    func Configure(p *config.Provider) {
+        p.AddResourceConfigurator("github_repository", func(r *config.Resource) {
+            // We need to override the default group that upjet generated for
+            // this resource, which would be "github"
+            r.ShortGroup = "repository"
+        })
+    }
+    EOF
+    ```
+
+    - Create the repository group configuration file for namespace-scoped resource
+
+    ```bash
+    cat <<EOF > config/namespaced/repository/config.go
     package repository
 
     import "github.com/crossplane/upjet/v2/pkg/config"
@@ -160,7 +181,7 @@ variables in the `Makefile`:
     > Note that you need to change `myorg/provider-github` to your organization.
 
     ```bash
-    cat <<EOF > config/branch/config.go
+    cat <<EOF > config/cluster/branch/config.go
     package branch
 
     import "github.com/crossplane/upjet/v2/pkg/config"
@@ -176,24 +197,53 @@ variables in the `Makefile`:
             // object, we can build cross resource referencing. See
             // repositoryRef in the example in the Testing section below.
             r.References["repository"] = config.Reference{
-                Type: "github.com/myorg/provider-github/apis/repository/v1alpha1.Repository",
+                Type: "github.com/myorg/provider-github/apis/cluster/repository/v1alpha1.Repository",
             }
         })
     }
     EOF
     ```
 
-    And register custom configurations in `config/provider.go`:
+    - Now add the same configuration for namespace-scoped provider configuration
+
+    ```bash
+    cat <<EOF > config/namespaced/branch/config.go
+    package branch
+
+    import "github.com/crossplane/upjet/v2/pkg/config"
+
+    func Configure(p *config.Provider) {
+        p.AddResourceConfigurator("github_branch", func(r *config.Resource) {
+            // We need to override the default group that upjet generated for
+            // this resource, which would be "github"
+            r.ShortGroup = "branch"
+
+            // This resource need the repository in which branch would be created
+            // as an input. And by defining it as a reference to Repository
+            // object, we can build cross resource referencing. See
+            // repositoryRef in the example in the Testing section below.
+            r.References["repository"] = config.Reference{
+                Type: "github.com/myorg/provider-github/apis/namespaced/repository/v1alpha1.Repository",
+            }
+        })
+    }
+    EOF
+    ```
+
+    And register custom configurations in `config/provider.go`, both for cluster-scoped and namespace-scoped provider configuration:
 
     ```diff
     import (
         ...
 
-        ujconfig "github.com/upbound/crossplane/pkg/config"
+        ujconfig "github.com/crossplane/upjet/pkg/config"
 
-    -   "github.com/myorg/provider-github/config/null"
-    +   "github.com/myorg/provider-github/config/branch"
-    +   "github.com/myorg/provider-github/config/repository"
+    -   nullCluster "github.com/myorg/provider-github/config/cluster/null"
+    -   nullNamespaced "github.com/myorg/provider-github/config/namespaced/null"
+    +   branchCluster "github.com/myorg/provider-github/config/cluster/branch"
+    +   repositoryCluster "github.com/myorg/provider-github/config/cluster/repository"
+    +   branchNamespaced "github.com/myorg/provider-github/config/namespaced/branch"
+    +   repositoryNamespaced "github.com/myorg/provider-github/config/namespaced/repository"
      )
 
      func GetProvider() *ujconfig.Provider {
@@ -201,11 +251,23 @@ variables in the `Makefile`:
         for _, configure := range []func(provider *ujconfig.Provider){
                 // add custom config functions
     -           null.Configure,
-    +           repository.Configure,
-    +           branch.Configure,
+    +           repositoryCluster.Configure,
+    +           branchCluster.Configure,
         } {
                 configure(pc)
         }
+     }
+     func GetProviderNamespaced() *ujconfig.Provider {
+        ...
+        for _, configure := range []func(provider *ujconfig.Provider){
+                // add custom config functions
+    -           nullNamespaced.Configure,
+    +           repositoryNamespaced.Configure,
+    +           branchNamespaced.Configure,
+        } {
+                configure(pc)
+        }
+     }
     ```
 
     _To learn more about custom resource configurations (in step 7), please
@@ -229,87 +291,142 @@ Now let's test our generated resources.
 
 1. First, we will create example resources under the `examples` directory:
 
-   Create example directories for repository and branch groups:
+    Create example directories for repository and branch groups:
 
-   ```bash
-   mkdir examples/repository
-   mkdir examples/branch
+    ```bash
+    mkdir examples/cluster/repository
+    mkdir examples/cluster/branch
+    mkdir examples/namespaced/repository
+    mkdir examples/namespaced/branch
+  
+    # remove the sample directory which was an example in the template
+    rm -rf examples/cluster/null
+    rm -rf examples/namespaced/null
+    ```
+  
+    Create a provider secret template:
+  
+    ```bash
+    cat <<EOF > examples/cluster/providerconfig/secret.yaml.tmpl
+    apiVersion: v1
+    kind: Secret
+    metadata:
+      name: example-creds
+      namespace: crossplane-system
+    type: Opaque
+    stringData:
+      credentials: |
+        {
+          "token": "y0ur-t0k3n"
+        }
+    EOF
 
-   # remove the sample directory which was an example in the template
-   rm -rf examples/null
-   ```
+    # namespaced
+    cat <<EOF > examples/namespaced/providerconfig/secret.yaml.tmpl
+    apiVersion: v1
+    kind: Secret
+    metadata:
+      name: example-creds
+      namespace: crossplane-system
+    type: Opaque
+    stringData:
+      credentials: |
+        {
+          "token": "y0ur-t0k3n"
+        }
+    EOF
+    ```
+  
+    Create example for `repository` resource, which will use
+    `upjet-provider-template` repo as template for the repository to be created:
+  
+    ```bash
+    # cluster-scoped
+    cat <<EOF > examples/cluster/repository/repository.yaml
+    apiVersion: repository.github.crossplane.io/v1alpha1
+    kind: Repository
+    metadata:
+      name: hello-crossplane
+    spec:
+      forProvider:
+        description: "Managed with Crossplane Github Provider (generated with Upjet)"
+        visibility: public
+        template:
+          - owner: upbound
+            repository: upjet-provider-template
+      providerConfigRef:
+        name: default
+    EOF
+  
+    # namespace-scoped
+    cat <<EOF > examples/namespaced/repository/repository.yaml
+    apiVersion: repository.github.m.crossplane.io/v1alpha1
+    kind: Repository
+    metadata:
+      name: hello-crossplane-v2
+    spec:
+      forProvider:
+        description: "Managed with Crossplane Github Provider (generated with Upjet)"
+        visibility: public
+        template:
+          - owner: upbound
+            repository: upjet-provider-template
+      providerConfigRef:
+        kind: ClusterProviderConfig
+        name: default
+    EOF
+    ```
 
-   Create a provider secret template:
+    Create `branch` resource which refers to the above repository managed
+    resource:
+  
+    ```bash
+    # cluster-scoped
+    cat <<EOF > examples/cluster/branch/branch.yaml
+    apiVersion: branch.github.crossplane.io/v1alpha1
+    kind: Branch
+    metadata:
+      name: hello-upjet
+    spec:
+      forProvider:
+        repositoryRef:
+          name: hello-crossplane
+      providerConfigRef:
+        name: default
+    EOF
 
-   ```bash
-   cat <<EOF > examples/providerconfig/secret.yaml.tmpl
-   apiVersion: v1
-   kind: Secret
-   metadata:
-     name: example-creds
-     namespace: crossplane-system
-   type: Opaque
-   stringData:
-     credentials: |
-       {
-         "token": "y0ur-t0k3n"
-       }
-   EOF
-   ```
+    # namespace-scoped
+    cat <<EOF > examples/namespaced/branch/branch.yaml
+    apiVersion: branch.github.m.crossplane.io/v1alpha1
+    kind: Branch
+    metadata:
+      name: hello-upjet-v2
+    spec:
+      forProvider:
+        repositoryRef:
+          name: hello-crossplane-v2
+      providerConfigRef:
+        kind: ClusterProviderConfig
+        name: default
+    EOF
+    ```
 
-   Create example for `repository` resource, which will use
-   `upjet-provider-template` repo as template for the repository to be created:
-
-   ```bash
-   cat <<EOF > examples/repository/repository.yaml
-   apiVersion: repository.github.upbound.io/v1alpha1
-   kind: Repository
-   metadata:
-     name: hello-crossplane
-   spec:
-     forProvider:
-       description: "Managed with Crossplane Github Provider (generated with Upjet)"
-       visibility: public
-       template:
-         - owner: upbound
-           repository: upjet-provider-template
-     providerConfigRef:
-       name: default
-   EOF
-   ```
-
-   Create `branch` resource which refers to the above repository managed
-   resource:
-
-   ```bash
-   cat <<EOF > examples/branch/branch.yaml
-   apiVersion: branch.github.upbound.io/v1alpha1
-   kind: Branch
-   metadata:
-     name: hello-upjet
-   spec:
-     forProvider:
-       repositoryRef:
-         name: hello-crossplane
-     providerConfigRef:
-       name: default
-   EOF
-   ```
-
-   In order to change the `apiVersion`, you can use `WithRootGroup` and
-   `WithShortName` options in `config/provider.go` as arguments to
-   `ujconfig.NewProvider`.
+    In order to change the `apiVersion`, you can use `WithRootGroup` and
+    `WithShortName` options in `config/provider.go` as arguments to
+    `ujconfig.NewProvider`.
 
 2. Generate a [Personal Access Token](https://github.com/settings/tokens) for
    your Github account with `repo/public_repo` and `delete_repo` scopes.
 
-3. Create `examples/providerconfig/secret.yaml` from
-   `examples/providerconfig/secret.yaml.tmpl` and set your token in the file:
+3. Create `examples/cluster/providerconfig/secret.yaml` from
+  `examples/cluster/providerconfig/secret.yaml.tmpl` and set your token in the file:
 
-   ```bash
-   GITHUB_TOKEN=<your-token-here>
-   cat examples/providerconfig/secret.yaml.tmpl | sed -e "s/y0ur-t0k3n/${GITHUB_TOKEN}/g" > examples/providerconfig/secret.yaml
-   ```
+    ```bash
+    GITHUB_TOKEN=<your-token-here>
+    cat examples/cluster/providerconfig/secret.yaml.tmpl | sed -e "s/y0ur-t0k3n/${GITHUB_TOKEN}/g" > examples/cluster/providerconfig/secret.yaml
+    # namespaced
+    cat examples/namespaced/providerconfig/secret.yaml.tmpl | sed -e "s/y0ur-t0k3n/${GITHUB_TOKEN}/g" > examples/namespaced/providerconfig/secret.yaml
+    ```
 
 4. Apply CRDs:
 
@@ -330,44 +447,57 @@ Now let's test our generated resources.
 6. Apply ProviderConfig and example manifests (_In another terminal since the
    previous command is blocking_):
 
-   ```bash
-   # Create "crossplane-system" namespace if not exists
-   kubectl create namespace crossplane-system --dry-run=client -o yaml | kubectl apply -f -
+    ```bash
+    # Create "crossplane-system" namespace if not exists
+    kubectl create namespace crossplane-system --dry-run=client -o yaml | kubectl apply -f -
 
-   kubectl apply -f examples/providerconfig/
-   kubectl apply -f examples/repository/repository.yaml
-   kubectl apply -f examples/branch/branch.yaml
-   ```
+    kubectl apply -f examples/cluster/providerconfig/
+    kubectl apply -f examples/cluster/repository/repository.yaml
+    kubectl apply -f examples/cluster/branch/branch.yaml
+
+    kubectl apply -f examples/namespaced/providerconfig/
+    kubectl apply -f examples/namespaced/repository/repository.yaml
+    kubectl apply -f examples/namespaced/branch/branch.yaml
+    ```
 
 7. Observe managed resources and wait until they are ready:
 
-   ```bash
-   watch kubectl get managed
-   ```
+    ```bash
+    watch kubectl get managed -A
+    ```
 
-   ```bash
-   NAME                                                   READY   SYNCED   EXTERNAL-NAME                     AGE
-   branch.branch.github.jet.crossplane.io/hello-upjet   True    True     hello-crossplane:hello-upjet   89s
+    ```bash
+    NAME                                             SYNCED   READY   EXTERNAL-NAME   AGE
+    branch.branch.github.crossplane.io/hello-upjet   True     True    hello-upjet     3m30s
 
-   NAME                                                             READY   SYNCED   EXTERNAL-NAME      AGE
-   repository.repository.github.jet.crossplane.io/hello-crossplane   True    True     hello-crossplane   89s
-   ```
+    NAMESPACE   NAME                                                  SYNCED   READY   EXTERNAL-NAME    AGE
+    default     branch.branch.github.m.crossplane.io/hello-upjet-v2   True     True    hello-upjet-v2   100s
 
-   Verify that repo `hello-crossplane` and branch `hello-upjet` created under
-   your GitHub account.
+    NAMESPACE   NAME                                                          SYNCED   READY   EXTERNAL-NAME      AGE
+                repository.repository.github.crossplane.io/hello-crossplane   True     True    hello-crossplane   3m30s
 
-8. You can check the errors and events by calling `kubectl describe` for either
-   of the resources.
+    NAMESPACE   NAME                                                               SYNCED   READY   EXTERNAL-NAME         AGE
+    default     repository.repository.github.m.crossplane.io/hello-crossplane-v2   True     True    hello-crossplane-v2   100s
+    ```
+
+    Verify that:
+    - repo `hello-crossplane` and branch `hello-upjet`
+    - repo `hello-crossplane-v2` and branch `hello-upjet-v2`
+    created under your GitHub account.
+
+8. You can check the errors and events by calling `kubectl describe` for either of the resources.
 
 9. Cleanup
 
-   ```bash
-   kubectl delete -f examples/branch/branch.yaml
-   kubectl delete -f examples/repository/repository.yaml
-   ```
+    ```bash
+    kubectl delete -f examples/cluster/branch/branch.yaml
+    kubectl delete -f examples/cluster/repository/repository.yaml
 
-   Verify that the repo got deleted once deletion is completed on the control
-   plane.
+    kubectl delete -f examples/namespaced/branch/branch.yaml
+    kubectl delete -f examples/namespaced/repository/repository.yaml
+    ```
+
+    Verify that the repo got deleted once deletion is completed on the control plane.
 
 ## Next steps
 
@@ -377,7 +507,7 @@ your provider, you can learn more about
 [testing your resources](testing-with-uptest.md) with Uptest.
 
 [Terraform GitHub provider]: https://registry.terraform.io/providers/integrations/github/latest/docs
-[upjet-provider-template]: https://github.com/upbound/upjet-provider-template
-[upbound/build]: https://github.com/upbound/build
+[upjet-provider-template]: https://github.com/crossplane/upjet-provider-template
+[crossplane/build]: https://github.com/crossplane/build
 [github_repository]: https://registry.terraform.io/providers/integrations/github/latest/docs/resources/repository
 [github_branch]: https://registry.terraform.io/providers/integrations/github/latest/docs/resources/branch
