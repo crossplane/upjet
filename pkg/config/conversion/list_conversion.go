@@ -90,7 +90,9 @@ type ConvertOptions struct {
 // an embedded object will be converted into a singleton list or a singleton
 // list will be converted into an embedded object) is determined by the mode
 // parameter.
-func Convert(params map[string]any, paths []string, mode ListConversionMode, opts *ConvertOptions) (map[string]any, error) { //nolint:gocyclo // easier to follow as a unit
+func Convert(params map[string]any, p []string, mode ListConversionMode, opts *ConvertOptions) (map[string]any, error) { //nolint:gocyclo // easier to follow as a unit
+	// make a copy of p to prevent races on the configured conversion paths.
+	paths := append([]string(nil), p...)
 	switch mode {
 	case ToSingletonList:
 		slices.Sort(paths)

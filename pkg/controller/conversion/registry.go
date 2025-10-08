@@ -5,6 +5,7 @@
 package conversion
 
 import (
+	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 
@@ -23,6 +24,17 @@ var instance *registry
 type registry struct {
 	provider *config.Provider
 	scheme   *runtime.Scheme
+	logger   logging.Logger
+}
+
+// RegistryOption sets an option for the conversion registry.
+type RegistryOption func(*registry)
+
+// WithLogger configures the logger to be used with the conversion registry.
+func WithLogger(logger logging.Logger) RegistryOption {
+	return func(r *registry) {
+		r.logger = logger
+	}
 }
 
 // RegisterConversions registers the API version conversions from the specified
@@ -56,12 +68,16 @@ func GetConversions(tr resource.Terraformed) []conversion.Conversion {
 // for the types whose versions are to be converted. If a registration for a
 // Go schema is not found in the specified registry, RoundTrip does not error
 // but only wildcard conversions must be used with the registry.
-func RegisterConversions(provider *config.Provider, scheme *runtime.Scheme) error {
+func RegisterConversions(provider *config.Provider, scheme *runtime.Scheme, opts ...RegistryOption) error {
 	if instance != nil {
 		return errors.New(errAlreadyRegistered)
 	}
 	instance = &registry{
 		scheme: scheme,
+		logger: logging.NewNopLogger(),
+	}
+	for _, o := range opts {
+		o(instance)
 	}
 	return instance.RegisterConversions(provider)
 }
