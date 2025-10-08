@@ -45,6 +45,7 @@ func (r *registry) RoundTrip(dst, src resource.Terraformed) error { //nolint:goc
 	}
 
 	// first PrioritizedManagedConversions are run in their registration order
+	r.logger.Debug("Running the registered PrioritizedManagedConversions.")
 	for _, c := range r.GetConversions(dst) {
 		if pc, ok := c.(conversion.PrioritizedManagedConversion); ok {
 			if _, err := pc.ConvertManaged(src, dst); err != nil {
@@ -65,6 +66,7 @@ func (r *registry) RoundTrip(dst, src resource.Terraformed) error { //nolint:goc
 	srcPaved := fieldpath.Pave(srcMap)
 	dstPaved := fieldpath.Pave(dstMap)
 	// then run the PavedConversions
+	r.logger.Debug("Running the registered PavedConversions.")
 	for _, c := range r.GetConversions(dst) {
 		if pc, ok := c.(conversion.PavedConversion); ok {
 			if _, err := pc.ConvertPaved(srcPaved, dstPaved); err != nil {
@@ -79,6 +81,7 @@ func (r *registry) RoundTrip(dst, src resource.Terraformed) error { //nolint:goc
 	}
 
 	// finally at the third stage, run the ManagedConverters
+	r.logger.Debug("Running the registered ManagedConverters.")
 	for _, c := range r.GetConversions(dst) {
 		if tc, ok := c.(conversion.ManagedConversion); ok {
 			if _, ok := tc.(conversion.PrioritizedManagedConversion); ok {
