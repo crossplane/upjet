@@ -52,7 +52,11 @@ func (cc ResourceConfiguratorChain) Configure(r *Resource) {
 type BasePackages struct {
 	APIVersion []string
 	// Deprecated: Use ControllerMap instead.
-	Controller    []string
+	Controller []string
+	// ControllerMap is a map from:
+	// <API group name>/<resource name> to <provider package name>.
+	// An example is "azure/resourcegroup: config", where "config" represents
+	// the config package (provider family package).
 	ControllerMap map[string]string
 }
 
