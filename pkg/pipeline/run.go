@@ -207,7 +207,11 @@ func (r *PipelineRunner) Run(pc *config.Provider) []string { //nolint:gocyclo
 					panic(errors.Wrapf(err, "cannot generate controller for resource %s", name))
 				}
 				controllerPkgMap[shortGroup] = append(controllerPkgMap[shortGroup], ctrlPkgPath)
-				controllerPkgMap[config.PackageNameMonolith] = append(controllerPkgMap[config.PackageNameMonolith], ctrlPkgPath)
+				// if the controller is not already added as a base package controller
+				// to the monolith provider.
+				if len(pc.BasePackages.ControllerMap[strings.TrimPrefix(ctrlPkgPath, strings.TrimSuffix(r.ModulePathControllers, "/")+"/")]) == 0 {
+					controllerPkgMap[config.PackageNameMonolith] = append(controllerPkgMap[config.PackageNameMonolith], ctrlPkgPath)
+				}
 				if err := exampleGen.Generate(group, version, resources[name]); err != nil {
 					panic(errors.Wrapf(err, "cannot generate example manifest for resource %s", name))
 				}
