@@ -60,6 +60,15 @@ type BasePackages struct {
 	ControllerMap map[string]string
 }
 
+// ExampleManifestConfiguration is the configuration for example manifest
+// generation pipeline.
+type ExampleManifestConfiguration struct {
+	// ManagedResourceNamespace is the namespace used for the namespace-scoped
+	// managed resource example manifests. Default namespace is upbound-system
+	// if not overridden.
+	ManagedResourceNamespace string
+}
+
 // Provider holds configuration for a provider to be generated with Upjet.
 type Provider struct {
 	// TerraformResourcePrefix is the prefix used in all resources of this
@@ -152,6 +161,10 @@ type Provider struct {
 	// TerraformPluginFrameworkProvider is the Terraform provider reference
 	// in Terraform Plugin Framework compatible format
 	TerraformPluginFrameworkProvider fwprovider.Provider
+
+	// ExampleManifestConfiguration is the optional example manifest
+	// generation pipeline configuration for the provider.
+	ExampleManifestConfiguration ExampleManifestConfiguration
 
 	// refInjectors is an ordered list of `ReferenceInjector`s for
 	// injecting references across this Provider's resources.
@@ -284,6 +297,14 @@ func WithMainTemplate(template string) ProviderOption {
 func WithSchemaTraversers(traversers ...traverser.SchemaTraverser) ProviderOption {
 	return func(p *Provider) {
 		p.schemaTraversers = traversers
+	}
+}
+
+// WithExampleManifestConfiguration configures the example manifest generation
+// pipeline for the provider.
+func WithExampleManifestConfiguration(emc ExampleManifestConfiguration) ProviderOption {
+	return func(p *Provider) {
+		p.ExampleManifestConfiguration = emc
 	}
 }
 
