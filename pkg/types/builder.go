@@ -283,21 +283,6 @@ func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, cp
 					return nil, nil, errors.Errorf("element type of %s is computed but the underlying schema does not return observation type", traverser.FieldPath(names))
 				}
 				elemType = obsType
-				// There are some types that are computed and not optional (observation field) but also has nested fields
-				// that can go under spec. This check prevents the elimination of fields in parameter type, by checking
-				// whether the schema in observation type has nested parameter (spec) fields.
-				if paramType.Underlying().String() != emptyStruct {
-					var tParam, tInit types.Type
-					if cfg.SchemaElementOptions.EmbeddedObject(cpath) || f.Schema.Type == conversiontfjson.SchemaTypeObject {
-						tParam = types.NewPointer(paramType)
-						tInit = types.NewPointer(initType)
-					} else {
-						tParam = types.NewSlice(paramType)
-						tInit = types.NewSlice(initType)
-					}
-					r.addParameterField(f, types.NewField(token.NoPos, g.Package, f.Name.Camel, tParam, false))
-					r.addInitField(f, types.NewField(token.NoPos, g.Package, f.Name.Camel, tInit, false), g, nil)
-				}
 			default:
 				if paramType == nil {
 					return nil, nil, errors.Errorf("element type of %s is configurable but the underlying schema does not return a parameter type", traverser.FieldPath(names))
@@ -399,7 +384,7 @@ func newTopLevelRequiredParam(path string, includeInit bool) *topLevelRequiredPa
 }
 
 func (r *resource) addParameterField(f *Field, field *types.Var) {
-	requiredBySchema := !f.Schema.Optional || f.Required
+	requiredBySchema := (!f.Schema.Optional && !f.Schema.Computed) || f.Required
 	// Note(turkenh): We are collecting the top level required parameters that
 	// are not identifier fields. This is for generating CEL validation rules for
 	// those parameters and not to require them if the management policy is set

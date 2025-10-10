@@ -98,10 +98,13 @@ func tfJSONAttributeToV2Schema(attr *tfjson.SchemaAttribute) *schemav2.Schema {
 func tfJSONNestedAttributeTypeToV2Schema(nestedAttr *tfjson.SchemaAttribute) *schemav2.Schema {
 	na := nestedAttr.AttributeNestedType
 	v2sch := &schemav2.Schema{
-		MinItems: int(na.MinItems), //nolint:gosec
-		MaxItems: int(na.MaxItems), //nolint:gosec
-		Required: nestedAttr.Required,
-		Optional: nestedAttr.Optional,
+		MinItems:   int(na.MinItems), //nolint:gosec
+		MaxItems:   int(na.MaxItems), //nolint:gosec
+		Required:   nestedAttr.Required,
+		Optional:   nestedAttr.Optional,
+		Computed:   nestedAttr.Computed,
+		Sensitive:  nestedAttr.Sensitive,
+		Deprecated: deprecatedMessage(nestedAttr.Deprecated),
 	}
 	switch na.NestingMode {
 	case tfjson.SchemaNestingModeSet:
