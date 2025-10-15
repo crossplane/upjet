@@ -8,6 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/pkg/errors"
 
+	"github.com/crossplane/upjet/v2/pkg/types/conversion/tfjson"
 	"github.com/crossplane/upjet/v2/pkg/types/name"
 )
 
@@ -117,11 +118,23 @@ func traverse(tfResource *schema.Resource, pNode Node, visitors ...SchemaTravers
 					return errors.Wrapf(err, "failed to visit the *schema.Resource node at path %s", FieldPathWithWildcard(node.TFPath))
 				}
 			}
-			// only list and set types support an elem type of resource.
-			node.CRDPath = append(node.CRDPath, wildcard)
-			node.TFPath = append(node.TFPath, wildcard)
+			if s.Type != tfjson.SchemaTypeObject {
+				node.CRDPath = append(node.CRDPath, wildcard)
+				node.TFPath = append(node.TFPath, wildcard)
+			}
 			if err := traverse(e, node, visitors...); err != nil {
 				return err
+			}
+		default:
+			// this is a primitive type or a dynamic type
+			for _, v := range visitors {
+				n := SchemaNode{
+					Node:       node,
+					ElemSchema: nil,
+				}
+				if err := n.Accept(v); err != nil {
+					return errors.Wrapf(err, "failed to visit the *schema.Schema node at path %s", FieldPathWithWildcard(node.TFPath))
+				}
 			}
 		}
 	}

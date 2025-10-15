@@ -57,8 +57,16 @@ func WithFileProducerFeatures(f *feature.Flags) FileProducerOption {
 	}
 }
 
+// WithHasIDAttribute configures whether the Terraform resource
+// has ID attribute in its schema
+func WithHasIDAttribute(hasTerraformID bool) FileProducerOption {
+	return func(fp *FileProducer) {
+		fp.hasTFID = hasTerraformID
+	}
+}
+
 // NewFileProducer returns a new FileProducer.
-func NewFileProducer(ctx context.Context, client resource.SecretClient, dir string, tr resource.Terraformed, ts Setup, cfg *config.Resource, opts ...FileProducerOption) (*FileProducer, error) {
+func NewFileProducer(ctx context.Context, client resource.SecretClient, dir string, tr resource.Terraformed, ts Setup, cfg *config.Resource, opts ...FileProducerOption) (*FileProducer, error) { //nolint:gocyclo // easier to follow as a unit
 	fp := &FileProducer{
 		Resource: tr,
 		Setup:    ts,
@@ -66,6 +74,7 @@ func NewFileProducer(ctx context.Context, client resource.SecretClient, dir stri
 		Config:   cfg,
 		fs:       afero.Afero{Fs: afero.NewOsFs()},
 		features: &feature.Flags{},
+		hasTFID:  true,
 	}
 	for _, f := range opts {
 		f(fp)
@@ -105,6 +114,11 @@ func NewFileProducer(ctx context.Context, client resource.SecretClient, dir stri
 		return nil, errors.Wrap(err, "cannot get sensitive parameters")
 	}
 	fp.Config.ExternalName.SetIdentifierArgumentFn(params, meta.GetExternalName(tr))
+	// apply dynamic-pseudo type conversions to params here
+	params, err = cfg.ApplyTFConversions(params, config.ToTerraform)
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot apply terraform parameter conversions")
+	}
 	fp.parameters = params
 
 	obs, err := tr.GetObservation()
@@ -153,6 +167,7 @@ type FileProducer struct {
 	ignored     []string
 	fs          afero.Afero
 	features    *feature.Flags
+	hasTFID     bool
 }
 
 // BuildMainTF produces the contents of the mainTF file as a map.  This format is conducive to
@@ -239,7 +254,11 @@ func (fp *FileProducer) EnsureTFState(_ context.Context, tfID string) error { //
 	for k, v := range fp.observation {
 		base[k] = v
 	}
-	base["id"] = tfID
+
+	// for TF resources without ID, don't set the `id` parameter
+	if fp.hasTFID {
+		base["id"] = tfID
+	}
 	attr, err := json.JSParser.Marshal(base)
 	if err != nil {
 		return errors.Wrap(err, errMarshalAttributes)
@@ -305,6 +324,13 @@ func (fp *FileProducer) isStateEmpty() (bool, error) {
 	if err := json.JSParser.Unmarshal(attrData, &attr); err != nil {
 		return false, errors.Wrap(err, errUnmarshalAttr)
 	}
+
+	// for ID-less resource schemas, don't check for
+	// ID and assume empty when there is no attribute
+	if !fp.hasTFID {
+		return len(attr) == 0, nil
+	}
+
 	id, ok := attr["id"]
 	if !ok {
 		return true, nil

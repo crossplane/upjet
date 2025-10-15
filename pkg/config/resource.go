@@ -16,6 +16,7 @@ import (
 	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	fwresource "github.com/hashicorp/terraform-plugin-framework/resource"
 	rschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
@@ -165,6 +166,19 @@ type ExternalName struct {
 	// management policy is including the Observe Only, different from other
 	// (required) fields.
 	IdentifierFields []string
+
+	// IsNotFoundDiagnosticFn determines whether the diagnostics
+	// returned by the TF provider ReadResource call should be
+	// treated as the external resource was not found.
+	// Valid only for TF Plugin Framework resources.
+	// Most resources won't need this, configure when needed.
+	// Some TF Plugin Framework resource Read implementations return
+	// error-severity diagnostics when external resource does not exist,
+	// instead of just returning an empty state.
+	// This function should return `true` when you want to
+	// "ignore" the supplied diagnostics, i.e. they
+	// correspond to "resource not found".
+	IsNotFoundDiagnosticFn func(diags []*tfprotov6.Diagnostic) bool
 }
 
 // References represents reference resolver configurations for the fields of a
@@ -507,6 +521,13 @@ type Resource struct {
 	// embedded objects after reading the state from the Terraform stack.
 	listConversionPaths map[string]string
 
+	// dynamicAttributeConversionPaths is a list of CRD field paths,
+	// of attributes that are TF dynamic pseudo-types. Such attributes include
+	// both their implicit type and value info in their Terraform state
+	// representation. Therefore, they need conversion before passing them to
+	// Terraform stack at runtime.
+	dynamicAttributeConversionPaths []string
+
 	// TerraformConfigurationInjector allows a managed resource to inject
 	// configuration values in the Terraform configuration map obtained by
 	// deserializing its `spec.forProvider` value. Managed resources can
@@ -693,6 +714,12 @@ func (r *Resource) CRDListConversionPaths() []string {
 		l = append(l, v)
 	}
 	return l
+}
+
+// TFDynamicAttributeConversionPaths returns the Resource's runtime Terraform
+// DynamicPseudoType conversion paths in TF fieldpath syntax.
+func (r *Resource) TFDynamicAttributeConversionPaths() []string {
+	return r.dynamicAttributeConversionPaths
 }
 
 // CRDStorageVersion returns the CRD storage version if configured. If not,

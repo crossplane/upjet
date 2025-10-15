@@ -163,7 +163,8 @@ func TestEnsureTFState(t *testing.T) {
 
 func TestIsStateEmpty(t *testing.T) {
 	type args struct {
-		fs func() afero.Afero
+		fs     func() afero.Afero
+		skipID bool
 	}
 	type want struct {
 		empty bool
@@ -202,7 +203,7 @@ func TestIsStateEmpty(t *testing.T) {
 			},
 		},
 		"NoID": {
-			reason: "If there is no ID in the state, that means state is empty",
+			reason: "If there is no ID in the state and the resource has ID in its schema, that means state is empty",
 			args: args{
 				fs: func() afero.Afero {
 					f := afero.Afero{Fs: afero.NewMemMapFs()}
@@ -223,6 +224,56 @@ func TestIsStateEmpty(t *testing.T) {
 			},
 			want: want{
 				empty: true,
+			},
+		},
+		"NoIDWithIDlessSchemaEmptyAttributes": {
+			reason: "If there is no ID in the state but the resource does NOT have ID in its schema, state file should be empty when there is no attributes",
+			args: args{
+				fs: func() afero.Afero {
+					f := afero.Afero{Fs: afero.NewMemMapFs()}
+					s := json.NewStateV4()
+					s.Resources = []json.ResourceStateV4{
+						{
+							Instances: []json.InstanceObjectStateV4{
+								{
+									AttributesRaw: []byte(`{}`),
+								},
+							},
+						},
+					}
+					d, _ := json.JSParser.Marshal(s)
+					_ = f.WriteFile(filepath.Join(dir, "terraform.tfstate"), d, 0600)
+					return f
+				},
+				skipID: true,
+			},
+			want: want{
+				empty: true,
+			},
+		},
+		"NoIDWithIDlessSchema": {
+			reason: "If there is no ID in the state but the resource does NOT have ID in its schema, state file is not empty if it has other potential identifiers",
+			args: args{
+				fs: func() afero.Afero {
+					f := afero.Afero{Fs: afero.NewMemMapFs()}
+					s := json.NewStateV4()
+					s.Resources = []json.ResourceStateV4{
+						{
+							Instances: []json.InstanceObjectStateV4{
+								{
+									AttributesRaw: []byte(`{"foo_id": "someid", "bar_field": "baz"}`),
+								},
+							},
+						},
+					}
+					d, _ := json.JSParser.Marshal(s)
+					_ = f.WriteFile(filepath.Join(dir, "terraform.tfstate"), d, 0600)
+					return f
+				},
+				skipID: true,
+			},
+			want: want{
+				empty: false,
 			},
 		},
 		"NonStringID": {
@@ -282,6 +333,7 @@ func TestIsStateEmpty(t *testing.T) {
 				},
 				Setup{},
 				config.DefaultResource("upjet_resource", nil, nil, nil), WithFileSystem(tc.args.fs()),
+				WithHasIDAttribute(!tc.args.skipID),
 			)
 			empty, err := fp.isStateEmpty()
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {

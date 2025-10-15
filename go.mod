@@ -4,9 +4,7 @@
 
 module github.com/crossplane/upjet/v2
 
-go 1.24.0
-
-toolchain go1.24.5
+go 1.24.7
 
 require (
 	dario.cat/mergo v1.0.2
@@ -25,7 +23,7 @@ require (
 	github.com/iancoleman/strcase v0.2.0
 	github.com/json-iterator/go v1.1.12
 	github.com/mitchellh/go-ps v1.0.0
-	github.com/muvaf/typewriter v0.0.0-20210910160850-80e49fe1eb32
+	github.com/muvaf/typewriter v0.0.0-20240614220100-70f9d4a54ea0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.22.0
 	github.com/spf13/afero v1.12.0
