@@ -15,9 +15,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/pkg/errors"
 
-	"github.com/crossplane/upjet/pkg/registry"
-	"github.com/crossplane/upjet/pkg/schema/traverser"
-	conversiontfjson "github.com/crossplane/upjet/pkg/types/conversion/tfjson"
+	"github.com/crossplane/upjet/v2/pkg/registry"
+	"github.com/crossplane/upjet/v2/pkg/schema/traverser"
+	conversiontfjson "github.com/crossplane/upjet/v2/pkg/types/conversion/tfjson"
 )
 
 // ResourceConfiguratorFn is a function that implements the ResourceConfigurator
@@ -52,8 +52,21 @@ func (cc ResourceConfiguratorChain) Configure(r *Resource) {
 type BasePackages struct {
 	APIVersion []string
 	// Deprecated: Use ControllerMap instead.
-	Controller    []string
+	Controller []string
+	// ControllerMap is a map from:
+	// <API group name>/<resource name> to <provider package name>.
+	// An example is "azure/resourcegroup: config", where "config" represents
+	// the config package (provider family package).
 	ControllerMap map[string]string
+}
+
+// ExampleManifestConfiguration is the configuration for example manifest
+// generation pipeline.
+type ExampleManifestConfiguration struct {
+	// ManagedResourceNamespace is the namespace used for the namespace-scoped
+	// managed resource example manifests. Default namespace is upbound-system
+	// if not overridden.
+	ManagedResourceNamespace string
 }
 
 // Provider holds configuration for a provider to be generated with Upjet.
@@ -148,6 +161,10 @@ type Provider struct {
 	// TerraformPluginFrameworkProvider is the Terraform provider reference
 	// in Terraform Plugin Framework compatible format
 	TerraformPluginFrameworkProvider fwprovider.Provider
+
+	// ExampleManifestConfiguration is the optional example manifest
+	// generation pipeline configuration for the provider.
+	ExampleManifestConfiguration ExampleManifestConfiguration
 
 	// refInjectors is an ordered list of `ReferenceInjector`s for
 	// injecting references across this Provider's resources.
@@ -283,6 +300,14 @@ func WithSchemaTraversers(traversers ...traverser.SchemaTraverser) ProviderOptio
 	}
 }
 
+// WithExampleManifestConfiguration configures the example manifest generation
+// pipeline for the provider.
+func WithExampleManifestConfiguration(emc ExampleManifestConfiguration) ProviderOption {
+	return func(p *Provider) {
+		p.ExampleManifestConfiguration = emc
+	}
+}
+
 // NewProvider builds and returns a new Provider from provider
 // tfjson schema, that is generated using Terraform CLI with:
 // `terraform providers schema --json`
@@ -371,10 +396,33 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadata []byt
 		p.Resources[name] = DefaultResource(name, terraformResource, terraformPluginFrameworkResource, providerMetadata.Resources[name], p.DefaultResourceOptions...)
 		p.Resources[name].useTerraformPluginSDKClient = isTerraformPluginSDK
 		p.Resources[name].useTerraformPluginFrameworkClient = isPluginFrameworkResource
+		if isCLIResource {
+			// we explicitly traverse for dynamic-pseudo types for CLI-based
+			// resources and record fieldpaths with dynamic type
+			if err := TraverseSchemas(name, p.Resources[name], &dynamicPseudoTypeTraverser{}); err != nil {
+				panic(errors.Wrap(err, "failed to execute the Terraform dynamic type traverser"))
+			}
+			if len(p.Resources[name].dynamicAttributeConversionPaths) > 0 {
+				p.Resources[name].TerraformConversions = append(p.Resources[name].TerraformConversions, NewTFDynamicValueConversion())
+			}
+		}
 		// traverse the Terraform resource schema to initialize the upjet Resource
 		// configurations
 		if err := TraverseSchemas(name, p.Resources[name], p.schemaTraversers...); err != nil {
 			panic(errors.Wrap(err, "failed to execute the Terraform schema traverser chain"))
+		}
+		// traverse the Terraform Framework resource schema to register conversions
+		// PseudoDynamicType attributes. the traversal is done on the framework schema.
+		if isPluginFrameworkResource {
+			paths, err := frameworkDynamicTypeAttributePaths(name, p.Resources[name].TerraformPluginFrameworkResource)
+			if err != nil {
+				panic(errors.Wrapf(err, "failed to traverse the framework resource %q for dynamic attributes", name))
+			}
+			if len(paths) > 0 {
+				p.Resources[name].dynamicAttributeConversionPaths = paths
+				p.Resources[name].TerraformConversions = append(p.Resources[name].TerraformConversions, NewTFDynamicValueConversion())
+			}
+
 		}
 	}
 	for i, refInjector := range p.refInjectors {

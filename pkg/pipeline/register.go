@@ -12,15 +12,15 @@ import (
 	"github.com/muvaf/typewriter/pkg/wrapper"
 	"github.com/pkg/errors"
 
-	"github.com/crossplane/upjet/pkg/pipeline/templates"
+	"github.com/crossplane/upjet/v2/pkg/pipeline/templates"
 )
 
 // NewRegisterGenerator returns a new RegisterGenerator.
-func NewRegisterGenerator(rootDir, modulePath string) *RegisterGenerator {
+func NewRegisterGenerator(apiDir, hackDir, apiModulePath string) *RegisterGenerator {
 	return &RegisterGenerator{
-		LocalDirectoryPath: filepath.Join(rootDir, "apis"),
-		LicenseHeaderPath:  filepath.Join(rootDir, "hack", "boilerplate.go.txt"),
-		ModulePath:         modulePath,
+		LocalDirectoryPath: apiDir,
+		LicenseHeaderPath:  filepath.Join(hackDir, "boilerplate.go.txt"),
+		ModulePath:         apiModulePath,
 	}
 }
 
@@ -34,7 +34,7 @@ type RegisterGenerator struct {
 // Generate writes the register file with the content produced using given
 // list of version packages.
 func (rg *RegisterGenerator) Generate(versionPkgList []string) error {
-	registerFile := wrapper.NewFile(filepath.Join(rg.ModulePath, "apis"), "apis", templates.RegisterTemplate,
+	registerFile := wrapper.NewFile(rg.ModulePath, filepath.Base(rg.ModulePath), templates.RegisterTemplate,
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath(rg.LicenseHeaderPath),
 	)
@@ -45,6 +45,7 @@ func (rg *RegisterGenerator) Generate(versionPkgList []string) error {
 		aliases[i] = registerFile.Imports.UsePackage(pkgPath)
 	}
 	vars := map[string]any{
+		"Package": filepath.Base(rg.ModulePath),
 		"Aliases": aliases,
 	}
 	filePath := filepath.Join(rg.LocalDirectoryPath, "zz_register.go")

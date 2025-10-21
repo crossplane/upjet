@@ -5,11 +5,11 @@
 package registry
 
 import (
-	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/fieldpath"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 
-	"github.com/crossplane/upjet/pkg/resource/json"
+	"github.com/crossplane/upjet/v2/pkg/resource/json"
 )
 
 const (

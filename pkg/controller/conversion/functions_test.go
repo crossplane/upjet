@@ -8,18 +8,18 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
-	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
-	"github.com/crossplane/crossplane-runtime/pkg/test"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/fieldpath"
+	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/test"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
-	"github.com/crossplane/upjet/pkg/config"
-	"github.com/crossplane/upjet/pkg/config/conversion"
-	"github.com/crossplane/upjet/pkg/resource"
-	"github.com/crossplane/upjet/pkg/resource/fake"
+	"github.com/crossplane/upjet/v2/pkg/config"
+	"github.com/crossplane/upjet/v2/pkg/config/conversion"
+	"github.com/crossplane/upjet/v2/pkg/resource"
+	"github.com/crossplane/upjet/v2/pkg/resource/fake"
 )
 
 const (
@@ -170,7 +170,7 @@ func TestRoundTrip(t *testing.T) {
 			r := &registry{
 				scheme: s,
 			}
-			if err := r.RegisterConversions(p); err != nil {
+			if err := r.RegisterConversions(p, nil); err != nil {
 				t.Fatalf("\n%s\nRegisterConversions(p): Failed to register the conversions with the registry.\n", tc.reason)
 			}
 			err := r.RoundTrip(tc.args.dst, tc.args.src)

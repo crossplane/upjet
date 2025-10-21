@@ -10,9 +10,9 @@ import (
 	fwresource "github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 
-	"github.com/crossplane/upjet/pkg/config/conversion"
-	"github.com/crossplane/upjet/pkg/registry"
-	tjname "github.com/crossplane/upjet/pkg/types/name"
+	"github.com/crossplane/upjet/v2/pkg/config/conversion"
+	"github.com/crossplane/upjet/v2/pkg/registry"
+	tjname "github.com/crossplane/upjet/v2/pkg/types/name"
 )
 
 const (
@@ -33,17 +33,17 @@ var (
 	DefaultBasePackages = BasePackages{
 		APIVersion: []string{
 			// Default package for ProviderConfig APIs
-			"apis/v1alpha1",
-			"apis/v1beta1",
+			"v1alpha1",
+			"v1beta1",
 		},
 
 		Controller: []string{
 			// Default package for ProviderConfig controllers
-			"internal/controller/providerconfig",
+			"providerconfig",
 		},
 		ControllerMap: map[string]string{
 			// Default package for ProviderConfig controllers
-			"internal/controller/providerconfig": PackageNameConfig,
+			"providerconfig": PackageNameConfig,
 		},
 	}
 

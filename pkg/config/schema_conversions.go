@@ -8,7 +8,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/pkg/errors"
 
-	"github.com/crossplane/upjet/pkg/schema/traverser"
+	"github.com/crossplane/upjet/v2/pkg/schema/traverser"
+	"github.com/crossplane/upjet/v2/pkg/types/conversion/tfjson"
 )
 
 var _ ResourceSetter = &SingletonListEmbedder{}
@@ -73,5 +74,17 @@ func (l *SingletonListEmbedder) VisitResource(r *traverser.ResourceNode) error {
 		return nil
 	}
 	l.r.AddSingletonListConversion(traverser.FieldPathWithWildcard(r.TFPath), traverser.FieldPathWithWildcard(r.CRDPath))
+	return nil
+}
+
+type dynamicPseudoTypeTraverser struct {
+	resourceContext
+	traverser.NoopTraverser
+}
+
+func (p *dynamicPseudoTypeTraverser) VisitSchema(s *traverser.SchemaNode) error {
+	if s.Schema.Type == tfjson.SchemaTypeDynamic {
+		p.r.dynamicAttributeConversionPaths = append(p.r.dynamicAttributeConversionPaths, traverser.FieldPathWithWildcard(s.TFPath))
+	}
 	return nil
 }

@@ -12,16 +12,17 @@ import (
 	"github.com/google/go-cmp/cmp"
 	twtypes "github.com/muvaf/typewriter/pkg/types"
 
-	"github.com/crossplane/upjet/pkg/config"
-	"github.com/crossplane/upjet/pkg/types/name"
+	"github.com/crossplane/upjet/v2/pkg/config"
+	"github.com/crossplane/upjet/v2/pkg/types/name"
 )
 
 func TestBuilder_generateReferenceFields(t *testing.T) {
-	tp := types.NewPackage("github.com/crossplane/upjet/pkg/types", "tjtypes")
+	tp := types.NewPackage("github.com/crossplane/upjet/v2/pkg/types", "tjtypes")
 
 	type args struct {
-		t *types.TypeName
-		f *Field
+		t        *types.TypeName
+		f        *Field
+		crdScope CRDScope
 	}
 	type want struct {
 		outFields   []*types.Var
@@ -34,7 +35,8 @@ func TestBuilder_generateReferenceFields(t *testing.T) {
 	}{
 		"OnlyRefType": {
 			args: args{
-				t: types.NewTypeName(token.NoPos, tp, "Params", types.Universe.Lookup("string").Type()),
+				crdScope: CRDScopeCluster,
+				t:        types.NewTypeName(token.NoPos, tp, "Params", types.Universe.Lookup("string").Type()),
 				f: &Field{
 					Name: name.NewFromCamel("TestField"),
 					Reference: &config.Reference{
@@ -52,14 +54,15 @@ func TestBuilder_generateReferenceFields(t *testing.T) {
 					`json:"testFieldSelector,omitempty" tf:"-"`,
 				},
 				outComments: twtypes.Comments{
-					"github.com/crossplane/upjet/pkg/types.Params:TestFieldRef":      "// Reference to a testObject to populate testField.\n// +kubebuilder:validation:Optional\n",
-					"github.com/crossplane/upjet/pkg/types.Params:TestFieldSelector": "// Selector for a testObject to populate testField.\n// +kubebuilder:validation:Optional\n",
+					"github.com/crossplane/upjet/v2/pkg/types.Params:TestFieldRef":      "// Reference to a testObject to populate testField.\n// +kubebuilder:validation:Optional\n",
+					"github.com/crossplane/upjet/v2/pkg/types.Params:TestFieldSelector": "// Selector for a testObject to populate testField.\n// +kubebuilder:validation:Optional\n",
 				},
 			},
 		},
 		"OnlyRefTypeSlice": {
 			args: args{
-				t: types.NewTypeName(token.NoPos, tp, "Params", types.Universe.Lookup("string").Type()),
+				crdScope: CRDScopeCluster,
+				t:        types.NewTypeName(token.NoPos, tp, "Params", types.Universe.Lookup("string").Type()),
 				f: &Field{
 					Name: name.NewFromCamel("TestField"),
 					Reference: &config.Reference{
@@ -77,14 +80,15 @@ func TestBuilder_generateReferenceFields(t *testing.T) {
 					`json:"testFieldSelector,omitempty" tf:"-"`,
 				},
 				outComments: twtypes.Comments{
-					"github.com/crossplane/upjet/pkg/types.Params:TestFieldRefs":     "// References to testObject to populate testField.\n// +kubebuilder:validation:Optional\n",
-					"github.com/crossplane/upjet/pkg/types.Params:TestFieldSelector": "// Selector for a list of testObject to populate testField.\n// +kubebuilder:validation:Optional\n",
+					"github.com/crossplane/upjet/v2/pkg/types.Params:TestFieldRefs":     "// References to testObject to populate testField.\n// +kubebuilder:validation:Optional\n",
+					"github.com/crossplane/upjet/v2/pkg/types.Params:TestFieldSelector": "// Selector for a list of testObject to populate testField.\n// +kubebuilder:validation:Optional\n",
 				},
 			},
 		},
 		"WithCustomFieldName": {
 			args: args{
-				t: types.NewTypeName(token.NoPos, tp, "Params", types.Universe.Lookup("string").Type()),
+				crdScope: CRDScopeCluster,
+				t:        types.NewTypeName(token.NoPos, tp, "Params", types.Universe.Lookup("string").Type()),
 				f: &Field{
 					Name: name.NewFromCamel("TestField"),
 					Reference: &config.Reference{
@@ -103,14 +107,15 @@ func TestBuilder_generateReferenceFields(t *testing.T) {
 					`json:"testFieldSelector,omitempty" tf:"-"`,
 				},
 				outComments: twtypes.Comments{
-					"github.com/crossplane/upjet/pkg/types.Params:CustomRef":         "// Reference to a TestObject to populate testField.\n// +kubebuilder:validation:Optional\n",
-					"github.com/crossplane/upjet/pkg/types.Params:TestFieldSelector": "// Selector for a TestObject to populate testField.\n// +kubebuilder:validation:Optional\n",
+					"github.com/crossplane/upjet/v2/pkg/types.Params:CustomRef":         "// Reference to a TestObject to populate testField.\n// +kubebuilder:validation:Optional\n",
+					"github.com/crossplane/upjet/v2/pkg/types.Params:TestFieldSelector": "// Selector for a TestObject to populate testField.\n// +kubebuilder:validation:Optional\n",
 				},
 			},
 		},
 		"WithCustomSelectorName": {
 			args: args{
-				t: types.NewTypeName(token.NoPos, tp, "Params", types.Universe.Lookup("string").Type()),
+				crdScope: CRDScopeCluster,
+				t:        types.NewTypeName(token.NoPos, tp, "Params", types.Universe.Lookup("string").Type()),
 				f: &Field{
 					Name: name.NewFromCamel("TestField"),
 					Reference: &config.Reference{
@@ -129,14 +134,15 @@ func TestBuilder_generateReferenceFields(t *testing.T) {
 					`json:"customSelector,omitempty" tf:"-"`,
 				},
 				outComments: twtypes.Comments{
-					"github.com/crossplane/upjet/pkg/types.Params:TestFieldRef":   "// Reference to a TestObject to populate testField.\n// +kubebuilder:validation:Optional\n",
-					"github.com/crossplane/upjet/pkg/types.Params:CustomSelector": "// Selector for a TestObject to populate testField.\n// +kubebuilder:validation:Optional\n",
+					"github.com/crossplane/upjet/v2/pkg/types.Params:TestFieldRef":   "// Reference to a TestObject to populate testField.\n// +kubebuilder:validation:Optional\n",
+					"github.com/crossplane/upjet/v2/pkg/types.Params:CustomSelector": "// Selector for a TestObject to populate testField.\n// +kubebuilder:validation:Optional\n",
 				},
 			},
 		},
 		"ReferenceToAnotherPackage": {
 			args: args{
-				t: types.NewTypeName(token.NoPos, tp, "Params", types.Universe.Lookup("string").Type()),
+				crdScope: CRDScopeCluster,
+				t:        types.NewTypeName(token.NoPos, tp, "Params", types.Universe.Lookup("string").Type()),
 				f: &Field{
 					Name: name.NewFromCamel("TestField"),
 					Reference: &config.Reference{
@@ -154,8 +160,141 @@ func TestBuilder_generateReferenceFields(t *testing.T) {
 					`json:"testFieldSelector,omitempty" tf:"-"`,
 				},
 				outComments: twtypes.Comments{
-					"github.com/crossplane/upjet/pkg/types.Params:TestFieldRef":      "// Reference to a TestObject in somepackage to populate testField.\n// +kubebuilder:validation:Optional\n",
-					"github.com/crossplane/upjet/pkg/types.Params:TestFieldSelector": "// Selector for a TestObject in somepackage to populate testField.\n// +kubebuilder:validation:Optional\n",
+					"github.com/crossplane/upjet/v2/pkg/types.Params:TestFieldRef":      "// Reference to a TestObject in somepackage to populate testField.\n// +kubebuilder:validation:Optional\n",
+					"github.com/crossplane/upjet/v2/pkg/types.Params:TestFieldSelector": "// Selector for a TestObject in somepackage to populate testField.\n// +kubebuilder:validation:Optional\n",
+				},
+			},
+		},
+		// namespaced CRD tests
+		"OnlyRefType_namespaced": {
+			args: args{
+				crdScope: CRDScopeNamespaced,
+				t:        types.NewTypeName(token.NoPos, tp, "Params", types.Universe.Lookup("string").Type()),
+				f: &Field{
+					Name: name.NewFromCamel("TestField"),
+					Reference: &config.Reference{
+						Type: "testObject",
+					},
+					FieldType: types.Universe.Lookup("string").Type(),
+				},
+			}, want: want{
+				outFields: []*types.Var{
+					types.NewField(token.NoPos, tp, "TestFieldRef", types.NewPointer(typeNamespacedReferenceField), false),
+					types.NewField(token.NoPos, tp, "TestFieldSelector", types.NewPointer(typeNamespacedSelectorField), false),
+				},
+				outTags: []string{
+					`json:"testFieldRef,omitempty" tf:"-"`,
+					`json:"testFieldSelector,omitempty" tf:"-"`,
+				},
+				outComments: twtypes.Comments{
+					"github.com/crossplane/upjet/v2/pkg/types.Params:TestFieldRef":      "// Reference to a testObject to populate testField.\n// +kubebuilder:validation:Optional\n",
+					"github.com/crossplane/upjet/v2/pkg/types.Params:TestFieldSelector": "// Selector for a testObject to populate testField.\n// +kubebuilder:validation:Optional\n",
+				},
+			},
+		},
+		"OnlyRefTypeSlice_namespaced": {
+			args: args{
+				crdScope: CRDScopeNamespaced,
+				t:        types.NewTypeName(token.NoPos, tp, "Params", types.Universe.Lookup("string").Type()),
+				f: &Field{
+					Name: name.NewFromCamel("TestField"),
+					Reference: &config.Reference{
+						Type: "testObject",
+					},
+					FieldType: types.NewSlice(types.Universe.Lookup("string").Type()),
+				},
+			}, want: want{
+				outFields: []*types.Var{
+					types.NewField(token.NoPos, tp, "TestFieldRefs", types.NewSlice(typeNamespacedReferenceField), false),
+					types.NewField(token.NoPos, tp, "TestFieldSelector", types.NewPointer(typeNamespacedSelectorField), false),
+				},
+				outTags: []string{
+					`json:"testFieldRefs,omitempty" tf:"-"`,
+					`json:"testFieldSelector,omitempty" tf:"-"`,
+				},
+				outComments: twtypes.Comments{
+					"github.com/crossplane/upjet/v2/pkg/types.Params:TestFieldRefs":     "// References to testObject to populate testField.\n// +kubebuilder:validation:Optional\n",
+					"github.com/crossplane/upjet/v2/pkg/types.Params:TestFieldSelector": "// Selector for a list of testObject to populate testField.\n// +kubebuilder:validation:Optional\n",
+				},
+			},
+		},
+		"WithCustomFieldName_namespaced": {
+			args: args{
+				crdScope: CRDScopeNamespaced,
+				t:        types.NewTypeName(token.NoPos, tp, "Params", types.Universe.Lookup("string").Type()),
+				f: &Field{
+					Name: name.NewFromCamel("TestField"),
+					Reference: &config.Reference{
+						Type:         "TestObject",
+						RefFieldName: "CustomRef",
+					},
+					FieldType: types.Universe.Lookup("string").Type(),
+				},
+			}, want: want{
+				outFields: []*types.Var{
+					types.NewField(token.NoPos, tp, "CustomRef", types.NewPointer(typeNamespacedReferenceField), false),
+					types.NewField(token.NoPos, tp, "TestFieldSelector", types.NewPointer(typeNamespacedSelectorField), false),
+				},
+				outTags: []string{
+					`json:"customRef,omitempty" tf:"-"`,
+					`json:"testFieldSelector,omitempty" tf:"-"`,
+				},
+				outComments: twtypes.Comments{
+					"github.com/crossplane/upjet/v2/pkg/types.Params:CustomRef":         "// Reference to a TestObject to populate testField.\n// +kubebuilder:validation:Optional\n",
+					"github.com/crossplane/upjet/v2/pkg/types.Params:TestFieldSelector": "// Selector for a TestObject to populate testField.\n// +kubebuilder:validation:Optional\n",
+				},
+			},
+		},
+		"WithCustomSelectorName_namespaced": {
+			args: args{
+				crdScope: CRDScopeNamespaced,
+				t:        types.NewTypeName(token.NoPos, tp, "Params", types.Universe.Lookup("string").Type()),
+				f: &Field{
+					Name: name.NewFromCamel("TestField"),
+					Reference: &config.Reference{
+						Type:              "TestObject",
+						SelectorFieldName: "CustomSelector",
+					},
+					FieldType: types.Universe.Lookup("string").Type(),
+				},
+			}, want: want{
+				outFields: []*types.Var{
+					types.NewField(token.NoPos, tp, "TestFieldRef", types.NewPointer(typeNamespacedReferenceField), false),
+					types.NewField(token.NoPos, tp, "CustomSelector", types.NewPointer(typeNamespacedSelectorField), false),
+				},
+				outTags: []string{
+					`json:"testFieldRef,omitempty" tf:"-"`,
+					`json:"customSelector,omitempty" tf:"-"`,
+				},
+				outComments: twtypes.Comments{
+					"github.com/crossplane/upjet/v2/pkg/types.Params:TestFieldRef":   "// Reference to a TestObject to populate testField.\n// +kubebuilder:validation:Optional\n",
+					"github.com/crossplane/upjet/v2/pkg/types.Params:CustomSelector": "// Selector for a TestObject to populate testField.\n// +kubebuilder:validation:Optional\n",
+				},
+			},
+		},
+		"ReferenceToAnotherPackage_namespaced": {
+			args: args{
+				crdScope: CRDScopeNamespaced,
+				t:        types.NewTypeName(token.NoPos, tp, "Params", types.Universe.Lookup("string").Type()),
+				f: &Field{
+					Name: name.NewFromCamel("TestField"),
+					Reference: &config.Reference{
+						Type: "github.com/upbound/official-providers/provider-aws/apis/somepackage/v1beta1.TestObject",
+					},
+					FieldType: types.Universe.Lookup("string").Type(),
+				},
+			}, want: want{
+				outFields: []*types.Var{
+					types.NewField(token.NoPos, tp, "TestFieldRef", types.NewPointer(typeNamespacedReferenceField), false),
+					types.NewField(token.NoPos, tp, "TestFieldSelector", types.NewPointer(typeNamespacedSelectorField), false),
+				},
+				outTags: []string{
+					`json:"testFieldRef,omitempty" tf:"-"`,
+					`json:"testFieldSelector,omitempty" tf:"-"`,
+				},
+				outComments: twtypes.Comments{
+					"github.com/crossplane/upjet/v2/pkg/types.Params:TestFieldRef":      "// Reference to a TestObject in somepackage to populate testField.\n// +kubebuilder:validation:Optional\n",
+					"github.com/crossplane/upjet/v2/pkg/types.Params:TestFieldSelector": "// Selector for a TestObject in somepackage to populate testField.\n// +kubebuilder:validation:Optional\n",
 				},
 			},
 		},
@@ -164,6 +303,7 @@ func TestBuilder_generateReferenceFields(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			g := &Builder{
 				comments: twtypes.Comments{},
+				scope:    tc.args.crdScope,
 			}
 			gotFields, gotTags := g.generateReferenceFields(tc.args.t, tc.args.f)
 			if diff := cmp.Diff(tc.want.outFields, gotFields, cmp.Comparer(func(a, b *types.Var) bool {

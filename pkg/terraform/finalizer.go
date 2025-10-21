@@ -7,7 +7,7 @@ package terraform
 import (
 	"context"
 
-	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
+	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/pkg/errors"
 )
 

@@ -16,8 +16,9 @@ import (
 	"github.com/pkg/errors"
 	"k8s.io/utils/ptr"
 
-	"github.com/crossplane/upjet/pkg/config"
-	"github.com/crossplane/upjet/pkg/schema/traverser"
+	"github.com/crossplane/upjet/v2/pkg/config"
+	"github.com/crossplane/upjet/v2/pkg/schema/traverser"
+	conversiontfjson "github.com/crossplane/upjet/v2/pkg/types/conversion/tfjson"
 )
 
 const (
@@ -30,6 +31,9 @@ const (
 	// description for an injected list map key field in the context of the
 	// server-side apply object list merging
 	descriptionInjectedKey = "This is an injected field with a default value for being able to merge items of the parent object list."
+
+	CRDScopeNamespaced CRDScope = "Namespaced"
+	CRDScopeCluster    CRDScope = "Cluster"
 )
 
 var (
@@ -51,6 +55,8 @@ type Generated struct {
 	ValidationRules string
 }
 
+type CRDScope string
+
 // Builder is used to generate Go type equivalence of given Terraform schema.
 type Builder struct {
 	Package *types.Package
@@ -58,13 +64,16 @@ type Builder struct {
 	genTypes        []*types.Named
 	comments        twtypes.Comments
 	validationRules string
+
+	scope CRDScope
 }
 
 // NewBuilder returns a new Builder.
-func NewBuilder(pkg *types.Package) *Builder {
+func NewBuilder(pkg *types.Package, scope CRDScope) *Builder {
 	return &Builder{
 		Package:  pkg,
 		comments: twtypes.Comments{},
+		scope:    scope,
 	}
 }
 
@@ -216,10 +225,12 @@ func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, cp
 		return types.NewPointer(types.Universe.Lookup("int64").Type()), nil, nil
 	case schema.TypeString:
 		return types.NewPointer(types.Universe.Lookup("string").Type()), nil, nil
-	case schema.TypeMap, schema.TypeList, schema.TypeSet:
+	case schema.TypeMap, schema.TypeList, schema.TypeSet, conversiontfjson.SchemaTypeObject:
 		names = append(names, f.Name.Camel)
-		if f.Schema.Type != schema.TypeMap {
-			// We don't want to have a many-to-many relationship in case of a Map, since we use SecretReference as
+		_, hasNonPrimitiveElement := f.Schema.Elem.(*schema.Resource)
+		isNonPrimitiveMap := (f.Schema.Type == schema.TypeMap) && hasNonPrimitiveElement
+		if (f.Schema.Type != schema.TypeMap && f.Schema.Type != conversiontfjson.SchemaTypeObject) || isNonPrimitiveMap {
+			// We don't want to have a many-to-many relationship in case of a Map of primitives , since we use SecretReference as
 			// the type of XP field. In this case, we want to have a one-to-many relationship which is handled at
 			// runtime in the controller.
 			f.TerraformPaths = append(f.TerraformPaths, wildcard)
@@ -242,6 +253,8 @@ func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, cp
 				elemType = types.Universe.Lookup("string").Type()
 			case schema.TypeMap, schema.TypeList, schema.TypeSet, schema.TypeInvalid:
 				return nil, nil, errors.Errorf("element type of %s is basic but not one of known basic types", traverser.FieldPath(names))
+			default:
+				return nil, nil, errors.Errorf("element type of %s is basic but not one of known types: %v", traverser.FieldPath(names), et)
 			}
 			initElemType = elemType
 		case *schema.Schema:
@@ -270,21 +283,6 @@ func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, cp
 					return nil, nil, errors.Errorf("element type of %s is computed but the underlying schema does not return observation type", traverser.FieldPath(names))
 				}
 				elemType = obsType
-				// There are some types that are computed and not optional (observation field) but also has nested fields
-				// that can go under spec. This check prevents the elimination of fields in parameter type, by checking
-				// whether the schema in observation type has nested parameter (spec) fields.
-				if paramType.Underlying().String() != emptyStruct {
-					var tParam, tInit types.Type
-					if cfg.SchemaElementOptions.EmbeddedObject(cpath) {
-						tParam = types.NewPointer(paramType)
-						tInit = types.NewPointer(initType)
-					} else {
-						tParam = types.NewSlice(paramType)
-						tInit = types.NewSlice(initType)
-					}
-					r.addParameterField(f, types.NewField(token.NoPos, g.Package, f.Name.Camel, tParam, false))
-					r.addInitField(f, types.NewField(token.NoPos, g.Package, f.Name.Camel, tInit, false), g, nil)
-				}
 			default:
 				if paramType == nil {
 					return nil, nil, errors.Errorf("element type of %s is configurable but the underlying schema does not return a parameter type", traverser.FieldPath(names))
@@ -295,8 +293,10 @@ func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, cp
 				// parameter type has nested observation (status) fields.
 				if obsType.Underlying().String() != emptyStruct {
 					var t types.Type
-					if cfg.SchemaElementOptions.EmbeddedObject(cpath) {
+					if cfg.SchemaElementOptions.EmbeddedObject(cpath) || f.Schema.Type == conversiontfjson.SchemaTypeObject { //nolint:gocritic
 						t = types.NewPointer(obsType)
+					} else if f.Schema.Type == schema.TypeMap {
+						t = types.NewMap(types.Universe.Lookup("string").Type(), obsType)
 					} else {
 						t = types.NewSlice(obsType)
 					}
@@ -314,7 +314,7 @@ func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, cp
 		}
 
 		// if the singleton list is to be replaced by an embedded object
-		if cfg.SchemaElementOptions.EmbeddedObject(cpath) {
+		if cfg.SchemaElementOptions.EmbeddedObject(cpath) || f.Schema.Type == conversiontfjson.SchemaTypeObject {
 			return types.NewPointer(elemType), types.NewPointer(initElemType), nil
 		}
 		// NOTE(muvaf): Maps and slices are already pointers, so we don't need to
@@ -323,6 +323,8 @@ func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, cp
 			return types.NewMap(types.Universe.Lookup("string").Type(), elemType), types.NewMap(types.Universe.Lookup("string").Type(), initElemType), nil
 		}
 		return types.NewSlice(elemType), types.NewSlice(initElemType), nil
+	case conversiontfjson.SchemaTypeDynamic:
+		return types.NewPointer(typeK8sAPIExtensionsJson), types.NewPointer(typeK8sAPIExtensionsJson), nil
 	case schema.TypeInvalid:
 		return nil, nil, errors.Errorf("invalid schema type %s", f.Schema.Type.String())
 	default:
@@ -382,7 +384,7 @@ func newTopLevelRequiredParam(path string, includeInit bool) *topLevelRequiredPa
 }
 
 func (r *resource) addParameterField(f *Field, field *types.Var) {
-	requiredBySchema := !f.Schema.Optional || f.Required
+	requiredBySchema := (!f.Schema.Optional && !f.Schema.Computed) || f.Required
 	// Note(turkenh): We are collecting the top level required parameters that
 	// are not identifier fields. This is for generating CEL validation rules for
 	// those parameters and not to require them if the management policy is set

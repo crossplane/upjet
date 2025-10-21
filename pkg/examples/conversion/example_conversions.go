@@ -19,16 +19,16 @@ import (
 	kyaml "k8s.io/apimachinery/pkg/util/yaml"
 	"sigs.k8s.io/yaml"
 
-	"github.com/crossplane/upjet/pkg/config"
-	"github.com/crossplane/upjet/pkg/config/conversion"
+	"github.com/crossplane/upjet/v2/pkg/config"
+	"github.com/crossplane/upjet/v2/pkg/config/conversion"
 )
 
-// ConvertSingletonListToEmbeddedObject generates the example manifests for
-// the APIs with converted singleton lists in their new API versions with the
-// embedded objects. All manifests under `startPath` are scanned and the
+// ApplyAPIConverters applies the registered converters to generated
+// example manifests under the given root directory.
+// All (generated) manifests under the `startPath` are scanned and the
 // header at the specified path `licenseHeaderPath` is used for the converted
 // example manifests.
-func ConvertSingletonListToEmbeddedObject(pc *config.Provider, startPath, licenseHeaderPath string) error {
+func ApplyAPIConverters(pc *config.Provider, startPath, licenseHeaderPath string) error {
 	resourceRegistry := prepareResourceRegistry(pc)
 
 	var license string
@@ -64,15 +64,15 @@ func ConvertSingletonListToEmbeddedObject(pc *config.Provider, startPath, licens
 				return nil
 			}
 
-			newPath := strings.ReplaceAll(path, examples[0].GroupVersionKind().Version, rootResource.Version)
-			if path == newPath {
-				return nil
-			}
 			annotationValue := strings.ToLower(fmt.Sprintf("%s/%s/%s", rootResource.ShortGroup, rootResource.Version, rootResource.Kind))
 			for _, e := range examples {
 				if resource, ok := resourceRegistry[fmt.Sprintf("%s/%s", e.GroupVersionKind().Kind, e.GroupVersionKind().Group)]; ok {
 					conversionPaths := resource.CRDListConversionPaths()
-					if conversionPaths != nil && e.GroupVersionKind().Version != resource.Version {
+					// if the latest version has conversions, run the conversions on the
+					// example manifest.
+					// Please note that only the version being generated (latest version)
+					// is processed.
+					if conversionPaths != nil && e.GroupVersionKind().Version == resource.Version {
 						for i, cp := range conversionPaths {
 							// Here, for the manifests to be converted, only `forProvider
 							// is converted, assuming the `initProvider` field is empty in the
@@ -100,7 +100,7 @@ func ConvertSingletonListToEmbeddedObject(pc *config.Provider, startPath, licens
 				}
 			}
 			convertedFileContent = license + "\n\n"
-			if err := writeExampleContent(path, convertedFileContent, examples, newPath); err != nil {
+			if err := writeExampleContent(path, convertedFileContent, examples, path); err != nil {
 				return errors.Wrap(err, "failed to write example content")
 			}
 		}

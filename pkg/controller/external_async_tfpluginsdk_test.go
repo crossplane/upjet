@@ -8,18 +8,19 @@ import (
 	"context"
 	"testing"
 
-	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
-	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
-	"github.com/crossplane/crossplane-runtime/pkg/test"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
+	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/test"
 	"github.com/google/go-cmp/cmp"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	tf "github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/crossplane/upjet/pkg/config"
-	"github.com/crossplane/upjet/pkg/resource/fake"
-	"github.com/crossplane/upjet/pkg/terraform"
+	"github.com/crossplane/upjet/v2/pkg/config"
+	"github.com/crossplane/upjet/v2/pkg/resource/fake"
+	"github.com/crossplane/upjet/v2/pkg/terraform"
 )
 
 var (
@@ -227,7 +228,7 @@ func TestAsyncTerraformPluginSDKCreate(t *testing.T) {
 				cfg: cfgAsync,
 				obj: objAsync,
 				fns: CallbackFns{
-					CreateFn: func(s string) terraform.CallbackFn {
+					CreateFn: func(nn types.NamespacedName) terraform.CallbackFn {
 						return func(err error, ctx context.Context) error {
 							return nil
 						}
@@ -271,7 +272,7 @@ func TestAsyncTerraformPluginSDKUpdate(t *testing.T) {
 				cfg: cfgAsync,
 				obj: objAsync,
 				fns: CallbackFns{
-					UpdateFn: func(s string) terraform.CallbackFn {
+					UpdateFn: func(nn types.NamespacedName) terraform.CallbackFn {
 						return func(err error, ctx context.Context) error {
 							return nil
 						}
@@ -315,7 +316,7 @@ func TestAsyncTerraformPluginSDKDelete(t *testing.T) {
 				cfg: cfgAsync,
 				obj: objAsync,
 				fns: CallbackFns{
-					DestroyFn: func(s string) terraform.CallbackFn {
+					DestroyFn: func(nn types.NamespacedName) terraform.CallbackFn {
 						return func(err error, ctx context.Context) error {
 							return nil
 						}

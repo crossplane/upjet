@@ -10,11 +10,14 @@ import (
 	"strings"
 	"time"
 
-	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
-	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
-	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
-	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
+	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/fieldpath"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
+	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	fwresource "github.com/hashicorp/terraform-plugin-framework/resource"
+	rschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 	"github.com/pkg/errors"
@@ -23,8 +26,8 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/crossplane/upjet/pkg/config/conversion"
-	"github.com/crossplane/upjet/pkg/registry"
+	"github.com/crossplane/upjet/v2/pkg/config/conversion"
+	"github.com/crossplane/upjet/v2/pkg/registry"
 )
 
 // A ListType is a type of list.
@@ -163,6 +166,19 @@ type ExternalName struct {
 	// management policy is including the Observe Only, different from other
 	// (required) fields.
 	IdentifierFields []string
+
+	// IsNotFoundDiagnosticFn determines whether the diagnostics
+	// returned by the TF provider ReadResource call should be
+	// treated as the external resource was not found.
+	// Valid only for TF Plugin Framework resources.
+	// Most resources won't need this, configure when needed.
+	// Some TF Plugin Framework resource Read implementations return
+	// error-severity diagnostics when external resource does not exist,
+	// instead of just returning an empty state.
+	// This function should return `true` when you want to
+	// "ignore" the supplied diagnostics, i.e. they
+	// correspond to "resource not found".
+	IsNotFoundDiagnosticFn func(diags []*tfprotov6.Diagnostic) bool
 }
 
 // References represents reference resolver configurations for the fields of a
@@ -505,6 +521,13 @@ type Resource struct {
 	// embedded objects after reading the state from the Terraform stack.
 	listConversionPaths map[string]string
 
+	// dynamicAttributeConversionPaths is a list of CRD field paths,
+	// of attributes that are TF dynamic pseudo-types. Such attributes include
+	// both their implicit type and value info in their Terraform state
+	// representation. Therefore, they need conversion before passing them to
+	// Terraform stack at runtime.
+	dynamicAttributeConversionPaths []string
+
 	// TerraformConfigurationInjector allows a managed resource to inject
 	// configuration values in the Terraform configuration map obtained by
 	// deserializing its `spec.forProvider` value. Managed resources can
@@ -516,6 +539,12 @@ type Resource struct {
 	// TerraformCustomDiff allows a resource.Terraformed to customize how its
 	// Terraform InstanceDiff is computed during reconciliation.
 	TerraformCustomDiff CustomDiff
+
+	// TerraformPluginFrameworkIsStateEmptyFn allows customizing the logic
+	// for determining whether a Terraform Plugin Framework state value should
+	// be considered empty/nil for resource existence checks. If not set, the
+	// default behavior uses tfStateValue.IsNull().
+	TerraformPluginFrameworkIsStateEmptyFn TerraformPluginFrameworkIsStateEmptyFn
 
 	// ServerSideApplyMergeStrategies configures the server-side apply merge
 	// strategy for the fields at the given map keys. The map key is
@@ -642,6 +671,13 @@ type CustomDiff func(diff *terraform.InstanceDiff, state *terraform.InstanceStat
 // the JSON tags and tfMap is obtained by using the TF tags.
 type ConfigurationInjector func(jsonMap map[string]any, tfMap map[string]any) error
 
+// TerraformPluginFrameworkIsStateEmptyFn is a function that determines whether
+// a Terraform Plugin Framework state value should be considered empty/nil for the
+// purpose of determining resource existence. This allows providers to implement
+// custom logic to handle cases where the standard IsNull() check is insufficient,
+// such as when provider interceptors add fields like region to all state values.
+type TerraformPluginFrameworkIsStateEmptyFn func(ctx context.Context, tfStateValue tftypes.Value, resourceSchema rschema.Schema) (bool, error)
+
 // SchemaElementOptions represents schema element options for the
 // schema elements of a Resource.
 type SchemaElementOptions map[string]*SchemaElementOption
@@ -678,6 +714,12 @@ func (r *Resource) CRDListConversionPaths() []string {
 		l = append(l, v)
 	}
 	return l
+}
+
+// TFDynamicAttributeConversionPaths returns the Resource's runtime Terraform
+// DynamicPseudoType conversion paths in TF fieldpath syntax.
+func (r *Resource) TFDynamicAttributeConversionPaths() []string {
+	return r.dynamicAttributeConversionPaths
 }
 
 // CRDStorageVersion returns the CRD storage version if configured. If not,

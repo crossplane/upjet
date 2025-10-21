@@ -16,11 +16,11 @@ import (
 	"github.com/pkg/errors"
 	"k8s.io/utils/ptr"
 
-	"github.com/crossplane/upjet/pkg"
-	"github.com/crossplane/upjet/pkg/config"
-	"github.com/crossplane/upjet/pkg/schema/traverser"
-	"github.com/crossplane/upjet/pkg/types/comments"
-	"github.com/crossplane/upjet/pkg/types/name"
+	"github.com/crossplane/upjet/v2/pkg"
+	"github.com/crossplane/upjet/v2/pkg/config"
+	"github.com/crossplane/upjet/v2/pkg/schema/traverser"
+	"github.com/crossplane/upjet/v2/pkg/types/comments"
+	"github.com/crossplane/upjet/v2/pkg/types/name"
 )
 
 const (
@@ -304,13 +304,27 @@ func NewSensitiveField(g *Builder, cfg *config.Resource, r *resource, sch *schem
 	f.FieldNameCamel += sfx
 
 	f.TFTag = "-"
-	switch f.FieldType.String() {
-	case "string", "*string":
-		f.FieldType = typeSecretKeySelector
-	case "[]string", "[]*string":
-		f.FieldType = types.NewSlice(typeSecretKeySelector)
-	case "map[string]string", "map[string]*string":
-		f.FieldType = typeSecretReference
+	switch g.scope {
+	case CRDScopeCluster:
+		switch f.FieldType.String() {
+		case "string", "*string":
+			f.FieldType = typeSecretKeySelector
+		case "[]string", "[]*string":
+			f.FieldType = types.NewSlice(typeSecretKeySelector)
+		case "map[string]string", "map[string]*string":
+			f.FieldType = typeSecretReference
+		}
+	case CRDScopeNamespaced:
+		switch f.FieldType.String() {
+		case "string", "*string":
+			f.FieldType = typeLocalSecretKeySelector
+		case "[]string", "[]*string":
+			f.FieldType = types.NewSlice(typeLocalSecretKeySelector)
+		case "map[string]string", "map[string]*string":
+			f.FieldType = typeLocalSecretReference
+		}
+	default:
+		return nil, false, errors.Errorf("Invalid CRD scope %q", g.scope)
 	}
 	f.TransformedName = name.NewFromCamel(f.FieldNameCamel).LowerCamelComputed
 	f.JSONTag = f.TransformedName

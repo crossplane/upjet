@@ -10,15 +10,14 @@ import (
 	"regexp"
 	"strings"
 
-	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
-	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
-	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
-	"github.com/crossplane/crossplane-runtime/pkg/resource"
+	v1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/fieldpath"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/pkg/errors"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
 
-	"github.com/crossplane/upjet/pkg/config"
+	"github.com/crossplane/upjet/v2/pkg/config"
 )
 
 const (
@@ -53,7 +52,7 @@ var (
 
 // SecretClient is the client to get sensitive data from kubernetes secrets
 //
-//go:generate go run github.com/golang/mock/mockgen -copyright_file ../../hack/boilerplate.txt -destination ./fake/mocks/mock.go -package mocks github.com/crossplane/upjet/pkg/resource SecretClient
+//go:generate go run github.com/golang/mock/mockgen -copyright_file ../../hack/boilerplate.txt -destination ./fake/mocks/mock.go -package mocks github.com/crossplane/upjet/v2/pkg/resource SecretClient
 type SecretClient interface {
 	GetSecretData(ctx context.Context, ref *v1.SecretReference) (map[string][]byte, error)
 	GetSecretValue(ctx context.Context, sel v1.SecretKeySelector) ([]byte, error)
@@ -158,7 +157,7 @@ func GetSensitiveAttributes(from map[string]any, mapping map[string]string) (map
 
 // GetSensitiveParameters will collect sensitive information as terraform state
 // attributes by following secret references in the spec.
-func GetSensitiveParameters(ctx context.Context, client SecretClient, from runtime.Object, into map[string]any, mapping map[string]string) error {
+func GetSensitiveParameters(ctx context.Context, client SecretClient, from resource.Managed, into map[string]any, mapping map[string]string) error {
 	if len(mapping) == 0 {
 		return nil
 	}
@@ -186,7 +185,7 @@ func GetSensitiveParameters(ctx context.Context, client SecretClient, from runti
 		// spec.forProvider secret references override the spec.initProvider
 		// references.
 		for _, p := range prefixes {
-			if err := storeSensitiveData(ctx, client, tfPath, p+jp, pavedTF, pavedJSON, mapping); err != nil {
+			if err := storeSensitiveData(ctx, client, tfPath, p+jp, pavedTF, pavedJSON, mapping, from.GetNamespace()); err != nil {
 				return err
 			}
 		}
@@ -195,7 +194,7 @@ func GetSensitiveParameters(ctx context.Context, client SecretClient, from runti
 	return nil
 }
 
-func storeSensitiveData(ctx context.Context, client SecretClient, tfPath, jsonPath string, pavedTF, pavedJSON *fieldpath.Paved, mapping map[string]string) error { //nolint:gocyclo // for better readability and not to split the logic
+func storeSensitiveData(ctx context.Context, client SecretClient, tfPath, jsonPath string, pavedTF, pavedJSON *fieldpath.Paved, mapping map[string]string, mrNamespace string) error { //nolint:gocyclo // for better readability and not to split the logic
 	jsonPathSet, err := pavedJSON.ExpandWildcards(jsonPath)
 	if err != nil {
 		return errors.Wrapf(err, "cannot expand wildcard for xp resource")
@@ -226,6 +225,12 @@ func storeSensitiveData(ctx context.Context, client SecretClient, tfPath, jsonPa
 				if err = pavedJSON.GetValueInto(expandedJSONPath, ref); err != nil {
 					return errors.Wrapf(err, errFmtCannotGetSecretKeySelectorAsMap, expandedJSONPath)
 				}
+				// namespaced MRs have local secret references
+				// with secret name only, fill MR namespace.
+				// no-op for cluster-scoped MRs
+				if ref != nil && mrNamespace != "" {
+					ref.Namespace = mrNamespace
+				}
 				data, err := client.GetSecretData(ctx, ref)
 				// We don't want to fail if the secret is not found. Otherwise, we won't be able to delete the
 				// resource if secret is deleted before. This is quite expected when both secret and resource
@@ -245,6 +250,12 @@ func storeSensitiveData(ctx context.Context, client SecretClient, tfPath, jsonPa
 			if err = pavedJSON.GetValueInto(expandedJSONPath, sel); err != nil {
 				return errors.Wrapf(err, errFmtCannotGetSecretKeySelector, expandedJSONPath)
 			}
+			// namespaced MRs have local secret references
+			// with secret name only, fill MR namespace.
+			// no-op for cluster-scoped MRs
+			if sel != nil && mrNamespace != "" {
+				sel.Namespace = mrNamespace
+			}
 			sensitive, err = client.GetSecretValue(ctx, *sel)
 			if resource.IgnoreNotFound(err) != nil {
 				return errors.Wrapf(err, errFmtCannotGetSecretValue, sel)
@@ -259,6 +270,12 @@ func storeSensitiveData(ctx context.Context, client SecretClient, tfPath, jsonPa
 			}
 			var sensitives []any
 			for _, s := range *sel {
+				// namespaced MRs have local secret references
+				// with secret name only, fill MR namespace.
+				// no-op for cluster-scoped MRs
+				if mrNamespace != "" {
+					s.Namespace = mrNamespace
+				}
 				sensitive, err = client.GetSecretValue(ctx, s)
 				if resource.IgnoreNotFound(err) != nil {
 					return errors.Wrapf(err, errFmtCannotGetSecretValue, sel)

@@ -13,15 +13,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/crossplane/crossplane-runtime/pkg/logging"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/logging"
 	"github.com/pkg/errors"
 	"github.com/spf13/afero"
 	k8sExec "k8s.io/utils/exec"
 
-	"github.com/crossplane/upjet/pkg/metrics"
-	"github.com/crossplane/upjet/pkg/resource"
-	"github.com/crossplane/upjet/pkg/resource/json"
-	tferrors "github.com/crossplane/upjet/pkg/terraform/errors"
+	"github.com/crossplane/upjet/v2/pkg/metrics"
+	"github.com/crossplane/upjet/v2/pkg/resource"
+	"github.com/crossplane/upjet/v2/pkg/resource/json"
+	tferrors "github.com/crossplane/upjet/v2/pkg/terraform/errors"
 )
 
 const (
@@ -355,6 +355,10 @@ func (w *Workspace) Import(ctx context.Context, tr resource.Terraformed) (Import
 	}
 	// Note(turkenh): This resource does not have an ID, we cannot import it. This happens with identifier from
 	// provider case, and we simply return does not exist in this case.
+	// NOTE(erhan): here terraformID actually corresponds to the import ID.
+	// This can differ from the resource schema ID format for some resources.
+	// Some TF Plugin Framework-based resources might not have the `id` attribute
+	// in their schema, though they can have import IDs.
 	if len(w.terraformID) == 0 {
 		return ImportResult{
 			Exists: false,

@@ -10,13 +10,13 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/crossplane/upjet/pkg/config"
-	"github.com/crossplane/upjet/pkg/registry"
-	"github.com/crossplane/upjet/pkg/types"
+	"github.com/crossplane/upjet/v2/pkg/config"
+	"github.com/crossplane/upjet/v2/pkg/registry"
+	"github.com/crossplane/upjet/v2/pkg/types"
 )
 
 const (
-	extractorPackagePath      = "github.com/crossplane/upjet/pkg/resource"
+	extractorPackagePath      = "github.com/crossplane/upjet/v2/pkg/resource"
 	extractResourceIDFuncPath = extractorPackagePath + ".ExtractResourceID()"
 	fmtExtractParamFuncPath   = extractorPackagePath + `.ExtractParamPath("%s",%t)`
 )
@@ -28,9 +28,9 @@ type Injector struct {
 }
 
 // NewInjector initializes a new Injector
-func NewInjector(modulePath string) *Injector {
+func NewInjector(apisModulePath string) *Injector {
 	return &Injector{
-		ModulePath: modulePath,
+		ModulePath: apisModulePath,
 	}
 }
 
@@ -123,7 +123,7 @@ func (rr *Injector) getTypePath(tfName string, configResources map[string]*confi
 	if len(shortGroup) == 0 {
 		shortGroup = rr.ProviderShortName
 	}
-	return fmt.Sprintf("%s/%s/%s/%s.%s", rr.ModulePath, "apis", shortGroup, r.Version, r.Kind), nil
+	return fmt.Sprintf("%s/%s/%s.%s", rr.ModulePath, shortGroup, r.Version, r.Kind), nil
 }
 
 // SetReferenceTypes resolves reference types of configured references

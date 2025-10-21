@@ -5,7 +5,7 @@ package controller
 import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	"github.com/crossplane/upjet/pkg/controller"
+	"github.com/crossplane/upjet/v2/pkg/controller"
 
 	{{ .Imports }}
 )
@@ -16,6 +16,21 @@ func Setup{{ .Group }}(mgr ctrl.Manager, o controller.Options) error {
 	for _, setup := range []func(ctrl.Manager, controller.Options) error{
 		{{- range $alias := .Aliases }}
 		{{ $alias }}Setup,
+		{{- end }}
+	} {
+		if err := setup(mgr, o); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// SetupGated{{ .Group }} creates all controllers with the supplied logger and adds them to
+// the supplied manager gated.
+func SetupGated{{ .Group }}(mgr ctrl.Manager, o controller.Options) error {
+	for _, setup := range []func(ctrl.Manager, controller.Options) error{
+		{{- range $alias := .Aliases }}
+		{{ $alias }}SetupGated,
 		{{- end }}
 	} {
 		if err := setup(mgr, o); err != nil {

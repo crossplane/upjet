@@ -10,12 +10,12 @@ import (
 	"strings"
 	"time"
 
-	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
-	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
-	"github.com/crossplane/crossplane-runtime/pkg/logging"
-	"github.com/crossplane/crossplane-runtime/pkg/meta"
-	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
-	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
+	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/fieldpath"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/logging"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
+	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/hashicorp/go-cty/cty"
 	tfdiag "github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -25,11 +25,11 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/crossplane/upjet/pkg/config"
-	"github.com/crossplane/upjet/pkg/metrics"
-	"github.com/crossplane/upjet/pkg/resource"
-	"github.com/crossplane/upjet/pkg/resource/json"
-	"github.com/crossplane/upjet/pkg/terraform"
+	"github.com/crossplane/upjet/v2/pkg/config"
+	"github.com/crossplane/upjet/v2/pkg/metrics"
+	"github.com/crossplane/upjet/v2/pkg/resource"
+	"github.com/crossplane/upjet/v2/pkg/resource/json"
+	"github.com/crossplane/upjet/v2/pkg/terraform"
 )
 
 type TerraformPluginSDKConnector struct {
@@ -229,8 +229,8 @@ func (c *TerraformPluginSDKConnector) applyHCLParserToParam(sc *schema.Schema, p
 }
 
 func (c *TerraformPluginSDKConnector) Connect(ctx context.Context, mg xpresource.Managed) (managed.ExternalClient, error) { //nolint:gocyclo
-	c.metricRecorder.ObserveReconcileDelay(mg.GetObjectKind().GroupVersionKind(), mg.GetName())
-	logger := c.logger.WithValues("uid", mg.GetUID(), "name", mg.GetName(), "gvk", mg.GetObjectKind().GroupVersionKind().String())
+	c.metricRecorder.ObserveReconcileDelay(mg.GetObjectKind().GroupVersionKind(), metrics.NameForManaged(mg))
+	logger := c.logger.WithValues("uid", mg.GetUID(), "name", mg.GetName(), "namespace", mg.GetNamespace(), "gvk", mg.GetObjectKind().GroupVersionKind().String())
 	logger.Debug("Connecting to the service provider")
 	start := time.Now()
 	ts, err := c.getTerraformSetup(ctx, c.kube, mg)
@@ -245,7 +245,7 @@ func (c *TerraformPluginSDKConnector) Connect(ctx context.Context, mg xpresource
 	externalName := meta.GetExternalName(tr)
 	params, err := getExtendedParameters(ctx, tr, externalName, c.config, ts, c.isManagementPoliciesEnabled, c.kube)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to get the extended parameters for resource %q", mg.GetName())
+		return nil, errors.Wrapf(err, "failed to get the extended parameters for resource %q", client.ObjectKeyFromObject(mg))
 	}
 	params = c.processParamsWithHCLParser(c.config.TerraformResource.Schema, params)
 
@@ -426,6 +426,11 @@ func (n *terraformPluginSDKExternal) getResourceDataDiff(tr resource.Terraformed
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get *terraform.InstanceDiff")
 	}
+	// Sanitize Identity field in Diff.
+	// This causes continuous diff loop.
+	if instanceDiff != nil {
+		instanceDiff.Identity = nil
+	}
 	if n.config.TerraformCustomDiff != nil {
 		instanceDiff, err = n.config.TerraformCustomDiff(instanceDiff, s, resourceConfig)
 		if err != nil {
@@ -561,7 +566,7 @@ func (n *terraformPluginSDKExternal) Observe(ctx context.Context, mg xpresource.
 		}
 
 		if !hasDiff {
-			n.metricRecorder.SetReconcileTime(mg.GetName())
+			n.metricRecorder.SetReconcileTime(metrics.NameForManaged(mg))
 		}
 		if !specUpdateRequired {
 			resource.SetUpToDateCondition(mg, !hasDiff)

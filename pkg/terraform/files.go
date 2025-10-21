@@ -12,14 +12,16 @@ import (
 	"strings"
 
 	"dario.cat/mergo"
-	"github.com/crossplane/crossplane-runtime/pkg/feature"
-	"github.com/crossplane/crossplane-runtime/pkg/meta"
+	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/feature"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
+	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/pkg/errors"
 	"github.com/spf13/afero"
 
-	"github.com/crossplane/upjet/pkg/config"
-	"github.com/crossplane/upjet/pkg/resource"
-	"github.com/crossplane/upjet/pkg/resource/json"
+	"github.com/crossplane/upjet/v2/pkg/config"
+	"github.com/crossplane/upjet/v2/pkg/resource"
+	"github.com/crossplane/upjet/v2/pkg/resource/json"
 )
 
 const (
@@ -55,8 +57,16 @@ func WithFileProducerFeatures(f *feature.Flags) FileProducerOption {
 	}
 }
 
+// WithHasIDAttribute configures whether the Terraform resource
+// has ID attribute in its schema
+func WithHasIDAttribute(hasTerraformID bool) FileProducerOption {
+	return func(fp *FileProducer) {
+		fp.hasTFID = hasTerraformID
+	}
+}
+
 // NewFileProducer returns a new FileProducer.
-func NewFileProducer(ctx context.Context, client resource.SecretClient, dir string, tr resource.Terraformed, ts Setup, cfg *config.Resource, opts ...FileProducerOption) (*FileProducer, error) {
+func NewFileProducer(ctx context.Context, client resource.SecretClient, dir string, tr resource.Terraformed, ts Setup, cfg *config.Resource, opts ...FileProducerOption) (*FileProducer, error) { //nolint:gocyclo // easier to follow as a unit
 	fp := &FileProducer{
 		Resource: tr,
 		Setup:    ts,
@@ -64,6 +74,7 @@ func NewFileProducer(ctx context.Context, client resource.SecretClient, dir stri
 		Config:   cfg,
 		fs:       afero.Afero{Fs: afero.NewOsFs()},
 		features: &feature.Flags{},
+		hasTFID:  true,
 	}
 	for _, f := range opts {
 		f(fp)
@@ -80,7 +91,7 @@ func NewFileProducer(ctx context.Context, client resource.SecretClient, dir stri
 	if fp.features.Enabled(feature.EnableBetaManagementPolicies) {
 		initParams, err := tr.GetInitParameters()
 		if err != nil {
-			return nil, errors.Wrapf(err, "cannot get the init parameters for the resource %q", tr.GetName())
+			return nil, errors.Wrapf(err, "cannot get the init parameters for the resource \"%s/%s\"", tr.GetNamespace(), tr.GetName())
 		}
 
 		// get fields which should be in the ignore_changes lifecycle block
@@ -95,7 +106,7 @@ func NewFileProducer(ctx context.Context, client resource.SecretClient, dir stri
 			c.Overwrite = false
 		})
 		if err != nil {
-			return nil, errors.Wrapf(err, "cannot merge the spec.initProvider and spec.forProvider parameters for the resource %q", tr.GetName())
+			return nil, errors.Wrapf(err, "cannot merge the spec.initProvider and spec.forProvider parameters for the resource \"%s/%s\"", tr.GetNamespace(), tr.GetName())
 		}
 	}
 
@@ -103,18 +114,44 @@ func NewFileProducer(ctx context.Context, client resource.SecretClient, dir stri
 		return nil, errors.Wrap(err, "cannot get sensitive parameters")
 	}
 	fp.Config.ExternalName.SetIdentifierArgumentFn(params, meta.GetExternalName(tr))
+	// apply dynamic-pseudo type conversions to params here
+	params, err = cfg.ApplyTFConversions(params, config.ToTerraform)
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot apply terraform parameter conversions")
+	}
 	fp.parameters = params
 
 	obs, err := tr.GetObservation()
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot get observation")
 	}
-	if err = resource.GetSensitiveObservation(ctx, client, tr.GetWriteConnectionSecretToReference(), obs); err != nil {
+
+	secretRef, err := getConnectionSecretRef(tr)
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot get connection secret ref")
+	}
+	if err = resource.GetSensitiveObservation(ctx, client, secretRef, obs); err != nil {
 		return nil, errors.Wrap(err, "cannot get sensitive observation")
 	}
 	fp.observation = obs
 
 	return fp, nil
+}
+
+func getConnectionSecretRef(tr resource.Terraformed) (*xpv1.SecretReference, error) {
+	switch trt := tr.(type) {
+	case xpresource.ConnectionSecretWriterTo:
+		return trt.GetWriteConnectionSecretToReference(), nil
+	case xpresource.LocalConnectionSecretWriterTo:
+		if trt.GetWriteConnectionSecretToReference() == nil {
+			return nil, nil
+		}
+		return &xpv1.SecretReference{
+			Name:      trt.GetWriteConnectionSecretToReference().Name,
+			Namespace: tr.GetNamespace(),
+		}, nil
+	}
+	return nil, errors.New("unknown managed resource type")
 }
 
 // FileProducer exist to serve as cache for the data that is costly to produce
@@ -130,6 +167,7 @@ type FileProducer struct {
 	ignored     []string
 	fs          afero.Afero
 	features    *feature.Flags
+	hasTFID     bool
 }
 
 // BuildMainTF produces the contents of the mainTF file as a map.  This format is conducive to
@@ -216,7 +254,11 @@ func (fp *FileProducer) EnsureTFState(_ context.Context, tfID string) error { //
 	for k, v := range fp.observation {
 		base[k] = v
 	}
-	base["id"] = tfID
+
+	// for TF resources without ID, don't set the `id` parameter
+	if fp.hasTFID {
+		base["id"] = tfID
+	}
 	attr, err := json.JSParser.Marshal(base)
 	if err != nil {
 		return errors.Wrap(err, errMarshalAttributes)
@@ -282,6 +324,13 @@ func (fp *FileProducer) isStateEmpty() (bool, error) {
 	if err := json.JSParser.Unmarshal(attrData, &attr); err != nil {
 		return false, errors.Wrap(err, errUnmarshalAttr)
 	}
+
+	// for ID-less resource schemas, don't check for
+	// ID and assume empty when there is no attribute
+	if !fp.hasTFID {
+		return len(attr) == 0, nil
+	}
+
 	id, ok := attr["id"]
 	if !ok {
 		return true, nil

@@ -15,18 +15,18 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/tools/go/packages"
 
-	"github.com/crossplane/upjet/pkg/config"
-	"github.com/crossplane/upjet/pkg/pipeline/templates"
+	"github.com/crossplane/upjet/v2/pkg/config"
+	"github.com/crossplane/upjet/v2/pkg/pipeline/templates"
 )
 
 // NewVersionGenerator returns a new VersionGenerator.
-func NewVersionGenerator(rootDir, modulePath, group, version string) *VersionGenerator {
-	pkgPath := filepath.Join(modulePath, "apis", strings.ToLower(strings.Split(group, ".")[0]), version)
+func NewVersionGenerator(apiDir, hackDir, apisModulePath, group, version string) *VersionGenerator {
+	pkgPath := filepath.Join(apisModulePath, strings.ToLower(strings.Split(group, ".")[0]), version)
 	return &VersionGenerator{
 		Group:             group,
 		Version:           version,
-		DirectoryPath:     filepath.Join(rootDir, "apis", strings.ToLower(strings.Split(group, ".")[0]), version),
-		LicenseHeaderPath: filepath.Join(rootDir, "hack", "boilerplate.go.txt"),
+		DirectoryPath:     filepath.Join(apiDir, strings.ToLower(strings.Split(group, ".")[0]), version),
+		LicenseHeaderPath: filepath.Join(hackDir, "boilerplate.go.txt"),
 		pkg:               types.NewPackage(pkgPath, version),
 	}
 }

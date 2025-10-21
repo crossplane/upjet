@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/crossplane/crossplane-runtime/pkg/logging"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/logging"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -54,7 +54,7 @@ func NewEventHandler(opts ...Option) *EventHandler {
 
 // RequestReconcile requeues a reconciliation request for the specified name.
 // Returns true if the reconcile request was successfully queued.
-func (e *EventHandler) RequestReconcile(rateLimiterName, name string, failureLimit *int) bool {
+func (e *EventHandler) RequestReconcile(rateLimiterName string, name types.NamespacedName, failureLimit *int) bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.queue == nil {
@@ -62,9 +62,7 @@ func (e *EventHandler) RequestReconcile(rateLimiterName, name string, failureLim
 	}
 	logger := e.logger.WithValues("name", name)
 	item := reconcile.Request{
-		NamespacedName: types.NamespacedName{
-			Name: name,
-		},
+		NamespacedName: name,
 	}
 	var when time.Duration = 0
 	if rateLimiterName != NoRateLimiter {
@@ -86,7 +84,7 @@ func (e *EventHandler) RequestReconcile(rateLimiterName, name string, failureLim
 
 // Forget indicates that the reconcile retries is finished for
 // the specified name.
-func (e *EventHandler) Forget(rateLimiterName, name string) {
+func (e *EventHandler) Forget(rateLimiterName string, name types.NamespacedName) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	rateLimiter := e.rateLimiterMap[rateLimiterName]
@@ -94,9 +92,7 @@ func (e *EventHandler) Forget(rateLimiterName, name string) {
 		return
 	}
 	rateLimiter.Forget(reconcile.Request{
-		NamespacedName: types.NamespacedName{
-			Name: name,
-		},
+		NamespacedName: name,
 	})
 }
 
@@ -110,24 +106,24 @@ func (e *EventHandler) setQueue(limitingInterface workqueue.TypedRateLimitingInt
 
 func (e *EventHandler) Create(ctx context.Context, ev event.CreateEvent, limitingInterface workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 	e.setQueue(limitingInterface)
-	e.logger.Debug("Calling the inner handler for Create event.", "name", ev.Object.GetName(), "queueLength", limitingInterface.Len())
+	e.logger.Debug("Calling the inner handler for Create event.", "name", ev.Object.GetName(), "namespace", ev.Object.GetNamespace(), "queueLength", limitingInterface.Len())
 	e.innerHandler.Create(ctx, ev, limitingInterface)
 }
 
 func (e *EventHandler) Update(ctx context.Context, ev event.UpdateEvent, limitingInterface workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 	e.setQueue(limitingInterface)
-	e.logger.Debug("Calling the inner handler for Update event.", "name", ev.ObjectOld.GetName(), "queueLength", limitingInterface.Len())
+	e.logger.Debug("Calling the inner handler for Update event.", "name", ev.ObjectOld.GetName(), "namespace", ev.ObjectOld.GetNamespace(), "queueLength", limitingInterface.Len())
 	e.innerHandler.Update(ctx, ev, limitingInterface)
 }
 
 func (e *EventHandler) Delete(ctx context.Context, ev event.DeleteEvent, limitingInterface workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 	e.setQueue(limitingInterface)
-	e.logger.Debug("Calling the inner handler for Delete event.", "name", ev.Object.GetName(), "queueLength", limitingInterface.Len())
+	e.logger.Debug("Calling the inner handler for Delete event.", "name", ev.Object.GetName(), "namespace", ev.Object.GetNamespace(), "queueLength", limitingInterface.Len())
 	e.innerHandler.Delete(ctx, ev, limitingInterface)
 }
 
 func (e *EventHandler) Generic(ctx context.Context, ev event.GenericEvent, limitingInterface workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 	e.setQueue(limitingInterface)
-	e.logger.Debug("Calling the inner handler for Generic event.", "name", ev.Object.GetName(), "queueLength", limitingInterface.Len())
+	e.logger.Debug("Calling the inner handler for Generic event.", "name", ev.Object.GetName(), "namespace", ev.Object.GetNamespace(), "queueLength", limitingInterface.Len())
 	e.innerHandler.Generic(ctx, ev, limitingInterface)
 }

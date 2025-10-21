@@ -8,10 +8,11 @@
 
 PROJECT_NAME := upjet
 PROJECT_REPO := github.com/crossplane/$(PROJECT_NAME)
+GO_PROJECT := github.com/crossplane/$(PROJECT_NAME)/v2
 
 # GOLANGCILINT_VERSION is inherited from build submodule by default.
 # Uncomment below if you need to override the version.
-GOLANGCILINT_VERSION ?= 1.64.4
+GOLANGCILINT_VERSION ?= 1.64.8
 # GO_REQUIRED_VERSION ?= 1.22
 
 PLATFORMS ?= linux_amd64 linux_arm64
