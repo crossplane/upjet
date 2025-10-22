@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/crossplane/upjet/pkg/types/structtag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/pkg/errors"
 	"k8s.io/utils/ptr"
@@ -37,7 +38,9 @@ type Field struct {
 	Schema                                   *schema.Schema
 	Name                                     name.Name
 	Comment                                  *comments.Comment
-	TFTag, JSONTag, FieldNameCamel           string
+	TFTag                                    *structtag.Value
+	JSONTag                                  *structtag.Value
+	FieldNameCamel                           string
 	TerraformPaths, CRDPaths, CanonicalPaths []string
 	FieldType                                types.Type
 	InitType                                 types.Type
@@ -143,8 +146,8 @@ func NewField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema,
 		return nil, errors.Wrapf(err, "cannot build comment for description: %s", commentText)
 	}
 	f.Comment = comment
-	f.TFTag = fmt.Sprintf("%s,omitempty", f.Name.Snake)
-	f.JSONTag = fmt.Sprintf("%s,omitempty", f.Name.LowerCamelComputed)
+	f.TFTag = structtag.NewTF(structtag.WithName(f.Name.Snake), structtag.WithOmit(structtag.OmitEmpty))
+	f.JSONTag = structtag.NewJSON(structtag.WithName(f.Name.LowerCamelComputed), structtag.WithOmit(structtag.OmitEmpty))
 	f.TransformedName = f.Name.LowerCamelComputed
 
 	// Terraform paths, e.g. { "lifecycle_rule", "*", "transition", "*", "days" } for https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket#lifecycle_rule
@@ -222,7 +225,7 @@ func setInjectedField(fp, k string, f *Field, s config.MergeStrategy) bool {
 	if s.ListMergeStrategy.ListMapKeys.InjectedKey.DefaultValue != "" {
 		f.Comment.KubebuilderOptions.Default = ptr.To[string](s.ListMergeStrategy.ListMapKeys.InjectedKey.DefaultValue)
 	}
-	f.TFTag = "-" // prevent serialization into Terraform configuration
+	f.TFTag = structtag.NewTF(structtag.WithOmit(structtag.OmitAlways)) // prevent serialization into Terraform configuration
 	f.Injected = true
 	return true
 }
@@ -303,7 +306,7 @@ func NewSensitiveField(g *Builder, cfg *config.Resource, r *resource, sch *schem
 	// Data will be loaded from the referenced secret key.
 	f.FieldNameCamel += sfx
 
-	f.TFTag = "-"
+	f.TFTag = structtag.NewTF(structtag.WithOmit(structtag.OmitAlways))
 	switch f.FieldType.String() {
 	case "string", "*string":
 		f.FieldType = typeSecretKeySelector
@@ -313,10 +316,10 @@ func NewSensitiveField(g *Builder, cfg *config.Resource, r *resource, sch *schem
 		f.FieldType = typeSecretReference
 	}
 	f.TransformedName = name.NewFromCamel(f.FieldNameCamel).LowerCamelComputed
-	f.JSONTag = f.TransformedName
+	f.JSONTag = structtag.NewJSON(structtag.WithName(f.TransformedName))
 	if f.Schema.Optional {
 		f.FieldType = types.NewPointer(f.FieldType)
-		f.JSONTag += ",omitempty"
+		f.JSONTag.SetOmit(structtag.OmitEmpty)
 	}
 
 	return f, false, nil
@@ -339,7 +342,7 @@ func NewReferenceField(g *Builder, cfg *config.Resource, r *resource, sch *schem
 // AddToResource adds built field to the resource.
 func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames, addToObservation bool) { //nolint:gocyclo
 	if f.Comment.UpjetOptions.FieldJSONTag != nil {
-		f.JSONTag = *f.Comment.UpjetOptions.FieldJSONTag
+		f.JSONTag = f.Comment.UpjetOptions.FieldJSONTag
 	}
 
 	field := types.NewField(token.NoPos, g.Package, f.FieldNameCamel, f.FieldType, false)
@@ -350,7 +353,7 @@ func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames, add
 	}
 
 	if f.Comment.UpjetOptions.FieldTFTag != nil {
-		f.TFTag = *f.Comment.UpjetOptions.FieldTFTag
+		f.TFTag = f.Comment.UpjetOptions.FieldTFTag
 	}
 
 	// Note(turkenh): We want atProvider to be a superset of forProvider, so
@@ -366,13 +369,13 @@ func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames, add
 	// We typically set tf tag to "-" for sensitive fields which were replaced
 	// with secretKeyRefs, or for injected fields into the CRD schema,
 	// which do not exist in the Terraform schema.
-	if (f.TFTag != "-" || f.Injected) && !addToObservation {
+	if (!f.TFTag.AlwaysOmitted() || f.Injected) && !addToObservation {
 		r.addObservationField(f, field)
 	}
 
 	if !IsObservation(f.Schema) {
 		if f.AsBlocksMode {
-			f.TFTag = strings.TrimSuffix(f.TFTag, ",omitempty")
+			f.TFTag.SetOmit(structtag.NotOmitted)
 		}
 		r.addParameterField(f, field)
 		r.addInitField(f, field, g, typeNames.InitTypeName)
@@ -425,7 +428,7 @@ func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames, add
 // an earlier step, so they cannot be included as well. Plus probably they
 // should also not change for Create and Update steps.
 func (f *Field) isInit() bool {
-	return !f.Identifier && (f.TFTag != "-" || f.Injected || f.Sensitive)
+	return !f.Identifier && (!f.TFTag.AlwaysOmitted() || f.Injected || f.Sensitive)
 }
 
 func getDescription(s string) string {

@@ -8,14 +8,17 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/crossplane/crossplane-runtime/pkg/test"
 	"github.com/google/go-cmp/cmp"
-	"github.com/pkg/errors"
+
+	"github.com/crossplane/crossplane-runtime/pkg/errors"
+	"github.com/crossplane/crossplane-runtime/pkg/test"
+
+	"github.com/crossplane/upjet/pkg/types/structtag"
 )
 
-func Test_parseAsUpjetOption(t *testing.T) {
-	customTF := "custom-tf"
-	customJSON := "custom-json"
+func TestParseAsUpjetOption(t *testing.T) {
+	customTF := structtag.NewTF(structtag.WithName("custom-tf"))
+	customJSON := structtag.NewJSON(structtag.WithName("customJSON"))
 
 	type args struct {
 		opts *UpjetOptions
@@ -30,29 +33,26 @@ func Test_parseAsUpjetOption(t *testing.T) {
 		args
 		want
 	}{
-		"CRDTagTFOnly": {
+		"CRDTFTag": {
 			args: args{
 				opts: &UpjetOptions{},
-				line: fmt.Sprintf("%s%s", markerPrefixCRDTFTag, customTF),
+				line: fmt.Sprintf("%s%s", markerPrefixCRDTFTag, customTF.StringWithoutKey()),
 			},
 			want: want{
 				opts: &UpjetOptions{
-					FieldTFTag: &customTF,
+					FieldTFTag: customTF,
 				},
 				parsed: true,
 			},
 		},
-		"CRDBothTags": {
+		"CRDJSONTag": {
 			args: args{
-				opts: &UpjetOptions{
-					FieldTFTag: &customTF,
-				},
-				line: fmt.Sprintf("%s%s\n", markerPrefixCRDJSONTag, customJSON),
+				opts: &UpjetOptions{},
+				line: fmt.Sprintf("%s%s", markerPrefixCRDJSONTag, customJSON.StringWithoutKey()),
 			},
 			want: want{
 				opts: &UpjetOptions{
-					FieldTFTag:   &customTF,
-					FieldJSONTag: &customJSON,
+					FieldJSONTag: customJSON,
 				},
 				parsed: true,
 			},
@@ -93,7 +93,9 @@ func Test_parseAsUpjetOption(t *testing.T) {
 				t.Errorf("ParseAsUpjetOption() parsed = %v, wantParsed %v", gotParsed, tc.want.parsed)
 			}
 
-			if diff := cmp.Diff(tc.want.opts, opts); diff != "" {
+			if diff := cmp.Diff(tc.want.opts, opts, cmp.Comparer(func(o1, o2 *UpjetOptions) bool {
+				return o1.String() == o2.String()
+			})); diff != "" {
 				t.Errorf("ParseAsUpjetOption() opts = %v, wantOpts %v", opts, tc.want.opts)
 			}
 		})

@@ -8,16 +8,18 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/crossplane/crossplane-runtime/pkg/test"
 	"github.com/google/go-cmp/cmp"
-	"github.com/pkg/errors"
+
+	"github.com/crossplane/crossplane-runtime/pkg/errors"
+	"github.com/crossplane/crossplane-runtime/pkg/test"
 
 	"github.com/crossplane/upjet/pkg/config"
 	"github.com/crossplane/upjet/pkg/types/markers"
+	"github.com/crossplane/upjet/pkg/types/structtag"
 )
 
-func TestComment_Build(t *testing.T) {
-	tftag := "-"
+func TestCommentBuild(t *testing.T) {
+	tftag := structtag.NewTF(structtag.WithOmit(structtag.OmitAlways))
 	type args struct {
 		text string
 		opts []Option
@@ -67,7 +69,7 @@ yes, this is a test`,
 `,
 				mopts: markers.Options{
 					UpjetOptions: markers.UpjetOptions{
-						FieldTFTag: &tftag,
+						FieldTFTag: tftag,
 					},
 				},
 			},
@@ -98,7 +100,7 @@ yes, this is a test`,
 `,
 				mopts: markers.Options{
 					UpjetOptions: markers.UpjetOptions{
-						FieldTFTag: &tftag,
+						FieldTFTag: tftag,
 					},
 				},
 			},
@@ -120,7 +122,7 @@ yes, this is a test`,
 `,
 				mopts: markers.Options{
 					UpjetOptions: markers.UpjetOptions{
-						FieldTFTag: &tftag,
+						FieldTFTag: tftag,
 					},
 					CrossplaneOptions: markers.CrossplaneOptions{
 						Reference: config.Reference{
@@ -138,7 +140,7 @@ yes, this is a test`,
 `,
 			},
 			want: want{
-				err: errors.New("cannot parse as a upjet prefix: +upjet:unsupported:key=value"),
+				err: errors.New("cannot parse as an upjet prefix: +upjet:unsupported:key=value"),
 			},
 		},
 	}
@@ -151,7 +153,9 @@ yes, this is a test`,
 			if gotErr != nil {
 				return
 			}
-			if diff := cmp.Diff(tc.want.mopts, c.Options); diff != "" {
+			if diff := cmp.Diff(tc.want.mopts, c.Options, cmp.Comparer(func(v1, v2 structtag.Value) bool {
+				return v1.String() == v2.String()
+			})); diff != "" {
 				t.Errorf("comment.New(...) opts = %v, want %v", c.Options, tc.want.mopts)
 			}
 			got := c.Build()

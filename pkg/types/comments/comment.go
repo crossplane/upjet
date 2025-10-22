@@ -9,6 +9,7 @@ import (
 
 	"github.com/crossplane/upjet/pkg/config"
 	"github.com/crossplane/upjet/pkg/types/markers"
+  "github.com/crossplane/upjet/pkg/types/structtag"
 )
 
 // Option is a comment option
@@ -21,10 +22,10 @@ func WithReferenceConfig(cfg config.Reference) Option {
 	}
 }
 
-// WithTFTag returns a comment options with input tf tag
-func WithTFTag(s string) Option {
+// WithTFTag returns a comment options with input tf tag.
+func WithTFTag(t string) Option {
 	return func(c *Comment) {
-		c.FieldTFTag = &s
+		c.FieldTFTag = structtag.MustParseTF(t)
 	}
 }
 
