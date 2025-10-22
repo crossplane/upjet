@@ -9,7 +9,6 @@ import (
 	"go/token"
 	"go/types"
 	"sort"
-	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	twtypes "github.com/muvaf/typewriter/pkg/types"
@@ -402,7 +401,7 @@ func (r *resource) addParameterField(f *Field, field *types.Var) {
 		requiredBySchema = false
 		// If the field is not a terraform field, we should not require it in init,
 		// as it is not an initProvider field.
-		r.topLevelRequiredParams = append(r.topLevelRequiredParams, newTopLevelRequiredParam(f.TransformedName, f.TFTag != "-"))
+		r.topLevelRequiredParams = append(r.topLevelRequiredParams, newTopLevelRequiredParam(f.TransformedName, !f.TFTag.AlwaysOmitted()))
 	}
 
 	// Note(lsviben): Only fields which are not also initProvider fields should have a required kubebuilder comment.
@@ -411,11 +410,9 @@ func (r *resource) addParameterField(f *Field, field *types.Var) {
 	// For removing omitempty tag from json tag, we are just checking if the field is required by the schema.
 	if requiredBySchema {
 		// Required fields should not have omitempty tag in json tag.
-		// TODO(muvaf): This overrides user intent if they provided custom
-		// JSON tag.
-		r.paramTags = append(r.paramTags, fmt.Sprintf(`json:"%s" tf:"%s"`, strings.TrimSuffix(f.JSONTag, ",omitempty"), f.TFTag))
+		r.paramTags = append(r.paramTags, fmt.Sprintf("%s %s", f.JSONTag.NoOmit(), f.TFTag))
 	} else {
-		r.paramTags = append(r.paramTags, fmt.Sprintf(`json:"%s" tf:"%s"`, f.JSONTag, f.TFTag))
+		r.paramTags = append(r.paramTags, fmt.Sprintf("%s %s", f.JSONTag, f.TFTag))
 	}
 
 	r.paramFields = append(r.paramFields, field)
@@ -427,7 +424,7 @@ func (r *resource) addInitField(f *Field, field *types.Var, g *Builder, typeName
 		return
 	}
 
-	r.initTags = append(r.initTags, fmt.Sprintf(`json:"%s" tf:"%s"`, f.JSONTag, f.TFTag))
+	r.initTags = append(r.initTags, fmt.Sprintf("%s %s", f.JSONTag, f.TFTag))
 
 	// If the field is a nested type, we need to add it as the init type.
 	if f.InitType != nil {
@@ -451,7 +448,7 @@ func (r *resource) addObservationField(f *Field, field *types.Var) {
 		}
 	}
 	r.obsFields = append(r.obsFields, field)
-	r.obsTags = append(r.obsTags, fmt.Sprintf(`json:"%s" tf:"%s"`, f.JSONTag, f.TFTag))
+	r.obsTags = append(r.obsTags, fmt.Sprintf("%s %s", f.JSONTag, f.TFTag))
 }
 
 func (r *resource) addReferenceFields(g *Builder, paramName *types.TypeName, field *Field, isInit bool) {
