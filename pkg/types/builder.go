@@ -403,7 +403,7 @@ func (r *resource) addParameterField(f *Field, field *types.Var) {
 	}
 
 	// Note(lsviben): Only fields which are not also initProvider fields should have a required kubebuilder comment.
-	f.Comment.Required = ptr.To(requiredBySchema && !f.isInit())
+	f.Comment.KubebuilderOptions.Required = ptr.To(requiredBySchema && !f.isInit())
 
 	// For removing omitempty tag from json tag, we are just checking if the field is required by the schema.
 	if requiredBySchema {

@@ -373,12 +373,14 @@ func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames, opt
 		r.addObservationField(f, field)
 	}
 
+	initProviderOverrides := ptr.Deref(opt.InitProviderOverrides, config.InitProviderOverrides{})
+
 	if !IsObservation(f.Schema) {
 		if f.AsBlocksMode {
 			f.TFTag.SetOmit(structtag.NotOmitted)
 		}
 		r.addParameterField(f, field)
-		r.addInitField(f, field, g, typeNames.InitTypeName, ptr.Deref(opt.InitProviderTagOverrides, config.TagOverrides{}))
+		r.addInitField(f, field, g, typeNames.InitTypeName, initProviderOverrides.TagOverrides)
 	}
 
 	if f.Reference != nil {
@@ -391,13 +393,20 @@ func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames, opt
 	// This doesn't count for identifiers and references, which are not
 	// mirrored in initProvider.
 	if f.isInit() {
-		f.Comment.Required = ptr.To(false)
+		f.Comment.KubebuilderOptions.Required = ptr.To(false)
 	}
 	g.comments.AddFieldComment(typeNames.ParameterTypeName, f.FieldNameCamel, f.Comment.Build())
 
 	// initProvider and observation fields are always optional.
-	f.Comment.Required = nil
-	g.comments.AddFieldComment(typeNames.InitTypeName, f.FieldNameCamel, f.Comment.Build())
+	f.Comment.KubebuilderOptions.Required = nil
+	// if InitProviderOverrides specified kubebuilder option overrides, use them.
+	// TODO: this is safe as we just need a copy of the KubebuilderOptions here.
+	// But we had better work on separate copies of fields instead of modifying
+	// the same field while generating the three APIs (InitProvider, ForProvider
+	// and Observation), as we extend the configuration framework.
+	initComment := *f.Comment
+	initComment.KubebuilderOptions = f.Comment.KubebuilderOptions.OverrideFrom(initProviderOverrides.KubebuilderOptions)
+	g.comments.AddFieldComment(typeNames.InitTypeName, f.FieldNameCamel, initComment.Build())
 
 	if opt.AddToObservation {
 		g.comments.AddFieldComment(typeNames.ObservationTypeName, f.FieldNameCamel, f.Comment.CommentWithoutOptions().Build())
