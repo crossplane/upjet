@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/crossplane/upjet/v2/pkg/types/markers/kubebuilder"
 	"k8s.io/utils/ptr"
 
 	"github.com/crossplane/upjet/v2/pkg/types/comments"
@@ -72,7 +73,7 @@ var (
 	)
 	commentOptional = &comments.Comment{
 		Options: markers.Options{
-			KubebuilderOptions: markers.KubebuilderOptions{
+			KubebuilderOptions: kubebuilder.Options{
 				Required: ptr.To(false),
 			},
 		},
