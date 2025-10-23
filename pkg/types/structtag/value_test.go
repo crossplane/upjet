@@ -10,7 +10,6 @@ import (
 	"github.com/crossplane/crossplane-runtime/v2/pkg/errors"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/test"
 	"github.com/google/go-cmp/cmp"
-	"k8s.io/utils/ptr"
 )
 
 func TestParseJSON(t *testing.T) {
@@ -58,7 +57,7 @@ func TestParseJSON(t *testing.T) {
 				v: &Value{
 					key:  KeyJSON,
 					name: "fieldName",
-					omit: ptr.To(OmitEmpty),
+					omit: OmitEmpty,
 				},
 			},
 		},
@@ -70,7 +69,7 @@ func TestParseJSON(t *testing.T) {
 			want: want{
 				v: &Value{
 					key:  KeyJSON,
-					omit: ptr.To(OmitEmpty),
+					omit: OmitEmpty,
 				},
 			},
 		},
@@ -82,7 +81,7 @@ func TestParseJSON(t *testing.T) {
 			want: want{
 				v: &Value{
 					key:  KeyJSON,
-					omit: ptr.To(OmitAlways),
+					omit: OmitAlways,
 				},
 			},
 		},
@@ -107,7 +106,7 @@ func TestParseJSON(t *testing.T) {
 				v: &Value{
 					key:  KeyJSON,
 					name: "fieldName",
-					omit: ptr.To(OmitEmpty),
+					omit: OmitEmpty,
 				},
 			},
 		},
@@ -120,7 +119,7 @@ func TestParseJSON(t *testing.T) {
 				v: &Value{
 					key:  KeyJSON,
 					name: "fieldName",
-					omit: ptr.To(OmitEmpty),
+					omit: OmitEmpty,
 				},
 			},
 		},
@@ -297,7 +296,7 @@ func TestParseTF(t *testing.T) {
 				v: &Value{
 					key:  KeyTF,
 					name: "tf_field_name",
-					omit: ptr.To(OmitEmpty),
+					omit: OmitEmpty,
 				},
 			},
 		},
@@ -345,7 +344,7 @@ func TestParseTF(t *testing.T) {
 			want: want{
 				v: &Value{
 					key:  KeyTF,
-					omit: ptr.To(OmitAlways),
+					omit: OmitAlways,
 				},
 			},
 		},
@@ -434,7 +433,7 @@ func TestNewJSON(t *testing.T) {
 			want: want{
 				v: &Value{
 					key:  KeyJSON,
-					omit: ptr.To(OmitEmpty),
+					omit: OmitEmpty,
 				},
 			},
 		},
@@ -464,7 +463,7 @@ func TestNewJSON(t *testing.T) {
 				v: &Value{
 					key:  KeyJSON,
 					name: "fieldName",
-					omit: ptr.To(OmitEmpty),
+					omit: OmitEmpty,
 				},
 			},
 		},
@@ -530,11 +529,10 @@ func TestNewTF(t *testing.T) {
 }
 
 func TestValueGetters(t *testing.T) {
-	omitEmpty := OmitEmpty
 	v := &Value{
 		key:    KeyJSON,
 		name:   "testField",
-		omit:   &omitEmpty,
+		omit:   OmitEmpty,
 		inline: true,
 	}
 
@@ -546,8 +544,8 @@ func TestValueGetters(t *testing.T) {
 		t.Errorf("Name() = %v, want %v", got, "testField")
 	}
 
-	if got := v.Omit(); got == nil || *got != OmitEmpty {
-		t.Errorf("Omit() = %v, want %v", got, &omitEmpty)
+	if got := v.Omit(); got != OmitEmpty {
+		t.Errorf("Omit() = %v, want %v", got, OmitEmpty)
 	}
 
 	if got := v.Inline(); got != true {
@@ -565,7 +563,7 @@ func TestValueAlwaysOmitted(t *testing.T) {
 			reason: "A value with OmitAlways should return true from AlwaysOmitted.",
 			v: &Value{
 				key:  KeyJSON,
-				omit: ptr.To(OmitAlways),
+				omit: OmitAlways,
 			},
 			want: true,
 		},
@@ -573,7 +571,7 @@ func TestValueAlwaysOmitted(t *testing.T) {
 			reason: "A value with OmitEmpty should return false from AlwaysOmitted as it is conditionally omitted.",
 			v: &Value{
 				key:  KeyJSON,
-				omit: ptr.To(OmitEmpty),
+				omit: OmitEmpty,
 			},
 			want: false,
 		},
@@ -581,14 +579,6 @@ func TestValueAlwaysOmitted(t *testing.T) {
 			reason: "A value with no omit setting should return false from AlwaysOmitted.",
 			v: &Value{
 				key: KeyJSON,
-			},
-			want: false,
-		},
-		"NilOmitted": {
-			reason: "A value with nil omit pointer should return false from AlwaysOmitted.",
-			v: &Value{
-				key:  KeyJSON,
-				omit: nil,
 			},
 			want: false,
 		},
@@ -612,14 +602,14 @@ func TestValueSetOmit(t *testing.T) {
 
 	v.SetOmit(OmitEmpty)
 
-	if v.omit == nil || *v.omit != OmitEmpty {
-		t.Errorf("SetOmit(OmitEmpty): omit = %v, want %v", v.omit, ptr.To(OmitEmpty))
+	if v.omit != OmitEmpty {
+		t.Errorf("SetOmit(OmitEmpty): omit = %v, want %v", v.omit, OmitEmpty)
 	}
 
 	v.SetOmit(OmitAlways)
 
-	if v.omit == nil || *v.omit != OmitAlways {
-		t.Errorf("SetOmit(OmitAlways): omit = %v, want %v", v.omit, ptr.To(OmitAlways))
+	if v.omit != OmitAlways {
+		t.Errorf("SetOmit(OmitAlways): omit = %v, want %v", v.omit, OmitAlways)
 	}
 }
 
@@ -634,12 +624,12 @@ func TestValueNoOmit(t *testing.T) {
 			v: &Value{
 				key:  KeyJSON,
 				name: "fieldName",
-				omit: ptr.To(OmitAlways),
+				omit: OmitAlways,
 			},
 			want: &Value{
 				key:  KeyJSON,
 				name: "fieldName",
-				omit: ptr.To(NotOmitted),
+				omit: NotOmitted,
 			},
 		},
 		"OmitEmptyToNotOmitted": {
@@ -647,38 +637,12 @@ func TestValueNoOmit(t *testing.T) {
 			v: &Value{
 				key:  KeyJSON,
 				name: "fieldName",
-				omit: ptr.To(OmitEmpty),
+				omit: OmitEmpty,
 			},
 			want: &Value{
 				key:  KeyJSON,
 				name: "fieldName",
-				omit: ptr.To(NotOmitted),
-			},
-		},
-		"AlreadyNotOmitted": {
-			reason: "NoOmit should preserve a value that is already NotOmitted.",
-			v: &Value{
-				key:  KeyJSON,
-				name: "fieldName",
-				omit: ptr.To(NotOmitted),
-			},
-			want: &Value{
-				key:  KeyJSON,
-				name: "fieldName",
-				omit: ptr.To(NotOmitted),
-			},
-		},
-		"NilOmittedToNotOmitted": {
-			reason: "NoOmit should convert a value with nil omit to NotOmitted.",
-			v: &Value{
-				key:  KeyJSON,
-				name: "fieldName",
-				omit: nil,
-			},
-			want: &Value{
-				key:  KeyJSON,
-				name: "fieldName",
-				omit: ptr.To(NotOmitted),
+				omit: NotOmitted,
 			},
 		},
 		"PreservesOtherFields": {
@@ -686,13 +650,13 @@ func TestValueNoOmit(t *testing.T) {
 			v: &Value{
 				key:    KeyTF,
 				name:   "tf_field",
-				omit:   ptr.To(OmitEmpty),
+				omit:   OmitEmpty,
 				inline: true,
 			},
 			want: &Value{
 				key:    KeyTF,
 				name:   "tf_field",
-				omit:   ptr.To(NotOmitted),
+				omit:   NotOmitted,
 				inline: true,
 			},
 		},
@@ -704,12 +668,6 @@ func TestValueNoOmit(t *testing.T) {
 			// Verify result
 			if diff := cmp.Diff(tc.want, got, cmp.AllowUnexported(Value{})); diff != "" {
 				t.Errorf("\n%s\nNoOmit(): -want, +got:\n%s", tc.reason, diff)
-			}
-
-			// Verify original is not modified
-			originalOmitted := tc.v.Omit()
-			if got.Omit() != nil && originalOmitted != nil && got.Omit() == originalOmitted {
-				t.Errorf("\n%s\nNoOmit() returned a value with shared omitted pointer (should be a copy)", tc.reason)
 			}
 		})
 	}
@@ -741,7 +699,7 @@ func TestValueStringWithoutKey(t *testing.T) {
 			v: &Value{
 				key:  KeyJSON,
 				name: "fieldName",
-				omit: ptr.To(OmitEmpty),
+				omit: OmitEmpty,
 			},
 			want: "fieldName,omitempty",
 		},
@@ -749,7 +707,7 @@ func TestValueStringWithoutKey(t *testing.T) {
 			reason: "A value with only omitempty should serialize with a leading comma without the key.",
 			v: &Value{
 				key:  KeyJSON,
-				omit: ptr.To(OmitEmpty),
+				omit: OmitEmpty,
 			},
 			want: ",omitempty",
 		},
@@ -757,7 +715,7 @@ func TestValueStringWithoutKey(t *testing.T) {
 			reason: "A value with OmitAlways should serialize to a dash without the key.",
 			v: &Value{
 				key:  KeyJSON,
-				omit: ptr.To(OmitAlways),
+				omit: OmitAlways,
 			},
 			want: "-",
 		},
@@ -807,7 +765,7 @@ func TestValueString(t *testing.T) {
 			v: &Value{
 				key:  KeyJSON,
 				name: "fieldName",
-				omit: ptr.To(OmitEmpty),
+				omit: OmitEmpty,
 			},
 			want: `json:"fieldName,omitempty"`,
 		},
@@ -815,7 +773,7 @@ func TestValueString(t *testing.T) {
 			reason: "A JSON value with only omitempty should serialize with a leading comma in the value.",
 			v: &Value{
 				key:  KeyJSON,
-				omit: ptr.To(OmitEmpty),
+				omit: OmitEmpty,
 			},
 			want: `json:",omitempty"`,
 		},
@@ -823,7 +781,7 @@ func TestValueString(t *testing.T) {
 			reason: "A JSON value with OmitAlways should serialize to json:\"-\".",
 			v: &Value{
 				key:  KeyJSON,
-				omit: ptr.To(OmitAlways),
+				omit: OmitAlways,
 			},
 			want: `json:"-"`,
 		},
@@ -840,7 +798,7 @@ func TestValueString(t *testing.T) {
 			v: &Value{
 				key:  KeyTF,
 				name: "tf_field_name",
-				omit: ptr.To(OmitEmpty),
+				omit: OmitEmpty,
 			},
 			want: `tf:"tf_field_name,omitempty"`,
 		},
@@ -848,7 +806,7 @@ func TestValueString(t *testing.T) {
 			reason: "A TF value with OmitAlways should serialize to tf:\"-\".",
 			v: &Value{
 				key:  KeyTF,
-				omit: ptr.To(OmitAlways),
+				omit: OmitAlways,
 			},
 			want: `tf:"-"`,
 		},
@@ -1122,6 +1080,185 @@ func TestNewJSONValidCases(t *testing.T) {
 			got := NewJSON(tc.opts...)
 			if diff := cmp.Diff(tc.want, got, cmp.AllowUnexported(Value{})); diff != "" {
 				t.Errorf("\n%s\nNewJSON(...): -want, +got:\n%s", tc.reason, diff)
+			}
+		})
+	}
+}
+
+func TestValueOverrideFrom(t *testing.T) {
+	cases := map[string]struct {
+		reason string
+		v      *Value
+		o      *Value
+		want   *Value
+	}{
+		"NilReceiver": {
+			reason: "OverrideFrom should return nil when the receiver is nil.",
+			v:      nil,
+			o: &Value{
+				key:  KeyJSON,
+				name: "override",
+			},
+			want: nil,
+		},
+		"NilOverride": {
+			reason: "OverrideFrom should return a deep copy of the receiver when the override is nil.",
+			v: &Value{
+				key:    KeyJSON,
+				name:   "original",
+				omit:   OmitEmpty,
+				inline: true,
+			},
+			o: nil,
+			want: &Value{
+				key:    KeyJSON,
+				name:   "original",
+				omit:   OmitEmpty,
+				inline: true,
+			},
+		},
+		"OverrideNameOnly": {
+			reason: "OverrideFrom should override the name when override has a name set.",
+			v: &Value{
+				key:    KeyJSON,
+				name:   "original",
+			},
+			o: &Value{
+				key:  KeyJSON,
+				name: "overridden",
+			},
+			want: &Value{
+				key:    KeyJSON,
+				name:   "overridden",
+			},
+		},
+		"OverrideOmitOnly": {
+			reason: "OverrideFrom should override omit while preserving other fields when override has only omit set.",
+			v: &Value{
+				key:    KeyJSON,
+				name:   "original",
+				omit:   NotOmitted,
+			},
+			o: &Value{
+				key:  KeyJSON,
+				omit: OmitEmpty,
+			},
+			want: &Value{
+				key:    KeyJSON,
+				name:   "original",
+				omit:   OmitEmpty,
+			},
+		},
+		"OverrideInlineOnly": {
+			reason: "OverrideFrom should override inline when override has inline set.",
+			v: &Value{
+				key:    KeyJSON,
+				name:   "original",
+				inline: false,
+			},
+			o: &Value{
+				key:    KeyJSON,
+				inline: true,
+			},
+			want: &Value{
+				key:    KeyJSON,
+				name:   "original",
+				inline: true,
+			},
+		},
+		"OverrideAllFields": {
+			reason: "OverrideFrom should override name, omit, and inline when all are set in override.",
+			v: &Value{
+				key:    KeyJSON,
+				name:   "original",
+				omit:   NotOmitted,
+				inline: false,
+			},
+			o: &Value{
+				key:    KeyJSON,
+				name:   "overridden",
+				omit:   OmitEmpty,
+				inline: true,
+			},
+			want: &Value{
+				key:    KeyJSON,
+				name:   "overridden",
+				omit:   OmitEmpty,
+				inline: true,
+			},
+		},
+		"PreserveKeyDifferentKeys": {
+			reason: "OverrideFrom should never override the key field even when override has a different key.",
+			v: &Value{
+				key:  KeyJSON,
+				name: "original",
+			},
+			o: &Value{
+				key:  KeyTF,
+				name: "overridden",
+			},
+			want: &Value{
+				key:    KeyJSON,
+				name:   "overridden",
+			},
+		},
+		"EmptyNameDoesNotOverride": {
+			reason: "OverrideFrom should not override name when override has an empty name.",
+			v: &Value{
+				key:  KeyJSON,
+				name: "original",
+			},
+			o: &Value{
+				key:  KeyJSON,
+				omit: OmitEmpty,
+			},
+			want: &Value{
+				key:  KeyJSON,
+				name: "original",
+				omit: OmitEmpty,
+			},
+		},
+		"OverrideOmitToNotOmitted": {
+			reason: "OverrideFrom should be able to override omit to NotOmitted (zero value).",
+			v: &Value{
+				key:  KeyJSON,
+				name: "field",
+				omit: OmitEmpty,
+			},
+			o: &Value{
+				key:  KeyJSON,
+				omit: NotOmitted,
+			},
+			want: &Value{
+				key:  KeyJSON,
+				name: "field",
+				omit: NotOmitted,
+			},
+		},
+		"OverrideInlineToFalse": {
+			reason: "OverrideFrom should be able to override inline to false (zero value).",
+			v: &Value{
+				key:    KeyJSON,
+				name:   "field",
+				inline: true,
+			},
+			o: &Value{
+				key:    KeyJSON,
+				inline: false,
+			},
+			want: &Value{
+				key:    KeyJSON,
+				name:   "field",
+				inline: false,
+			},
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			got := tc.v.OverrideFrom(tc.o)
+
+			if diff := cmp.Diff(tc.want, got, cmp.AllowUnexported(Value{})); diff != "" {
+				t.Errorf("\n%s\nOverrideFrom(...): -want, +got:\n%s", tc.reason, diff)
 			}
 		})
 	}
