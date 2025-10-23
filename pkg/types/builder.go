@@ -167,7 +167,7 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 				return nil, nil, nil, err
 			}
 		}
-		f.AddToResource(g, r, typeNames, cfg.SchemaElementOptions.AddToObservation(cPath))
+		f.AddToResource(g, r, typeNames, ptr.Deref(cfg.SchemaElementOptions[cPath], config.SchemaElementOption{}))
 	}
 
 	paramType, obsType, initType := g.AddToBuilder(typeNames, r)
@@ -416,13 +416,13 @@ func (r *resource) addParameterField(f *Field, field *types.Var) {
 	r.paramFields = append(r.paramFields, field)
 }
 
-func (r *resource) addInitField(f *Field, field *types.Var, g *Builder, typeNames *types.TypeName) {
+func (r *resource) addInitField(f *Field, field *types.Var, g *Builder, typeNames *types.TypeName, o config.TagOverrides) {
 	// If the field is not an init field, we don't add it.
 	if !f.isInit() {
 		return
 	}
 
-	r.initTags = append(r.initTags, fmt.Sprintf("%s %s", f.JSONTag, f.TFTag))
+	r.initTags = append(r.initTags, fmt.Sprintf("%s %s", f.JSONTag.OverrideFrom(o.JSONTag), f.TFTag.OverrideFrom(o.TFTag)))
 
 	// If the field is a nested type, we need to add it as the init type.
 	if f.InitType != nil {

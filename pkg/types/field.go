@@ -340,7 +340,7 @@ func NewReferenceField(g *Builder, cfg *config.Resource, r *resource, sch *schem
 }
 
 // AddToResource adds built field to the resource.
-func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames, addToObservation bool) { //nolint:gocyclo
+func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames, opt config.SchemaElementOption) { //nolint:gocyclo
 	if f.Comment.UpjetOptions.FieldJSONTag != nil {
 		f.JSONTag = f.Comment.UpjetOptions.FieldJSONTag
 	}
@@ -348,7 +348,7 @@ func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames, add
 	field := types.NewField(token.NoPos, g.Package, f.FieldNameCamel, f.FieldType, false)
 	// if the field is explicitly configured to be added to
 	// the Observation type
-	if addToObservation {
+	if opt.AddToObservation {
 		r.addObservationField(f, field)
 	}
 
@@ -369,7 +369,7 @@ func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames, add
 	// We typically set tf tag to "-" for sensitive fields which were replaced
 	// with secretKeyRefs, or for injected fields into the CRD schema,
 	// which do not exist in the Terraform schema.
-	if (!f.TFTag.AlwaysOmitted() || f.Injected) && !addToObservation {
+	if (!f.TFTag.AlwaysOmitted() || f.Injected) && !opt.AddToObservation {
 		r.addObservationField(f, field)
 	}
 
@@ -378,7 +378,7 @@ func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames, add
 			f.TFTag.SetOmit(structtag.NotOmitted)
 		}
 		r.addParameterField(f, field)
-		r.addInitField(f, field, g, typeNames.InitTypeName)
+		r.addInitField(f, field, g, typeNames.InitTypeName, ptr.Deref(opt.InitProviderTagOverrides, config.TagOverrides{}))
 	}
 
 	if f.Reference != nil {
@@ -399,7 +399,7 @@ func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames, add
 	f.Comment.Required = nil
 	g.comments.AddFieldComment(typeNames.InitTypeName, f.FieldNameCamel, f.Comment.Build())
 
-	if addToObservation {
+	if opt.AddToObservation {
 		g.comments.AddFieldComment(typeNames.ObservationTypeName, f.FieldNameCamel, f.Comment.CommentWithoutOptions().Build())
 	} else {
 		// Note(turkenh): We don't want reference resolver to be generated for
