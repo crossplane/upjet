@@ -810,10 +810,16 @@ func (m SchemaElementOptions) SetInitProviderTagOverrides(el string, o *TagOverr
 // the Terraform schema element.
 type TagOverrides struct {
 	// TFTag can be set to override the generated tf struct tag
-	// for the schema element.
+	// for the schema element. Tag's key cannot be overridden and if you specify
+	// a key here, it will be ignored. Tag's name is only overridden
+	// if you specify a non-empty name. Tag's omit policy and inline are always
+	// overridden with what you specify here.
 	TFTag *structtag.Value
 	// JSONTag can be set to override the generated json struct tag
-	// for the schema element.
+	// for the schema element. Tag's key cannot be overridden and if you specify
+	//	// a key here, it will be ignored. Tag's name is only overridden
+	//	// if you specify a non-empty name. Tag's omit policy and inline are always
+	//	// overridden with what you specify here.
 	JSONTag *structtag.Value
 }
 
