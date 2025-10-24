@@ -12,7 +12,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/crossplane/upjet/pkg/types/structtag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/pkg/errors"
 	"k8s.io/utils/ptr"
@@ -22,6 +21,7 @@ import (
 	"github.com/crossplane/upjet/pkg/schema/traverser"
 	"github.com/crossplane/upjet/pkg/types/comments"
 	"github.com/crossplane/upjet/pkg/types/name"
+	"github.com/crossplane/upjet/pkg/types/structtag"
 )
 
 const (

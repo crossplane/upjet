@@ -21,16 +21,16 @@ type Options struct {
 	// Minimum generates the
 	// +kubebuilder:validation:Minimum=<val>
 	// marker.
-	Minimum  *int
+	Minimum *int
 	// Maximum generates the
 	// +kubebuilder:validation:Maximum=<val>
 	// marker.
-	Maximum  *int
+	Maximum *int
 	// Default generates the
 	// +kubebuilder:default:=<val>
 	// marker. Please note that you will need to include the quotes when setting
 	// Default as needed, e.g., `"10"`.
-	Default  *string
+	Default *string
 }
 
 func (o *Options) setFrom(opt *Options) {

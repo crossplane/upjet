@@ -124,7 +124,7 @@ func build(key Key, opts ...Option) *Value {
 //   - ",inline" sets the inline flag (used in Kubernetes for embedded structs)
 //
 // Returns an error if the given tag value cannot be parsed successfully.
-func parse(key Key, value string) (*Value, error) {
+func parse(key Key, value string) (*Value, error) { //nolint:gocyclo // easier to follow as a unit
 	v := &Value{
 		key: key,
 	}
