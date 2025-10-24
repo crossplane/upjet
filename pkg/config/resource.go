@@ -14,8 +14,6 @@ import (
 	"github.com/crossplane/crossplane-runtime/v2/pkg/fieldpath"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
-	"github.com/crossplane/upjet/v2/pkg/types/markers/kubebuilder"
-	"github.com/crossplane/upjet/v2/pkg/types/structtag"
 	fwresource "github.com/hashicorp/terraform-plugin-framework/resource"
 	rschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
@@ -30,6 +28,8 @@ import (
 
 	"github.com/crossplane/upjet/v2/pkg/config/conversion"
 	"github.com/crossplane/upjet/v2/pkg/registry"
+	"github.com/crossplane/upjet/v2/pkg/types/markers/kubebuilder"
+	"github.com/crossplane/upjet/v2/pkg/types/structtag"
 )
 
 // A ListType is a type of list.

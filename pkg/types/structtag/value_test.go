@@ -1014,10 +1014,8 @@ func TestBuildPanics(t *testing.T) {
 					if panicMsg != tc.panicMsg {
 						t.Errorf("\n%s\npanic message: -want, +got:\n%s\n%s", tc.reason, tc.panicMsg, panicMsg)
 					}
-				} else {
-					if r != nil {
-						t.Errorf("\n%s\nunexpected panic: %v", tc.reason, r)
-					}
+				} else if r != nil {
+					t.Errorf("\n%s\nunexpected panic: %v", tc.reason, r)
 				}
 			}()
 			got := build(tc.key, tc.opts...)
@@ -1120,33 +1118,33 @@ func TestValueOverrideFrom(t *testing.T) {
 		"OverrideNameOnly": {
 			reason: "OverrideFrom should override the name when override has a name set.",
 			v: &Value{
-				key:    KeyJSON,
-				name:   "original",
+				key:  KeyJSON,
+				name: "original",
 			},
 			o: &Value{
 				key:  KeyJSON,
 				name: "overridden",
 			},
 			want: &Value{
-				key:    KeyJSON,
-				name:   "overridden",
+				key:  KeyJSON,
+				name: "overridden",
 			},
 		},
 		"OverrideOmitOnly": {
 			reason: "OverrideFrom should override omit while preserving other fields when override has only omit set.",
 			v: &Value{
-				key:    KeyJSON,
-				name:   "original",
-				omit:   NotOmitted,
+				key:  KeyJSON,
+				name: "original",
+				omit: NotOmitted,
 			},
 			o: &Value{
 				key:  KeyJSON,
 				omit: OmitEmpty,
 			},
 			want: &Value{
-				key:    KeyJSON,
-				name:   "original",
-				omit:   OmitEmpty,
+				key:  KeyJSON,
+				name: "original",
+				omit: OmitEmpty,
 			},
 		},
 		"OverrideInlineOnly": {
@@ -1198,8 +1196,8 @@ func TestValueOverrideFrom(t *testing.T) {
 				name: "overridden",
 			},
 			want: &Value{
-				key:    KeyJSON,
-				name:   "overridden",
+				key:  KeyJSON,
+				name: "overridden",
 			},
 		},
 		"EmptyNameDoesNotOverride": {

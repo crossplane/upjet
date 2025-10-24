@@ -165,7 +165,7 @@ func emptyValue(sc rschema.Schema) tftypes.Value {
 func emptyAttribute(attr rschema.Attribute) tftypes.Value {
 	switch attr := attr.(type) {
 	case rschema.NestedAttribute:
-		switch attr.GetNestingMode() { //nolint:exhaustive
+		switch attr.GetNestingMode() {
 		case NestingModeSingle:
 			vals := make(map[string]tftypes.Value)
 			for key, na := range attr.GetNestedObject().GetAttributes() {
@@ -188,7 +188,7 @@ func emptyAttribute(attr rschema.Attribute) tftypes.Value {
 }
 
 func emptyBlock(blockS rschema.Block) tftypes.Value {
-	switch blockS.GetNestingMode() { //nolint:exhaustive
+	switch blockS.GetNestingMode() {
 	case BlockNestingModeList:
 		return tftypes.NewValue(blockS.Type().TerraformType(context.TODO()), []tftypes.Value{})
 	case BlockNestingModeSet:
@@ -249,7 +249,7 @@ func proposedNewNestedBlock(schema rschema.Block, prior, config tftypes.Value) t
 		Blocks:     resBlocks,
 	}
 
-	switch schema.GetNestingMode() { //nolint:exhaustive
+	switch schema.GetNestingMode() {
 	case BlockNestingModeSingle:
 		// A NestingSingle configuration block value can be null, and since it
 		// cannot be computed we can always take the configuration value.
@@ -277,7 +277,7 @@ func proposedNewNestedType(schema rschema.NestedAttribute, prior, config tftypes
 
 	// Even if the config is null or empty, we will be using this default value.
 	newV := config
-	switch schema.GetNestingMode() { //nolint:exhaustive
+	switch schema.GetNestingMode() {
 	case NestingModeSingle:
 		// If the config is null, we already have our value. If the attribute
 		// is optional+computed, we won't reach this branch with a null value
