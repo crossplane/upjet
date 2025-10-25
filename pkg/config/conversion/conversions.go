@@ -261,7 +261,9 @@ func (i *identityConversion) ConvertManaged(src, target resource.Managed) (bool,
 		pv := fieldpath.Pave(srcRaw)
 		for _, ex := range i.excludePaths {
 			exPaths, err := pv.ExpandWildcards(ex)
-			if err != nil {
+			if fieldpath.IsNotFound(err) {
+				continue
+			} else if err != nil {
 				return false, errors.Wrapf(err, "cannot expand wildcards in the fieldpath expression %s", ex)
 			}
 			for _, p := range exPaths {
