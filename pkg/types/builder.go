@@ -281,8 +281,10 @@ func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, cp
 						tParam = types.NewSlice(paramType)
 						tInit = types.NewSlice(initType)
 					}
+					opt := ptr.Deref(cfg.SchemaElementOptions[cpath], config.SchemaElementOption{})
+					initProviderOverrides := ptr.Deref(opt.InitProviderOverrides, config.InitProviderOverrides{})
 					r.addParameterField(f, types.NewField(token.NoPos, g.Package, f.Name.Camel, tParam, false))
-					r.addInitField(f, types.NewField(token.NoPos, g.Package, f.Name.Camel, tInit, false), g, nil)
+					r.addInitField(f, types.NewField(token.NoPos, g.Package, f.Name.Camel, tInit, false), g, nil, initProviderOverrides.TagOverrides)
 				}
 			default:
 				if paramType == nil {

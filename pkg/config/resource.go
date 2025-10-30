@@ -16,7 +16,6 @@ import (
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	fwresource "github.com/hashicorp/terraform-plugin-framework/resource"
 	rschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
@@ -684,6 +683,13 @@ func (m SchemaElementOptions) SetAddToObservation(el string) {
 		m[el] = &SchemaElementOption{}
 	}
 	m[el].AddToObservation = true
+}
+
+// AddToObservation returns true if the schema element at the specified path
+// should be added to the CRD type's Observation type.
+// Deprecated: Use SchemaElementOptions.AddToObservation instead.
+func (m SchemaElementOptions) AddToObservation(el string) bool {
+	return m[el] != nil && m[el].AddToObservation
 }
 
 // TFListConversionPaths returns the Resource's runtime Terraform list

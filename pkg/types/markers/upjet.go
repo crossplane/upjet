@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/crossplane/crossplane-runtime/v2/pkg/errors"
+	"github.com/crossplane/crossplane-runtime/pkg/errors"
 
-	"github.com/crossplane/upjet/v2/pkg/types/structtag"
+	"github.com/crossplane/upjet/pkg/types/structtag"
 )
 
 const (

@@ -9,7 +9,7 @@ import (
 
 	"github.com/crossplane/upjet/pkg/config"
 	"github.com/crossplane/upjet/pkg/types/markers"
-  "github.com/crossplane/upjet/pkg/types/structtag"
+	"github.com/crossplane/upjet/pkg/types/structtag"
 )
 
 // Option is a comment option
