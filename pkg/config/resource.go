@@ -692,6 +692,13 @@ func (m SchemaElementOptions) SetAddToObservation(el string) {
 	m[el].AddToObservation = true
 }
 
+// AddToObservation returns true if the schema element at the specified path
+// should be added to the CRD type's Observation type.
+// Deprecated: Use SchemaElementOptions.AddToObservation instead.
+func (m SchemaElementOptions) AddToObservation(el string) bool {
+	return m[el] != nil && m[el].AddToObservation
+}
+
 // TFListConversionPaths returns the Resource's runtime Terraform list
 // conversion paths in fieldpath syntax.
 func (r *Resource) TFListConversionPaths() []string {

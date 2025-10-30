@@ -111,16 +111,12 @@ func TestParseJSON(t *testing.T) {
 			},
 		},
 		"UnknownOption": {
-			reason: "Unknown options in a JSON tag should be silently ignored while known options are parsed.",
+			reason: "Unknown options in a JSON tag should return an error",
 			args: args{
 				value: "fieldName,omitempty,unknownopt",
 			},
 			want: want{
-				v: &Value{
-					key:  KeyJSON,
-					name: "fieldName",
-					omit: OmitEmpty,
-				},
+				err: errors.New(`invalid struct tag option: "unknownopt"`),
 			},
 		},
 		"ErrorOmitAlwaysWithOptions": {
@@ -129,7 +125,7 @@ func TestParseJSON(t *testing.T) {
 				value: "-,omitempty",
 			},
 			want: want{
-				err: errors.New(`invalid struct tag format: "-,omitempty" (cannot combine "-" with other options)`),
+				err: errors.New(`invalid struct tag format: "-,omitempty" (cannot combine - with other options)`),
 			},
 		},
 		"ErrorNameWithInline": {
@@ -869,6 +865,17 @@ func TestMustParseTF(t *testing.T) {
 			value:     ",inline,omitempty",
 			mustPanic: true,
 			panicMsg:  `invalid struct tag format: ",inline,omitempty" (cannot combine inline with omitempty)`,
+		},
+		"validTFTag": {
+			reason:    "MustParseTF should succeed if the struct tag being parsed is valid.",
+			value:     "name,omitempty",
+			mustPanic: false,
+			want: &Value{
+				key:    KeyTF,
+				name:   "name",
+				omit:   OmitEmpty,
+				inline: false,
+			},
 		},
 	}
 	for name, tc := range cases {

@@ -16,8 +16,8 @@ const (
 	errFmtInvalidJSONTagName = "invalid JSON struct tag name: %q (must match %s)"
 	errFmtInlineWithName     = "invalid struct tag: cannot set the name %q with inline"
 	errFmtInlineWithOmit     = "invalid struct tag: cannot set inline with omit option %q"
-	errFmtInvalidOptions     = "invalid struct tag format: %q (cannot combine %q with other options)"
 	errFmtInvalidCombination = "invalid struct tag format: %q (cannot combine %s with %s)"
+	errFmtInvalidOption      = "invalid struct tag option: %q"
 )
 
 // reJSONName matches valid Kubernetes CRD field names.
@@ -142,7 +142,7 @@ func parse(key Key, value string) (*Value, error) { //nolint:gocyclo // easier t
 	name := strings.TrimSpace(parts[0])
 	if name == string(OmitAlways) {
 		if len(parts) > 1 {
-			return nil, errors.Errorf(errFmtInvalidOptions, value, OmitAlways)
+			return nil, errors.Errorf(errFmtInvalidCombination, value, OmitAlways, "other options")
 		}
 		// no name expected for "-" (OmitAlways).
 		v.omit = OmitAlways
@@ -164,7 +164,7 @@ func parse(key Key, value string) (*Value, error) { //nolint:gocyclo // easier t
 		case "inline":
 			v.inline = true
 		default:
-			// ignore unknown options for forward compatibility.
+			return nil, errors.Errorf(errFmtInvalidOption, option)
 		}
 	}
 
