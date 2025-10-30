@@ -14,6 +14,10 @@ import (
 
 const (
 	errFmtInvalidJSONTagName = "invalid JSON struct tag name: %q (must match %s)"
+	errFmtInlineWithName     = "invalid struct tag: cannot set the name %q with inline"
+	errFmtInlineWithOmit     = "invalid struct tag: cannot set inline with omit option %q"
+	errFmtInvalidOptions     = "invalid struct tag format: %q (cannot combine %q with other options)"
+	errFmtInvalidCombination = "invalid struct tag format: %q (cannot combine %s with %s)"
 )
 
 // reJSONName matches valid Kubernetes CRD field names.
@@ -105,11 +109,11 @@ func build(key Key, opts ...Option) *Value {
 	}
 	// make sure name and inline are not both set.
 	if v.inline && v.name != "" {
-		panic(fmt.Sprintf("invalid struct tag: cannot set the name %q with inline", v.name))
+		panic(fmt.Sprintf(errFmtInlineWithName, v.name))
 	}
 	// make sure omit and inline are not both set.
 	if v.inline && v.omit != NotOmitted {
-		panic(fmt.Sprintf("invalid struct tag: cannot set inline with omit option %q", v.omit))
+		panic(fmt.Sprintf(errFmtInlineWithOmit, v.omit))
 	}
 	return v
 }
@@ -138,7 +142,7 @@ func parse(key Key, value string) (*Value, error) { //nolint:gocyclo // easier t
 	name := strings.TrimSpace(parts[0])
 	if name == string(OmitAlways) {
 		if len(parts) > 1 {
-			return nil, errors.Errorf("invalid struct tag format: %q (cannot combine %q with other options)", value, OmitAlways)
+			return nil, errors.Errorf(errFmtInvalidOptions, value, OmitAlways)
 		}
 		// no name expected for "-" (OmitAlways).
 		v.omit = OmitAlways
@@ -166,12 +170,12 @@ func parse(key Key, value string) (*Value, error) { //nolint:gocyclo // easier t
 
 	// inline cannot be combined with a name.
 	if v.inline && v.name != "" {
-		return nil, errors.Errorf("invalid struct tag format: %q (cannot combine name with inline)", value)
+		return nil, errors.Errorf(errFmtInvalidCombination, value, "name", "inline")
 	}
 
 	// inline cannot be combined with an omit.
 	if v.inline && v.omit != NotOmitted {
-		return nil, errors.Errorf("invalid struct tag format: %q (cannot combine inline with omitempty)", value)
+		return nil, errors.Errorf(errFmtInvalidCombination, value, "inline", "omitempty")
 	}
 
 	return v, nil
