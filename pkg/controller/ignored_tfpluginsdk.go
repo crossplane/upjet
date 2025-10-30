@@ -22,7 +22,11 @@ func getTerraformIgnoreChanges(forProvider, initProvider map[string]any) []strin
 func getIgnoredFieldsMap(format string, forProvider, initProvider map[string]any) []string {
 	ignored := []string{}
 
-	for k := range initProvider {
+	for k, v := range initProvider {
+		if v == nil {
+			continue
+		}
+
 		if _, ok := forProvider[k]; !ok {
 			ignored = append(ignored, fmt.Sprintf(format, k))
 		} else {
