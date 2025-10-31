@@ -7,6 +7,7 @@ package config
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"regexp"
 	"strings"
 	"text/template"
@@ -210,6 +211,35 @@ func GetExternalNameFromTemplated(tmpl, val string) (string, error) { //nolint:g
 	return "", errors.Errorf("unhandled case with template %s and value %s", tmpl, val)
 }
 
+// FrameworkResourceWithComputedIdentifier returns an ExternalName
+// configuration for a Terraform plugin framework resource with the specified
+// computed identifier attribute and the specified placeholder identifier for
+// the initial external read calls.
+func FrameworkResourceWithComputedIdentifier(identifier, placeholder string) ExternalName {
+	en := NewExternalNameFrom(IdentifierFromProvider,
+		WithSetIdentifierArgumentsFn(func(fn SetIdentifierArgumentsFn, base map[string]any, externalName string) {
+			if id, ok := base[identifier]; !ok || id == placeholder {
+				if externalName == "" {
+					base[identifier] = placeholder
+				} else {
+					base[identifier] = externalName
+				}
+			}
+		}),
+		WithGetExternalNameFn(func(fn GetExternalNameFn, tfState map[string]any) (string, error) {
+			if id, ok := tfState[identifier]; ok {
+				idStr := fmt.Sprintf("%v", id)
+				if len(idStr) > 0 {
+					return idStr, nil
+				}
+			}
+			return "", errors.Errorf("cannot find attribute %q in tfstate", identifier)
+		}),
+	)
+	en.TFPluginFrameworkOptions.ComputedIdentifierAttributes = []string{identifier}
+	return en
+}
+
 // ExternalNameFrom is an ExternalName configuration which uses a parent
 // configuration as its base and modifies any of the GetIDFn,
 // GetExternalNameFn or SetIdentifierArgumentsFn. This enables us to reuse
@@ -276,7 +306,9 @@ func WithSetIdentifierArgumentsFn(fn func(fn SetIdentifierArgumentsFn, base map[
 //		return fn(ctx, externalName, parameters, terraformProviderConfig)
 //	}))
 func NewExternalNameFrom(parent ExternalName, opts ...ExternalNameFromOption) ExternalName {
-	ec := &ExternalNameFrom{}
+	ec := &ExternalNameFrom{
+		ExternalName: parent,
+	}
 	for _, o := range opts {
 		o(ec)
 	}
