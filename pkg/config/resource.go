@@ -165,6 +165,20 @@ type ExternalName struct {
 	// management policy is including the Observe Only, different from other
 	// (required) fields.
 	IdentifierFields []string
+
+	// TFPluginFrameworkOptions represents options related to Terraform plugin
+	// framework resources.
+	TFPluginFrameworkOptions TFPluginFrameworkOptions
+}
+
+// TFPluginFrameworkOptions are external-name configuration options that
+// are specific to Terraform plugin framework resources.
+type TFPluginFrameworkOptions struct {
+	// ComputedIdentifierAttributes is the list of computed Terraform identifier
+	// attribute names for a framework resource. When set,
+	// these computed identifier attributes will be ignored from the desired
+	// state when calculating the drifts between the desired and actual states.
+	ComputedIdentifierAttributes []string
 }
 
 // References represents reference resolver configurations for the fields of a
