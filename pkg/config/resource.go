@@ -181,6 +181,20 @@ type ExternalName struct {
 	// "ignore" the supplied diagnostics, i.e. they
 	// correspond to "resource not found".
 	IsNotFoundDiagnosticFn func(diags []*tfprotov6.Diagnostic) bool
+
+	// TFPluginFrameworkOptions represents options related to Terraform plugin
+	// framework resources.
+	TFPluginFrameworkOptions TFPluginFrameworkOptions
+}
+
+// TFPluginFrameworkOptions are external-name configuration options that
+// are specific to Terraform plugin framework resources.
+type TFPluginFrameworkOptions struct {
+	// ComputedIdentifierName is the computed Terraform identifier attribute
+	// name for a framework resource.
+	// When set, ExternalName.SetIdentifierArgumentFn will
+	// conditionally set this attribute from the external-name annotation value.
+	ComputedIdentifierName *string
 }
 
 // References represents reference resolver configurations for the fields of a

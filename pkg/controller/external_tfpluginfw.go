@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"math"
 	"math/big"
 	"strings"
@@ -313,9 +314,13 @@ func (n *terraformPluginFrameworkExternalClient) filteredDiffExists(rawDiff []tf
 // If plan response contains non-empty RequiresReplace (i.e. the resource needs
 // to be recreated) an error is returned as Crossplane Resource Model (XRM)
 // prohibits resource re-creations and rejects this plan.
-func (n *terraformPluginFrameworkExternalClient) getDiffPlanResponse(ctx context.Context,
-	tfStateValue tftypes.Value) (*tfprotov6.PlanResourceChangeResponse, bool, error) {
-	tfConfigDynamicVal, err := protov6DynamicValueFromMap(n.params, n.resourceValueTerraformType)
+func (n *terraformPluginFrameworkExternalClient) getDiffPlanResponse(ctx context.Context, tfStateValue tftypes.Value) (*tfprotov6.PlanResourceChangeResponse, bool, error) {
+	params := maps.Clone(n.params)
+	// if a computed identifier has been configured, remove it from config.
+	if n.config.ExternalName.TFPluginFrameworkOptions.ComputedIdentifierName != nil {
+		delete(params, *n.config.ExternalName.TFPluginFrameworkOptions.ComputedIdentifierName)
+	}
+	tfConfigDynamicVal, err := protov6DynamicValueFromMap(params, n.resourceValueTerraformType)
 	if err != nil {
 		return nil, false, errors.Wrap(err, "cannot construct dynamic value for TF Config")
 	}
