@@ -19,7 +19,6 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
-	fwdiag "github.com/hashicorp/terraform-plugin-framework/diag"
 	fwprovider "github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	fwresource "github.com/hashicorp/terraform-plugin-framework/resource"
@@ -36,6 +35,7 @@ import (
 	"github.com/crossplane/upjet/pkg/resource"
 	upjson "github.com/crossplane/upjet/pkg/resource/json"
 	"github.com/crossplane/upjet/pkg/terraform"
+	tferrors "github.com/crossplane/upjet/pkg/terraform/errors"
 )
 
 // TerraformPluginFrameworkConnector is an external client, with credentials and
@@ -190,8 +190,7 @@ func (c *TerraformPluginFrameworkConnector) getResourceSchema(ctx context.Contex
 	schemaResp := &fwresource.SchemaResponse{}
 	res.Schema(ctx, fwresource.SchemaRequest{}, schemaResp)
 	if schemaResp.Diagnostics.HasError() {
-		fwErrors := frameworkDiagnosticsToString(schemaResp.Diagnostics)
-		return rschema.Schema{}, errors.Errorf("could not retrieve resource schema: %s", fwErrors)
+		return rschema.Schema{}, tferrors.FrameworkDiagnosticsError("could not retrieve resource schema", schemaResp.Diagnostics)
 	}
 
 	return schemaResp.Schema, nil
@@ -210,8 +209,7 @@ func (c *TerraformPluginFrameworkConnector) configureProvider(ctx context.Contex
 	var schemaResp fwprovider.SchemaResponse
 	ts.FrameworkProvider.Schema(ctx, fwprovider.SchemaRequest{}, &schemaResp)
 	if schemaResp.Diagnostics.HasError() {
-		fwDiags := frameworkDiagnosticsToString(schemaResp.Diagnostics)
-		return nil, fmt.Errorf("cannot retrieve provider schema: %s", fwDiags)
+		return nil, tferrors.FrameworkDiagnosticsError("cannot retrieve provider schema", schemaResp.Diagnostics)
 	}
 	providerServer := providerserver.NewProtocol5(ts.FrameworkProvider)()
 
@@ -712,18 +710,6 @@ func getFatalDiagnostics(diags []*tfprotov5.Diagnostic) error {
 		errs = errors.New(strings.Join(diagErrors, "\n"))
 	}
 	return errs
-}
-
-// frameworkDiagnosticsToString constructs an error string from the provided
-// Plugin Framework diagnostics instance. Only Error severity diagnostics are
-// included.
-func frameworkDiagnosticsToString(fwdiags fwdiag.Diagnostics) string {
-	frameworkErrorDiags := fwdiags.Errors()
-	diagErrors := make([]string, 0, len(frameworkErrorDiags))
-	for _, tfdiag := range frameworkErrorDiags {
-		diagErrors = append(diagErrors, fmt.Sprintf("%s: %s", tfdiag.Summary(), tfdiag.Detail()))
-	}
-	return strings.Join(diagErrors, "\n")
 }
 
 // protov5DynamicValueFromMap constructs a protov5 DynamicValue given the
