@@ -268,7 +268,7 @@ func (n *terraformPluginFrameworkExternalClient) getDiffPlanResponse(ctx context
 	}
 
 	//
-	tfPlannedStateDynamicVal, err := protov5DynamicValueFromMap(n.params, n.resourceValueTerraformType)
+	tfPlannedStateDynamicVal, err := protov5DynamicValueFromMap(params, n.resourceValueTerraformType)
 	if err != nil {
 		return nil, false, errors.Wrap(err, "cannot construct dynamic value for TF Planned State")
 	}
