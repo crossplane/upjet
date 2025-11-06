@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
+	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	"github.com/google/go-cmp/cmp"
@@ -169,6 +170,7 @@ func TestRoundTrip(t *testing.T) {
 			}
 			r := &registry{
 				scheme: s,
+				logger: logging.NewNopLogger(),
 			}
 			if err := r.RegisterConversions(p); err != nil {
 				t.Fatalf("\n%s\nRegisterConversions(p): Failed to register the conversions with the registry.\n", tc.reason)
