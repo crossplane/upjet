@@ -102,6 +102,7 @@ func Run(pc *config.Provider, rootDir string) { //nolint:gocyclo
 				panic(errors.Wrapf(err, "cannot insert type definitions from the previous versions into the package scope for group %q", group))
 			}
 
+			modulePathControllers := filepath.Join(pc.ModulePath, "internal", "controller")
 			for _, name := range sortedResources(resources) {
 				paramTypeName, err := crdGen.Generate(resources[name])
 				if err != nil {
@@ -125,7 +126,11 @@ func Run(pc *config.Provider, rootDir string) { //nolint:gocyclo
 					panic(errors.Wrapf(err, "cannot generate controller for resource %s", name))
 				}
 				controllerPkgMap[shortGroup] = append(controllerPkgMap[shortGroup], ctrlPkgPath)
-				controllerPkgMap[config.PackageNameMonolith] = append(controllerPkgMap[config.PackageNameMonolith], ctrlPkgPath)
+				// if the controller is not already added as a base package controller
+				// to the monolith provider.
+				if len(pc.BasePackages.ControllerMap[strings.TrimPrefix(ctrlPkgPath, strings.TrimSuffix(modulePathControllers, "/")+"/")]) == 0 {
+					controllerPkgMap[config.PackageNameMonolith] = append(controllerPkgMap[config.PackageNameMonolith], ctrlPkgPath)
+				}
 				if err := exampleGen.Generate(group, version, resources[name]); err != nil {
 					panic(errors.Wrapf(err, "cannot generate example manifest for resource %s", name))
 				}
