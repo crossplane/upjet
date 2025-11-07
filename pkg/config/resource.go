@@ -27,6 +27,8 @@ import (
 
 	"github.com/crossplane/upjet/pkg/config/conversion"
 	"github.com/crossplane/upjet/pkg/registry"
+	"github.com/crossplane/upjet/pkg/types/markers/kubebuilder"
+	"github.com/crossplane/upjet/pkg/types/structtag"
 )
 
 // A ListType is a type of list.
@@ -685,6 +687,7 @@ func (m SchemaElementOptions) SetAddToObservation(el string) {
 
 // AddToObservation returns true if the schema element at the specified path
 // should be added to the CRD type's Observation type.
+// Deprecated: Use SchemaElementOptions.AddToObservation instead.
 func (m SchemaElementOptions) AddToObservation(el string) bool {
 	return m[el] != nil && m[el].AddToObservation
 }
@@ -799,6 +802,48 @@ func (m SchemaElementOptions) EmbeddedObject(el string) bool {
 	return m[el] != nil && m[el].EmbeddedObject
 }
 
+// SetInitProviderOverrides sets the InitProviderOverrides
+// for the specified key.
+// The key is a Terraform field path without the wildcard segments, like
+// a.b.c.
+func (m SchemaElementOptions) SetInitProviderOverrides(el string, o *InitProviderOverrides) {
+	if m[el] == nil {
+		m[el] = &SchemaElementOption{}
+	}
+	m[el].InitProviderOverrides = o
+}
+
+// TagOverrides can be used to override the generated struct tags in
+// the generated InitProvider, ForProvider or Observation APIs for
+// the Terraform schema element.
+type TagOverrides struct {
+	// TFTag can be set to override the generated tf struct tag
+	// for the schema element. Tag's key cannot be overridden and if you specify
+	// a key here, it will be ignored. Tag's name is only overridden
+	// if you specify a non-empty name. Tag's omit policy and inline are always
+	// overridden with what you specify here.
+	TFTag *structtag.Value
+	// JSONTag can be set to override the generated json struct tag
+	// for the schema element. Tag's key cannot be overridden and if you specify
+	// a key here, it will be ignored. Tag's name is only overridden
+	// if you specify a non-empty name. Tag's omit policy and inline are always
+	// overridden with what you specify here.
+	JSONTag *structtag.Value
+}
+
+// InitProviderOverrides is a set of overrides for the generated InitProvider
+// field corresponding to a Terraform schema element.
+type InitProviderOverrides struct {
+	// TagOverrides sets tag overrides for the generated struct tags
+	// in the InitProvider API.
+	TagOverrides
+	// Options sets the override for the kubebuilder marker options
+	// to be used for the generated InitProvider field corresponding to a
+	// Terraform schema element. A kubebuilder marker option is only overridden
+	// if it's not nil.
+	KubebuilderOptions *kubebuilder.Options
+}
+
 // SchemaElementOption represents configuration options on a schema element.
 type SchemaElementOption struct {
 	// AddToObservation is set to true if the field represented by
@@ -809,4 +854,7 @@ type SchemaElementOption struct {
 	// a schema element is to be embedded into its parent instead of being
 	// generated as a single element list.
 	EmbeddedObject bool
+	// InitProviderOverrides is set to override the generated InitProvider field
+	// corresponding to a schema element.
+	InitProviderOverrides *InitProviderOverrides
 }

@@ -15,6 +15,7 @@ import (
 
 	"github.com/crossplane/upjet/pkg/types/comments"
 	"github.com/crossplane/upjet/pkg/types/markers"
+	"github.com/crossplane/upjet/pkg/types/markers/kubebuilder"
 	"github.com/crossplane/upjet/pkg/types/name"
 )
 
@@ -48,7 +49,7 @@ var (
 	)
 	commentOptional = &comments.Comment{
 		Options: markers.Options{
-			KubebuilderOptions: markers.KubebuilderOptions{
+			KubebuilderOptions: kubebuilder.Options{
 				Required: ptr.To(false),
 			},
 		},
