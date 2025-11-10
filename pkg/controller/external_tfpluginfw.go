@@ -142,17 +142,6 @@ func getFrameworkExtendedParameters(ctx context.Context, tr resource.Terraformed
 		params["id"] = tfID
 	}
 
-	// we need to parameterize the following for a provider
-	// not all providers may have this attribute
-	// TODO: tags-tags_all implementation is AWS specific.
-	// Consider making this logic independent of provider.
-	// TODO(erhan): this might be already resolved with proposed state impl
-	_, hasTags := fwResSchema.Attributes["tags"]
-	_, hasTagsAll := fwResSchema.Attributes["tags_all"]
-	if hasTags && hasTagsAll {
-		params["tags_all"] = params["tags"]
-	}
-
 	return params, nil
 }
 
@@ -311,7 +300,33 @@ func (c *TerraformPluginFrameworkConnector) getResourceConfigTerraformValue(ctx 
 		return tftypes.Value{}, errors.Wrap(err, "cannot construct TF value for resource config")
 	}
 
-	return tfConfigValue, nil
+	// remove any computed + not-optional (read-only) attribute from resource config
+	// we might still need them at `params` for prior state reconstruction in initial reads,
+	// however, they should not exist in the final resource config value sent to TF layer.
+	// currently read-only params can end up in the `params` via getFrameworkExtendedParameters:
+	// - externalname.SetIdentifierArgumentFn might set some computed identifiers
+	// - externalname.GetIDFn, id is mostly read-only
+	tfConfigValueClean, err := tftypes.Transform(tfConfigValue, func(path *tftypes.AttributePath, v tftypes.Value) (tftypes.Value, error) {
+		if !v.IsKnown() || v.IsNull() {
+			return v, nil
+		}
+		attr, err := sch.AttributeAtTerraformPath(ctx, path)
+		if err != nil || attr == nil {
+			// Not an attribute, could be an element or attribute of a complex type
+			// we can safely ignore them
+			return v, nil //nolint:nilerr // intentional per above explanation
+		}
+		if attr.IsComputed() && !attr.IsOptional() {
+			// nullify the value with its own type
+			return tftypes.NewValue(v.Type(), nil), nil
+		}
+		// no-op
+		return v, nil
+	})
+	if err != nil {
+		return tftypes.Value{}, errors.Wrap(err, "cannot remove read-only attributes from resource config")
+	}
+	return tfConfigValueClean, nil
 }
 
 // Filter diffs that have unknown plan values, which correspond to
