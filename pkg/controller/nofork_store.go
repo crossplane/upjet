@@ -18,6 +18,13 @@ import (
 	"github.com/crossplane/upjet/v2/pkg/terraform"
 )
 
+type stateMark int
+
+const (
+	defaultState stateMark = iota
+	reconstructedState
+)
+
 // AsyncTracker holds information for a managed resource to track the
 // async Terraform operations and the
 // Terraform state (TF SDKv2 or TF Plugin Framework) of the external resource
@@ -48,6 +55,8 @@ type AsyncTracker struct {
 	tfState *tfsdk.InstanceState
 	// TF Plugin Framework instance state for TF Plugin Framework-based resources
 	fwState *tfprotov6.DynamicValue
+	// stateMark holds meta-information about the state
+	stateMark stateMark
 	// lifecycle of certain external resources are bound to a parent resource's
 	// lifecycle, and they cannot be deleted without actually deleting
 	// the owning external resource (e.g.,  a database resource as the parent
@@ -157,6 +166,29 @@ func (a *AsyncTracker) SetFrameworkTFState(state *tfprotov6.DynamicValue) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.fwState = state
+	a.stateMark = defaultState
+}
+
+// SetReconstructedFrameworkTFState stores the given *tfprotov6.DynamicValue
+// Terraform Plugin Framework external resource reconstructed state into this
+// AsyncTracker's fwstate and marks the state as reconstructed.
+// MUST be used only for Terraform Plugin Framework resources
+func (a *AsyncTracker) SetReconstructedFrameworkTFState(state *tfprotov6.DynamicValue) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.fwState = state
+	a.stateMark = reconstructedState
+}
+
+// ResetReconstructedFrameworkTFState clears the TF Plugin Framework resource
+// state if it is a reconstructed state. No-op otherwise.
+func (a *AsyncTracker) ResetReconstructedFrameworkTFState() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.stateMark == reconstructedState {
+		a.fwState = nil
+		a.stateMark = defaultState
+	}
 }
 
 // OperationTrackerStore stores the AsyncTracker instances associated with the
