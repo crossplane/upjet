@@ -186,7 +186,7 @@ func (c *TerraformPluginFrameworkConnector) Connect(ctx context.Context, mg xpre
 		if err != nil {
 			return nil, errors.Wrap(err, "cannot unmarshal TF state dynamic value during state existence check")
 		}
-		hasState = err == nil && !tfStateValue.IsNull()
+		hasState = !tfStateValue.IsNull()
 	}
 
 	if !hasState {
@@ -221,7 +221,7 @@ func (c *TerraformPluginFrameworkConnector) Connect(ctx context.Context, mg xpre
 		if err != nil {
 			return nil, errors.Wrap(err, "cannot construct dynamic value for TF state")
 		}
-		opTracker.SetFrameworkTFState(tfStateDynamicValue)
+		opTracker.SetReconstructedFrameworkTFState(tfStateDynamicValue)
 	}
 
 	configuredProviderServer, err := c.configureProvider(ctx, ts)
@@ -453,6 +453,7 @@ func (n *terraformPluginFrameworkExternalClient) Observe(ctx context.Context, mg
 	}
 	readResponse, err := n.server.ReadResource(ctx, readRequest)
 	if err != nil {
+		n.opTracker.ResetReconstructedFrameworkTFState()
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot read resource")
 	}
 
@@ -462,6 +463,7 @@ func (n *terraformPluginFrameworkExternalClient) Observe(ctx context.Context, mg
 	isResourceNotFoundDiags := n.hasResourceNotFoundDiagnostic(readResponse.Diagnostics)
 	if fatalDiags := getFatalDiagnostics(readResponse.Diagnostics); fatalDiags != nil {
 		if !isResourceNotFoundDiags {
+			n.opTracker.ResetReconstructedFrameworkTFState()
 			return managed.ExternalObservation{}, errors.Wrap(fatalDiags, "read resource request failed")
 		}
 		n.logger.Debug("TF ReadResource returned error diagnostics, but XP resource was configured to treat them as `Resource not exists`. Skipping", "skippedDiags", fatalDiags)
