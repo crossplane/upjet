@@ -15,3 +15,6 @@ cover.out
 # ignore IDE folders
 .vscode/
 .idea/
+
+# ignore AI agent folders
+.claude/
