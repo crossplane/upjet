@@ -57,8 +57,12 @@ version:
    - The existing version stays backward compatible
    - Old manifests continue to work without modification
 
-2. **Optional Fields with Defaults**: New fields that have default values
-   - Resources will function with or without the new field specified
+2. **Optional Fields with Defaults**: New fields that have default values in the
+   Terraform provider schema
+   - Note: Upjet does not generate default values in the CRD schema itself, even
+     when defaults exist in the Terraform schema
+   - Defaults are applied at runtime by the Terraform provider or cloud provider
+   - Resources will function with or without the new field specified in the manifest
 
 3. **Additional Enum Values**: Adding new allowed values to existing fields
    - Existing values remain valid
@@ -67,12 +71,16 @@ version:
 
 ### Non-Breaking Changes (Backward Compatible)
 
-When new fields are **optional** or have **default values**, no version bump is
-necessary. The existing API version remains backward compatible because:
+When new fields are **optional** or have **default values in the Terraform
+provider schema**, no version bump is necessary. The existing API version
+remains backward compatible because:
 
 - Old manifests that don't specify the new fields continue to work
-- The Terraform provider handles the absence of these fields gracefully
-- Late initialization can populate sensible defaults
+- The Terraform provider handles the absence of these fields gracefully at
+  runtime (applying defaults when needed)
+- Late initialization can populate sensible defaults from the provider state
+- Note: While defaults exist in the Terraform schema, they are not reflected in
+  the generated CRD schema itself
 
 **Example**: Adding an optional `encryption_enabled` field to a database
 resource doesn't break existing manifests that don't specify this field.
@@ -146,9 +154,17 @@ func Configure(p *config.Provider) {
 ```
 
 This configuration will:
-1. Generate CRDs for all three versions: `v1alpha1`, `v1alpha2`, and `v1beta1`
-2. Mark `v1beta1` as the storage version (hub)
-3. Create conversion webhooks to translate between versions
+1. Generate the CRD for the latest version (`v1beta1`)
+2. Mark the previous versions (`v1alpha1`, `v1alpha2`) as served API versions
+3. Set `v1beta1` as both the storage version and hub version (by default, both
+   are set to `r.Version`)
+4. Create conversion webhooks to translate between versions
+
+**Note**: The storage version and hub version are different concepts, though by
+default both are set to `r.Version`. They can be configured independently using:
+- `SetCRDStorageVersion`: Configures which version is used for persistence
+- `SetCRDHubVersion`: Configures which version is used as the hub in the
+  hub-and-spoke conversion pattern
 
 ## Conversion Strategies
 
@@ -163,12 +179,19 @@ Kubernetes uses a "hub-and-spoke" conversion model:
 v1alpha1 ←→ v1beta1 (hub) ←→ v1alpha2
 ```
 
-- **Hub**: The storage version (usually the latest stable version)
+- **Hub**: The central version used for all conversions (by default set to
+  `r.Version`, usually the latest stable version)
 - **Spokes**: Other versions that convert to/from the hub
+- **Storage Version**: The version used to persist objects in etcd (by default
+  also set to `r.Version`, but can be configured separately)
 
 All conversion happens through the hub version:
 - `v1alpha1` → `v1beta1` → `v1alpha2`
 - Never directly `v1alpha1` ↔ `v1alpha2`
+
+**Note**: While the hub version and storage version are often the same (both
+default to `r.Version`), they serve different purposes and can be configured
+independently if needed.
 
 ### API-Level Converters
 
