@@ -139,7 +139,7 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 	// we need to process all fields in the same order all the time.
 	keys := sortedKeys(res.Schema)
 
-	typeNames, err := NewTypeNames(names, g.Package, cfg.OverrideFieldNames)
+	typeNames, err := NewTypeNames(names, g.Package, cfg.OverrideFieldNames) //nolint:staticcheck // still handling deprecated field behavior
 	if err != nil {
 		return nil, nil, nil, err
 	}
