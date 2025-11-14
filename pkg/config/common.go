@@ -138,6 +138,7 @@ func (r *Resource) MarkAsRequired(fieldpaths ...string) {
 // useful in cases where external name contains an optional parameter that is
 // defaulted by the provider but we need it to exist or to fix plain buggy
 // schemas.
+//
 // Deprecated: Use Resource.MarkAsRequired instead.
 // This function will be removed in future versions.
 func MarkAsRequired(sch *schema.Resource, fieldpaths ...string) {

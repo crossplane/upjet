@@ -209,6 +209,7 @@ type References map[string]Reference
 type Reference struct {
 	// Type is the Go type name of the CRD if it is in the same package or
 	// <package-path>.<type-name> if it is in a different package.
+	//
 	// Deprecated: Type is deprecated in favor of TerraformName, which provides
 	// a more stable and less error-prone API compared to Type. TerraformName
 	// will automatically handle name & version configurations that will affect
@@ -612,6 +613,7 @@ type Resource struct {
 	// conflict. By convention, also used in upjet, the field name is preceded by
 	// the value of the generated Kind, for example:
 	// "TagParameters": "ClusterTagParameters"
+	//
 	// Deprecated: OverrideFieldNames has been deprecated in favor of loading
 	// the already existing type names from the older versions of the MR APIS
 	// via the PreviousVersions API.
@@ -708,6 +710,7 @@ func (m SchemaElementOptions) SetAddToObservation(el string) {
 
 // AddToObservation returns true if the schema element at the specified path
 // should be added to the CRD type's Observation type.
+//
 // Deprecated: Use SchemaElementOptions.AddToObservation instead.
 func (m SchemaElementOptions) AddToObservation(el string) bool {
 	return m[el] != nil && m[el].AddToObservation
