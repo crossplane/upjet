@@ -2,207 +2,194 @@
 #
 # SPDX-License-Identifier: CC0-1.0
 
-run:
-  timeout: 10m
-
+version: "2"
 output:
-  # colored-line-number|line-number|json|tab|checkstyle|code-climate, default is "colored-line-number"
   formats:
-    - format: colored-line-number
-  print-linter-name: true
-  show-stats: true
-
-linters-settings:
-  errcheck:
-    # report about not checking of errors in type assetions: `a := b.(MyStruct)`;
-    # default is false: such cases aren't reported by default.
-    check-type-assertions: false
-
-    # report about assignment of errors to blank identifier: `num, _ := strconv.Atoi(numStr)`;
-    # default is false: such cases aren't reported by default.
-    check-blank: false
-
-    exclude-functions:
-      - io/ioutil.ReadFile
-      - io/ioutil.ReadDir
-      - io/ioutil.ReadAll
-
-  revive:
-    # confidence for issues, default is 0.8
-    confidence: 0.8
-
-  gofmt:
-    # simplify code: gofmt with `-s` option, true by default
-    simplify: true
-
-  gci:
-    custom-order: true
-    sections:
-      - standard
-      - default
-      - prefix(github.com/crossplane/upjet)
-      - blank
-      - dot
-
-  gocyclo:
-    # minimal code complexity to report, 30 by default (but we recommend 10-20)
-    min-complexity: 10
-
-  dupl:
-    # tokens count to trigger issue, 150 by default
-    threshold: 100
-
-  goconst:
-    # minimal length of string constant, 3 by default
-    min-len: 3
-    # minimal occurrences count to trigger, 3 by default
-    min-occurrences: 5
-
-  lll:
-    # tab width in spaces. Default to 1.
-    tab-width: 1
-
-  unparam:
-    # Inspect exported functions, default is false. Set to true if no external program/library imports your code.
-    # XXX: if you enable this setting, unparam will report a lot of false-positives in text editors:
-    # if it's called for subdir of a project it can't find external interfaces. All text editor integrations
-    # with golangci-lint call it on a directory with the changed file.
-    check-exported: false
-
-  nakedret:
-    # make an issue if func has more lines of code than this setting and it has naked returns; default is 30
-    max-func-lines: 30
-
-  prealloc:
-    # XXX: we don't recommend using this linter before doing performance profiling.
-    # For most programs usage of prealloc will be a premature optimization.
-
-    # Report preallocation suggestions only on simple loops that have no returns/breaks/continues/gotos in them.
-    # True by default.
-    simple: true
-    range-loops: true # Report preallocation suggestions on range loops, true by default
-    for-loops: false # Report preallocation suggestions on for loops, false by default
-
-  gocritic:
-    # Enable multiple checks by tags, run `GL_DEBUG=gocritic golangci-lint` run to see all tags and checks.
-    # Empty list by default. See https://github.com/go-critic/go-critic#usage -> section "Tags".
-    enabled-tags:
-      - performance
-
-    settings: # settings passed to gocritic
-      captLocal: # must be valid enabled check name
-        paramsOnly: true
-      rangeValCopy:
-        sizeThreshold: 32
-
-  nolintlint:
-    require-explanation: false
-    require-specific: true
-
+    text:
+      path: stdout
+      print-linter-name: true
 linters:
   enable:
-    - govet
-    - gocyclo
-    - gocritic
+    - asasalint
+    - asciicheck
+    - bidichk
+    - bodyclose
+    - contextcheck
+    - durationcheck
+    - errchkjson
+    - errorlint
+    - exhaustive
+    - gocheckcompilerdirectives
+    - gochecksumtype
     - goconst
-    - gci
-    - gofmt # We enable this as well as goimports for its simplify mode.
-    - gosimple
-    - prealloc
-    - revive
-    - staticcheck
-    - unconvert
-    - unused
+    - gocritic
+    - gocyclo
+    - gosec
+    - gosmopolitan
+    - loggercheck
+    - makezero
     - misspell
+    - musttag
     - nakedret
+    - nilerr
+    - nilnesserr
+    - noctx
     - nolintlint
+    - prealloc
+    - protogetter
+    - reassign
+    - recvcheck
+    - revive
+    - rowserrcheck
+    - spancheck
+    - sqlclosecheck
+    - testifylint
+    - unconvert
+    - unparam
+    - zerologlint
+  settings:
+    dupl:
+      threshold: 100
+    errcheck:
+      check-type-assertions: false
+      check-blank: false
+      exclude-functions:
+        - io/ioutil.ReadFile
+        - io/ioutil.ReadDir
+        - io/ioutil.ReadAll
+    goconst:
+      min-len: 3
+      min-occurrences: 5
+    gocritic:
+      enabled-tags:
+        - performance
+      settings:
+        captLocal:
+          paramsOnly: true
+        rangeValCopy:
+          sizeThreshold: 32
+    gocyclo:
+      min-complexity: 10
+    lll:
+      tab-width: 1
+    nakedret:
+      max-func-lines: 30
+    nolintlint:
+      require-explanation: false
+      require-specific: true
+    prealloc:
+      simple: true
+      range-loops: true
+      for-loops: false
+    revive:
+      confidence: 0.8
+    unparam:
+      check-exported: false
+  exclusions:
+    generated: lax
+    rules:
+      # Exclude some linters from running on tests files.
+      - linters:
+          - dupl
+          - errcheck
+          - gocyclo
+          - gosec
+          - scopelint
+          - unparam
+        path: _test(ing)?\.go
 
-  presets:
-    - bugs
-    - unused
-  fast: false
+      # Ease some gocritic warnings on test files.
+      - linters:
+          - gocritic
+        path: _test\.go
+        text: (unnamedResult|exitAfterDefer)
 
+      # These are performance optimisations rather than style issues per se.
+      # They warn when function arguments or range values copy a lot of memory
+      # rather than using a pointer.
+      - linters:
+          - gocritic
+        text: '(hugeParam|rangeValCopy):'
+
+      # This "TestMain should call os.Exit to set exit code" warning is not clever
+      # enough to notice that we call a helper method that calls os.Exit.
+      - linters:
+          - staticcheck
+        text: 'SA3000:'
+
+      # This is a "potential hardcoded credentials" warning. It's triggered by
+      # any variable with 'secret' in the same, and thus hits a lot of false
+      # positives in Kubernetes land where a Secret is an object type.
+      - linters:
+          - gosec
+        text: 'G101:'
+
+      # This is an 'errors unhandled' warning that duplicates errcheck.
+      - linters:
+          - gosec
+        text: 'G104:'
+
+      # Some k8s dependencies do not have JSON tags on all fields in structs.
+      - linters:
+          - musttag
+        path: k8s.io/
+
+      # This exclusion is necessary because this package relies on deprecated
+      # functions and fields to maintain compatibility with older versions. This
+      # package acts as a migration framework, supporting users coming from
+      # previous versions. In the future, we may extract this package into a
+      # separate module and decouple its dependencies from upjet.
+      - linters:
+          - staticcheck
+        path: pkg/migration/
+        text: 'SA1019:'
+      - linters:
+          - staticcheck
+        text: 'QF1008:'
+      # Ease some deprecated field usage, we still handle them
+      - linters:
+          - staticcheck
+        path: pkg/types/reference.go
+        text: 'SA1019:'
+      - linters:
+          - staticcheck
+        path: pkg/types/markers/crossplane.go
+        text: 'SA1019:'
+      - linters:
+          - govet
+        text: 'buildtag:'
+        path: pkg/generate.go
+      - linters:
+          - nolintlint
+        path: pkg/controller/proposed_state.go
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
 issues:
-  # Excluding configuration per-path and per-linter
-  exclude-rules:
-    # Exclude some linters from running on tests files.
-    - path: _test(ing)?\.go
-      linters:
-        - gocyclo
-        - errcheck
-        - dupl
-        - gosec
-        - scopelint
-        - unparam
-
-    # Ease some gocritic warnings on test files.
-    - path: _test\.go
-      text: "(unnamedResult|exitAfterDefer)"
-      linters:
-        - gocritic
-
-    # These are performance optimisations rather than style issues per se.
-    # They warn when function arguments or range values copy a lot of memory
-    # rather than using a pointer.
-    - text: "(hugeParam|rangeValCopy):"
-      linters:
-      - gocritic
-
-    # This "TestMain should call os.Exit to set exit code" warning is not clever
-    # enough to notice that we call a helper method that calls os.Exit.
-    - text: "SA3000:"
-      linters:
-      - staticcheck
-
-    - text: "k8s.io/api/core/v1"
-      linters:
-      - goimports
-
-    # This is a "potential hardcoded credentials" warning. It's triggered by
-    # any variable with 'secret' in the same, and thus hits a lot of false
-    # positives in Kubernetes land where a Secret is an object type.
-    - text: "G101:"
-      linters:
-      - gosec
-      - gas
-
-    # This is an 'errors unhandled' warning that duplicates errcheck.
-    - text: "G104:"
-      linters:
-      - gosec
-      - gas
-
-    # Some k8s dependencies do not have JSON tags on all fields in structs.
-    - path: k8s.io/
-      linters:
-        - musttag
-
-    # This exclusion is necessary because this package relies on deprecated
-    # functions and fields to maintain compatibility with older versions. This
-    # package acts as a migration framework, supporting users coming from
-    # previous versions. In the future, we may extract this package into a
-    # separate module and decouple its dependencies from upjet.
-    - path: pkg/migration/
-      linters:
-        - staticcheck
-      text: "SA1019:"
-
-  # Independently from option `exclude` we use default exclude patterns,
-  # it can be disabled by this option. To list all
-  # excluded by default patterns execute `golangci-lint run --help`.
-  # Default value for this option is true.
-  exclude-use-default: false
-
-  # Show only new issues: if there are unstaged changes or untracked files,
-  # only those changes are analyzed, else only changes in HEAD~ are analyzed.
-  # It's a super-useful option for integration of golangci-lint into existing
-  # large codebase. It's not practical to fix all existing issues at the moment
-  # of integration: much better don't allow issues in new code.
-  # Default is false.
-  new: false
-
-  # Maximum issues count per one linter. Set to 0 to disable. Default is 50.
+  # Maximum issues count per one linter. Set to 0 to disable.
   max-issues-per-linter: 0
-
-  # Maximum count of issues with the same text. Set to 0 to disable. Default is 3.
+  # Maximum count of issues with the same text. Set to 0 to disable.
   max-same-issues: 0
+  new: false
+formatters:
+  enable:
+    - gci
+    - gofmt
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/crossplane/upjet)
+        - blank
+        - dot
+      custom-order: true
+    gofmt:
+      simplify: true
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
