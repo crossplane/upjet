@@ -6,16 +6,17 @@ package transformers
 
 import (
 	"fmt"
-	"github.com/crossplane/crossplane-runtime/v2/pkg/logging"
-	"github.com/pkg/errors"
-	"github.com/spf13/afero"
 	"go/ast"
 	"go/format"
 	"go/token"
-	"golang.org/x/tools/go/ast/astutil"
-	"golang.org/x/tools/go/packages"
 	"path/filepath"
 	"strings"
+
+	"github.com/crossplane/crossplane-runtime/v2/pkg/logging"
+	"github.com/pkg/errors"
+	"github.com/spf13/afero"
+	"golang.org/x/tools/go/ast/astutil"
+	"golang.org/x/tools/go/packages"
 )
 
 const (
