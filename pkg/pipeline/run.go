@@ -282,14 +282,14 @@ func (r *PipelineRunner) Run(pc *config.Provider) []string { //nolint:gocyclo
 	// So, we set the directory of the command instead of passing in the directory
 	// as an argument to "find".
 	fmt.Printf("Running goimports on apis folder with scope %s\n", r.Scope)
-	apisCmd := exec.Command("bash", "-c", "goimports -w $(find . -iname 'zz_*')")
+	apisCmd := exec.Command("bash", "-c", "goimports -w $(find . -iname 'zz_*')") //nolint:noctx
 	apisCmd.Dir = filepath.Clean(r.DirAPIs)
 	if out, err := apisCmd.CombinedOutput(); err != nil {
 		panic(errors.Wrap(err, "cannot run goimports for apis folder: "+string(out)))
 	}
 
 	fmt.Printf("Running goimports on controller folder with scope %s\n", r.Scope)
-	ctrlCmd := exec.Command("bash", "-c", "goimports -w $(find . -iname 'zz_*')")
+	ctrlCmd := exec.Command("bash", "-c", "goimports -w $(find . -iname 'zz_*')") //nolint:noctx
 	ctrlCmd.Dir = filepath.Clean(r.DirControllers)
 	if out, err := ctrlCmd.CombinedOutput(); err != nil {
 		panic(errors.Wrap(err, "cannot run goimports for controller folder: "+string(out)))
