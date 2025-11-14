@@ -131,7 +131,7 @@ func (rr *Injector) getTypePath(tfName string, configResources map[string]*confi
 func (rr *Injector) SetReferenceTypes(configResources map[string]*config.Resource) error {
 	for _, r := range configResources {
 		for attr, ref := range r.References {
-			if ref.Type == "" && ref.TerraformName != "" {
+			if ref.Type == "" && ref.TerraformName != "" { //nolint:staticcheck // still handling deprecated field behavior
 				crdTypePath, err := rr.getTypePath(ref.TerraformName, configResources)
 				if err != nil {
 					return errors.Wrap(err, "cannot set reference types")
@@ -147,7 +147,7 @@ func (rr *Injector) SetReferenceTypes(configResources map[string]*config.Resourc
 					delete(r.References, attr)
 					continue
 				}
-				ref.Type = crdTypePath
+				ref.Type = crdTypePath //nolint:staticcheck // still handling deprecated field behavior
 				r.References[attr] = ref
 			}
 		}
