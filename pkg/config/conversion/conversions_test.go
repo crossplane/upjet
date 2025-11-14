@@ -1026,3 +1026,490 @@ func TestOptionalFieldConversionModeString(t *testing.T) {
 		})
 	}
 }
+
+func TestFieldTypeConversion(t *testing.T) {
+	type args struct {
+		sourceVersion string
+		targetVersion string
+		fieldPath     string
+		mode          TypeConversionMode
+		sourceObj     *fieldpath.Paved
+		targetObj     *fieldpath.Paved
+	}
+	type want struct {
+		converted bool
+		err       error
+		targetObj *fieldpath.Paved
+	}
+	tests := map[string]struct {
+		reason string
+		args   args
+		want   want
+	}{
+		"SuccessfulIntToStringConversion": {
+			reason: "Successfully convert int64 field to string.",
+			args: args{
+				sourceVersion: "v1beta1",
+				targetVersion: "v1beta2",
+				fieldPath:     "spec.forProvider.port",
+				mode:          IntToString,
+				sourceObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta1",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"port": int64(8080),
+						},
+					},
+				}),
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{},
+					},
+				}),
+			},
+			want: want{
+				converted: true,
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"port": "8080",
+						},
+					},
+				}),
+			},
+		},
+		"SuccessfulIntToStringFromFloat64": {
+			reason: "Successfully convert float64 (representing integer) field to string.",
+			args: args{
+				sourceVersion: "v1beta1",
+				targetVersion: "v1beta2",
+				fieldPath:     "spec.forProvider.port",
+				mode:          IntToString,
+				sourceObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta1",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"port": float64(8080), // JSON unmarshaling produces float64
+						},
+					},
+				}),
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{},
+					},
+				}),
+			},
+			want: want{
+				converted: true,
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"port": "8080",
+						},
+					},
+				}),
+			},
+		},
+		"SuccessfulStringToIntConversion": {
+			reason: "Successfully convert string field to int64.",
+			args: args{
+				sourceVersion: "v1beta2",
+				targetVersion: "v1beta1",
+				fieldPath:     "spec.forProvider.port",
+				mode:          StringToInt,
+				sourceObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"port": "8080",
+						},
+					},
+				}),
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta1",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{},
+					},
+				}),
+			},
+			want: want{
+				converted: true,
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta1",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"port": int64(8080),
+						},
+					},
+				}),
+			},
+		},
+		"SuccessfulBoolToStringConversion": {
+			reason: "Successfully convert bool field to string.",
+			args: args{
+				sourceVersion: "v1beta1",
+				targetVersion: "v1beta2",
+				fieldPath:     "spec.forProvider.enabled",
+				mode:          BoolToString,
+				sourceObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta1",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"enabled": true,
+						},
+					},
+				}),
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{},
+					},
+				}),
+			},
+			want: want{
+				converted: true,
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"enabled": "true",
+						},
+					},
+				}),
+			},
+		},
+		"SuccessfulStringToBoolConversion": {
+			reason: "Successfully convert string field to bool.",
+			args: args{
+				sourceVersion: "v1beta2",
+				targetVersion: "v1beta1",
+				fieldPath:     "spec.forProvider.enabled",
+				mode:          StringToBool,
+				sourceObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"enabled": "true",
+						},
+					},
+				}),
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta1",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{},
+					},
+				}),
+			},
+			want: want{
+				converted: true,
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta1",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"enabled": true,
+						},
+					},
+				}),
+			},
+		},
+		"SuccessfulStringToBoolVariations": {
+			reason: "Successfully convert various string representations to bool.",
+			args: args{
+				sourceVersion: "v1beta2",
+				targetVersion: "v1beta1",
+				fieldPath:     "spec.forProvider.enabled",
+				mode:          StringToBool,
+				sourceObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"enabled": "1",
+						},
+					},
+				}),
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta1",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{},
+					},
+				}),
+			},
+			want: want{
+				converted: true,
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta1",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"enabled": true,
+						},
+					},
+				}),
+			},
+		},
+		"SuccessfulFloatToStringConversion": {
+			reason: "Successfully convert float64 field to string.",
+			args: args{
+				sourceVersion: "v1beta1",
+				targetVersion: "v1beta2",
+				fieldPath:     "spec.forProvider.ratio",
+				mode:          FloatToString,
+				sourceObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta1",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"ratio": float64(3.14),
+						},
+					},
+				}),
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{},
+					},
+				}),
+			},
+			want: want{
+				converted: true,
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"ratio": "3.14",
+						},
+					},
+				}),
+			},
+		},
+		"SuccessfulStringToFloatConversion": {
+			reason: "Successfully convert string field to float64.",
+			args: args{
+				sourceVersion: "v1beta2",
+				targetVersion: "v1beta1",
+				fieldPath:     "spec.forProvider.ratio",
+				mode:          StringToFloat,
+				sourceObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"ratio": "3.14",
+						},
+					},
+				}),
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta1",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{},
+					},
+				}),
+			},
+			want: want{
+				converted: true,
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta1",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"ratio": float64(3.14),
+						},
+					},
+				}),
+			},
+		},
+		"FieldNotFound": {
+			reason: "No conversion when source field is not found.",
+			args: args{
+				sourceVersion: "v1beta1",
+				targetVersion: "v1beta2",
+				fieldPath:     "spec.forProvider.missingField",
+				mode:          IntToString,
+				sourceObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta1",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"existingField": "value",
+						},
+					},
+				}),
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{},
+					},
+				}),
+			},
+			want: want{
+				converted: false,
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{},
+					},
+				}),
+			},
+		},
+		"VersionMismatch": {
+			reason: "No conversion when API versions don't match the conversion configuration.",
+			args: args{
+				sourceVersion: "v1beta1",
+				targetVersion: "v1beta2",
+				fieldPath:     "spec.forProvider.port",
+				mode:          IntToString,
+				sourceObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1alpha1", // Different version
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"port": int64(8080),
+						},
+					},
+				}),
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{},
+					},
+				}),
+			},
+			want: want{
+				converted: false,
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{},
+					},
+				}),
+			},
+		},
+		"NilValueHandling": {
+			reason: "Successfully handle nil field value.",
+			args: args{
+				sourceVersion: "v1beta1",
+				targetVersion: "v1beta2",
+				fieldPath:     "spec.forProvider.port",
+				mode:          IntToString,
+				sourceObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta1",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"port": nil,
+						},
+					},
+				}),
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{},
+					},
+				}),
+			},
+			want: want{
+				converted: true,
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"port": nil,
+						},
+					},
+				}),
+			},
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			c := NewFieldTypeConversion(tc.args.sourceVersion, tc.args.targetVersion, tc.args.fieldPath, tc.args.mode)
+			converted, err := c.(*fieldTypeConverter).ConvertPaved(tc.args.sourceObj, tc.args.targetObj)
+			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
+				t.Errorf("\n%s\nConvertPaved(sourceObj, targetObj): -wantErr, +gotErr:\n%s", tc.reason, diff)
+			}
+			if tc.want.err != nil {
+				return
+			}
+			if diff := cmp.Diff(tc.want.converted, converted); diff != "" {
+				t.Errorf("\n%s\nConvertPaved(sourceObj, targetObj): -wantConverted, +gotConverted:\n%s", tc.reason, diff)
+			}
+			if diff := cmp.Diff(tc.want.targetObj.UnstructuredContent(), tc.args.targetObj.UnstructuredContent()); diff != "" {
+				t.Errorf("\n%s\nConvertPaved(sourceObj, targetObj): -wantTargetObj, +gotTargetObj:\n%s", tc.reason, diff)
+			}
+		})
+	}
+}
+
+func TestTypeConversionModeString(t *testing.T) {
+	tests := map[string]struct {
+		mode TypeConversionMode
+		want string
+	}{
+		"IntToString": {
+			mode: IntToString,
+			want: "intToString",
+		},
+		"StringToInt": {
+			mode: StringToInt,
+			want: "stringToInt",
+		},
+		"BoolToString": {
+			mode: BoolToString,
+			want: "boolToString",
+		},
+		"StringToBool": {
+			mode: StringToBool,
+			want: "stringToBool",
+		},
+		"FloatToString": {
+			mode: FloatToString,
+			want: "floatToString",
+		},
+		"StringToFloat": {
+			mode: StringToFloat,
+			want: "stringToFloat",
+		},
+		"UnknownMode": {
+			mode: TypeConversionMode(999),
+			want: "unknown",
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			got := tc.mode.String()
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("TypeConversionMode.String(): -want, +got:\n%s", diff)
+			}
+		})
+	}
+}

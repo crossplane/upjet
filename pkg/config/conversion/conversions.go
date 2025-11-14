@@ -57,11 +57,51 @@ func (m OptionalFieldConversionMode) String() string {
 	}
 }
 
+// TypeConversionMode denotes the mode of type conversion between different
+// primitive types in API versions.
+type TypeConversionMode int
+
+const (
+	// IntToString converts integer values to string representation
+	IntToString TypeConversionMode = iota
+	// StringToInt converts string values to integer representation
+	StringToInt
+	// BoolToString converts boolean values to string representation ("true"/"false")
+	BoolToString
+	// StringToBool converts string values to boolean representation
+	StringToBool
+	// FloatToString converts float values to string representation
+	FloatToString
+	// StringToFloat converts string values to float representation
+	StringToFloat
+)
+
+// String returns a string representation of the type conversion mode.
+func (m TypeConversionMode) String() string {
+	switch m {
+	case IntToString:
+		return "intToString"
+	case StringToInt:
+		return "stringToInt"
+	case BoolToString:
+		return "boolToString"
+	case StringToBool:
+		return "stringToBool"
+	case FloatToString:
+		return "floatToString"
+	case StringToFloat:
+		return "stringToFloat"
+	default:
+		return "unknown"
+	}
+}
+
 var (
 	_ PrioritizedManagedConversion = &identityConversion{}
 	_ PavedConversion              = &fieldCopy{}
 	_ PavedConversion              = &singletonListConverter{}
 	_ PavedConversion              = &optionalFieldConverter{}
+	_ PavedConversion              = &fieldTypeConverter{}
 )
 
 // Conversion is the interface for the CRD API version converters.
@@ -464,6 +504,166 @@ func (o *optionalFieldConverter) convertFromAnnotation(src, target *fieldpath.Pa
 // the annotation.
 func NewOptionalFieldConversion(sourceVersion, targetVersion, fieldPath string, mode OptionalFieldConversionMode) Conversion {
 	return &optionalFieldConverter{
+		baseConversion: newBaseConversion(sourceVersion, targetVersion),
+		fieldPath:      fieldPath,
+		mode:           mode,
+	}
+}
+
+type fieldTypeConverter struct {
+	baseConversion
+	fieldPath string
+	mode      TypeConversionMode
+}
+
+func (f *fieldTypeConverter) ConvertPaved(src, target *fieldpath.Paved) (bool, error) {
+	if !f.Applicable(&unstructured.Unstructured{Object: src.UnstructuredContent()},
+		&unstructured.Unstructured{Object: target.UnstructuredContent()}) {
+		return false, nil
+	}
+
+	// Get the field value from source
+	fieldValue, err := src.GetValue(f.fieldPath)
+	if fieldpath.IsNotFound(err) {
+		// Field doesn't exist in source, nothing to convert
+		return false, nil
+	}
+	if err != nil {
+		return false, errors.Wrapf(err, "failed to get field %q from source", f.fieldPath)
+	}
+
+	// Convert the value based on the mode
+	convertedValue, err := f.convertValue(fieldValue)
+	if err != nil {
+		return false, errors.Wrapf(err, "failed to convert field %q with mode %s", f.fieldPath, f.mode)
+	}
+
+	// Set the converted value in target
+	if err := target.SetValue(f.fieldPath, convertedValue); err != nil {
+		return false, errors.Wrapf(err, "failed to set converted field %q in target", f.fieldPath)
+	}
+
+	return true, nil
+}
+
+func (f *fieldTypeConverter) convertValue(value interface{}) (interface{}, error) {
+	if value == nil {
+		return nil, nil
+	}
+
+	switch f.mode {
+	case IntToString:
+		return f.intToString(value)
+	case StringToInt:
+		return f.stringToInt(value)
+	case BoolToString:
+		return f.boolToString(value)
+	case StringToBool:
+		return f.stringToBool(value)
+	case FloatToString:
+		return f.floatToString(value)
+	case StringToFloat:
+		return f.stringToFloat(value)
+	default:
+		return nil, errors.Errorf("unknown type conversion mode: %v", f.mode)
+	}
+}
+
+func (f *fieldTypeConverter) intToString(value interface{}) (interface{}, error) {
+	// In upjet, integer types are represented as int64. However, JSON unmarshaling
+	// often produces float64 for numeric values, so we handle both cases.
+	switch v := value.(type) {
+	case int64:
+		return fmt.Sprintf("%d", v), nil
+	case float64: // JSON unmarshaling often produces float64 for numbers
+		if v == float64(int64(v)) {
+			return fmt.Sprintf("%.0f", v), nil
+		}
+		return "", errors.Errorf("value %v is not an integer", v)
+	default:
+		return "", errors.Errorf("expected int64 or float64 type, got %T", v)
+	}
+}
+
+func (f *fieldTypeConverter) stringToInt(value interface{}) (interface{}, error) {
+	str, ok := value.(string)
+	if !ok {
+		return nil, errors.Errorf("expected string type, got %T", value)
+	}
+	
+	// Parse as int64, which is the standard integer type in upjet
+	var result int64
+	if n, err := fmt.Sscanf(str, "%d", &result); err != nil || n != 1 {
+		return nil, errors.Errorf("cannot convert string %q to int64", str)
+	}
+	
+	return result, nil
+}
+
+func (f *fieldTypeConverter) boolToString(value interface{}) (interface{}, error) {
+	b, ok := value.(bool)
+	if !ok {
+		return "", errors.Errorf("expected bool type, got %T", value)
+	}
+	return fmt.Sprintf("%t", b), nil
+}
+
+func (f *fieldTypeConverter) stringToBool(value interface{}) (interface{}, error) {
+	str, ok := value.(string)
+	if !ok {
+		return nil, errors.Errorf("expected string type, got %T", value)
+	}
+	
+	switch str {
+	case "true", "True", "TRUE", "1":
+		return true, nil
+	case "false", "False", "FALSE", "0":
+		return false, nil
+	default:
+		return nil, errors.Errorf("cannot convert string %q to boolean", str)
+	}
+}
+
+func (f *fieldTypeConverter) floatToString(value interface{}) (interface{}, error) {
+	// In upjet, floating-point numbers are represented as float64
+	v, ok := value.(float64)
+	if !ok {
+		return "", errors.Errorf("expected float64 type, got %T", value)
+	}
+	return fmt.Sprintf("%g", v), nil
+}
+
+func (f *fieldTypeConverter) stringToFloat(value interface{}) (interface{}, error) {
+	str, ok := value.(string)
+	if !ok {
+		return nil, errors.Errorf("expected string type, got %T", value)
+	}
+	
+	// Parse as float64, which is the standard floating-point type in upjet
+	var result float64
+	if n, err := fmt.Sscanf(str, "%f", &result); err != nil || n != 1 {
+		return nil, errors.Errorf("cannot convert string %q to float64", str)
+	}
+	
+	return result, nil
+}
+
+// NewFieldTypeConversion returns a new Conversion that handles type changes
+// of fields between API versions. It converts primitive types according to the
+// given conversion mode. 
+//
+// Type assumptions for upjet:
+// - Integers are represented as int64 (though JSON unmarshaling may produce float64)
+// - Floating-point numbers are represented as float64
+// - Booleans are represented as bool
+// - Strings are represented as string
+//
+// Supported conversions:
+// - IntToString/StringToInt: int64 ↔ string
+// - FloatToString/StringToFloat: float64 ↔ string  
+// - BoolToString/StringToBool: bool ↔ string
+func NewFieldTypeConversion(sourceVersion, targetVersion, fieldPath string, mode TypeConversionMode) Conversion {
+	return &fieldTypeConverter{
 		baseConversion: newBaseConversion(sourceVersion, targetVersion),
 		fieldPath:      fieldPath,
 		mode:           mode,
