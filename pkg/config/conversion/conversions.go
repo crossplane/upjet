@@ -5,6 +5,7 @@
 package conversion
 
 import (
+	"encoding/json"
 	"fmt"
 	"slices"
 
@@ -20,6 +21,10 @@ const (
 	// of an API with which the Conversion is registered. It can be used for
 	// both the conversion source or target API versions.
 	AllVersions = "*"
+
+	// AnnotationPrefix is the prefix for internal upjet annotations used
+	// for storing optional field values during API version conversions.
+	AnnotationPrefix = "internal-upjet.crossplane.io/"
 )
 
 const (
@@ -28,10 +33,35 @@ const (
 	pathAtProvider   = "status.atProvider"
 )
 
+// OptionalFieldConversionMode denotes the mode of optional field conversion.
+type OptionalFieldConversionMode int
+
+const (
+	// ToAnnotation converts a field value to an annotation when the field
+	// does not exist in the target API version (newer → older version).
+	ToAnnotation OptionalFieldConversionMode = iota
+	// FromAnnotation converts an annotation value back to a field when
+	// the field exists in the target API version (older → newer version).
+	FromAnnotation
+)
+
+// String returns a string representation of the optional field conversion mode.
+func (m OptionalFieldConversionMode) String() string {
+	switch m {
+	case ToAnnotation:
+		return "toAnnotation"
+	case FromAnnotation:
+		return "fromAnnotation"
+	default:
+		return "unknown"
+	}
+}
+
 var (
 	_ PrioritizedManagedConversion = &identityConversion{}
 	_ PavedConversion              = &fieldCopy{}
 	_ PavedConversion              = &singletonListConverter{}
+	_ PavedConversion              = &optionalFieldConverter{}
 )
 
 // Conversion is the interface for the CRD API version converters.
@@ -334,4 +364,108 @@ func ExpandParameters(prefixes []string, excludePaths ...string) []string {
 // ["spec.forProvider", "spec.initProvider", "status.atProvider"].
 func DefaultPathPrefixes() []string {
 	return []string{pathForProvider, pathInitProvider, pathAtProvider}
+}
+
+// generateAnnotationKey generates the annotation key from a field path.
+func generateAnnotationKey(fieldPath string) string {
+	return AnnotationPrefix + fieldPath
+}
+
+type optionalFieldConverter struct {
+	baseConversion
+	fieldPath string
+	mode      OptionalFieldConversionMode
+}
+
+func (o *optionalFieldConverter) ConvertPaved(src, target *fieldpath.Paved) (bool, error) {
+	if !o.Applicable(&unstructured.Unstructured{Object: src.UnstructuredContent()},
+		&unstructured.Unstructured{Object: target.UnstructuredContent()}) {
+		return false, nil
+	}
+
+	annotationKey := generateAnnotationKey(o.fieldPath)
+
+	switch o.mode {
+	case ToAnnotation:
+		return o.convertToAnnotation(src, target, annotationKey)
+	case FromAnnotation:
+		return o.convertFromAnnotation(src, target, annotationKey)
+	default:
+		return false, errors.Errorf("unknown optional field conversion mode: %v", o.mode)
+	}
+}
+
+func (o *optionalFieldConverter) convertToAnnotation(src, target *fieldpath.Paved, annotationKey string) (bool, error) {
+	// Get the field value from source
+	fieldValue, err := src.GetValue(o.fieldPath)
+	if fieldpath.IsNotFound(err) {
+		// Field doesn't exist in source, nothing to convert
+		return false, nil
+	}
+	if err != nil {
+		return false, errors.Wrapf(err, "failed to get field %q from source", o.fieldPath)
+	}
+
+	// Convert field value to JSON string for annotation storage
+	var annotationValue string
+	if fieldValue == nil {
+		annotationValue = ""
+	} else {
+		jsonBytes, err := json.Marshal(fieldValue)
+		if err != nil {
+			return false, errors.Wrapf(err, "failed to marshal field %q to JSON", o.fieldPath)
+		}
+		annotationValue = string(jsonBytes)
+	}
+
+	// Set annotation in target
+	if err := target.SetValue(fmt.Sprintf("metadata.annotations['%s']", annotationKey), annotationValue); err != nil {
+		return false, errors.Wrapf(err, "failed to set annotation %q", annotationKey)
+	}
+
+	return true, nil
+}
+
+func (o *optionalFieldConverter) convertFromAnnotation(src, target *fieldpath.Paved, annotationKey string) (bool, error) {
+	// Get annotation value from source
+	annotationPath := fmt.Sprintf("metadata.annotations['%s']", annotationKey)
+	annotationValue, err := src.GetValue(annotationPath)
+	if fieldpath.IsNotFound(err) {
+		// Annotation doesn't exist, nothing to convert
+		return false, nil
+	}
+	if err != nil {
+		return false, errors.Wrapf(err, "failed to get annotation %q from source", annotationKey)
+	}
+
+	// Convert annotation value back to field value
+	var fieldValue interface{}
+	if annotationStr, ok := annotationValue.(string); ok && annotationStr != "" {
+		if err := json.Unmarshal([]byte(annotationStr), &fieldValue); err != nil {
+			return false, errors.Wrapf(err, "failed to unmarshal annotation %q from JSON", annotationKey)
+		}
+	}
+
+	// Set field value in target
+	if fieldValue != nil {
+		if err := target.SetValue(o.fieldPath, fieldValue); err != nil {
+			return false, errors.Wrapf(err, "failed to set field %q in target", o.fieldPath)
+		}
+	}
+
+	return true, nil
+}
+
+// NewOptionalFieldConversion returns a new Conversion that handles optional fields
+// that exist in some API versions but not others. When converting from a version
+// that has the field to one that doesn't (ToAnnotation mode), the field value
+// is stored in an annotation. When converting from a version without the field
+// to one that has it (FromAnnotation mode), the field value is restored from
+// the annotation.
+func NewOptionalFieldConversion(sourceVersion, targetVersion, fieldPath string, mode OptionalFieldConversionMode) Conversion {
+	return &optionalFieldConverter{
+		baseConversion: newBaseConversion(sourceVersion, targetVersion),
+		fieldPath:      fieldPath,
+		mode:           mode,
+	}
 }

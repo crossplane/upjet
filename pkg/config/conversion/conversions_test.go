@@ -578,3 +578,451 @@ func newMockManaged(m map[string]any) *mockManaged {
 		Paved:   fieldpath.Pave(m),
 	}
 }
+
+func TestOptionalFieldConversion(t *testing.T) {
+	type args struct {
+		sourceVersion string
+		targetVersion string
+		fieldPath     string
+		mode          OptionalFieldConversionMode
+		sourceObj     *fieldpath.Paved
+		targetObj     *fieldpath.Paved
+	}
+	type want struct {
+		converted bool
+		err       error
+		targetObj *fieldpath.Paved
+	}
+	tests := map[string]struct {
+		reason string
+		args   args
+		want   want
+	}{
+		"SuccessfulToAnnotationStringField": {
+			reason: "Successfully convert a string field to annotation when field exists in source but not in target schema.",
+			args: args{
+				sourceVersion: "v1beta2",
+				targetVersion: "v1beta1",
+				fieldPath:     "spec.forProvider.newField",
+				mode:          ToAnnotation,
+				sourceObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"newField": "test-value",
+						},
+					},
+				}),
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta1",
+					"kind":       "TestResource",
+				}),
+			},
+			want: want{
+				converted: true,
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta1",
+					"kind":       "TestResource",
+					"metadata": map[string]any{
+						"annotations": map[string]any{
+							"internal-upjet.crossplane.io/spec.forProvider.newField": `"test-value"`,
+						},
+					},
+				}),
+			},
+		},
+		"SuccessfulToAnnotationComplexField": {
+			reason: "Successfully convert a complex field (map) to annotation.",
+			args: args{
+				sourceVersion: "v1beta2",
+				targetVersion: "v1beta1",
+				fieldPath:     "spec.forProvider.complexField",
+				mode:          ToAnnotation,
+				sourceObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"complexField": map[string]any{
+								"nested":  "value",
+								"another": 42,
+							},
+						},
+					},
+				}),
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta1",
+					"kind":       "TestResource",
+				}),
+			},
+			want: want{
+				converted: true,
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta1",
+					"kind":       "TestResource",
+					"metadata": map[string]any{
+						"annotations": map[string]any{
+							"internal-upjet.crossplane.io/spec.forProvider.complexField": `{"another":42,"nested":"value"}`,
+						},
+					},
+				}),
+			},
+		},
+		"SuccessfulFromAnnotationStringField": {
+			reason: "Successfully convert annotation back to string field.",
+			args: args{
+				sourceVersion: "v1beta1",
+				targetVersion: "v1beta2",
+				fieldPath:     "spec.forProvider.newField",
+				mode:          FromAnnotation,
+				sourceObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta1",
+					"kind":       "TestResource",
+					"metadata": map[string]any{
+						"annotations": map[string]any{
+							"internal-upjet.crossplane.io/spec.forProvider.newField": `"restored-value"`,
+						},
+					},
+				}),
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{},
+					},
+				}),
+			},
+			want: want{
+				converted: true,
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"newField": "restored-value",
+						},
+					},
+				}),
+			},
+		},
+		"SuccessfulFromAnnotationComplexField": {
+			reason: "Successfully convert annotation back to complex field.",
+			args: args{
+				sourceVersion: "v1beta1",
+				targetVersion: "v1beta2",
+				fieldPath:     "spec.forProvider.complexField",
+				mode:          FromAnnotation,
+				sourceObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta1",
+					"kind":       "TestResource",
+					"metadata": map[string]any{
+						"annotations": map[string]any{
+							"internal-upjet.crossplane.io/spec.forProvider.complexField": `{"nested":"value","another":42}`,
+						},
+					},
+				}),
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{},
+					},
+				}),
+			},
+			want: want{
+				converted: true,
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"complexField": map[string]any{
+								"nested":  "value",
+								"another": int64(42), // JSON unmarshal converts numbers to int64
+							},
+						},
+					},
+				}),
+			},
+		},
+		"ToAnnotationFieldNotFound": {
+			reason: "No conversion when source field is not found in source object.",
+			args: args{
+				sourceVersion: "v1beta2",
+				targetVersion: "v1beta1",
+				fieldPath:     "spec.forProvider.missingField",
+				mode:          ToAnnotation,
+				sourceObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"existingField": "value",
+						},
+					},
+				}),
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta1",
+					"kind":       "TestResource",
+				}),
+			},
+			want: want{
+				converted: false,
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta1",
+					"kind":       "TestResource",
+				}),
+			},
+		},
+		"FromAnnotationAnnotationNotFound": {
+			reason: "No conversion when annotation is not found in source object.",
+			args: args{
+				sourceVersion: "v1beta1",
+				targetVersion: "v1beta2",
+				fieldPath:     "spec.forProvider.newField",
+				mode:          FromAnnotation,
+				sourceObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta1",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"existingField": "value",
+						},
+					},
+				}),
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+				}),
+			},
+			want: want{
+				converted: false,
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+				}),
+			},
+		},
+		"VersionMismatch": {
+			reason: "No conversion when API versions don't match the conversion configuration.",
+			args: args{
+				sourceVersion: "v1beta1",
+				targetVersion: "v1beta2",
+				fieldPath:     "spec.forProvider.newField",
+				mode:          ToAnnotation,
+				sourceObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1alpha1", // Different version
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"newField": "value",
+						},
+					},
+				}),
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+				}),
+			},
+			want: want{
+				converted: false,
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+				}),
+			},
+		},
+		"ToAnnotationNilField": {
+			reason: "Successfully handle nil field value by storing empty annotation.",
+			args: args{
+				sourceVersion: "v1beta2",
+				targetVersion: "v1beta1",
+				fieldPath:     "spec.forProvider.nullField",
+				mode:          ToAnnotation,
+				sourceObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"nullField": nil,
+						},
+					},
+				}),
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta1",
+					"kind":       "TestResource",
+				}),
+			},
+			want: want{
+				converted: true,
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta1",
+					"kind":       "TestResource",
+					"metadata": map[string]any{
+						"annotations": map[string]any{
+							"internal-upjet.crossplane.io/spec.forProvider.nullField": "",
+						},
+					},
+				}),
+			},
+		},
+		"SuccessfulToAnnotationNestedField": {
+			reason: "Successfully convert a nested field to annotation.",
+			args: args{
+				sourceVersion: "v1beta2",
+				targetVersion: "v1beta1",
+				fieldPath:     "spec.forProvider.a.b",
+				mode:          ToAnnotation,
+				sourceObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"a": map[string]any{
+								"b": "nested-value",
+							},
+							"existingField": "existing",
+						},
+					},
+				}),
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta1",
+					"kind":       "TestResource",
+				}),
+			},
+			want: want{
+				converted: true,
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta1",
+					"kind":       "TestResource",
+					"metadata": map[string]any{
+						"annotations": map[string]any{
+							"internal-upjet.crossplane.io/spec.forProvider.a.b": `"nested-value"`,
+						},
+					},
+				}),
+			},
+		},
+		"SuccessfulFromAnnotationNestedField": {
+			reason: "Successfully convert annotation back to nested field.",
+			args: args{
+				sourceVersion: "v1beta1",
+				targetVersion: "v1beta2",
+				fieldPath:     "spec.forProvider.a.b",
+				mode:          FromAnnotation,
+				sourceObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta1",
+					"kind":       "TestResource",
+					"metadata": map[string]any{
+						"annotations": map[string]any{
+							"internal-upjet.crossplane.io/spec.forProvider.a.b": `"nested-restored-value"`,
+						},
+					},
+				}),
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"existingField": "existing",
+						},
+					},
+				}),
+			},
+			want: want{
+				converted: true,
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"existingField": "existing",
+							"a": map[string]any{
+								"b": "nested-restored-value",
+							},
+						},
+					},
+				}),
+			},
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			c := NewOptionalFieldConversion(tc.args.sourceVersion, tc.args.targetVersion, tc.args.fieldPath, tc.args.mode)
+			converted, err := c.(*optionalFieldConverter).ConvertPaved(tc.args.sourceObj, tc.args.targetObj)
+			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
+				t.Errorf("\n%s\nConvertPaved(sourceObj, targetObj): -wantErr, +gotErr:\n%s", tc.reason, diff)
+			}
+			if tc.want.err != nil {
+				return
+			}
+			if diff := cmp.Diff(tc.want.converted, converted); diff != "" {
+				t.Errorf("\n%s\nConvertPaved(sourceObj, targetObj): -wantConverted, +gotConverted:\n%s", tc.reason, diff)
+			}
+			if diff := cmp.Diff(tc.want.targetObj.UnstructuredContent(), tc.args.targetObj.UnstructuredContent()); diff != "" {
+				t.Errorf("\n%s\nConvertPaved(sourceObj, targetObj): -wantTargetObj, +gotTargetObj:\n%s", tc.reason, diff)
+			}
+		})
+	}
+}
+
+func TestGenerateAnnotationKey(t *testing.T) {
+	tests := map[string]struct {
+		reason    string
+		fieldPath string
+		want      string
+	}{
+		"SimpleFieldPath": {
+			reason:    "Extract field name from simple path.",
+			fieldPath: "newField",
+			want:      "internal-upjet.crossplane.io/newField",
+		},
+		"NestedFieldPath": {
+			reason:    "Extract field name from nested path.",
+			fieldPath: "spec.forProvider.newField",
+			want:      "internal-upjet.crossplane.io/spec.forProvider.newField",
+		},
+		"DeeplyNestedFieldPath": {
+			reason:    "Extract field name from deeply nested path.",
+			fieldPath: "spec.forProvider.configuration.advanced.newField",
+			want:      "internal-upjet.crossplane.io/spec.forProvider.configuration.advanced.newField",
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			got := generateAnnotationKey(tc.fieldPath)
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("\n%s\ngenerateAnnotationKey(%s): -want, +got:\n%s", tc.reason, tc.fieldPath, diff)
+			}
+		})
+	}
+}
+
+func TestOptionalFieldConversionModeString(t *testing.T) {
+	tests := map[string]struct {
+		mode OptionalFieldConversionMode
+		want string
+	}{
+		"ToAnnotation": {
+			mode: ToAnnotation,
+			want: "toAnnotation",
+		},
+		"FromAnnotation": {
+			mode: FromAnnotation,
+			want: "fromAnnotation",
+		},
+		"UnknownMode": {
+			mode: OptionalFieldConversionMode(999),
+			want: "unknown",
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			got := tc.mode.String()
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("OptionalFieldConversionMode.String(): -want, +got:\n%s", diff)
+			}
+		})
+	}
+}
