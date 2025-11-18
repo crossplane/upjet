@@ -187,7 +187,11 @@ func tfJSONBlockTypeToV2Schema(nb *tfjson.SchemaBlockType) *schemav2.Schema { //
 	res := &schemav2.Resource{}
 	res.Schema = make(map[string]*schemav2.Schema, len(nb.Block.Attributes)+len(nb.Block.NestedBlocks))
 	for key, attr := range nb.Block.Attributes {
-		res.Schema[key] = tfJSONAttributeToV2Schema(attr)
+		if attr.AttributeNestedType != nil {
+			res.Schema[key] = tfJSONNestedAttributeTypeToV2Schema(attr)
+		} else {
+			res.Schema[key] = tfJSONAttributeToV2Schema(attr)
+		}
 	}
 	for key, block := range nb.Block.NestedBlocks {
 		// Please note that unlike the resource-level CRUD timeout configuration
