@@ -434,7 +434,7 @@ func NewProvider(schema []byte, prefix string, modulePath string, metadata []byt
 }
 
 // AddResourceConfigurator adds resource specific configurators.
-func (p *Provider) AddResourceConfigurator(resource string, c ResourceConfiguratorFn) { //nolint:interfacer
+func (p *Provider) AddResourceConfigurator(resource string, c ResourceConfiguratorFn) {
 	// Note(turkenh): nolint reasoning - easier to provide a function without
 	// converting to an explicit type supporting the ResourceConfigurator
 	// interface. Since this function would be a frequently used one, it should
