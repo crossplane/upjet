@@ -109,7 +109,7 @@ type terraformPluginFrameworkExternalClient struct {
 	resourceTerraformConfigValue tftypes.Value
 }
 
-func getFrameworkExtendedParameters(ctx context.Context, tr resource.Terraformed, externalName string, cfg *config.Resource, ts terraform.Setup, initParamsMerged bool, kube client.Client, fwResSchema rschema.Schema) (map[string]any, error) { //nolint:gocyclo // easier to follow as a unit
+func getFrameworkExtendedParameters(ctx context.Context, tr resource.Terraformed, externalName string, cfg *config.Resource, ts terraform.Setup, initParamsMerged bool, kube client.Client, fwResSchema rschema.Schema) (map[string]any, error) {
 	params, err := tr.GetMergedParameters(initParamsMerged)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot get merged parameters")
