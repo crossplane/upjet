@@ -105,9 +105,11 @@ type terraformPluginFrameworkExternalClient struct {
 	resourceSchema rschema.Schema
 	// the terraform value type associated with the resource schema
 	resourceValueTerraformType tftypes.Type
+	// configured value for the resource in terraform type system
+	resourceTerraformConfigValue tftypes.Value
 }
 
-func getFrameworkExtendedParameters(ctx context.Context, tr resource.Terraformed, externalName string, cfg *config.Resource, ts terraform.Setup, initParamsMerged bool, kube client.Client, fwResSchema rschema.Schema) (map[string]any, error) { //nolint:gocyclo // easier to follow as a unit
+func getFrameworkExtendedParameters(ctx context.Context, tr resource.Terraformed, externalName string, cfg *config.Resource, ts terraform.Setup, initParamsMerged bool, kube client.Client, fwResSchema rschema.Schema) (map[string]any, error) {
 	params, err := tr.GetMergedParameters(initParamsMerged)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot get merged parameters")
@@ -140,17 +142,6 @@ func getFrameworkExtendedParameters(ctx context.Context, tr resource.Terraformed
 		params["id"] = tfID
 	}
 
-	// we need to parameterize the following for a provider
-	// not all providers may have this attribute
-	// TODO: tags-tags_all implementation is AWS specific.
-	// Consider making this logic independent of provider.
-	// TODO(erhan): this might be already resolved with proposed state impl
-	_, hasTags := fwResSchema.Attributes["tags"]
-	_, hasTagsAll := fwResSchema.Attributes["tags_all"]
-	if hasTags && hasTagsAll {
-		params["tags_all"] = params["tags"]
-	}
-
 	return params, nil
 }
 
@@ -180,13 +171,17 @@ func (c *TerraformPluginFrameworkConnector) Connect(ctx context.Context, mg xpre
 	}
 
 	resourceTfValueType := resourceSchema.Type().TerraformType(ctx)
+	resourceConfigTFValue, err := c.getResourceConfigTerraformValue(ctx, resourceTfValueType, params, resourceSchema)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get resource config TF value")
+	}
 	hasState := false
 	if opTracker.HasFrameworkTFState() {
 		tfStateValue, err := opTracker.GetFrameworkTFState().Unmarshal(resourceTfValueType)
 		if err != nil {
 			return nil, errors.Wrap(err, "cannot unmarshal TF state dynamic value during state existence check")
 		}
-		hasState = err == nil && !tfStateValue.IsNull()
+		hasState = !tfStateValue.IsNull()
 	}
 
 	if !hasState {
@@ -221,7 +216,7 @@ func (c *TerraformPluginFrameworkConnector) Connect(ctx context.Context, mg xpre
 		if err != nil {
 			return nil, errors.Wrap(err, "cannot construct dynamic value for TF state")
 		}
-		opTracker.SetFrameworkTFState(tfStateDynamicValue)
+		opTracker.SetReconstructedFrameworkTFState(tfStateDynamicValue)
 	}
 
 	configuredProviderServer, err := c.configureProvider(ctx, ts)
@@ -230,16 +225,17 @@ func (c *TerraformPluginFrameworkConnector) Connect(ctx context.Context, mg xpre
 	}
 
 	return &terraformPluginFrameworkExternalClient{
-		ts:                         ts,
-		config:                     c.config,
-		logger:                     logger,
-		metricRecorder:             c.metricRecorder,
-		opTracker:                  opTracker,
-		resource:                   c.config.TerraformPluginFrameworkResource,
-		server:                     configuredProviderServer,
-		params:                     params,
-		resourceSchema:             resourceSchema,
-		resourceValueTerraformType: resourceTfValueType,
+		ts:                           ts,
+		config:                       c.config,
+		logger:                       logger,
+		metricRecorder:               c.metricRecorder,
+		opTracker:                    opTracker,
+		resource:                     c.config.TerraformPluginFrameworkResource,
+		server:                       configuredProviderServer,
+		params:                       params,
+		resourceSchema:               resourceSchema,
+		resourceValueTerraformType:   resourceTfValueType,
+		resourceTerraformConfigValue: resourceConfigTFValue,
 	}, nil
 }
 
@@ -291,6 +287,48 @@ func (c *TerraformPluginFrameworkConnector) configureProvider(ctx context.Contex
 	return providerServer, nil
 }
 
+func (c *TerraformPluginFrameworkConnector) getResourceConfigTerraformValue(ctx context.Context, tfType tftypes.Type, params map[string]any, sch rschema.Schema) (tftypes.Value, error) {
+	configValues := maps.Clone(params)
+	// if some computed identifiers have been configured explicitly,
+	// remove them from config.
+	for _, id := range c.config.ExternalName.TFPluginFrameworkOptions.ComputedIdentifierAttributes {
+		delete(configValues, id)
+	}
+
+	tfConfigValue, err := tfValueFromMap(configValues, tfType)
+	if err != nil {
+		return tftypes.Value{}, errors.Wrap(err, "cannot construct TF value for resource config")
+	}
+
+	// remove any computed + not-optional (read-only) attribute from resource config
+	// we might still need them at `params` for prior state reconstruction in initial reads,
+	// however, they should not exist in the final resource config value sent to TF layer.
+	// currently read-only params can end up in the `params` via getFrameworkExtendedParameters:
+	// - externalname.SetIdentifierArgumentFn might set some computed identifiers
+	// - externalname.GetIDFn, id is mostly read-only
+	tfConfigValueClean, err := tftypes.Transform(tfConfigValue, func(path *tftypes.AttributePath, v tftypes.Value) (tftypes.Value, error) {
+		if !v.IsKnown() || v.IsNull() {
+			return v, nil
+		}
+		attr, err := sch.AttributeAtTerraformPath(ctx, path)
+		if err != nil || attr == nil {
+			// Not an attribute, could be an element or attribute of a complex type
+			// we can safely ignore them
+			return v, nil //nolint:nilerr // intentional per above explanation
+		}
+		if attr.IsComputed() && !attr.IsOptional() {
+			// nullify the value with its own type
+			return tftypes.NewValue(v.Type(), nil), nil
+		}
+		// no-op
+		return v, nil
+	})
+	if err != nil {
+		return tftypes.Value{}, errors.Wrap(err, "cannot remove read-only attributes from resource config")
+	}
+	return tfConfigValueClean, nil
+}
+
 // Filter diffs that have unknown plan values, which correspond to
 // computed fields, and null plan values, which correspond to
 // not-specified fields. Such cases cause unnecessary diff detection
@@ -313,21 +351,12 @@ func (n *terraformPluginFrameworkExternalClient) filteredDiffExists(rawDiff []tf
 // to be recreated) an error is returned as Crossplane Resource Model (XRM)
 // prohibits resource re-creations and rejects this plan.
 func (n *terraformPluginFrameworkExternalClient) getDiffPlanResponse(ctx context.Context, tfStateValue tftypes.Value) (*tfprotov6.PlanResourceChangeResponse, bool, error) {
-	params := maps.Clone(n.params)
-	// if some computed identifiers have been configured,
-	// remove them from config.
-	for _, id := range n.config.ExternalName.TFPluginFrameworkOptions.ComputedIdentifierAttributes {
-		delete(params, id)
-	}
-	tfConfigDynamicVal, err := protov6DynamicValueFromMap(params, n.resourceValueTerraformType)
+	tfConfigDynamicVal, err := tfprotov6.NewDynamicValue(n.resourceValueTerraformType, n.resourceTerraformConfigValue.Copy())
 	if err != nil {
 		return nil, false, errors.Wrap(err, "cannot construct dynamic value for TF Config")
 	}
 
-	proposedStateVal, err := proposedState(n.resourceSchema, n.opTracker.GetFrameworkTFState(), tfConfigDynamicVal) //nolint:contextcheck
-	if err != nil {
-		return nil, false, errors.Wrap(err, "failed to calculate proposed state for PlanResourceChange")
-	}
+	proposedStateVal := proposedState(n.resourceSchema, tfStateValue, n.resourceTerraformConfigValue) //nolint:contextcheck
 	tfProposedStateDynamicVal, err := tfprotov6.NewDynamicValue(n.resourceValueTerraformType, proposedStateVal)
 	if err != nil {
 		return nil, false, errors.Wrap(err, "cannot construct dynamic value for TF Planned State")
@@ -336,7 +365,7 @@ func (n *terraformPluginFrameworkExternalClient) getDiffPlanResponse(ctx context
 	prcReq := &tfprotov6.PlanResourceChangeRequest{
 		TypeName:         n.config.Name,
 		PriorState:       n.opTracker.GetFrameworkTFState(),
-		Config:           tfConfigDynamicVal,
+		Config:           &tfConfigDynamicVal,
 		ProposedNewState: &tfProposedStateDynamicVal,
 	}
 	planResponse, err := n.server.PlanResourceChange(ctx, prcReq)
@@ -453,6 +482,7 @@ func (n *terraformPluginFrameworkExternalClient) Observe(ctx context.Context, mg
 	}
 	readResponse, err := n.server.ReadResource(ctx, readRequest)
 	if err != nil {
+		n.opTracker.ResetReconstructedFrameworkTFState()
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot read resource")
 	}
 
@@ -462,6 +492,7 @@ func (n *terraformPluginFrameworkExternalClient) Observe(ctx context.Context, mg
 	isResourceNotFoundDiags := n.hasResourceNotFoundDiagnostic(readResponse.Diagnostics)
 	if fatalDiags := getFatalDiagnostics(readResponse.Diagnostics); fatalDiags != nil {
 		if !isResourceNotFoundDiags {
+			n.opTracker.ResetReconstructedFrameworkTFState()
 			return managed.ExternalObservation{}, errors.Wrap(fatalDiags, "read resource request failed")
 		}
 		n.logger.Debug("TF ReadResource returned error diagnostics, but XP resource was configured to treat them as `Resource not exists`. Skipping", "skippedDiags", fatalDiags)
@@ -602,7 +633,7 @@ func (n *terraformPluginFrameworkExternalClient) Observe(ctx context.Context, mg
 func (n *terraformPluginFrameworkExternalClient) Create(ctx context.Context, mg xpresource.Managed) (managed.ExternalCreation, error) { //nolint:gocyclo // easier to follow as a unit
 	n.logger.Debug("Creating the external resource")
 
-	tfConfigDynamicVal, err := protov6DynamicValueFromMap(n.params, n.resourceValueTerraformType)
+	tfConfigDynamicVal, err := tfprotov6.NewDynamicValue(n.resourceValueTerraformType, n.resourceTerraformConfigValue.Copy())
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, "cannot construct dynamic value for TF Config")
 	}
@@ -611,7 +642,7 @@ func (n *terraformPluginFrameworkExternalClient) Create(ctx context.Context, mg 
 		TypeName:     n.config.Name,
 		PriorState:   n.opTracker.GetFrameworkTFState(),
 		PlannedState: n.planResponse.PlannedState,
-		Config:       tfConfigDynamicVal,
+		Config:       &tfConfigDynamicVal,
 	}
 	start := time.Now()
 	applyResponse, err := n.server.ApplyResourceChange(ctx, applyRequest)
@@ -693,7 +724,7 @@ func (n *terraformPluginFrameworkExternalClient) Update(ctx context.Context, mg 
 		return managed.ExternalUpdate{}, errors.Errorf("diff contains fields that require resource replacement: %s", fields)
 	}
 
-	tfConfigDynamicVal, err := protov6DynamicValueFromMap(n.params, n.resourceValueTerraformType)
+	tfConfigDynamicVal, err := tfprotov6.NewDynamicValue(n.resourceValueTerraformType, n.resourceTerraformConfigValue.Copy())
 	if err != nil {
 		return managed.ExternalUpdate{}, errors.Wrap(err, "cannot construct dynamic value for TF Config")
 	}
@@ -702,7 +733,7 @@ func (n *terraformPluginFrameworkExternalClient) Update(ctx context.Context, mg 
 		TypeName:     n.config.Name,
 		PriorState:   n.opTracker.GetFrameworkTFState(),
 		PlannedState: n.planResponse.PlannedState,
-		Config:       tfConfigDynamicVal,
+		Config:       &tfConfigDynamicVal,
 	}
 	start := time.Now()
 	applyResponse, err := n.server.ApplyResourceChange(ctx, applyRequest)
@@ -746,7 +777,7 @@ func (n *terraformPluginFrameworkExternalClient) Update(ctx context.Context, mg 
 func (n *terraformPluginFrameworkExternalClient) Delete(ctx context.Context, _ xpresource.Managed) (managed.ExternalDelete, error) {
 	n.logger.Debug("Deleting the external resource")
 
-	tfConfigDynamicVal, err := protov6DynamicValueFromMap(n.params, n.resourceValueTerraformType)
+	tfConfigDynamicVal, err := tfprotov6.NewDynamicValue(n.resourceValueTerraformType, n.resourceTerraformConfigValue.Copy())
 	if err != nil {
 		return managed.ExternalDelete{}, errors.Wrap(err, "cannot construct dynamic value for TF Config")
 	}
@@ -760,7 +791,7 @@ func (n *terraformPluginFrameworkExternalClient) Delete(ctx context.Context, _ x
 		TypeName:     n.config.Name,
 		PriorState:   n.opTracker.GetFrameworkTFState(),
 		PlannedState: &plannedState,
-		Config:       tfConfigDynamicVal,
+		Config:       &tfConfigDynamicVal,
 	}
 	start := time.Now()
 	applyResponse, err := n.server.ApplyResourceChange(ctx, applyRequest)
@@ -906,22 +937,29 @@ func getFatalDiagnostics(diags []*tfprotov6.Diagnostic) error {
 // protov6DynamicValueFromMap constructs a protov6 DynamicValue given the
 // map[string]any using the terraform type as reference.
 func protov6DynamicValueFromMap(data map[string]any, terraformType tftypes.Type) (*tfprotov6.DynamicValue, error) {
-	jsonBytes, err := json.Marshal(data)
+	tfValue, err := tfValueFromMap(data, terraformType)
 	if err != nil {
-		return nil, errors.Wrap(err, "cannot marshal json")
+		return nil, errors.Wrap(err, "cannot construct TF value from raw map")
 	}
-
-	tfValue, err := tftypes.ValueFromJSONWithOpts(jsonBytes, terraformType, tftypes.ValueFromJSONOpts{IgnoreUndefinedAttributes: true})
-	if err != nil {
-		return nil, errors.Wrap(err, "cannot construct tf value from json")
-	}
-
 	dynamicValue, err := tfprotov6.NewDynamicValue(terraformType, tfValue)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot construct dynamic value from tf value")
 	}
-
 	return &dynamicValue, nil
+}
+
+// tfValueFromMap constructs a tftypes.Value given the map[string]any
+// representation using the terraform type as reference.
+func tfValueFromMap(data map[string]any, terraformType tftypes.Type) (tftypes.Value, error) {
+	jsonBytes, err := json.Marshal(data)
+	if err != nil {
+		return tftypes.Value{}, errors.Wrap(err, "cannot marshal json")
+	}
+	tfValue, err := tftypes.ValueFromJSONWithOpts(jsonBytes, terraformType, tftypes.ValueFromJSONOpts{IgnoreUndefinedAttributes: true})
+	if err != nil {
+		return tftypes.Value{}, errors.Wrap(err, "cannot construct tf value from json")
+	}
+	return tfValue, nil
 }
 
 func (n *terraformPluginFrameworkExternalClient) Disconnect(_ context.Context) error {

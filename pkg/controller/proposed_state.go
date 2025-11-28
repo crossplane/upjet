@@ -10,7 +10,6 @@ import (
 
 	"github.com/crossplane/crossplane-runtime/v2/pkg/errors"
 	rschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
 
@@ -65,16 +64,8 @@ var (
 	NestingModeMap = rschema.MapNestedAttribute{}.GetNestingMode()
 )
 
-func proposedState(schema rschema.Schema, prior, config *tfprotov6.DynamicValue) (tftypes.Value, error) {
-	priorTFVal, err := prior.Unmarshal(schema.Type().TerraformType(context.TODO()))
-	if err != nil {
-		return priorTFVal, errors.Wrap(err, "cannot unmarshal TF prior state value")
-	}
-	configTFVal, err := config.Unmarshal(schema.Type().TerraformType(context.TODO()))
-	if err != nil {
-		return configTFVal, errors.Wrap(err, "cannot unmarshal TF Config value")
-	}
-	return proposedNew(schema, priorTFVal, configTFVal), nil
+func proposedState(schema rschema.Schema, prior, config tftypes.Value) tftypes.Value {
+	return proposedNew(schema, prior.Copy(), config.Copy())
 }
 
 // proposedNew constructs a proposed new object value by combining the
