@@ -6,6 +6,7 @@ package {{ .APIVersion }}
 
 import (
 	"dario.cat/mergo"
+	"github.com/crossplane/upjet/v2/pkg/controller"
 	"github.com/pkg/errors"
 
 	"github.com/crossplane/upjet/v2/pkg/resource"
@@ -97,6 +98,10 @@ func (tr *{{ .CRD.Kind }}) GetMergedParameters(shouldMergeInitProvider bool) (ma
     if err != nil {
         return nil, errors.Wrapf(err, "cannot get init parameters for resource \"%s/%s\"", tr.GetNamespace(), tr.GetName())
     }
+
+	if err = controller.MergeAnnotationFields(params, initParams, tr.GetAnnotations()); err != nil {
+		return nil, errors.Wrap(err, "cannot merge annotations")
+	}
 
     // Note(lsviben): mergo.WithSliceDeepCopy is needed to merge the
     // slices from the initProvider to forProvider. As it also sets

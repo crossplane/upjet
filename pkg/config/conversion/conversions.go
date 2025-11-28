@@ -438,6 +438,7 @@ func (o *optionalFieldConverter) ConvertPaved(src, target *fieldpath.Paved) (boo
 func (o *optionalFieldConverter) convertToAnnotation(src, target *fieldpath.Paved, annotationKey string) (bool, error) {
 	// Get the field value from source
 	fieldValue, err := src.GetValue(o.fieldPath)
+	fmt.Printf("Got field value %v\n", fieldValue)
 	if fieldpath.IsNotFound(err) {
 		// Field doesn't exist in source, nothing to convert
 		return false, nil
@@ -456,12 +457,19 @@ func (o *optionalFieldConverter) convertToAnnotation(src, target *fieldpath.Pave
 			return false, errors.Wrapf(err, "failed to marshal field %q to JSON", o.fieldPath)
 		}
 		annotationValue = string(jsonBytes)
+		fmt.Printf("Annotation value %v\n", annotationValue)
 	}
 
+	fmt.Printf("Annotation key %v\n", annotationKey)
 	// Set annotation in target
 	if err := target.SetValue(fmt.Sprintf("metadata.annotations['%s']", annotationKey), annotationValue); err != nil {
 		return false, errors.Wrapf(err, "failed to set annotation %q", annotationKey)
 	}
+	annotations, err := target.GetValue("metadata.annotations")
+	if err != nil {
+		return false, errors.Wrapf(err, "failed to get annotations %q", annotationKey)
+	}
+	fmt.Printf("Annotations %v\n", annotations)
 
 	return true, nil
 }
@@ -590,13 +598,13 @@ func (f *fieldTypeConverter) stringToInt(value interface{}) (interface{}, error)
 	if !ok {
 		return nil, errors.Errorf("expected string type, got %T", value)
 	}
-	
+
 	// Parse as int64, which is the standard integer type in upjet
 	var result int64
 	if n, err := fmt.Sscanf(str, "%d", &result); err != nil || n != 1 {
 		return nil, errors.Errorf("cannot convert string %q to int64", str)
 	}
-	
+
 	return result, nil
 }
 
@@ -613,7 +621,7 @@ func (f *fieldTypeConverter) stringToBool(value interface{}) (interface{}, error
 	if !ok {
 		return nil, errors.Errorf("expected string type, got %T", value)
 	}
-	
+
 	switch str {
 	case "true", "True", "TRUE", "1":
 		return true, nil
@@ -638,13 +646,13 @@ func (f *fieldTypeConverter) stringToFloat(value interface{}) (interface{}, erro
 	if !ok {
 		return nil, errors.Errorf("expected string type, got %T", value)
 	}
-	
+
 	// Parse as float64, which is the standard floating-point type in upjet
 	var result float64
 	if n, err := fmt.Sscanf(str, "%f", &result); err != nil || n != 1 {
 		return nil, errors.Errorf("cannot convert string %q to float64", str)
 	}
-	
+
 	return result, nil
 }
 

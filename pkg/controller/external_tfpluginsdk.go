@@ -16,6 +16,8 @@ import (
 	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
+	"github.com/crossplane/upjet/v2/pkg/config/conversion"
+	"github.com/crossplane/upjet/v2/pkg/types/name"
 	"github.com/hashicorp/go-cty/cty"
 	tfdiag "github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -228,6 +230,38 @@ func (c *TerraformPluginSDKConnector) applyHCLParserToParam(sc *schema.Schema, p
 	return param
 }
 
+func MergeAnnotationFields(parameters, initParameters map[string]any, annotations map[string]string) error {
+	parametersPaved := fieldpath.Pave(parameters)
+	initParametersPaved := fieldpath.Pave(initParameters)
+	for k, v := range annotations {
+		if strings.HasPrefix(k, conversion.AnnotationPrefix) {
+			t := strings.TrimPrefix(k, conversion.AnnotationPrefix)
+			fmt.Printf("annotation field: %s\n", t)
+			switch {
+			case strings.HasPrefix(t, "spec.forProvider."):
+				key := strings.TrimPrefix(t, "spec.forProvider.")
+				snakeKey := name.NewFromCamel(key).Snake
+				fmt.Printf("annotation field forProvider: %s\n", snakeKey)
+				keyValue, err := parametersPaved.GetValue(snakeKey)
+				if err != nil {
+					return errors.Wrapf(err, "cannot get value for %v", keyValue)
+				}
+				if err := parametersPaved.SetValue(snakeKey, v); err != nil {
+					return errors.Wrapf(err, "cannot set value for %s", snakeKey)
+				}
+			case strings.HasPrefix(t, "spec.initProvider."):
+				key := strings.TrimPrefix(t, "spec.initProvider.")
+				snakeKey := name.NewFromCamel(key).Snake
+				fmt.Printf("annotation field initProvider: %s\n", snakeKey)
+				if err := initParametersPaved.SetValue(snakeKey, v); err != nil {
+					return errors.Wrapf(err, "cannot set value for %s", snakeKey)
+				}
+			}
+		}
+	}
+	return nil
+}
+
 func (c *TerraformPluginSDKConnector) Connect(ctx context.Context, mg xpresource.Managed) (managed.ExternalClient, error) { //nolint:gocyclo
 	c.metricRecorder.ObserveReconcileDelay(mg.GetObjectKind().GroupVersionKind(), metrics.NameForManaged(mg))
 	logger := c.logger.WithValues("uid", mg.GetUID(), "name", mg.GetName(), "namespace", mg.GetNamespace(), "gvk", mg.GetObjectKind().GroupVersionKind().String())
@@ -323,6 +357,9 @@ func filterInitExclusiveDiffs(tr resource.Terraformed, instanceDiff *tf.Instance
 	paramsInitProvider, err := tr.GetInitParameters()
 	if err != nil {
 		return errors.Wrap(err, "cannot get spec.initProvider parameters")
+	}
+	if err = MergeAnnotationFields(paramsForProvider, paramsInitProvider, tr.GetAnnotations()); err != nil {
+		return errors.Wrap(err, "cannot merge annotation fields")
 	}
 
 	initProviderExclusiveParamKeys := getTerraformIgnoreChanges(paramsForProvider, paramsInitProvider)
