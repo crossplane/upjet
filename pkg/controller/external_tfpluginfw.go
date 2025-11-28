@@ -939,7 +939,7 @@ func getFatalDiagnostics(diags []*tfprotov6.Diagnostic) error {
 func protov6DynamicValueFromMap(data map[string]any, terraformType tftypes.Type) (*tfprotov6.DynamicValue, error) {
 	tfValue, err := tfValueFromMap(data, terraformType)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "cannot construct TF value from raw map")
 	}
 	dynamicValue, err := tfprotov6.NewDynamicValue(terraformType, tfValue)
 	if err != nil {
