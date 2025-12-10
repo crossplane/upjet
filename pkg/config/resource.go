@@ -538,6 +538,8 @@ type Resource struct {
 	// embedded objects after reading the state from the Terraform stack.
 	listConversionPaths map[string]string
 
+	TfStatusConversionPaths []string
+
 	// dynamicAttributeConversionPaths is a list of CRD field paths,
 	// of attributes that are TF dynamic pseudo-types. Such attributes include
 	// both their implicit type and value info in their Terraform state

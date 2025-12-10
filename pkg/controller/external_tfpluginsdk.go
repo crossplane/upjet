@@ -6,6 +6,7 @@ package controller
 
 import (
 	"context"
+	encodingjson "encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -236,28 +237,49 @@ func MergeAnnotationFields(parameters, initParameters map[string]any, annotation
 	for k, v := range annotations {
 		if strings.HasPrefix(k, conversion.AnnotationPrefix) {
 			t := strings.TrimPrefix(k, conversion.AnnotationPrefix)
-			fmt.Printf("annotation field: %s\n", t)
 			switch {
 			case strings.HasPrefix(t, "spec.forProvider."):
 				key := strings.TrimPrefix(t, "spec.forProvider.")
 				snakeKey := name.NewFromCamel(key).Snake
-				fmt.Printf("annotation field forProvider: %s\n", snakeKey)
-				keyValue, err := parametersPaved.GetValue(snakeKey)
-				if err != nil {
-					return errors.Wrapf(err, "cannot get value for %v", keyValue)
-				}
 				if err := parametersPaved.SetValue(snakeKey, v); err != nil {
 					return errors.Wrapf(err, "cannot set value for %s", snakeKey)
 				}
 			case strings.HasPrefix(t, "spec.initProvider."):
 				key := strings.TrimPrefix(t, "spec.initProvider.")
 				snakeKey := name.NewFromCamel(key).Snake
-				fmt.Printf("annotation field initProvider: %s\n", snakeKey)
 				if err := initParametersPaved.SetValue(snakeKey, v); err != nil {
 					return errors.Wrapf(err, "cannot set value for %s", snakeKey)
 				}
 			}
 		}
+	}
+	return nil
+}
+
+func MoveStatusValuesToAnnotation(observation map[string]any, annotations map[string]string, paths []string) error {
+	observationPaved := fieldpath.Pave(observation)
+	for _, path := range paths {
+		p := strings.TrimPrefix(path, "status.atProvider.")
+		snakeP := name.NewFromCamel(p).Snake
+		fieldValue, err := observationPaved.GetValue(snakeP)
+		if err != nil {
+			return errors.Wrapf(err, "cannot get value for %s", snakeP)
+		}
+		// Convert field value to JSON string for annotation storage
+		var annotationValue string
+		if fieldValue == nil {
+			annotationValue = ""
+		} else {
+			jsonBytes, err := encodingjson.Marshal(fieldValue)
+			if err != nil {
+				return errors.Wrapf(err, "failed to marshal field %q to JSON", path)
+			}
+			annotationValue = string(jsonBytes)
+		}
+		if annotations == nil {
+			annotations = make(map[string]string)
+		}
+		annotations[conversion.AnnotationPrefix+path] = annotationValue
 	}
 	return nil
 }
@@ -597,6 +619,9 @@ func (n *terraformPluginSDKExternal) Observe(ctx context.Context, mg xpresource.
 			}
 		}
 
+		if err := MoveStatusValuesToAnnotation(stateValueMap, mg.GetAnnotations(), n.config.TfStatusConversionPaths); err != nil {
+			return managed.ExternalObservation{}, errors.Wrap(err, "cannot move status values to annotation")
+		}
 		err = mg.(resource.Terraformed).SetObservation(stateValueMap)
 		if err != nil {
 			return managed.ExternalObservation{}, errors.Errorf("could not set observation: %v", err)
@@ -703,6 +728,9 @@ func (n *terraformPluginSDKExternal) Create(ctx context.Context, mg xpresource.M
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, "cannot convert the singleton lists in the state value map of the newly created resource into embedded objects")
 	}
+	if err := MoveStatusValuesToAnnotation(stateValueMap, mg.GetAnnotations(), n.config.TfStatusConversionPaths); err != nil {
+		return managed.ExternalCreation{}, errors.Wrap(err, "cannot move status values to annotation")
+	}
 	err = mg.(resource.Terraformed).SetObservation(stateValueMap)
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Errorf("could not set observation: %v", err)
@@ -765,7 +793,9 @@ func (n *terraformPluginSDKExternal) Update(ctx context.Context, mg xpresource.M
 	if err != nil {
 		return managed.ExternalUpdate{}, errors.Wrap(err, "cannot convert the singleton lists for the updated resource state value map into embedded objects")
 	}
-
+	if err := MoveStatusValuesToAnnotation(stateValueMap, mg.GetAnnotations(), n.config.TfStatusConversionPaths); err != nil {
+		return managed.ExternalUpdate{}, errors.Wrap(err, "cannot move status values to annotation")
+	}
 	err = mg.(resource.Terraformed).SetObservation(stateValueMap)
 	if err != nil {
 		return managed.ExternalUpdate{}, errors.Errorf("failed to set observation: %v", err)
