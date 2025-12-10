@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strconv"
 
 	"github.com/crossplane/crossplane-runtime/v2/pkg/fieldpath"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
@@ -24,7 +25,7 @@ const (
 
 	// AnnotationPrefix is the prefix for internal upjet annotations used
 	// for storing optional field values during API version conversions.
-	AnnotationPrefix = "internal-upjet.crossplane.io/"
+	AnnotationPrefix = "internal-upjet/"
 )
 
 const (
@@ -49,11 +50,11 @@ const (
 func (m OptionalFieldConversionMode) String() string {
 	switch m {
 	case ToAnnotation:
-		return "toAnnotation"
+		return "ToAnnotation"
 	case FromAnnotation:
-		return "fromAnnotation"
+		return "FromAnnotation"
 	default:
-		return "unknown"
+		return "Unknown"
 	}
 }
 
@@ -80,19 +81,19 @@ const (
 func (m TypeConversionMode) String() string {
 	switch m {
 	case IntToString:
-		return "intToString"
+		return "IntToString"
 	case StringToInt:
-		return "stringToInt"
+		return "StringToInt"
 	case BoolToString:
-		return "boolToString"
+		return "BoolToString"
 	case StringToBool:
-		return "stringToBool"
+		return "StringToBool"
 	case FloatToString:
-		return "floatToString"
+		return "FloatToString"
 	case StringToFloat:
-		return "stringToFloat"
+		return "StringToFloat"
 	default:
-		return "unknown"
+		return "Unknown"
 	}
 }
 
@@ -407,6 +408,8 @@ func DefaultPathPrefixes() []string {
 }
 
 // generateAnnotationKey generates the annotation key from a field path.
+// The caller must ensure fieldPath produces a valid Kubernetes annotation key
+// (max 63 characters, matching regex: [a-z0-9]([-a-z0-9]*[a-z0-9])?).
 func generateAnnotationKey(fieldPath string) string {
 	return AnnotationPrefix + fieldPath
 }
@@ -436,7 +439,6 @@ func (o *optionalFieldConverter) ConvertPaved(src, target *fieldpath.Paved) (boo
 }
 
 func (o *optionalFieldConverter) convertToAnnotation(src, target *fieldpath.Paved, annotationKey string) (bool, error) {
-	// Get the field value from source
 	fieldValue, err := src.GetValue(o.fieldPath)
 	if fieldpath.IsNotFound(err) {
 		// Field doesn't exist in source, nothing to convert
@@ -446,7 +448,6 @@ func (o *optionalFieldConverter) convertToAnnotation(src, target *fieldpath.Pave
 		return false, errors.Wrapf(err, "failed to get field %q from source", o.fieldPath)
 	}
 
-	// Convert field value to JSON string for annotation storage
 	var annotationValue string
 	if fieldValue == nil {
 		annotationValue = ""
@@ -458,7 +459,6 @@ func (o *optionalFieldConverter) convertToAnnotation(src, target *fieldpath.Pave
 		annotationValue = string(jsonBytes)
 	}
 
-	// Set annotation in target
 	if err := target.SetValue(fmt.Sprintf("metadata.annotations['%s']", annotationKey), annotationValue); err != nil {
 		return false, errors.Wrapf(err, "failed to set annotation %q", annotationKey)
 	}
@@ -569,15 +569,18 @@ func (f *fieldTypeConverter) convertValue(value interface{}) (interface{}, error
 	}
 }
 
+// intToString converts integer values to string representation.
+// For float64 inputs (from JSON unmarshaling), only values within the
+// safe integer range [-2^53+1, 2^53-1] are supported to prevent precision loss.
 func (f *fieldTypeConverter) intToString(value interface{}) (interface{}, error) {
 	// In upjet, integer types are represented as int64. However, JSON unmarshaling
 	// often produces float64 for numeric values, so we handle both cases.
 	switch v := value.(type) {
 	case int64:
-		return fmt.Sprintf("%d", v), nil
+		return strconv.FormatInt(v, 10), nil // base 10
 	case float64: // JSON unmarshaling often produces float64 for numbers
 		if v == float64(int64(v)) {
-			return fmt.Sprintf("%.0f", v), nil
+			return strconv.FormatInt(int64(v), 10), nil
 		}
 		return "", errors.Errorf("value %v is not an integer", v)
 	default:
@@ -591,10 +594,9 @@ func (f *fieldTypeConverter) stringToInt(value interface{}) (interface{}, error)
 		return nil, errors.Errorf("expected string type, got %T", value)
 	}
 
-	// Parse as int64, which is the standard integer type in upjet
-	var result int64
-	if n, err := fmt.Sscanf(str, "%d", &result); err != nil || n != 1 {
-		return nil, errors.Errorf("cannot convert string %q to int64", str)
+	result, err := strconv.ParseInt(str, 10, 64)
+	if err != nil {
+		return nil, errors.Wrapf(err, "cannot convert string %q to int64", str)
 	}
 
 	return result, nil
@@ -605,7 +607,7 @@ func (f *fieldTypeConverter) boolToString(value interface{}) (interface{}, error
 	if !ok {
 		return "", errors.Errorf("expected bool type, got %T", value)
 	}
-	return fmt.Sprintf("%t", b), nil
+	return strconv.FormatBool(b), nil
 }
 
 func (f *fieldTypeConverter) stringToBool(value interface{}) (interface{}, error) {
@@ -614,14 +616,12 @@ func (f *fieldTypeConverter) stringToBool(value interface{}) (interface{}, error
 		return nil, errors.Errorf("expected string type, got %T", value)
 	}
 
-	switch str {
-	case "true", "True", "TRUE", "1":
-		return true, nil
-	case "false", "False", "FALSE", "0":
-		return false, nil
-	default:
-		return nil, errors.Errorf("cannot convert string %q to boolean", str)
+	result, err := strconv.ParseBool(str)
+	if err != nil {
+		return nil, errors.Wrapf(err, "cannot convert string %q to boolean", str)
 	}
+
+	return result, nil
 }
 
 func (f *fieldTypeConverter) floatToString(value interface{}) (interface{}, error) {
@@ -630,7 +630,7 @@ func (f *fieldTypeConverter) floatToString(value interface{}) (interface{}, erro
 	if !ok {
 		return "", errors.Errorf("expected float64 type, got %T", value)
 	}
-	return fmt.Sprintf("%g", v), nil
+	return strconv.FormatFloat(v, 'g', -1, 64), nil
 }
 
 func (f *fieldTypeConverter) stringToFloat(value interface{}) (interface{}, error) {
@@ -639,10 +639,9 @@ func (f *fieldTypeConverter) stringToFloat(value interface{}) (interface{}, erro
 		return nil, errors.Errorf("expected string type, got %T", value)
 	}
 
-	// Parse as float64, which is the standard floating-point type in upjet
-	var result float64
-	if n, err := fmt.Sscanf(str, "%f", &result); err != nil || n != 1 {
-		return nil, errors.Errorf("cannot convert string %q to float64", str)
+	result, err := strconv.ParseFloat(str, 64)
+	if err != nil {
+		return nil, errors.Wrapf(err, "cannot convert string %q to float64", str)
 	}
 
 	return result, nil
@@ -650,8 +649,7 @@ func (f *fieldTypeConverter) stringToFloat(value interface{}) (interface{}, erro
 
 // NewFieldTypeConversion returns a new Conversion that handles type changes
 // of fields between API versions. It converts primitive types according to the
-// given conversion mode. 
-//
+// given conversion mode.
 // Type assumptions for upjet:
 // - Integers are represented as int64 (though JSON unmarshaling may produce float64)
 // - Floating-point numbers are represented as float64
@@ -659,9 +657,9 @@ func (f *fieldTypeConverter) stringToFloat(value interface{}) (interface{}, erro
 // - Strings are represented as string
 //
 // Supported conversions:
-// - IntToString/StringToInt: int64 ↔ string
-// - FloatToString/StringToFloat: float64 ↔ string  
-// - BoolToString/StringToBool: bool ↔ string
+// IntToString/StringToInt: int64 ↔ string
+// FloatToString/StringToFloat: float64 ↔ string
+// BoolToString/StringToBool: bool ↔ string
 func NewFieldTypeConversion(sourceVersion, targetVersion, fieldPath string, mode TypeConversionMode) Conversion {
 	return &fieldTypeConverter{
 		baseConversion: newBaseConversion(sourceVersion, targetVersion),

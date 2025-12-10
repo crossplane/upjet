@@ -17,8 +17,6 @@ import (
 	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
-	"github.com/crossplane/upjet/v2/pkg/config/conversion"
-	"github.com/crossplane/upjet/v2/pkg/types/name"
 	"github.com/hashicorp/go-cty/cty"
 	tfdiag "github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -29,10 +27,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/crossplane/upjet/v2/pkg/config"
+	"github.com/crossplane/upjet/v2/pkg/config/conversion"
 	"github.com/crossplane/upjet/v2/pkg/metrics"
 	"github.com/crossplane/upjet/v2/pkg/resource"
 	"github.com/crossplane/upjet/v2/pkg/resource/json"
 	"github.com/crossplane/upjet/v2/pkg/terraform"
+	"github.com/crossplane/upjet/v2/pkg/types/name"
 )
 
 type TerraformPluginSDKConnector struct {
@@ -231,7 +231,7 @@ func (c *TerraformPluginSDKConnector) applyHCLParserToParam(sc *schema.Schema, p
 	return param
 }
 
-func MergeAnnotationFields(parameters, initParameters map[string]any, annotations map[string]string) error {
+func MergeAnnotationFieldsWithSpec(parameters, initParameters map[string]any, annotations map[string]string) error { //nolint:gocyclo
 	parametersPaved := fieldpath.Pave(parameters)
 	initParametersPaved := fieldpath.Pave(initParameters)
 	for k, v := range annotations {
@@ -241,14 +241,28 @@ func MergeAnnotationFields(parameters, initParameters map[string]any, annotation
 			case strings.HasPrefix(t, "spec.forProvider."):
 				key := strings.TrimPrefix(t, "spec.forProvider.")
 				snakeKey := name.NewFromCamel(key).Snake
-				if err := parametersPaved.SetValue(snakeKey, v); err != nil {
-					return errors.Wrapf(err, "cannot set value for %s", snakeKey)
+				_, err := parametersPaved.GetValue(snakeKey)
+				if err != nil {
+					if fieldpath.IsNotFound(err) {
+						if err := parametersPaved.SetValue(snakeKey, v); err != nil {
+							return errors.Wrapf(err, "cannot set value for %s", snakeKey)
+						}
+					} else {
+						return errors.Wrapf(err, "cannot get the current value for %s", snakeKey)
+					}
 				}
 			case strings.HasPrefix(t, "spec.initProvider."):
 				key := strings.TrimPrefix(t, "spec.initProvider.")
 				snakeKey := name.NewFromCamel(key).Snake
-				if err := initParametersPaved.SetValue(snakeKey, v); err != nil {
-					return errors.Wrapf(err, "cannot set value for %s", snakeKey)
+				_, err := initParametersPaved.GetValue(snakeKey)
+				if err != nil {
+					if fieldpath.IsNotFound(err) {
+						if err := initParametersPaved.SetValue(snakeKey, v); err != nil {
+							return errors.Wrapf(err, "cannot set value for %s", snakeKey)
+						}
+					} else {
+						return errors.Wrapf(err, "cannot get the current value for %s", snakeKey)
+					}
 				}
 			}
 		}
@@ -256,30 +270,38 @@ func MergeAnnotationFields(parameters, initParameters map[string]any, annotation
 	return nil
 }
 
-func MoveStatusValuesToAnnotation(observation map[string]any, annotations map[string]string, paths []string) error {
-	observationPaved := fieldpath.Pave(observation)
+func MoveTFStateValuesToAnnotation(tfObservation map[string]any, atProvider map[string]any, annotations map[string]string, paths []string) error {
+	tfObservationPaved := fieldpath.Pave(tfObservation)
+	atProviderPaved := fieldpath.Pave(atProvider)
 	for _, path := range paths {
 		p := strings.TrimPrefix(path, "status.atProvider.")
 		snakeP := name.NewFromCamel(p).Snake
-		fieldValue, err := observationPaved.GetValue(snakeP)
+		fieldValue, err := tfObservationPaved.GetValue(snakeP)
 		if err != nil {
 			return errors.Wrapf(err, "cannot get value for %s", snakeP)
 		}
-		// Convert field value to JSON string for annotation storage
-		var annotationValue string
-		if fieldValue == nil {
-			annotationValue = ""
-		} else {
-			jsonBytes, err := encodingjson.Marshal(fieldValue)
-			if err != nil {
-				return errors.Wrapf(err, "failed to marshal field %q to JSON", path)
+		_, err = atProviderPaved.GetValue(snakeP)
+		if err != nil {
+			if fieldpath.IsNotFound(err) {
+				// Convert field value to JSON string for annotation storage
+				var annotationValue string
+				if fieldValue == nil {
+					annotationValue = ""
+				} else {
+					jsonBytes, err := encodingjson.Marshal(fieldValue)
+					if err != nil {
+						return errors.Wrapf(err, "failed to marshal field %q to JSON", path)
+					}
+					annotationValue = string(jsonBytes)
+				}
+				if annotations == nil {
+					annotations = make(map[string]string)
+				}
+				annotations[conversion.AnnotationPrefix+path] = annotationValue
+			} else {
+				return errors.Wrapf(err, "cannot get the current value for %s", snakeP)
 			}
-			annotationValue = string(jsonBytes)
 		}
-		if annotations == nil {
-			annotations = make(map[string]string)
-		}
-		annotations[conversion.AnnotationPrefix+path] = annotationValue
 	}
 	return nil
 }
@@ -380,7 +402,7 @@ func filterInitExclusiveDiffs(tr resource.Terraformed, instanceDiff *tf.Instance
 	if err != nil {
 		return errors.Wrap(err, "cannot get spec.initProvider parameters")
 	}
-	if err = MergeAnnotationFields(paramsForProvider, paramsInitProvider, tr.GetAnnotations()); err != nil {
+	if err = MergeAnnotationFieldsWithSpec(paramsForProvider, paramsInitProvider, tr.GetAnnotations()); err != nil {
 		return errors.Wrap(err, "cannot merge annotation fields")
 	}
 
@@ -619,12 +641,17 @@ func (n *terraformPluginSDKExternal) Observe(ctx context.Context, mg xpresource.
 			}
 		}
 
-		if err := MoveStatusValuesToAnnotation(stateValueMap, mg.GetAnnotations(), n.config.TfStatusConversionPaths); err != nil {
-			return managed.ExternalObservation{}, errors.Wrap(err, "cannot move status values to annotation")
-		}
 		err = mg.(resource.Terraformed).SetObservation(stateValueMap)
 		if err != nil {
 			return managed.ExternalObservation{}, errors.Errorf("could not set observation: %v", err)
+		}
+
+		obs, err := mg.(resource.Terraformed).GetObservation()
+		if err != nil {
+			return managed.ExternalObservation{}, errors.Wrap(err, "could not get observation")
+		}
+		if err := MoveTFStateValuesToAnnotation(stateValueMap, obs, mg.GetAnnotations(), n.config.TfStatusConversionPaths); err != nil {
+			return managed.ExternalObservation{}, errors.Wrap(err, "cannot move status values to annotation")
 		}
 
 		if !hasDiff {
@@ -728,12 +755,16 @@ func (n *terraformPluginSDKExternal) Create(ctx context.Context, mg xpresource.M
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, "cannot convert the singleton lists in the state value map of the newly created resource into embedded objects")
 	}
-	if err := MoveStatusValuesToAnnotation(stateValueMap, mg.GetAnnotations(), n.config.TfStatusConversionPaths); err != nil {
-		return managed.ExternalCreation{}, errors.Wrap(err, "cannot move status values to annotation")
-	}
 	err = mg.(resource.Terraformed).SetObservation(stateValueMap)
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Errorf("could not set observation: %v", err)
+	}
+	obs, err := mg.(resource.Terraformed).GetObservation()
+	if err != nil {
+		return managed.ExternalCreation{}, errors.Wrap(err, "could not get observation")
+	}
+	if err := MoveTFStateValuesToAnnotation(stateValueMap, obs, mg.GetAnnotations(), n.config.TfStatusConversionPaths); err != nil {
+		return managed.ExternalCreation{}, errors.Wrap(err, "cannot move status values to annotation")
 	}
 
 	return managed.ExternalCreation{ConnectionDetails: conn}, nil
@@ -759,7 +790,7 @@ func (n *terraformPluginSDKExternal) assertNoForceNew() error {
 	return nil
 }
 
-func (n *terraformPluginSDKExternal) Update(ctx context.Context, mg xpresource.Managed) (managed.ExternalUpdate, error) {
+func (n *terraformPluginSDKExternal) Update(ctx context.Context, mg xpresource.Managed) (managed.ExternalUpdate, error) { //nolint:gocyclo
 	if n.config.UpdateLoopPrevention != nil {
 		preventResult, err := n.config.UpdateLoopPrevention.UpdateLoopPreventionFunc(n.instanceDiff, mg)
 		if err != nil {
@@ -793,12 +824,16 @@ func (n *terraformPluginSDKExternal) Update(ctx context.Context, mg xpresource.M
 	if err != nil {
 		return managed.ExternalUpdate{}, errors.Wrap(err, "cannot convert the singleton lists for the updated resource state value map into embedded objects")
 	}
-	if err := MoveStatusValuesToAnnotation(stateValueMap, mg.GetAnnotations(), n.config.TfStatusConversionPaths); err != nil {
-		return managed.ExternalUpdate{}, errors.Wrap(err, "cannot move status values to annotation")
-	}
 	err = mg.(resource.Terraformed).SetObservation(stateValueMap)
 	if err != nil {
 		return managed.ExternalUpdate{}, errors.Errorf("failed to set observation: %v", err)
+	}
+	obs, err := mg.(resource.Terraformed).GetObservation()
+	if err != nil {
+		return managed.ExternalUpdate{}, errors.Wrap(err, "could not get observation")
+	}
+	if err := MoveTFStateValuesToAnnotation(stateValueMap, obs, mg.GetAnnotations(), n.config.TfStatusConversionPaths); err != nil {
+		return managed.ExternalUpdate{}, errors.Wrap(err, "cannot move status values to annotation")
 	}
 	return managed.ExternalUpdate{}, nil
 }

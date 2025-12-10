@@ -626,7 +626,7 @@ func TestOptionalFieldConversion(t *testing.T) {
 					"kind":       "TestResource",
 					"metadata": map[string]any{
 						"annotations": map[string]any{
-							"internal-upjet.crossplane.io/spec.forProvider.newField": `"test-value"`,
+							"internal-upjet/spec.forProvider.newField": `"test-value"`,
 						},
 					},
 				}),
@@ -663,7 +663,7 @@ func TestOptionalFieldConversion(t *testing.T) {
 					"kind":       "TestResource",
 					"metadata": map[string]any{
 						"annotations": map[string]any{
-							"internal-upjet.crossplane.io/spec.forProvider.complexField": `{"another":42,"nested":"value"}`,
+							"internal-upjet/spec.forProvider.complexField": `{"another":42,"nested":"value"}`,
 						},
 					},
 				}),
@@ -681,7 +681,7 @@ func TestOptionalFieldConversion(t *testing.T) {
 					"kind":       "TestResource",
 					"metadata": map[string]any{
 						"annotations": map[string]any{
-							"internal-upjet.crossplane.io/spec.forProvider.newField": `"restored-value"`,
+							"internal-upjet/spec.forProvider.newField": `"restored-value"`,
 						},
 					},
 				}),
@@ -718,7 +718,7 @@ func TestOptionalFieldConversion(t *testing.T) {
 					"kind":       "TestResource",
 					"metadata": map[string]any{
 						"annotations": map[string]any{
-							"internal-upjet.crossplane.io/spec.forProvider.complexField": `{"nested":"value","another":42}`,
+							"internal-upjet/spec.forProvider.complexField": `{"nested":"value","another":42}`,
 						},
 					},
 				}),
@@ -861,7 +861,7 @@ func TestOptionalFieldConversion(t *testing.T) {
 					"kind":       "TestResource",
 					"metadata": map[string]any{
 						"annotations": map[string]any{
-							"internal-upjet.crossplane.io/spec.forProvider.nullField": "",
+							"internal-upjet/spec.forProvider.nullField": "",
 						},
 					},
 				}),
@@ -898,7 +898,7 @@ func TestOptionalFieldConversion(t *testing.T) {
 					"kind":       "TestResource",
 					"metadata": map[string]any{
 						"annotations": map[string]any{
-							"internal-upjet.crossplane.io/spec.forProvider.a.b": `"nested-value"`,
+							"internal-upjet/spec.forProvider.a.b": `"nested-value"`,
 						},
 					},
 				}),
@@ -916,7 +916,7 @@ func TestOptionalFieldConversion(t *testing.T) {
 					"kind":       "TestResource",
 					"metadata": map[string]any{
 						"annotations": map[string]any{
-							"internal-upjet.crossplane.io/spec.forProvider.a.b": `"nested-restored-value"`,
+							"internal-upjet/spec.forProvider.a.b": `"nested-restored-value"`,
 						},
 					},
 				}),
@@ -976,17 +976,17 @@ func TestGenerateAnnotationKey(t *testing.T) {
 		"SimpleFieldPath": {
 			reason:    "Extract field name from simple path.",
 			fieldPath: "newField",
-			want:      "internal-upjet.crossplane.io/newField",
+			want:      "internal-upjet/newField",
 		},
 		"NestedFieldPath": {
 			reason:    "Extract field name from nested path.",
 			fieldPath: "spec.forProvider.newField",
-			want:      "internal-upjet.crossplane.io/spec.forProvider.newField",
+			want:      "internal-upjet/spec.forProvider.newField",
 		},
 		"DeeplyNestedFieldPath": {
 			reason:    "Extract field name from deeply nested path.",
 			fieldPath: "spec.forProvider.configuration.advanced.newField",
-			want:      "internal-upjet.crossplane.io/spec.forProvider.configuration.advanced.newField",
+			want:      "internal-upjet/spec.forProvider.configuration.advanced.newField",
 		},
 	}
 	for name, tc := range tests {
@@ -1006,15 +1006,15 @@ func TestOptionalFieldConversionModeString(t *testing.T) {
 	}{
 		"ToAnnotation": {
 			mode: ToAnnotation,
-			want: "toAnnotation",
+			want: "ToAnnotation",
 		},
 		"FromAnnotation": {
 			mode: FromAnnotation,
-			want: "fromAnnotation",
+			want: "FromAnnotation",
 		},
 		"UnknownMode": {
 			mode: OptionalFieldConversionMode(999),
-			want: "unknown",
+			want: "Unknown",
 		},
 	}
 	for name, tc := range tests {
@@ -1477,31 +1477,31 @@ func TestTypeConversionModeString(t *testing.T) {
 	}{
 		"IntToString": {
 			mode: IntToString,
-			want: "intToString",
+			want: "IntToString",
 		},
 		"StringToInt": {
 			mode: StringToInt,
-			want: "stringToInt",
+			want: "StringToInt",
 		},
 		"BoolToString": {
 			mode: BoolToString,
-			want: "boolToString",
+			want: "BoolToString",
 		},
 		"StringToBool": {
 			mode: StringToBool,
-			want: "stringToBool",
+			want: "StringToBool",
 		},
 		"FloatToString": {
 			mode: FloatToString,
-			want: "floatToString",
+			want: "FloatToString",
 		},
 		"StringToFloat": {
 			mode: StringToFloat,
-			want: "stringToFloat",
+			want: "StringToFloat",
 		},
 		"UnknownMode": {
 			mode: TypeConversionMode(999),
-			want: "unknown",
+			want: "Unknown",
 		},
 	}
 	for name, tc := range tests {

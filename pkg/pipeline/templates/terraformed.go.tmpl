@@ -99,7 +99,7 @@ func (tr *{{ .CRD.Kind }}) GetMergedParameters(shouldMergeInitProvider bool) (ma
         return nil, errors.Wrapf(err, "cannot get init parameters for resource \"%s/%s\"", tr.GetNamespace(), tr.GetName())
     }
 
-	if err = controller.MergeAnnotationFields(params, initParams, tr.GetAnnotations()); err != nil {
+	if err = controller.MergeAnnotationFieldsWithSpec(params, initParams, tr.GetAnnotations()); err != nil {
 		return nil, errors.Wrap(err, "cannot merge annotations")
 	}
 
