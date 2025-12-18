@@ -224,8 +224,12 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 	if e.config.UseAsync && meta.GetExternalName(tr) != "" {
 		annotations := tr.GetAnnotations()
 		if _, hasCreateSucceeded := annotations["crossplane.io/external-create-succeeded"]; hasCreateSucceeded {
+			e.logger.Debug("Using Import instead of Refresh for async resource with external-create-succeeded annotation", "external-name", meta.GetExternalName(tr))
 			return e.Import(ctx, tr)
 		}
+		e.logger.Debug("Async resource missing external-create-succeeded annotation, using Refresh", "external-name", meta.GetExternalName(tr), "annotations", annotations)
+	} else {
+		e.logger.Debug("Not using Import fallback", "useAsync", e.config.UseAsync, "externalName", meta.GetExternalName(tr))
 	}
 
 	res, err := e.workspace.Refresh(ctx)
