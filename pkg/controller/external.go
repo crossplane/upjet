@@ -215,6 +215,19 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 		return e.Import(ctx, tr)
 	}
 
+	// For async resources that were previously created, use Import instead
+	// of Refresh if the resource has been successfully created before.
+	// This prevents duplicate resource creation after provider pod restarts
+	// when the ephemeral workspace state in /tmp is lost.
+	// The external-create-succeeded annotation persists in Kubernetes and
+	// indicates the resource was successfully created or imported previously.
+	if e.config.UseAsync && meta.GetExternalName(tr) != "" {
+		annotations := tr.GetAnnotations()
+		if _, hasCreateSucceeded := annotations["crossplane.io/external-create-succeeded"]; hasCreateSucceeded {
+			return e.Import(ctx, tr)
+		}
+	}
+
 	res, err := e.workspace.Refresh(ctx)
 	if err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, errRefresh)
