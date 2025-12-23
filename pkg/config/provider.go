@@ -20,6 +20,12 @@ import (
 	conversiontfjson "github.com/crossplane/upjet/v2/pkg/types/conversion/tfjson"
 )
 
+const (
+	pathForProvider  = "spec.forProvider"
+	pathInitProvider = "spec.initProvider"
+	pathAtProvider   = "status.atProvider"
+)
+
 // ResourceConfiguratorFn is a function that implements the ResourceConfigurator
 // interface
 type ResourceConfiguratorFn func(r *Resource)

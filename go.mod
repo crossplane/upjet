@@ -4,7 +4,7 @@
 
 module github.com/crossplane/upjet/v2
 
-go 1.24.7
+go 1.24.11
 
 require (
 	dario.cat/mergo v1.0.2
@@ -28,7 +28,8 @@ require (
 	github.com/prometheus/client_golang v1.22.0
 	github.com/spf13/afero v1.12.0
 	github.com/tmccombs/hcl2json v0.3.3
-	github.com/yuin/goldmark v1.4.13
+	github.com/upbound/uptest v0.12.1
+	github.com/yuin/goldmark v1.5.3
 	github.com/zclconf/go-cty v1.16.2
 	github.com/zclconf/go-cty-yaml v1.0.3
 	golang.org/x/net v0.39.0
@@ -43,7 +44,10 @@ require (
 	sigs.k8s.io/yaml v1.4.0
 )
 
+replace github.com/upbound/uptest => github.com/sergenyalcin/uptest v0.0.0-20251223200730-59f258b5357c
+
 require (
+	cloud.google.com/go v0.116.0 // indirect
 	github.com/agext/levenshtein v1.2.3 // indirect
 	github.com/alecthomas/units v0.0.0-20240927000941-0f3dac36c52b // indirect
 	github.com/antchfx/xpath v1.2.0 // indirect
@@ -58,6 +62,7 @@ require (
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/fsnotify/fsnotify v1.8.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
+	github.com/getkin/kin-openapi v0.108.0 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/zapr v1.3.0 // indirect
 	github.com/go-openapi/jsonpointer v0.21.0 // indirect
@@ -79,6 +84,7 @@ require (
 	github.com/hashicorp/terraform-svchost v0.1.1 // indirect
 	github.com/hashicorp/yamux v0.1.1 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/invopop/yaml v0.1.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
@@ -90,6 +96,7 @@ require (
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
+	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/oklog/run v1.0.0 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
@@ -97,6 +104,7 @@ require (
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/spf13/cobra v1.9.1 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
+	github.com/tufin/oasdiff v1.2.6 // indirect
 	github.com/vmihailenco/msgpack v4.0.4+incompatible // indirect
 	github.com/vmihailenco/msgpack/v5 v5.4.1 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
