@@ -538,6 +538,29 @@ type Resource struct {
 	// embedded objects after reading the state from the Terraform stack.
 	listConversionPaths map[string]string
 
+	// TfStatusConversionPaths is a list of status field paths that should be moved
+	// to annotations when they don't exist in the CRD's status.atProvider schema.
+	// This is used for API version compatibility when controllers run older API versions.
+	//
+	// Context: When a new status field is added in a newer API version, and Terraform
+	// returns this field in its state, controllers running older API versions won't
+	// have this field in their status.atProvider Go types. These field values would
+	// be lost during TF state to CRD status conversion.
+	//
+	// By listing these field paths here, the MoveTFStateValuesToAnnotation function
+	// will automatically store them in annotations (prefixed with "internal-upjet/")
+	// when the field doesn't exist in the status schema, preventing data loss.
+	//
+	// Format: "status.atProvider.fieldName" (in camelCase)
+	//
+	// Example:
+	//   TfStatusConversionPaths: []string{
+	//       "status.atProvider.newStatusField",
+	//       "status.atProvider.anotherNewField",
+	//   }
+	//
+	// When the field doesn't exist in the old API version's status.atProvider,
+	// it will be stored as annotation["internal-upjet/status.atProvider.newStatusField"].
 	TfStatusConversionPaths []string
 
 	// dynamicAttributeConversionPaths is a list of CRD field paths,

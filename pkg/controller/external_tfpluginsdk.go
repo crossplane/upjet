@@ -231,6 +231,33 @@ func (c *TerraformPluginSDKConnector) applyHCLParserToParam(sc *schema.Schema, p
 	return param
 }
 
+// MergeAnnotationFieldsWithSpec merges field values stored in annotations back into
+// the spec.forProvider and spec.initProvider parameter maps. This function is critical
+// for handling API version compatibility when controllers run older API versions.
+//
+// Context: When a new field is added to a CRD API version, and a resource is created
+// with this field in a newer version, controllers running older API versions will not
+// have this field in their Go types. During API conversion, these field values are
+// stored in annotations (prefixed with "internal-upjet/") to prevent data loss.
+// This function restores those values before passing parameters to Terraform.
+//
+// The function:
+// 1. Scans all annotations with the "internal-upjet/" prefix
+// 2. For annotations with "spec.forProvider." prefix, merges values into parameters map
+// 3. For annotations with "spec.initProvider." prefix, merges values into initParameters map
+// 4. Only sets annotation values if the field doesn't already exist in the target map
+// 5. Handles both camelCase (annotation key) and snake_case (Terraform parameter key) conversions
+//
+// Example:
+// If annotation "internal-upjet/spec.forProvider.newField" contains a value,
+// and "new_field" doesn't exist in parameters, it will be set from the annotation.
+//
+// Parameters:
+//   - parameters: The spec.forProvider parameters as a map
+//   - initParameters: The spec.initProvider parameters as a map
+//   - annotations: The resource's annotations map
+//
+// Returns an error if field operations fail.
 func MergeAnnotationFieldsWithSpec(parameters, initParameters map[string]any, annotations map[string]string) error { //nolint:gocyclo
 	parametersPaved := fieldpath.Pave(parameters)
 	initParametersPaved := fieldpath.Pave(initParameters)
@@ -270,6 +297,38 @@ func MergeAnnotationFieldsWithSpec(parameters, initParameters map[string]any, an
 	return nil
 }
 
+// MoveTFStateValuesToAnnotation moves field values from Terraform state to annotations
+// when those fields don't exist in the CRD's status.atProvider schema. This function
+// prevents status data loss during API version transitions.
+//
+// Context: When Terraform returns state containing a field that was added in a newer
+// API version, controllers running older API versions won't have this field in their
+// status.atProvider Go types. Without this function, these values would be silently
+// dropped during the conversion from TF state to CRD status.
+//
+// The function:
+// 1. For each configured path, checks if the field exists in TF state (tfObservation)
+// 2. Checks if the same field exists in the CRD's status.atProvider (atProvider)
+// 3. If field exists in TF state but NOT in status.atProvider (old API version):
+// Serializes the field value to JSON
+// Stores it in an annotation with key "internal-upjet/status.atProvider.fieldName"
+// 4. If field exists in both, no action is taken (normal case)
+//
+// This allows the field value to be preserved in annotations until the controller
+// is upgraded to a version that includes the field in the API schema.
+//
+// Example:
+// If TF state has "new_status_field" but the old API version doesn't have this field
+// in status.atProvider, the value is stored as:
+// annotation["internal-upjet/status.atProvider.newStatusField"] = <JSON serialized value>
+//
+// Parameters:
+//   - tfObservation: The complete Terraform state as returned by TF operations
+//   - atProvider: The status.atProvider map that will be set on the CRD
+//   - annotations: The resource's annotations map (will be modified in-place)
+//   - paths: List of status field paths to check (format: "status.atProvider.fieldName")
+//
+// Returns an error if field operations or JSON marshaling fails.
 func MoveTFStateValuesToAnnotation(tfObservation map[string]any, atProvider map[string]any, annotations map[string]string, paths []string) error {
 	tfObservationPaved := fieldpath.Pave(tfObservation)
 	atProviderPaved := fieldpath.Pave(atProvider)
@@ -401,9 +460,6 @@ func filterInitExclusiveDiffs(tr resource.Terraformed, instanceDiff *tf.Instance
 	paramsInitProvider, err := tr.GetInitParameters()
 	if err != nil {
 		return errors.Wrap(err, "cannot get spec.initProvider parameters")
-	}
-	if err = MergeAnnotationFieldsWithSpec(paramsForProvider, paramsInitProvider, tr.GetAnnotations()); err != nil {
-		return errors.Wrap(err, "cannot merge annotation fields")
 	}
 
 	initProviderExclusiveParamKeys := getTerraformIgnoreChanges(paramsForProvider, paramsInitProvider)

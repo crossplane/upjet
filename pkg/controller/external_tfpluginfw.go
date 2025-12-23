@@ -609,6 +609,15 @@ func (n *terraformPluginFrameworkExternalClient) Observe(ctx context.Context, mg
 		if err != nil {
 			return managed.ExternalObservation{}, errors.Errorf("could not set observation: %v", err)
 		}
+
+		obs, err := mg.(resource.Terraformed).GetObservation()
+		if err != nil {
+			return managed.ExternalObservation{}, errors.Wrap(err, "could not get observation")
+		}
+		if err := MoveTFStateValuesToAnnotation(stateValueMap, obs, mg.GetAnnotations(), n.config.TfStatusConversionPaths); err != nil {
+			return managed.ExternalObservation{}, errors.Wrap(err, "cannot move status values to annotation")
+		}
+
 		if !hasDiff {
 			n.metricRecorder.SetReconcileTime(metrics.NameForManaged(mg))
 		}
@@ -699,6 +708,14 @@ func (n *terraformPluginFrameworkExternalClient) Create(ctx context.Context, mg 
 		return managed.ExternalCreation{}, errors.Errorf("could not set observation: %v", err)
 	}
 
+	obs, err := mg.(resource.Terraformed).GetObservation()
+	if err != nil {
+		return managed.ExternalCreation{}, errors.Wrap(err, "could not get observation")
+	}
+	if err := MoveTFStateValuesToAnnotation(stateValueMap, obs, mg.GetAnnotations(), n.config.TfStatusConversionPaths); err != nil {
+		return managed.ExternalCreation{}, errors.Wrap(err, "cannot move status values to annotation")
+	}
+
 	return managed.ExternalCreation{ConnectionDetails: conn}, nil
 }
 
@@ -717,7 +734,7 @@ func (n *terraformPluginFrameworkExternalClient) planRequiresReplace() (bool, st
 
 }
 
-func (n *terraformPluginFrameworkExternalClient) Update(ctx context.Context, mg xpresource.Managed) (managed.ExternalUpdate, error) {
+func (n *terraformPluginFrameworkExternalClient) Update(ctx context.Context, mg xpresource.Managed) (managed.ExternalUpdate, error) { //nolint:gocyclo // easier to follow as a unit
 	n.logger.Debug("Updating the external resource")
 	// refuse plans that require replace for XRM compliance
 	if isReplace, fields := n.planRequiresReplace(); isReplace {
@@ -771,6 +788,15 @@ func (n *terraformPluginFrameworkExternalClient) Update(ctx context.Context, mg 
 	if err != nil {
 		return managed.ExternalUpdate{}, errors.Errorf("could not set observation: %v", err)
 	}
+
+	obs, err := mg.(resource.Terraformed).GetObservation()
+	if err != nil {
+		return managed.ExternalUpdate{}, errors.Wrap(err, "could not get observation")
+	}
+	if err := MoveTFStateValuesToAnnotation(stateValueMap, obs, mg.GetAnnotations(), n.config.TfStatusConversionPaths); err != nil {
+		return managed.ExternalUpdate{}, errors.Wrap(err, "cannot move status values to annotation")
+	}
+
 	return managed.ExternalUpdate{}, nil
 }
 
