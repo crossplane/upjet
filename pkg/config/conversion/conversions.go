@@ -23,9 +23,9 @@ const (
 	// both the conversion source or target API versions.
 	AllVersions = "*"
 
-	// AnnotationPrefix is the prefix for internal upjet annotations used
-	// for storing optional field values during API version conversions.
-	AnnotationPrefix = "internal-upjet/"
+	// AnnotationKey is the annotation key used for storing field
+	// conversion values as a JSON map during API version conversions.
+	AnnotationKey = "internal.upjet.crossplane.io/field-conversions"
 )
 
 const (
@@ -34,20 +34,20 @@ const (
 	pathAtProvider   = "status.atProvider"
 )
 
-// OptionalFieldConversionMode denotes the mode of optional field conversion.
-type OptionalFieldConversionMode int
+// NewlyIntroducedFieldConversionMode denotes the mode of new field conversion.
+type NewlyIntroducedFieldConversionMode int
 
 const (
 	// ToAnnotation converts a field value to an annotation when the field
 	// does not exist in the target API version (newer → older version).
-	ToAnnotation OptionalFieldConversionMode = iota
+	ToAnnotation NewlyIntroducedFieldConversionMode = iota
 	// FromAnnotation converts an annotation value back to a field when
 	// the field exists in the target API version (older → newer version).
 	FromAnnotation
 )
 
-// String returns a string representation of the optional field conversion mode.
-func (m OptionalFieldConversionMode) String() string {
+// String returns a string representation of the new field conversion mode.
+func (m NewlyIntroducedFieldConversionMode) String() string {
 	switch m {
 	case ToAnnotation:
 		return "ToAnnotation"
@@ -101,7 +101,7 @@ var (
 	_ PrioritizedManagedConversion = &identityConversion{}
 	_ PavedConversion              = &fieldCopy{}
 	_ PavedConversion              = &singletonListConverter{}
-	_ PavedConversion              = &optionalFieldConverter{}
+	_ PavedConversion              = &newlyIntroducedFieldConverter{}
 	_ PavedConversion              = &fieldTypeConverter{}
 )
 
@@ -407,38 +407,29 @@ func DefaultPathPrefixes() []string {
 	return []string{pathForProvider, pathInitProvider, pathAtProvider}
 }
 
-// generateAnnotationKey generates the annotation key from a field path.
-// The caller must ensure fieldPath produces a valid Kubernetes annotation key
-// (max 63 characters, matching regex: [a-z0-9]([-a-z0-9]*[a-z0-9])?).
-func generateAnnotationKey(fieldPath string) string {
-	return AnnotationPrefix + fieldPath
-}
-
-type optionalFieldConverter struct {
+type newlyIntroducedFieldConverter struct {
 	baseConversion
 	fieldPath string
-	mode      OptionalFieldConversionMode
+	mode      NewlyIntroducedFieldConversionMode
 }
 
-func (o *optionalFieldConverter) ConvertPaved(src, target *fieldpath.Paved) (bool, error) {
+func (o *newlyIntroducedFieldConverter) ConvertPaved(src, target *fieldpath.Paved) (bool, error) {
 	if !o.Applicable(&unstructured.Unstructured{Object: src.UnstructuredContent()},
 		&unstructured.Unstructured{Object: target.UnstructuredContent()}) {
 		return false, nil
 	}
 
-	annotationKey := generateAnnotationKey(o.fieldPath)
-
 	switch o.mode {
 	case ToAnnotation:
-		return o.convertToAnnotation(src, target, annotationKey)
+		return o.convertToAnnotation(src, target)
 	case FromAnnotation:
-		return o.convertFromAnnotation(src, target, annotationKey)
+		return o.convertFromAnnotation(src, target)
 	default:
-		return false, errors.Errorf("unknown optional field conversion mode: %v", o.mode)
+		return false, errors.Errorf("unknown new field conversion mode: %v", o.mode)
 	}
 }
 
-func (o *optionalFieldConverter) convertToAnnotation(src, target *fieldpath.Paved, annotationKey string) (bool, error) {
+func (o *newlyIntroducedFieldConverter) convertToAnnotation(src, target *fieldpath.Paved) (bool, error) { //nolint:gocyclo // easier to follow as a unit
 	fieldValue, err := src.GetValue(o.fieldPath)
 	if fieldpath.IsNotFound(err) {
 		// Field doesn't exist in source, nothing to convert
@@ -448,47 +439,87 @@ func (o *optionalFieldConverter) convertToAnnotation(src, target *fieldpath.Pave
 		return false, errors.Wrapf(err, "failed to get field %q from source", o.fieldPath)
 	}
 
-	var annotationValue string
-	if fieldValue == nil {
-		annotationValue = ""
-	} else {
-		jsonBytes, err := json.Marshal(fieldValue)
-		if err != nil {
-			return false, errors.Wrapf(err, "failed to marshal field %q to JSON", o.fieldPath)
-		}
-		annotationValue = string(jsonBytes)
+	// Marshal field value to JSON bytes
+	jsonBytes, err := json.Marshal(fieldValue)
+	if err != nil {
+		return false, errors.Wrapf(err, "failed to marshal field %q to JSON", o.fieldPath)
 	}
 
-	if err := target.SetValue(fmt.Sprintf("metadata.annotations['%s']", annotationKey), annotationValue); err != nil {
-		return false, errors.Wrapf(err, "failed to set annotation %q", annotationKey)
+	// Optimized approach: Read ONLY our specific annotation key, not all annotations.
+	// This is more efficient and fieldpath.Paved.SetValue() will automatically preserve
+	// all other annotations when we write back.
+	annotationPath := fmt.Sprintf("metadata.annotations['%s']", AnnotationKey)
+	existingAnnotationValue, err := target.GetValue(annotationPath)
+
+	// Parse existing field conversion map or create new one
+	fieldMap := make(map[string]any)
+	if err == nil {
+		// Our annotation exists, parse it
+		if annotationStr, ok := existingAnnotationValue.(string); ok {
+			if err := json.Unmarshal([]byte(annotationStr), &fieldMap); err != nil {
+				return false, errors.Wrapf(err, "failed to unmarshal annotation %q", AnnotationKey)
+			}
+		}
+	} else if !fieldpath.IsNotFound(err) {
+		// Error other than NotFound
+		return false, errors.Wrapf(err, "failed to get annotation %q", AnnotationKey)
+	}
+	// If NotFound, fieldMap remains empty which is correct - we'll create a new annotation
+
+	// Unmarshal the field value to get actual typed value (prevents double-encoding)
+	var value any
+	if err := json.Unmarshal(jsonBytes, &value); err != nil {
+		return false, errors.Wrapf(err, "failed to unmarshal value from JSON")
+	}
+	fieldMap[o.fieldPath] = value
+
+	// Marshal the updated field map back to JSON
+	newAnnotationValue, err := json.Marshal(fieldMap)
+	if err != nil {
+		return false, errors.Wrapf(err, "failed to marshal annotation %q to JSON", AnnotationKey)
+	}
+
+	// SetValue on specific annotation key preserves all other annotations automatically!
+	if err := target.SetValue(annotationPath, string(newAnnotationValue)); err != nil {
+		return false, errors.Wrapf(err, "failed to set annotation %q", AnnotationKey)
 	}
 
 	return true, nil
 }
 
-func (o *optionalFieldConverter) convertFromAnnotation(src, target *fieldpath.Paved, annotationKey string) (bool, error) {
+func (o *newlyIntroducedFieldConverter) convertFromAnnotation(src, target *fieldpath.Paved) (bool, error) {
 	// Get annotation value from source
-	annotationPath := fmt.Sprintf("metadata.annotations['%s']", annotationKey)
+	annotationPath := fmt.Sprintf("metadata.annotations['%s']", AnnotationKey)
 	annotationValue, err := src.GetValue(annotationPath)
 	if fieldpath.IsNotFound(err) {
 		// Annotation doesn't exist, nothing to convert
 		return false, nil
 	}
 	if err != nil {
-		return false, errors.Wrapf(err, "failed to get annotation %q from source", annotationKey)
+		return false, errors.Wrapf(err, "failed to get annotation %q from source", AnnotationKey)
 	}
 
-	// Convert annotation value back to field value
-	var fieldValue interface{}
-	if annotationStr, ok := annotationValue.(string); ok && annotationStr != "" {
-		if err := json.Unmarshal([]byte(annotationStr), &fieldValue); err != nil {
-			return false, errors.Wrapf(err, "failed to unmarshal annotation %q from JSON", annotationKey)
-		}
+	// Parse the JSON map
+	annotationStr, ok := annotationValue.(string)
+	if !ok || annotationStr == "" {
+		return false, nil
 	}
 
-	// Set field value in target
-	if fieldValue != nil {
-		if err := target.SetValue(o.fieldPath, fieldValue); err != nil {
+	m := map[string]any{}
+	if err := json.Unmarshal([]byte(annotationStr), &m); err != nil {
+		return false, errors.Wrapf(err, "failed to unmarshal annotation %q from JSON", AnnotationKey)
+	}
+
+	// Extract the specific field value from the map
+	fieldValueRaw, exists := m[o.fieldPath]
+	if !exists {
+		// This specific field is not in the annotation map
+		return false, nil
+	}
+
+	// fieldValueRaw is already the actual value, use it directly
+	if fieldValueRaw != nil {
+		if err := target.SetValue(o.fieldPath, fieldValueRaw); err != nil {
 			return false, errors.Wrapf(err, "failed to set field %q in target", o.fieldPath)
 		}
 	}
@@ -496,14 +527,14 @@ func (o *optionalFieldConverter) convertFromAnnotation(src, target *fieldpath.Pa
 	return true, nil
 }
 
-// NewOptionalFieldConversion returns a new Conversion that handles optional fields
+// NewNewlyIntroducedFieldConversion returns a new Conversion that handles newly introduced fields
 // that exist in some API versions but not others. When converting from a version
 // that has the field to one that doesn't (ToAnnotation mode), the field value
 // is stored in an annotation. When converting from a version without the field
 // to one that has it (FromAnnotation mode), the field value is restored from
 // the annotation.
-func NewOptionalFieldConversion(sourceVersion, targetVersion, fieldPath string, mode OptionalFieldConversionMode) Conversion {
-	return &optionalFieldConverter{
+func NewNewlyIntroducedFieldConversion(sourceVersion, targetVersion, fieldPath string, mode NewlyIntroducedFieldConversionMode) Conversion {
+	return &newlyIntroducedFieldConverter{
 		baseConversion: newBaseConversion(sourceVersion, targetVersion),
 		fieldPath:      fieldPath,
 		mode:           mode,

@@ -473,6 +473,14 @@ type Resource struct {
 	// generated. Because this configuration parameter's value defaults to
 	// the value of Version, by default the controllers will reconcile the
 	// currently generated API versions of their associated CRs.
+	//
+	// Deprecated: ControllerReconcileVersion is deprecated and will be removed
+	// in a future release. Controllers should always reconcile using the latest
+	// available CRD version to avoid complexity in runtime conversion logic.
+	// When this field differs from Version, additional runtime overhead is
+	// incurred for field conversions between API versions via annotations.
+	// The recommended approach is to always keep ControllerReconcileVersion
+	// equal to Version.
 	ControllerReconcileVersion string
 
 	// Kind is the kind of the CRD.
@@ -548,7 +556,7 @@ type Resource struct {
 	// be lost during TF state to CRD status conversion.
 	//
 	// By listing these field paths here, the MoveTFStateValuesToAnnotation function
-	// will automatically store them in annotations (prefixed with "internal-upjet/")
+	// will automatically store them in annotation ("internal.upjet.crossplane.io/field-conversions")
 	// when the field doesn't exist in the status schema, preventing data loss.
 	//
 	// Format: "status.atProvider.fieldName" (in camelCase)
@@ -560,7 +568,11 @@ type Resource struct {
 	//   }
 	//
 	// When the field doesn't exist in the old API version's status.atProvider,
-	// it will be stored as annotation["internal-upjet/status.atProvider.newStatusField"].
+	// it will be stored as annotation["internal.upjet.crossplane.io/field-conversions"].
+	//
+	// Please note that these paths are CRD fieldpaths. Therefore, they actually
+	// describe a particular version's fieldset. This configuration doesn't
+	// distinguish versions.
 	TfStatusConversionPaths []string
 
 	// dynamicAttributeConversionPaths is a list of CRD field paths,

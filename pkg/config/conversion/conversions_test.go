@@ -584,7 +584,7 @@ func TestOptionalFieldConversion(t *testing.T) {
 		sourceVersion string
 		targetVersion string
 		fieldPath     string
-		mode          OptionalFieldConversionMode
+		mode          NewlyIntroducedFieldConversionMode
 		sourceObj     *fieldpath.Paved
 		targetObj     *fieldpath.Paved
 	}
@@ -626,7 +626,7 @@ func TestOptionalFieldConversion(t *testing.T) {
 					"kind":       "TestResource",
 					"metadata": map[string]any{
 						"annotations": map[string]any{
-							"internal-upjet/spec.forProvider.newField": `"test-value"`,
+							"internal.upjet.crossplane.io/field-conversions": `{"spec.forProvider.newField":"test-value"}`,
 						},
 					},
 				}),
@@ -663,7 +663,7 @@ func TestOptionalFieldConversion(t *testing.T) {
 					"kind":       "TestResource",
 					"metadata": map[string]any{
 						"annotations": map[string]any{
-							"internal-upjet/spec.forProvider.complexField": `{"another":42,"nested":"value"}`,
+							"internal.upjet.crossplane.io/field-conversions": `{"spec.forProvider.complexField":{"another":42,"nested":"value"}}`,
 						},
 					},
 				}),
@@ -681,7 +681,7 @@ func TestOptionalFieldConversion(t *testing.T) {
 					"kind":       "TestResource",
 					"metadata": map[string]any{
 						"annotations": map[string]any{
-							"internal-upjet/spec.forProvider.newField": `"restored-value"`,
+							"internal.upjet.crossplane.io/field-conversions": `{"spec.forProvider.newField":"restored-value"}`,
 						},
 					},
 				}),
@@ -718,7 +718,7 @@ func TestOptionalFieldConversion(t *testing.T) {
 					"kind":       "TestResource",
 					"metadata": map[string]any{
 						"annotations": map[string]any{
-							"internal-upjet/spec.forProvider.complexField": `{"nested":"value","another":42}`,
+							"internal.upjet.crossplane.io/field-conversions": `{"spec.forProvider.complexField":{"nested":"value","another":42}}`,
 						},
 					},
 				}),
@@ -861,7 +861,7 @@ func TestOptionalFieldConversion(t *testing.T) {
 					"kind":       "TestResource",
 					"metadata": map[string]any{
 						"annotations": map[string]any{
-							"internal-upjet/spec.forProvider.nullField": "",
+							"internal.upjet.crossplane.io/field-conversions": `{"spec.forProvider.nullField":null}`,
 						},
 					},
 				}),
@@ -898,7 +898,7 @@ func TestOptionalFieldConversion(t *testing.T) {
 					"kind":       "TestResource",
 					"metadata": map[string]any{
 						"annotations": map[string]any{
-							"internal-upjet/spec.forProvider.a.b": `"nested-value"`,
+							"internal.upjet.crossplane.io/field-conversions": `{"spec.forProvider.a.b":"nested-value"}`,
 						},
 					},
 				}),
@@ -916,7 +916,7 @@ func TestOptionalFieldConversion(t *testing.T) {
 					"kind":       "TestResource",
 					"metadata": map[string]any{
 						"annotations": map[string]any{
-							"internal-upjet/spec.forProvider.a.b": `"nested-restored-value"`,
+							"internal.upjet.crossplane.io/field-conversions": `{"spec.forProvider.a.b":"nested-restored-value"}`,
 						},
 					},
 				}),
@@ -949,8 +949,8 @@ func TestOptionalFieldConversion(t *testing.T) {
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			c := NewOptionalFieldConversion(tc.args.sourceVersion, tc.args.targetVersion, tc.args.fieldPath, tc.args.mode)
-			converted, err := c.(*optionalFieldConverter).ConvertPaved(tc.args.sourceObj, tc.args.targetObj)
+			c := NewNewlyIntroducedFieldConversion(tc.args.sourceVersion, tc.args.targetVersion, tc.args.fieldPath, tc.args.mode)
+			converted, err := c.(*newlyIntroducedFieldConverter).ConvertPaved(tc.args.sourceObj, tc.args.targetObj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nConvertPaved(sourceObj, targetObj): -wantErr, +gotErr:\n%s", tc.reason, diff)
 			}
@@ -967,41 +967,9 @@ func TestOptionalFieldConversion(t *testing.T) {
 	}
 }
 
-func TestGenerateAnnotationKey(t *testing.T) {
-	tests := map[string]struct {
-		reason    string
-		fieldPath string
-		want      string
-	}{
-		"SimpleFieldPath": {
-			reason:    "Extract field name from simple path.",
-			fieldPath: "newField",
-			want:      "internal-upjet/newField",
-		},
-		"NestedFieldPath": {
-			reason:    "Extract field name from nested path.",
-			fieldPath: "spec.forProvider.newField",
-			want:      "internal-upjet/spec.forProvider.newField",
-		},
-		"DeeplyNestedFieldPath": {
-			reason:    "Extract field name from deeply nested path.",
-			fieldPath: "spec.forProvider.configuration.advanced.newField",
-			want:      "internal-upjet/spec.forProvider.configuration.advanced.newField",
-		},
-	}
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
-			got := generateAnnotationKey(tc.fieldPath)
-			if diff := cmp.Diff(tc.want, got); diff != "" {
-				t.Errorf("\n%s\ngenerateAnnotationKey(%s): -want, +got:\n%s", tc.reason, tc.fieldPath, diff)
-			}
-		})
-	}
-}
-
 func TestOptionalFieldConversionModeString(t *testing.T) {
 	tests := map[string]struct {
-		mode OptionalFieldConversionMode
+		mode NewlyIntroducedFieldConversionMode
 		want string
 	}{
 		"ToAnnotation": {
@@ -1013,7 +981,7 @@ func TestOptionalFieldConversionModeString(t *testing.T) {
 			want: "FromAnnotation",
 		},
 		"UnknownMode": {
-			mode: OptionalFieldConversionMode(999),
+			mode: NewlyIntroducedFieldConversionMode(999),
 			want: "Unknown",
 		},
 	}
@@ -1021,7 +989,7 @@ func TestOptionalFieldConversionModeString(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			got := tc.mode.String()
 			if diff := cmp.Diff(tc.want, got); diff != "" {
-				t.Errorf("OptionalFieldConversionMode.String(): -want, +got:\n%s", diff)
+				t.Errorf("NewlyIntroducedFieldConversionMode.String(): -want, +got:\n%s", diff)
 			}
 		})
 	}

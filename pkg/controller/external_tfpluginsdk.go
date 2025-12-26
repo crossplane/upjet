@@ -6,7 +6,6 @@ package controller
 
 import (
 	"context"
-	encodingjson "encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -27,12 +26,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/crossplane/upjet/v2/pkg/config"
-	"github.com/crossplane/upjet/v2/pkg/config/conversion"
 	"github.com/crossplane/upjet/v2/pkg/metrics"
 	"github.com/crossplane/upjet/v2/pkg/resource"
 	"github.com/crossplane/upjet/v2/pkg/resource/json"
 	"github.com/crossplane/upjet/v2/pkg/terraform"
-	"github.com/crossplane/upjet/v2/pkg/types/name"
 )
 
 type TerraformPluginSDKConnector struct {
@@ -126,10 +123,19 @@ type terraformPluginSDKExternal struct {
 	isManagementPoliciesEnabled bool
 }
 
-func getExtendedParameters(ctx context.Context, tr resource.Terraformed, externalName string, cfg *config.Resource, ts terraform.Setup, initParamsMerged bool, kube client.Client) (map[string]any, error) {
-	params, err := tr.GetMergedParameters(initParamsMerged)
-	if err != nil {
-		return nil, errors.Wrap(err, "cannot get merged parameters")
+func getExtendedParameters(ctx context.Context, tr resource.Terraformed, externalName string, cfg *config.Resource, ts terraform.Setup, initParamsMerged bool, kube client.Client) (map[string]any, error) { //nolint:gocyclo // easier to follow as a unit
+	var err error
+	var params map[string]any                          // Assigned by both branches; functions return non-nil on success
+	if cfg.ControllerReconcileVersion == cfg.Version { //nolint:staticcheck // still handling deprecated field behavior
+		params, err = tr.GetMergedParameters(initParamsMerged)
+		if err != nil {
+			return nil, errors.Wrap(err, "cannot get merged parameters")
+		}
+	} else {
+		params, err = MergeAnnotationFieldsWithSpec(tr, initParamsMerged, tr.GetAnnotations())
+		if err != nil {
+			return nil, errors.Wrap(err, "cannot merge annotation fields")
+		}
 	}
 	params, err = cfg.ApplyTFConversions(params, config.ToTerraform)
 	if err != nil {
@@ -231,140 +237,6 @@ func (c *TerraformPluginSDKConnector) applyHCLParserToParam(sc *schema.Schema, p
 	return param
 }
 
-// MergeAnnotationFieldsWithSpec merges field values stored in annotations back into
-// the spec.forProvider and spec.initProvider parameter maps. This function is critical
-// for handling API version compatibility when controllers run older API versions.
-//
-// Context: When a new field is added to a CRD API version, and a resource is created
-// with this field in a newer version, controllers running older API versions will not
-// have this field in their Go types. During API conversion, these field values are
-// stored in annotations (prefixed with "internal-upjet/") to prevent data loss.
-// This function restores those values before passing parameters to Terraform.
-//
-// The function:
-// 1. Scans all annotations with the "internal-upjet/" prefix
-// 2. For annotations with "spec.forProvider." prefix, merges values into parameters map
-// 3. For annotations with "spec.initProvider." prefix, merges values into initParameters map
-// 4. Only sets annotation values if the field doesn't already exist in the target map
-// 5. Handles both camelCase (annotation key) and snake_case (Terraform parameter key) conversions
-//
-// Example:
-// If annotation "internal-upjet/spec.forProvider.newField" contains a value,
-// and "new_field" doesn't exist in parameters, it will be set from the annotation.
-//
-// Parameters:
-//   - parameters: The spec.forProvider parameters as a map
-//   - initParameters: The spec.initProvider parameters as a map
-//   - annotations: The resource's annotations map
-//
-// Returns an error if field operations fail.
-func MergeAnnotationFieldsWithSpec(parameters, initParameters map[string]any, annotations map[string]string) error { //nolint:gocyclo
-	parametersPaved := fieldpath.Pave(parameters)
-	initParametersPaved := fieldpath.Pave(initParameters)
-	for k, v := range annotations {
-		if strings.HasPrefix(k, conversion.AnnotationPrefix) {
-			t := strings.TrimPrefix(k, conversion.AnnotationPrefix)
-			switch {
-			case strings.HasPrefix(t, "spec.forProvider."):
-				key := strings.TrimPrefix(t, "spec.forProvider.")
-				snakeKey := name.NewFromCamel(key).Snake
-				_, err := parametersPaved.GetValue(snakeKey)
-				if err != nil {
-					if fieldpath.IsNotFound(err) {
-						if err := parametersPaved.SetValue(snakeKey, v); err != nil {
-							return errors.Wrapf(err, "cannot set value for %s", snakeKey)
-						}
-					} else {
-						return errors.Wrapf(err, "cannot get the current value for %s", snakeKey)
-					}
-				}
-			case strings.HasPrefix(t, "spec.initProvider."):
-				key := strings.TrimPrefix(t, "spec.initProvider.")
-				snakeKey := name.NewFromCamel(key).Snake
-				_, err := initParametersPaved.GetValue(snakeKey)
-				if err != nil {
-					if fieldpath.IsNotFound(err) {
-						if err := initParametersPaved.SetValue(snakeKey, v); err != nil {
-							return errors.Wrapf(err, "cannot set value for %s", snakeKey)
-						}
-					} else {
-						return errors.Wrapf(err, "cannot get the current value for %s", snakeKey)
-					}
-				}
-			}
-		}
-	}
-	return nil
-}
-
-// MoveTFStateValuesToAnnotation moves field values from Terraform state to annotations
-// when those fields don't exist in the CRD's status.atProvider schema. This function
-// prevents status data loss during API version transitions.
-//
-// Context: When Terraform returns state containing a field that was added in a newer
-// API version, controllers running older API versions won't have this field in their
-// status.atProvider Go types. Without this function, these values would be silently
-// dropped during the conversion from TF state to CRD status.
-//
-// The function:
-// 1. For each configured path, checks if the field exists in TF state (tfObservation)
-// 2. Checks if the same field exists in the CRD's status.atProvider (atProvider)
-// 3. If field exists in TF state but NOT in status.atProvider (old API version):
-// Serializes the field value to JSON
-// Stores it in an annotation with key "internal-upjet/status.atProvider.fieldName"
-// 4. If field exists in both, no action is taken (normal case)
-//
-// This allows the field value to be preserved in annotations until the controller
-// is upgraded to a version that includes the field in the API schema.
-//
-// Example:
-// If TF state has "new_status_field" but the old API version doesn't have this field
-// in status.atProvider, the value is stored as:
-// annotation["internal-upjet/status.atProvider.newStatusField"] = <JSON serialized value>
-//
-// Parameters:
-//   - tfObservation: The complete Terraform state as returned by TF operations
-//   - atProvider: The status.atProvider map that will be set on the CRD
-//   - annotations: The resource's annotations map (will be modified in-place)
-//   - paths: List of status field paths to check (format: "status.atProvider.fieldName")
-//
-// Returns an error if field operations or JSON marshaling fails.
-func MoveTFStateValuesToAnnotation(tfObservation map[string]any, atProvider map[string]any, annotations map[string]string, paths []string) error {
-	tfObservationPaved := fieldpath.Pave(tfObservation)
-	atProviderPaved := fieldpath.Pave(atProvider)
-	for _, path := range paths {
-		p := strings.TrimPrefix(path, "status.atProvider.")
-		snakeP := name.NewFromCamel(p).Snake
-		fieldValue, err := tfObservationPaved.GetValue(snakeP)
-		if err != nil {
-			return errors.Wrapf(err, "cannot get value for %s", snakeP)
-		}
-		_, err = atProviderPaved.GetValue(snakeP)
-		if err != nil {
-			if fieldpath.IsNotFound(err) {
-				// Convert field value to JSON string for annotation storage
-				var annotationValue string
-				if fieldValue == nil {
-					annotationValue = ""
-				} else {
-					jsonBytes, err := encodingjson.Marshal(fieldValue)
-					if err != nil {
-						return errors.Wrapf(err, "failed to marshal field %q to JSON", path)
-					}
-					annotationValue = string(jsonBytes)
-				}
-				if annotations == nil {
-					annotations = make(map[string]string)
-				}
-				annotations[conversion.AnnotationPrefix+path] = annotationValue
-			} else {
-				return errors.Wrapf(err, "cannot get the current value for %s", snakeP)
-			}
-		}
-	}
-	return nil
-}
-
 func (c *TerraformPluginSDKConnector) Connect(ctx context.Context, mg xpresource.Managed) (managed.ExternalClient, error) { //nolint:gocyclo
 	c.metricRecorder.ObserveReconcileDelay(mg.GetObjectKind().GroupVersionKind(), metrics.NameForManaged(mg))
 	logger := c.logger.WithValues("uid", mg.GetUID(), "name", mg.GetName(), "namespace", mg.GetNamespace(), "gvk", mg.GetObjectKind().GroupVersionKind().String())
@@ -396,6 +268,9 @@ func (c *TerraformPluginSDKConnector) Connect(ctx context.Context, mg xpresource
 		tfState, err := tr.GetObservation()
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to get the observation")
+		}
+		if err := MergeAnnotationFieldsWithStatus(tfState, mg.GetAnnotations(), c.config); err != nil {
+			return nil, errors.Wrapf(err, "failed to merge annotations on resource %q", client.ObjectKeyFromObject(mg))
 		}
 		tfState, err = c.config.ApplyTFConversions(tfState, config.ToTerraform)
 		if err != nil {
@@ -706,9 +581,15 @@ func (n *terraformPluginSDKExternal) Observe(ctx context.Context, mg xpresource.
 		if err != nil {
 			return managed.ExternalObservation{}, errors.Wrap(err, "could not get observation")
 		}
-		if err := MoveTFStateValuesToAnnotation(stateValueMap, obs, mg.GetAnnotations(), n.config.TfStatusConversionPaths); err != nil {
+		annotations := mg.GetAnnotations()
+		annotationUpdate, err := MoveTFStateValuesToAnnotation(stateValueMap, obs, annotations, n.config)
+		if err != nil {
 			return managed.ExternalObservation{}, errors.Wrap(err, "cannot move status values to annotation")
 		}
+		if annotationUpdate {
+			mg.SetAnnotations(annotations)
+		}
+		specUpdateRequired = specUpdateRequired || annotationUpdate
 
 		if !hasDiff {
 			n.metricRecorder.SetReconcileTime(metrics.NameForManaged(mg))
@@ -819,8 +700,11 @@ func (n *terraformPluginSDKExternal) Create(ctx context.Context, mg xpresource.M
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, "could not get observation")
 	}
-	if err := MoveTFStateValuesToAnnotation(stateValueMap, obs, mg.GetAnnotations(), n.config.TfStatusConversionPaths); err != nil {
+	annotations := mg.GetAnnotations()
+	if annotationUpdate, err := MoveTFStateValuesToAnnotation(stateValueMap, obs, annotations, n.config); err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, "cannot move status values to annotation")
+	} else if annotationUpdate {
+		mg.SetAnnotations(annotations)
 	}
 
 	return managed.ExternalCreation{ConnectionDetails: conn}, nil
@@ -888,8 +772,11 @@ func (n *terraformPluginSDKExternal) Update(ctx context.Context, mg xpresource.M
 	if err != nil {
 		return managed.ExternalUpdate{}, errors.Wrap(err, "could not get observation")
 	}
-	if err := MoveTFStateValuesToAnnotation(stateValueMap, obs, mg.GetAnnotations(), n.config.TfStatusConversionPaths); err != nil {
+	annotations := mg.GetAnnotations()
+	if annotationUpdate, err := MoveTFStateValuesToAnnotation(stateValueMap, obs, annotations, n.config); err != nil {
 		return managed.ExternalUpdate{}, errors.Wrap(err, "cannot move status values to annotation")
+	} else if annotationUpdate {
+		mg.SetAnnotations(annotations)
 	}
 	return managed.ExternalUpdate{}, nil
 }
