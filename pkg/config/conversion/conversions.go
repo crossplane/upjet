@@ -5,8 +5,10 @@
 package conversion
 
 import (
+	"encoding/json"
 	"fmt"
 	"slices"
+	"strconv"
 
 	"github.com/crossplane/crossplane-runtime/v2/pkg/fieldpath"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
@@ -20,6 +22,10 @@ const (
 	// of an API with which the Conversion is registered. It can be used for
 	// both the conversion source or target API versions.
 	AllVersions = "*"
+
+	// AnnotationKey is the annotation key used for storing field
+	// conversion values as a JSON map during API version conversions.
+	AnnotationKey = "internal.upjet.crossplane.io/field-conversions"
 )
 
 const (
@@ -28,10 +34,75 @@ const (
 	pathAtProvider   = "status.atProvider"
 )
 
+// NewlyIntroducedFieldConversionMode denotes the mode of new field conversion.
+type NewlyIntroducedFieldConversionMode int
+
+const (
+	// ToAnnotation converts a field value to an annotation when the field
+	// does not exist in the target API version (newer → older version).
+	ToAnnotation NewlyIntroducedFieldConversionMode = iota
+	// FromAnnotation converts an annotation value back to a field when
+	// the field exists in the target API version (older → newer version).
+	FromAnnotation
+)
+
+// String returns a string representation of the new field conversion mode.
+func (m NewlyIntroducedFieldConversionMode) String() string {
+	switch m {
+	case ToAnnotation:
+		return "ToAnnotation"
+	case FromAnnotation:
+		return "FromAnnotation"
+	default:
+		return "Unknown"
+	}
+}
+
+// TypeConversionMode denotes the mode of type conversion between different
+// primitive types in API versions.
+type TypeConversionMode int
+
+const (
+	// IntToString converts integer values to string representation
+	IntToString TypeConversionMode = iota
+	// StringToInt converts string values to integer representation
+	StringToInt
+	// BoolToString converts boolean values to string representation ("true"/"false")
+	BoolToString
+	// StringToBool converts string values to boolean representation
+	StringToBool
+	// FloatToString converts float values to string representation
+	FloatToString
+	// StringToFloat converts string values to float representation
+	StringToFloat
+)
+
+// String returns a string representation of the type conversion mode.
+func (m TypeConversionMode) String() string {
+	switch m {
+	case IntToString:
+		return "IntToString"
+	case StringToInt:
+		return "StringToInt"
+	case BoolToString:
+		return "BoolToString"
+	case StringToBool:
+		return "StringToBool"
+	case FloatToString:
+		return "FloatToString"
+	case StringToFloat:
+		return "StringToFloat"
+	default:
+		return "Unknown"
+	}
+}
+
 var (
 	_ PrioritizedManagedConversion = &identityConversion{}
 	_ PavedConversion              = &fieldCopy{}
 	_ PavedConversion              = &singletonListConverter{}
+	_ PavedConversion              = &newlyIntroducedFieldConverter{}
+	_ PavedConversion              = &fieldTypeConverter{}
 )
 
 // Conversion is the interface for the CRD API version converters.
@@ -334,4 +405,296 @@ func ExpandParameters(prefixes []string, excludePaths ...string) []string {
 // ["spec.forProvider", "spec.initProvider", "status.atProvider"].
 func DefaultPathPrefixes() []string {
 	return []string{pathForProvider, pathInitProvider, pathAtProvider}
+}
+
+type newlyIntroducedFieldConverter struct {
+	baseConversion
+	fieldPath string
+	mode      NewlyIntroducedFieldConversionMode
+}
+
+func (o *newlyIntroducedFieldConverter) ConvertPaved(src, target *fieldpath.Paved) (bool, error) {
+	if !o.Applicable(&unstructured.Unstructured{Object: src.UnstructuredContent()},
+		&unstructured.Unstructured{Object: target.UnstructuredContent()}) {
+		return false, nil
+	}
+
+	switch o.mode {
+	case ToAnnotation:
+		return o.convertToAnnotation(src, target)
+	case FromAnnotation:
+		return o.convertFromAnnotation(src, target)
+	default:
+		return false, errors.Errorf("unknown new field conversion mode: %v", o.mode)
+	}
+}
+
+func (o *newlyIntroducedFieldConverter) convertToAnnotation(src, target *fieldpath.Paved) (bool, error) { //nolint:gocyclo // easier to follow as a unit
+	fieldValue, err := src.GetValue(o.fieldPath)
+	if fieldpath.IsNotFound(err) {
+		// Field doesn't exist in source, nothing to convert
+		return false, nil
+	}
+	if err != nil {
+		return false, errors.Wrapf(err, "failed to get field %q from source", o.fieldPath)
+	}
+
+	// Marshal field value to JSON bytes
+	jsonBytes, err := json.Marshal(fieldValue)
+	if err != nil {
+		return false, errors.Wrapf(err, "failed to marshal field %q to JSON", o.fieldPath)
+	}
+
+	// Optimized approach: Read ONLY our specific annotation key, not all annotations.
+	// This is more efficient and fieldpath.Paved.SetValue() will automatically preserve
+	// all other annotations when we write back.
+	annotationPath := fmt.Sprintf("metadata.annotations['%s']", AnnotationKey)
+	existingAnnotationValue, err := target.GetValue(annotationPath)
+
+	// Parse existing field conversion map or create new one
+	fieldMap := make(map[string]any)
+	if err == nil {
+		// Our annotation exists, parse it
+		if annotationStr, ok := existingAnnotationValue.(string); ok {
+			if err := json.Unmarshal([]byte(annotationStr), &fieldMap); err != nil {
+				return false, errors.Wrapf(err, "failed to unmarshal annotation %q", AnnotationKey)
+			}
+		}
+	} else if !fieldpath.IsNotFound(err) {
+		// Error other than NotFound
+		return false, errors.Wrapf(err, "failed to get annotation %q", AnnotationKey)
+	}
+	// If NotFound, fieldMap remains empty which is correct - we'll create a new annotation
+
+	// Unmarshal the field value to get actual typed value (prevents double-encoding)
+	var value any
+	if err := json.Unmarshal(jsonBytes, &value); err != nil {
+		return false, errors.Wrapf(err, "failed to unmarshal value from JSON")
+	}
+	fieldMap[o.fieldPath] = value
+
+	// Marshal the updated field map back to JSON
+	newAnnotationValue, err := json.Marshal(fieldMap)
+	if err != nil {
+		return false, errors.Wrapf(err, "failed to marshal annotation %q to JSON", AnnotationKey)
+	}
+
+	// SetValue on specific annotation key preserves all other annotations automatically!
+	if err := target.SetValue(annotationPath, string(newAnnotationValue)); err != nil {
+		return false, errors.Wrapf(err, "failed to set annotation %q", AnnotationKey)
+	}
+
+	return true, nil
+}
+
+func (o *newlyIntroducedFieldConverter) convertFromAnnotation(src, target *fieldpath.Paved) (bool, error) {
+	// Get annotation value from source
+	annotationPath := fmt.Sprintf("metadata.annotations['%s']", AnnotationKey)
+	annotationValue, err := src.GetValue(annotationPath)
+	if fieldpath.IsNotFound(err) {
+		// Annotation doesn't exist, nothing to convert
+		return false, nil
+	}
+	if err != nil {
+		return false, errors.Wrapf(err, "failed to get annotation %q from source", AnnotationKey)
+	}
+
+	// Parse the JSON map
+	annotationStr, ok := annotationValue.(string)
+	if !ok || annotationStr == "" {
+		return false, nil
+	}
+
+	m := map[string]any{}
+	if err := json.Unmarshal([]byte(annotationStr), &m); err != nil {
+		return false, errors.Wrapf(err, "failed to unmarshal annotation %q from JSON", AnnotationKey)
+	}
+
+	// Extract the specific field value from the map
+	fieldValueRaw, exists := m[o.fieldPath]
+	if !exists {
+		// This specific field is not in the annotation map
+		return false, nil
+	}
+
+	// fieldValueRaw is already the actual value, use it directly
+	if fieldValueRaw != nil {
+		if err := target.SetValue(o.fieldPath, fieldValueRaw); err != nil {
+			return false, errors.Wrapf(err, "failed to set field %q in target", o.fieldPath)
+		}
+	}
+
+	return true, nil
+}
+
+// NewNewlyIntroducedFieldConversion returns a new Conversion that handles newly introduced fields
+// that exist in some API versions but not others. When converting from a version
+// that has the field to one that doesn't (ToAnnotation mode), the field value
+// is stored in an annotation. When converting from a version without the field
+// to one that has it (FromAnnotation mode), the field value is restored from
+// the annotation.
+func NewNewlyIntroducedFieldConversion(sourceVersion, targetVersion, fieldPath string, mode NewlyIntroducedFieldConversionMode) Conversion {
+	return &newlyIntroducedFieldConverter{
+		baseConversion: newBaseConversion(sourceVersion, targetVersion),
+		fieldPath:      fieldPath,
+		mode:           mode,
+	}
+}
+
+type fieldTypeConverter struct {
+	baseConversion
+	fieldPath string
+	mode      TypeConversionMode
+}
+
+func (f *fieldTypeConverter) ConvertPaved(src, target *fieldpath.Paved) (bool, error) {
+	if !f.Applicable(&unstructured.Unstructured{Object: src.UnstructuredContent()},
+		&unstructured.Unstructured{Object: target.UnstructuredContent()}) {
+		return false, nil
+	}
+
+	// Get the field value from source
+	fieldValue, err := src.GetValue(f.fieldPath)
+	if fieldpath.IsNotFound(err) {
+		// Field doesn't exist in source, nothing to convert
+		return false, nil
+	}
+	if err != nil {
+		return false, errors.Wrapf(err, "failed to get field %q from source", f.fieldPath)
+	}
+
+	// Convert the value based on the mode
+	convertedValue, err := f.convertValue(fieldValue)
+	if err != nil {
+		return false, errors.Wrapf(err, "failed to convert field %q with mode %s", f.fieldPath, f.mode)
+	}
+
+	// Set the converted value in target
+	if err := target.SetValue(f.fieldPath, convertedValue); err != nil {
+		return false, errors.Wrapf(err, "failed to set converted field %q in target", f.fieldPath)
+	}
+
+	return true, nil
+}
+
+func (f *fieldTypeConverter) convertValue(value interface{}) (interface{}, error) {
+	if value == nil {
+		return nil, nil
+	}
+
+	switch f.mode {
+	case IntToString:
+		return f.intToString(value)
+	case StringToInt:
+		return f.stringToInt(value)
+	case BoolToString:
+		return f.boolToString(value)
+	case StringToBool:
+		return f.stringToBool(value)
+	case FloatToString:
+		return f.floatToString(value)
+	case StringToFloat:
+		return f.stringToFloat(value)
+	default:
+		return nil, errors.Errorf("unknown type conversion mode: %v", f.mode)
+	}
+}
+
+// intToString converts integer values to string representation.
+// For float64 inputs (from JSON unmarshaling), only values within the
+// safe integer range [-2^53+1, 2^53-1] are supported to prevent precision loss.
+func (f *fieldTypeConverter) intToString(value interface{}) (interface{}, error) {
+	// In upjet, integer types are represented as int64. However, JSON unmarshaling
+	// often produces float64 for numeric values, so we handle both cases.
+	switch v := value.(type) {
+	case int64:
+		return strconv.FormatInt(v, 10), nil // base 10
+	case float64: // JSON unmarshaling often produces float64 for numbers
+		if v == float64(int64(v)) {
+			return strconv.FormatInt(int64(v), 10), nil
+		}
+		return "", errors.Errorf("value %v is not an integer", v)
+	default:
+		return "", errors.Errorf("expected int64 or float64 type, got %T", v)
+	}
+}
+
+func (f *fieldTypeConverter) stringToInt(value interface{}) (interface{}, error) {
+	str, ok := value.(string)
+	if !ok {
+		return nil, errors.Errorf("expected string type, got %T", value)
+	}
+
+	result, err := strconv.ParseInt(str, 10, 64)
+	if err != nil {
+		return nil, errors.Wrapf(err, "cannot convert string %q to int64", str)
+	}
+
+	return result, nil
+}
+
+func (f *fieldTypeConverter) boolToString(value interface{}) (interface{}, error) {
+	b, ok := value.(bool)
+	if !ok {
+		return "", errors.Errorf("expected bool type, got %T", value)
+	}
+	return strconv.FormatBool(b), nil
+}
+
+func (f *fieldTypeConverter) stringToBool(value interface{}) (interface{}, error) {
+	str, ok := value.(string)
+	if !ok {
+		return nil, errors.Errorf("expected string type, got %T", value)
+	}
+
+	result, err := strconv.ParseBool(str)
+	if err != nil {
+		return nil, errors.Wrapf(err, "cannot convert string %q to boolean", str)
+	}
+
+	return result, nil
+}
+
+func (f *fieldTypeConverter) floatToString(value interface{}) (interface{}, error) {
+	// In upjet, floating-point numbers are represented as float64
+	v, ok := value.(float64)
+	if !ok {
+		return "", errors.Errorf("expected float64 type, got %T", value)
+	}
+	return strconv.FormatFloat(v, 'g', -1, 64), nil
+}
+
+func (f *fieldTypeConverter) stringToFloat(value interface{}) (interface{}, error) {
+	str, ok := value.(string)
+	if !ok {
+		return nil, errors.Errorf("expected string type, got %T", value)
+	}
+
+	result, err := strconv.ParseFloat(str, 64)
+	if err != nil {
+		return nil, errors.Wrapf(err, "cannot convert string %q to float64", str)
+	}
+
+	return result, nil
+}
+
+// NewFieldTypeConversion returns a new Conversion that handles type changes
+// of fields between API versions. It converts primitive types according to the
+// given conversion mode.
+// Type assumptions for upjet:
+// - Integers are represented as int64 (though JSON unmarshaling may produce float64)
+// - Floating-point numbers are represented as float64
+// - Booleans are represented as bool
+// - Strings are represented as string
+//
+// Supported conversions:
+// IntToString/StringToInt: int64 ↔ string
+// FloatToString/StringToFloat: float64 ↔ string
+// BoolToString/StringToBool: bool ↔ string
+func NewFieldTypeConversion(sourceVersion, targetVersion, fieldPath string, mode TypeConversionMode) Conversion {
+	return &fieldTypeConverter{
+		baseConversion: newBaseConversion(sourceVersion, targetVersion),
+		fieldPath:      fieldPath,
+		mode:           mode,
+	}
 }
