@@ -59,64 +59,61 @@ func MergeAnnotationFieldsWithSpec(tr resource.Terraformed, shouldMergeInitProvi
 		return nil, errors.Wrap(err, "cannot get init parameters")
 	}
 
-	// Get the consolidated annotation containing all field conversions
-	annotationValue, ok := annotations[conversion.AnnotationKey]
-	if !ok || annotationValue == "" {
-		// No conversion annotations present
-		return parameters, nil
-	}
-
-	// Unmarshal the JSON map
-	fieldMap := map[string]any{}
-	if err := encodingjson.Unmarshal([]byte(annotationValue), &fieldMap); err != nil {
-		return nil, errors.Wrapf(err, "failed to unmarshal annotation %q from JSON", conversion.AnnotationKey)
-	}
-
 	parametersPaved := fieldpath.Pave(parameters)
 	initParametersPaved := fieldpath.Pave(initParameters)
 
-	// Iterate through each field in the JSON map
-	for fieldPath, annotationFieldValue := range fieldMap {
-		switch {
-		case strings.HasPrefix(fieldPath, "spec.forProvider."):
-			key := strings.TrimPrefix(fieldPath, "spec.forProvider.")
-			snakeKey := name.NewFromCamel(key).Snake
-			currentValue, err := parametersPaved.GetValue(snakeKey)
-			if err != nil {
-				if fieldpath.IsNotFound(err) {
-					// Field doesn't exist, set it from annotation
-					if err := parametersPaved.SetValue(snakeKey, annotationFieldValue); err != nil {
-						return nil, errors.Wrapf(err, "cannot set value for %s", snakeKey)
+	// Get the consolidated annotation containing all field conversions
+	annotationValue, ok := annotations[conversion.AnnotationKey]
+	if ok && annotationValue != "" {
+		// Unmarshal the JSON map
+		fieldMap := map[string]any{}
+		if err := encodingjson.Unmarshal([]byte(annotationValue), &fieldMap); err != nil {
+			return nil, errors.Wrapf(err, "failed to unmarshal annotation %q from JSON", conversion.AnnotationKey)
+		}
+
+		// Iterate through each field in the JSON map
+		for fieldPath, annotationFieldValue := range fieldMap {
+			switch {
+			case strings.HasPrefix(fieldPath, "spec.forProvider."):
+				key := strings.TrimPrefix(fieldPath, "spec.forProvider.")
+				snakeKey := name.NewFromCamel(key).Snake
+				currentValue, err := parametersPaved.GetValue(snakeKey)
+				if err != nil {
+					if fieldpath.IsNotFound(err) {
+						// Field doesn't exist, set it from annotation
+						if err := parametersPaved.SetValue(snakeKey, annotationFieldValue); err != nil {
+							return nil, errors.Wrapf(err, "cannot set value for %s", snakeKey)
+						}
+					} else {
+						return nil, errors.Wrapf(err, "cannot get the current value for %s", snakeKey)
 					}
 				} else {
-					return nil, errors.Wrapf(err, "cannot get the current value for %s", snakeKey)
-				}
-			} else {
-				// Field exists, compare values - only set if different
-				if !areValuesEqual(currentValue, annotationFieldValue) {
-					if err := parametersPaved.SetValue(snakeKey, annotationFieldValue); err != nil {
-						return nil, errors.Wrapf(err, "cannot set value for %s", snakeKey)
+					// Field exists, compare values - only set if different
+					if !areValuesEqual(currentValue, annotationFieldValue) {
+						if err := parametersPaved.SetValue(snakeKey, annotationFieldValue); err != nil {
+							return nil, errors.Wrapf(err, "cannot set value for %s", snakeKey)
+						}
 					}
 				}
-			}
-		case strings.HasPrefix(fieldPath, "spec.initProvider.") && shouldMergeInitProvider:
-			key := strings.TrimPrefix(fieldPath, "spec.initProvider.")
-			snakeKey := name.NewFromCamel(key).Snake
-			currentValue, err := initParametersPaved.GetValue(snakeKey)
-			if err != nil {
-				if fieldpath.IsNotFound(err) {
-					// Field doesn't exist, set it from annotation
-					if err := initParametersPaved.SetValue(snakeKey, annotationFieldValue); err != nil {
-						return nil, errors.Wrapf(err, "cannot set value for %s", snakeKey)
+			case strings.HasPrefix(fieldPath, "spec.initProvider.") && shouldMergeInitProvider:
+				key := strings.TrimPrefix(fieldPath, "spec.initProvider.")
+				snakeKey := name.NewFromCamel(key).Snake
+				currentValue, err := initParametersPaved.GetValue(snakeKey)
+				if err != nil {
+					if fieldpath.IsNotFound(err) {
+						// Field doesn't exist, set it from annotation
+						if err := initParametersPaved.SetValue(snakeKey, annotationFieldValue); err != nil {
+							return nil, errors.Wrapf(err, "cannot set value for %s", snakeKey)
+						}
+					} else {
+						return nil, errors.Wrapf(err, "cannot get the current value for %s", snakeKey)
 					}
 				} else {
-					return nil, errors.Wrapf(err, "cannot get the current value for %s", snakeKey)
-				}
-			} else {
-				// Field exists, compare values - only set if different
-				if !areValuesEqual(currentValue, annotationFieldValue) {
-					if err := initParametersPaved.SetValue(snakeKey, annotationFieldValue); err != nil {
-						return nil, errors.Wrapf(err, "cannot set value for %s", snakeKey)
+					// Field exists, compare values - only set if different
+					if !areValuesEqual(currentValue, annotationFieldValue) {
+						if err := initParametersPaved.SetValue(snakeKey, annotationFieldValue); err != nil {
+							return nil, errors.Wrapf(err, "cannot set value for %s", snakeKey)
+						}
 					}
 				}
 			}
