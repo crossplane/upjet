@@ -167,6 +167,28 @@ The trade-off is increased conversion activity while storage version remains
 unchanged; however, this cost is acceptable given the maturity of the conversion
 framework.
 
+Not updating the `ControllerReconcileVersion` to the latest API version will
+increase the runtime complexity. The controllers will need to handle the API
+differences between the runtime Terraform API and the latest Crossplane CRD API.
+Please see the example runtime overheads in this https://github.com/crossplane/upjet/pull/563.
+
+Please note that the `ControllerReconcileVersion` field will be deprecated in
+the upjet with the following deprecation notice:
+
+```go
+// Deprecated: ControllerReconcileVersion is deprecated and will be removed
+// in a future release. Controllers should always reconcile using the latest
+// available CRD version to avoid complexity in runtime conversion logic.
+// When this field differs from Version, additional runtime overhead is
+// incurred for field conversions between API versions via annotations.
+// The recommended approach is to always keep ControllerReconcileVersion
+// equal to Version.
+```
+
+Then in the providers, the controller (reconcile) API version will be set to the
+latest MR API version, and it guarantees that the runtime will be equivalent
+with the latest API.
+
 ### Deprecation Policy
 
 When a new storage version becomes active:
