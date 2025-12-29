@@ -19,7 +19,7 @@ import (
 	"github.com/crossplane/upjet/v2/pkg/types/name"
 )
 
-// MergeAnnotationFieldsWithSpec merges field values stored in annotations back into
+// mergeAnnotationFieldsWithSpec merges field values stored in annotations back into
 // the spec.forProvider and spec.initProvider parameter maps. This function is critical
 // for handling API version compatibility when controllers run older API versions.
 //
@@ -49,7 +49,7 @@ import (
 //   - annotations: The resource's annotations map
 //
 // Returns the merged parameters map or an error if field operations fail.
-func MergeAnnotationFieldsWithSpec(tr resource.Terraformed, shouldMergeInitProvider bool, annotations map[string]string) (map[string]any, error) { //nolint:gocyclo
+func mergeAnnotationFieldsWithSpec(tr resource.Terraformed, shouldMergeInitProvider bool, annotations map[string]string) (map[string]any, error) { //nolint:gocyclo
 	parameters, err := tr.GetParameters()
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot get parameters")
@@ -138,7 +138,7 @@ func MergeAnnotationFieldsWithSpec(tr resource.Terraformed, shouldMergeInitProvi
 	return fp, nil
 }
 
-// MoveTFStateValuesToAnnotation moves field values from Terraform state to annotations
+// moveTFStateValuesToAnnotation moves field values from Terraform state to annotations
 // when those fields don't exist in the CRD's status.atProvider schema. This function
 // prevents status data loss during API version transitions.
 //
@@ -176,9 +176,8 @@ func MergeAnnotationFieldsWithSpec(tr resource.Terraformed, shouldMergeInitProvi
 //
 // Returns a boolean indicating if annotations were updated, and an error if field
 // operations or JSON marshaling fails.
-func MoveTFStateValuesToAnnotation(tfObservation map[string]any, atProvider map[string]any, annotations map[string]string, c *config.Resource) (bool, error) { //nolint:gocyclo // easier to follow as a unit
-	//nolint:staticcheck // still handling deprecated field behavior
-	if c.ControllerReconcileVersion == c.Version {
+func moveTFStateValuesToAnnotation(tfObservation map[string]any, atProvider map[string]any, annotations map[string]string, c *config.Resource) (bool, error) { //nolint:gocyclo // easier to follow as a unit
+	if c.ControllerReconcileVersion == c.Version { //nolint:staticcheck // still handling deprecated field behavior
 		return false, nil
 	}
 
@@ -240,7 +239,7 @@ func MoveTFStateValuesToAnnotation(tfObservation map[string]any, atProvider map[
 	return updated, nil
 }
 
-// MergeAnnotationFieldsWithStatus merges field values stored in the consolidated
+// mergeAnnotationFieldsWithStatus merges field values stored in the consolidated
 // annotation back into the status.atProvider map. This function is used during
 // Connect() to restore TF state from both the CRD status and annotation values.
 //
@@ -265,9 +264,8 @@ func MoveTFStateValuesToAnnotation(tfObservation map[string]any, atProvider map[
 // - c: The resource configuration, used to check ControllerReconcileVersion
 //
 // Returns an error if field operations or JSON unmarshaling fails.
-func MergeAnnotationFieldsWithStatus(atProvider map[string]any, annotations map[string]string, c *config.Resource) error { //nolint:gocyclo // easier to follow as a unit
-	//nolint:staticcheck // still handling deprecated field behavior
-	if c.ControllerReconcileVersion == c.Version {
+func mergeAnnotationFieldsWithStatus(atProvider map[string]any, annotations map[string]string, c *config.Resource) error { //nolint:gocyclo // easier to follow as a unit
+	if c.ControllerReconcileVersion == c.Version { //nolint:staticcheck // still handling deprecated field behavior
 		return nil
 	}
 

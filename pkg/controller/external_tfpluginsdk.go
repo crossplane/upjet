@@ -132,7 +132,7 @@ func getExtendedParameters(ctx context.Context, tr resource.Terraformed, externa
 			return nil, errors.Wrap(err, "cannot get merged parameters")
 		}
 	} else {
-		params, err = MergeAnnotationFieldsWithSpec(tr, initParamsMerged, tr.GetAnnotations())
+		params, err = mergeAnnotationFieldsWithSpec(tr, initParamsMerged, tr.GetAnnotations())
 		if err != nil {
 			return nil, errors.Wrap(err, "cannot merge annotation fields")
 		}
@@ -269,7 +269,7 @@ func (c *TerraformPluginSDKConnector) Connect(ctx context.Context, mg xpresource
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to get the observation")
 		}
-		if err := MergeAnnotationFieldsWithStatus(tfState, mg.GetAnnotations(), c.config); err != nil {
+		if err := mergeAnnotationFieldsWithStatus(tfState, mg.GetAnnotations(), c.config); err != nil {
 			return nil, errors.Wrapf(err, "failed to merge annotations on resource %q", client.ObjectKeyFromObject(mg))
 		}
 		tfState, err = c.config.ApplyTFConversions(tfState, config.ToTerraform)
@@ -582,7 +582,7 @@ func (n *terraformPluginSDKExternal) Observe(ctx context.Context, mg xpresource.
 			return managed.ExternalObservation{}, errors.Wrap(err, "could not get observation")
 		}
 		annotations := mg.GetAnnotations()
-		annotationUpdate, err := MoveTFStateValuesToAnnotation(stateValueMap, obs, annotations, n.config)
+		annotationUpdate, err := moveTFStateValuesToAnnotation(stateValueMap, obs, annotations, n.config)
 		if err != nil {
 			return managed.ExternalObservation{}, errors.Wrap(err, "cannot move status values to annotation")
 		}
@@ -701,7 +701,7 @@ func (n *terraformPluginSDKExternal) Create(ctx context.Context, mg xpresource.M
 		return managed.ExternalCreation{}, errors.Wrap(err, "could not get observation")
 	}
 	annotations := mg.GetAnnotations()
-	if annotationUpdate, err := MoveTFStateValuesToAnnotation(stateValueMap, obs, annotations, n.config); err != nil {
+	if annotationUpdate, err := moveTFStateValuesToAnnotation(stateValueMap, obs, annotations, n.config); err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, "cannot move status values to annotation")
 	} else if annotationUpdate {
 		mg.SetAnnotations(annotations)
@@ -773,7 +773,7 @@ func (n *terraformPluginSDKExternal) Update(ctx context.Context, mg xpresource.M
 		return managed.ExternalUpdate{}, errors.Wrap(err, "could not get observation")
 	}
 	annotations := mg.GetAnnotations()
-	if annotationUpdate, err := MoveTFStateValuesToAnnotation(stateValueMap, obs, annotations, n.config); err != nil {
+	if annotationUpdate, err := moveTFStateValuesToAnnotation(stateValueMap, obs, annotations, n.config); err != nil {
 		return managed.ExternalUpdate{}, errors.Wrap(err, "cannot move status values to annotation")
 	} else if annotationUpdate {
 		mg.SetAnnotations(annotations)
