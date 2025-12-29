@@ -199,6 +199,7 @@ func (r *PipelineRunner) Run(pc *config.Provider) []string { //nolint:gocyclo
 					featuresPkgPath = filepath.Join(pc.ModulePath, pc.FeaturesPackage)
 				}
 				watchVersionGen := versionGen
+				//nolint:staticcheck // still handling deprecated field behavior
 				if len(resources[name].ControllerReconcileVersion) != 0 {
 					watchVersionGen = NewVersionGenerator(r.DirAPIs, r.DirHack, r.ModulePathAPIs, group, resources[name].ControllerReconcileVersion)
 				}

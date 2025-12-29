@@ -473,6 +473,14 @@ type Resource struct {
 	// generated. Because this configuration parameter's value defaults to
 	// the value of Version, by default the controllers will reconcile the
 	// currently generated API versions of their associated CRs.
+	//
+	// Deprecated: ControllerReconcileVersion is deprecated and will be removed
+	// in a future release. Controllers should always reconcile using the latest
+	// available CRD version to avoid complexity in runtime conversion logic.
+	// When this field differs from Version, additional runtime overhead is
+	// incurred for field conversions between API versions via annotations.
+	// The recommended approach is to always keep ControllerReconcileVersion
+	// equal to Version.
 	ControllerReconcileVersion string
 
 	// Kind is the kind of the CRD.
@@ -537,6 +545,35 @@ type Resource struct {
 	// at runtime before passing them to the Terraform stack and lists into
 	// embedded objects after reading the state from the Terraform stack.
 	listConversionPaths map[string]string
+
+	// TfStatusConversionPaths is a list of status field paths that should be moved
+	// to annotations when they don't exist in the CRD's status.atProvider schema.
+	// This is used for API version compatibility when controllers run older API versions.
+	//
+	// Context: When a new status field is added in a newer API version, and Terraform
+	// returns this field in its state, controllers running older API versions won't
+	// have this field in their status.atProvider Go types. These field values would
+	// be lost during TF state to CRD status conversion.
+	//
+	// By listing these field paths here, the MoveTFStateValuesToAnnotation function
+	// will automatically store them in annotation ("internal.upjet.crossplane.io/field-conversions")
+	// when the field doesn't exist in the status schema, preventing data loss.
+	//
+	// Format: "status.atProvider.fieldName" (in camelCase)
+	//
+	// Example:
+	//   TfStatusConversionPaths: []string{
+	//       "status.atProvider.newStatusField",
+	//       "status.atProvider.anotherNewField",
+	//   }
+	//
+	// When the field doesn't exist in the old API version's status.atProvider,
+	// it will be stored as annotation["internal.upjet.crossplane.io/field-conversions"].
+	//
+	// Please note that these paths are CRD fieldpaths. Therefore, they actually
+	// describe a particular version's fieldset. This configuration doesn't
+	// distinguish versions.
+	TfStatusConversionPaths []string
 
 	// dynamicAttributeConversionPaths is a list of CRD field paths,
 	// of attributes that are TF dynamic pseudo-types. Such attributes include
