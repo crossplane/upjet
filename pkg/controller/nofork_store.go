@@ -115,6 +115,29 @@ func (a *AsyncTracker) SetTfState(state *tfsdk.InstanceState) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.tfState = state
+	a.stateMark = defaultState
+}
+
+// SetReconstructedTfState stores the given SDKv2 Terraform InstanceState into
+// the AsyncTracker and marks the state as reconstructed.
+// MUST be only used for SDKv2 resources.
+func (a *AsyncTracker) SetReconstructedTfState(state *tfsdk.InstanceState) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.tfState = state
+	a.stateMark = reconstructedState
+}
+
+// ResetReconstructedTfState clears the TF Plugin SDKv2 InstanceState
+// if it is a reconstructed state. No-op otherwise.
+// MUST be only used for SDKv2 resources.
+func (a *AsyncTracker) ResetReconstructedTfState() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.stateMark == reconstructedState {
+		a.tfState = nil
+		a.stateMark = defaultState
+	}
 }
 
 // GetTfID returns the Terraform ID of the external resource currently
