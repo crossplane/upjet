@@ -99,6 +99,11 @@ func RegisterAutoConversions(pc *Provider, crdSchemaChanges []byte) error {
 								// Path doesn't match expected prefixes, skip conversion
 								continue
 							}
+							// Check if TerraformResource is available
+							if r.TerraformResource == nil {
+								// No Terraform schema available - skip this conversion
+								continue
+							}
 							// Consult Terraform schema to determine if this is int or float
 							sch := GetSchema(r.TerraformResource, schPath)
 							if sch == nil {

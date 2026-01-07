@@ -27,6 +27,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.23.2
 	github.com/spf13/afero v1.15.0
+	github.com/stretchr/testify v1.11.1
 	github.com/tmccombs/hcl2json v0.3.3
 	github.com/upbound/uptest v0.12.1-0.20260122114836-7ce94bc0de92
 	github.com/yuin/goldmark v1.7.16

@@ -1,0 +1,80 @@
+{
+  "test.example.io/ResourceOne": {
+    "versions": {
+      "v1beta1": {
+        "oldVersion": "v1alpha1",
+        "newVersion": "v1beta1",
+        "changes": [
+          {
+            "path": "spec.forProvider.name",
+            "pathParts": ["spec", "forProvider", "name"],
+            "changeType": "field_added"
+          }
+        ]
+      }
+    }
+  },
+  "test.example.io/ResourceTwo": {
+    "versions": {
+      "v1beta1": {
+        "oldVersion": "v1alpha1",
+        "newVersion": "v1beta1",
+        "changes": [
+          {
+            "path": "spec.forProvider.count",
+            "pathParts": ["spec", "forProvider", "count"],
+            "changeType": "type_changed",
+            "oldValue": "string",
+            "newValue": "number"
+          }
+        ]
+      }
+    }
+  },
+  "test.example.io/ResourceThree": {
+    "versions": {
+      "v1beta1": {
+        "oldVersion": "v1alpha1",
+        "newVersion": "v1beta1",
+        "changes": [
+          {
+            "path": "spec.forProvider.oldField",
+            "pathParts": ["spec", "forProvider", "oldField"],
+            "changeType": "field_deleted"
+          }
+        ]
+      }
+    }
+  },
+  "other.example.io/ResourceFour": {
+    "versions": {
+      "v1beta1": {
+        "oldVersion": "v1alpha1",
+        "newVersion": "v1beta1",
+        "changes": [
+          {
+            "path": "spec.forProvider.name",
+            "pathParts": ["spec", "forProvider", "name"],
+            "changeType": "field_added"
+          },
+          {
+            "path": "spec.forProvider.enabled",
+            "pathParts": ["spec", "forProvider", "enabled"],
+            "changeType": "type_changed",
+            "oldValue": "string",
+            "newValue": "boolean"
+          }
+        ]
+      }
+    }
+  },
+  "test.example.io/ResourceFive": {
+    "versions": {
+      "v1beta1": {
+        "oldVersion": "v1alpha1",
+        "newVersion": "v1beta1",
+        "changes": []
+      }
+    }
+  }
+}
