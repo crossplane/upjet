@@ -1,0 +1,33 @@
+{
+  "test.example.io/TestResource": {
+    "versions": {
+      "v1beta1": {
+        "oldVersion": "v1alpha1",
+        "newVersion": "v1beta1",
+        "changes": [
+          {
+            "path": "spec.forProvider.field1",
+            "pathParts": ["spec", "forProvider", "field1"],
+            "changeType": "type_changed",
+            "oldValue": "string",
+            "newValue": "number"
+          },
+          {
+            "path": "spec.forProvider.field2",
+            "pathParts": ["spec", "forProvider", "field2"],
+            "changeType": "type_changed",
+            "oldValue": "string",
+            "newValue": "boolean"
+          },
+          {
+            "path": "spec.initProvider.field3",
+            "pathParts": ["spec", "initProvider", "field3"],
+            "changeType": "type_changed",
+            "oldValue": "number",
+            "newValue": "string"
+          }
+        ]
+      }
+    }
+  }
+}
