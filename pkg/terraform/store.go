@@ -50,6 +50,12 @@ type ProviderRequirement struct {
 
 	// Registry of the provider. An example value is `provider["registry.terraform.io/%s"]`
 	Registry string
+
+	// LocalName is the local name used for the provider in the Terraform
+	// configuration. If not set, it defaults to the last segment of Source.
+	// This is useful for providers where the resource prefix doesn't match
+	// the provider source name (e.g., port-labs/port-labs uses port_ prefix).
+	LocalName string
 }
 
 // ProviderConfiguration holds the setup configuration body
