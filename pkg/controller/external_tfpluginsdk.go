@@ -307,7 +307,7 @@ func (c *TerraformPluginSDKConnector) Connect(ctx context.Context, mg xpresource
 			}
 			s.Meta[schema.TimeoutKey] = timeouts
 		}
-		opTracker.SetTfState(s)
+		opTracker.SetReconstructedTfState(s)
 	}
 
 	return &terraformPluginSDKExternal{
@@ -496,6 +496,7 @@ func (n *terraformPluginSDKExternal) Observe(ctx context.Context, mg xpresource.
 	newState, diag := n.resourceSchema.RefreshWithoutUpgrade(ctx, n.opTracker.GetTfState(), n.ts.Meta)
 	metrics.ExternalAPITime.WithLabelValues("read").Observe(time.Since(start).Seconds())
 	if diag != nil && diag.HasError() {
+		n.opTracker.ResetReconstructedTfState()
 		return managed.ExternalObservation{}, errors.Errorf("failed to observe the resource: %v", diag)
 	}
 	diffState := n.opTracker.GetTfState()
