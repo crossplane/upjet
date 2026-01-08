@@ -40,17 +40,17 @@ func NewTestResource(name string, tfSchema map[string]*schema.Schema) *Resource 
 		tfResource.Schema = tfSchema
 	}
 	return &Resource{
-		Name:       name,
-		ShortGroup: "test",
-		Kind:       name,
+		Name:                              name,
+		ShortGroup:                        "test",
+		Kind:                              name,
 		TerraformResource:                 tfResource,
 		AutoConversionRegistrationOptions: AutoConversionRegistrationOptions{},
 	}
 }
 
 // newTestResource is the package-internal version for unit tests.
-func newTestResource(name string, tfSchema map[string]*schema.Schema) *Resource {
-	return NewTestResource(name, tfSchema)
+func newTestResource(name string) *Resource {
+	return NewTestResource(name, nil)
 }
 
 // NewTestResourceWithIntField creates a test resource with a single integer field.
@@ -125,8 +125,7 @@ func newTestResourceWithBoolField(name, fieldName string) *Resource {
 // The path is relative to pkg/config/testdata/.
 // This function is exported for use in integration tests.
 //
-// Example:
-//   data := LoadTestFixture(t, "valid/field-addition.json")
+// Example: data := LoadTestFixture(t, "valid/field-addition.json")
 func LoadTestFixture(t *testing.T, relativePath string) []byte {
 	t.Helper()
 
@@ -146,7 +145,7 @@ func LoadTestFixture(t *testing.T, relativePath string) []byte {
 	var data []byte
 	var err error
 	for _, path := range paths {
-		data, err = os.ReadFile(path)
+		data, err = os.ReadFile(path) //nolint:gosec
 		if err == nil {
 			return data
 		}
@@ -159,34 +158,4 @@ func LoadTestFixture(t *testing.T, relativePath string) []byte {
 // loadTestFixture is the package-internal version for unit tests.
 func loadTestFixture(t *testing.T, relativePath string) []byte {
 	return LoadTestFixture(t, relativePath)
-}
-
-// assertConversionCount asserts that a resource has the expected number of conversions registered.
-func assertConversionCount(t *testing.T, r *Resource, expected int) {
-	t.Helper()
-	require.Len(t, r.Conversions, expected, "resource %s should have %d conversions, got %d",
-		r.Name, expected, len(r.Conversions))
-}
-
-// assertHasIdentityExcludePath asserts that a path is in the IdentityConversionExcludePaths.
-func assertHasIdentityExcludePath(t *testing.T, r *Resource, path string) {
-	t.Helper()
-	found := false
-	for _, p := range r.AutoConversionRegistrationOptions.IdentityConversionExcludePaths {
-		if p == path {
-			found = true
-			break
-		}
-	}
-	require.True(t, found, "resource %s should have %q in IdentityConversionExcludePaths", r.Name, path)
-}
-
-// assertNotHasIdentityExcludePath asserts that a path is NOT in the IdentityConversionExcludePaths.
-func assertNotHasIdentityExcludePath(t *testing.T, r *Resource, path string) {
-	t.Helper()
-	for _, p := range r.AutoConversionRegistrationOptions.IdentityConversionExcludePaths {
-		if p == path {
-			require.Fail(t, "resource %s should not have %q in IdentityConversionExcludePaths", r.Name, path)
-		}
-	}
 }

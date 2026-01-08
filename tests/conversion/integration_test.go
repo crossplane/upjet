@@ -20,6 +20,12 @@ import (
 	"github.com/crossplane/upjet/v2/pkg/resource/fake"
 )
 
+const (
+	testName               = "test"
+	stringToNumberResource = "string_to_number_resource"
+	multiChangeResource    = "multi_change_resource"
+)
+
 // Level 2 Integration Tests
 // These tests verify that registered conversions EXECUTE correctly and transform data properly.
 // Unlike Level 1 tests which only verify registration, these tests call RoundTrip and verify
@@ -34,31 +40,31 @@ func TestConversionIntegration(t *testing.T) {
 
 	// Resource 1: TestResource for field addition/deletion tests
 	r1 := config.NewTestResource("TestResource", nil)
-	r1.ShortGroup = "test"
+	r1.ShortGroup = testName
 	r1.Kind = "TestResource"
 	pc.Resources["test_resource"] = r1
 
 	// Resource 2: StringToNumberResource (count: string -> number)
 	r2 := config.NewTestResourceWithIntField("StringToNumberResource", "count")
-	r2.ShortGroup = "test"
+	r2.ShortGroup = testName
 	r2.Kind = "StringToNumberResource"
-	pc.Resources["string_to_number_resource"] = r2
+	pc.Resources[stringToNumberResource] = r2
 
 	// Resource 3: NumberToStringResource (value: number -> string)
 	r3 := config.NewTestResourceWithStringField("NumberToStringResource", "value")
-	r3.ShortGroup = "test"
+	r3.ShortGroup = testName
 	r3.Kind = "NumberToStringResource"
 	pc.Resources["number_to_string_resource"] = r3
 
 	// Resource 4: StringToBoolResource (enabled: string -> bool)
 	r4 := config.NewTestResourceWithBoolField("StringToBoolResource", "enabled")
-	r4.ShortGroup = "test"
+	r4.ShortGroup = testName
 	r4.Kind = "StringToBoolResource"
 	pc.Resources["string_to_bool_resource"] = r4
 
 	// Resource 5: BoolToStringResource (flag: bool -> string)
 	r5 := config.NewTestResourceWithStringField("BoolToStringResource", "flag")
-	r5.ShortGroup = "test"
+	r5.ShortGroup = testName
 	r5.Kind = "BoolToStringResource"
 	pc.Resources["bool_to_string_resource"] = r5
 
@@ -74,9 +80,9 @@ func TestConversionIntegration(t *testing.T) {
 			Optional: true,
 		},
 	})
-	r6.ShortGroup = "test"
+	r6.ShortGroup = testName
 	r6.Kind = "MultiChangeResource"
-	pc.Resources["multi_change_resource"] = r6
+	pc.Resources[multiChangeResource] = r6
 
 	// Load and merge all fixtures
 	fixture1 := config.LoadTestFixture(t, "valid/field-addition.json")
@@ -114,10 +120,13 @@ func TestConversionIntegration(t *testing.T) {
 		merged[k] = v
 	}
 
-	mergedJSON, _ := json.Marshal(merged)
+	mergedJSON, err := json.Marshal(merged)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Register conversions ONCE for all resources
-	err := config.RegisterAutoConversions(pc, mergedJSON)
+	err = config.RegisterAutoConversions(pc, mergedJSON)
 	if err != nil {
 		t.Fatalf("Failed to register conversions: %v", err)
 	}
@@ -143,7 +152,7 @@ func TestConversionIntegration(t *testing.T) {
 					Kind:       "TestResource",
 				},
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "test",
+					Name: testName,
 					Annotations: map[string]string{
 						"internal.upjet.crossplane.io/field-conversions": `{"spec.forProvider.newField":"restored-value"}`,
 					},
@@ -196,7 +205,7 @@ func TestConversionIntegration(t *testing.T) {
 					Kind:       "TestResource",
 				},
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "test",
+					Name: testName,
 				},
 				Spec: TestResourceSpec{
 					ForProvider: TestResourceParameters{
@@ -257,7 +266,7 @@ func TestConversionIntegration(t *testing.T) {
 					Kind:       "TestResource",
 				},
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "test",
+					Name: testName,
 				},
 				Spec: TestResourceSpec{
 					ForProvider: TestResourceParameters{
@@ -338,7 +347,7 @@ func TestConversionIntegration(t *testing.T) {
 						Kind:       "StringToNumberResource",
 					},
 					ObjectMeta: metav1.ObjectMeta{
-						Name: "test",
+						Name: testName,
 					},
 					Spec: TestResourceSpec{
 						ForProvider: TestResourceParameters{
@@ -346,7 +355,7 @@ func TestConversionIntegration(t *testing.T) {
 						},
 					},
 				}
-				src.TerraformResourceType = "string_to_number_resource"
+				src.TerraformResourceType = stringToNumberResource
 
 				// v1beta1 should have count as number
 				dst := &TestResource{
@@ -358,7 +367,7 @@ func TestConversionIntegration(t *testing.T) {
 						ForProvider: TestResourceParameters{},
 					},
 				}
-				dst.TerraformResourceType = "string_to_number_resource"
+				dst.TerraformResourceType = stringToNumberResource
 
 				err := ujconversion.RoundTrip(dst, src)
 				if err != nil {
@@ -400,7 +409,7 @@ func TestConversionIntegration(t *testing.T) {
 						Kind:       "StringToNumberResource",
 					},
 					ObjectMeta: metav1.ObjectMeta{
-						Name: "test",
+						Name: testName,
 					},
 					Spec: TestResourceSpec{
 						ForProvider: TestResourceParameters{
@@ -408,7 +417,7 @@ func TestConversionIntegration(t *testing.T) {
 						},
 					},
 				}
-				src.TerraformResourceType = "string_to_number_resource"
+				src.TerraformResourceType = stringToNumberResource
 
 				// v1alpha1 should have count as string
 				dst := &TestResource{
@@ -420,7 +429,7 @@ func TestConversionIntegration(t *testing.T) {
 						ForProvider: TestResourceParameters{},
 					},
 				}
-				dst.TerraformResourceType = "string_to_number_resource"
+				dst.TerraformResourceType = stringToNumberResource
 
 				err := ujconversion.RoundTrip(dst, src)
 				if err != nil {
@@ -453,7 +462,7 @@ func TestConversionIntegration(t *testing.T) {
 						Kind:       "StringToNumberResource",
 					},
 					ObjectMeta: metav1.ObjectMeta{
-						Name: "test",
+						Name: testName,
 					},
 					Spec: TestResourceSpec{
 						ForProvider: TestResourceParameters{
@@ -461,7 +470,7 @@ func TestConversionIntegration(t *testing.T) {
 						},
 					},
 				}
-				original.TerraformResourceType = "string_to_number_resource"
+				original.TerraformResourceType = stringToNumberResource
 
 				// Convert to v1alpha1 (string)
 				v1alpha1 := &TestResource{
@@ -473,7 +482,7 @@ func TestConversionIntegration(t *testing.T) {
 						ForProvider: TestResourceParameters{},
 					},
 				}
-				v1alpha1.TerraformResourceType = "string_to_number_resource"
+				v1alpha1.TerraformResourceType = stringToNumberResource
 
 				err := ujconversion.RoundTrip(v1alpha1, original)
 				if err != nil {
@@ -490,7 +499,7 @@ func TestConversionIntegration(t *testing.T) {
 						ForProvider: TestResourceParameters{},
 					},
 				}
-				v1beta1.TerraformResourceType = "string_to_number_resource"
+				v1beta1.TerraformResourceType = stringToNumberResource
 
 				err = ujconversion.RoundTrip(v1beta1, v1alpha1)
 				if err != nil {
@@ -533,7 +542,7 @@ func TestConversionIntegration(t *testing.T) {
 						Kind:       "NumberToStringResource",
 					},
 					ObjectMeta: metav1.ObjectMeta{
-						Name: "test",
+						Name: testName,
 					},
 					Spec: TestResourceSpec{
 						ForProvider: TestResourceParameters{
@@ -587,7 +596,7 @@ func TestConversionIntegration(t *testing.T) {
 						Kind:       "StringToBoolResource",
 					},
 					ObjectMeta: metav1.ObjectMeta{
-						Name: "test",
+						Name: testName,
 					},
 					Spec: TestResourceSpec{
 						ForProvider: TestResourceParameters{
@@ -637,7 +646,7 @@ func TestConversionIntegration(t *testing.T) {
 						Kind:       "StringToBoolResource",
 					},
 					ObjectMeta: metav1.ObjectMeta{
-						Name: "test",
+						Name: testName,
 					},
 					Spec: TestResourceSpec{
 						ForProvider: TestResourceParameters{
@@ -689,7 +698,7 @@ func TestConversionIntegration(t *testing.T) {
 						Kind:       "BoolToStringResource",
 					},
 					ObjectMeta: metav1.ObjectMeta{
-						Name: "test",
+						Name: testName,
 					},
 					Spec: TestResourceSpec{
 						ForProvider: TestResourceParameters{
@@ -739,7 +748,7 @@ func TestConversionIntegration(t *testing.T) {
 						Kind:       "BoolToStringResource",
 					},
 					ObjectMeta: metav1.ObjectMeta{
-						Name: "test",
+						Name: testName,
 					},
 					Spec: TestResourceSpec{
 						ForProvider: TestResourceParameters{
@@ -797,7 +806,7 @@ func TestConversionIntegration(t *testing.T) {
 					Kind:       "MultiChangeResource",
 				},
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "test",
+					Name: testName,
 					Annotations: map[string]string{
 						// newField stored in annotation
 						"internal.upjet.crossplane.io/field-conversions": `{"spec.forProvider.newField":"annotation-value"}`,
@@ -810,7 +819,7 @@ func TestConversionIntegration(t *testing.T) {
 					},
 				},
 			}
-			src.TerraformResourceType = "multi_change_resource"
+			src.TerraformResourceType = multiChangeResource
 
 			// v1beta1: count=int, enabled=bool, newField=string
 			dst := &TestResource{
@@ -822,7 +831,7 @@ func TestConversionIntegration(t *testing.T) {
 					ForProvider: TestResourceParameters{},
 				},
 			}
-			dst.TerraformResourceType = "multi_change_resource"
+			dst.TerraformResourceType = multiChangeResource
 
 			err := ujconversion.RoundTrip(dst, src)
 			if err != nil {
@@ -888,7 +897,7 @@ func TestConversionIntegration(t *testing.T) {
 					Kind:       "MultiChangeResource",
 				},
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "test",
+					Name: testName,
 				},
 				Spec: TestResourceSpec{
 					ForProvider: TestResourceParameters{
@@ -898,7 +907,7 @@ func TestConversionIntegration(t *testing.T) {
 					},
 				},
 			}
-			src.TerraformResourceType = "multi_change_resource"
+			src.TerraformResourceType = multiChangeResource
 
 			// v1alpha1: count=string, enabled=string, newField doesn't exist
 			dst := &TestResource{
@@ -910,7 +919,7 @@ func TestConversionIntegration(t *testing.T) {
 					ForProvider: TestResourceParameters{},
 				},
 			}
-			dst.TerraformResourceType = "multi_change_resource"
+			dst.TerraformResourceType = multiChangeResource
 
 			err := ujconversion.RoundTrip(dst, src)
 			if err != nil {
@@ -976,7 +985,7 @@ func TestConversionIntegration(t *testing.T) {
 					Kind:       "MultiChangeResource",
 				},
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "test",
+					Name: testName,
 				},
 				Spec: TestResourceSpec{
 					ForProvider: TestResourceParameters{
@@ -986,7 +995,7 @@ func TestConversionIntegration(t *testing.T) {
 					},
 				},
 			}
-			original.TerraformResourceType = "multi_change_resource"
+			original.TerraformResourceType = multiChangeResource
 
 			// Convert to v1alpha1
 			v1alpha1 := &TestResource{
@@ -998,7 +1007,7 @@ func TestConversionIntegration(t *testing.T) {
 					ForProvider: TestResourceParameters{},
 				},
 			}
-			v1alpha1.TerraformResourceType = "multi_change_resource"
+			v1alpha1.TerraformResourceType = multiChangeResource
 
 			err := ujconversion.RoundTrip(v1alpha1, original)
 			if err != nil {
@@ -1015,7 +1024,7 @@ func TestConversionIntegration(t *testing.T) {
 					ForProvider: TestResourceParameters{},
 				},
 			}
-			v1beta1.TerraformResourceType = "multi_change_resource"
+			v1beta1.TerraformResourceType = multiChangeResource
 
 			err = ujconversion.RoundTrip(v1beta1, v1alpha1)
 			if err != nil {
