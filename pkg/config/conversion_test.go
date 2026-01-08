@@ -13,13 +13,11 @@ import (
 
 func TestRegisterAutoConversions(t *testing.T) {
 	type args struct {
-		pc                *Provider
-		crdSchemaChanges  []byte
-		setupResource     func() *Resource
+		crdSchemaChanges []byte
+		setupResource    func() *Resource
 	}
 	type want struct {
 		conversionCount int
-		excludePathsLen int
 		err             bool
 	}
 
@@ -33,7 +31,7 @@ func TestRegisterAutoConversions(t *testing.T) {
 			args: args{
 				crdSchemaChanges: loadTestFixture(t, "valid/field-addition.json"),
 				setupResource: func() *Resource {
-					return newTestResource("TestResource", nil)
+					return newTestResource("TestResource")
 				},
 			},
 			want: want{
@@ -46,7 +44,7 @@ func TestRegisterAutoConversions(t *testing.T) {
 			args: args{
 				crdSchemaChanges: loadTestFixture(t, "valid/field-deletion.json"),
 				setupResource: func() *Resource {
-					return newTestResource("TestResource", nil)
+					return newTestResource("TestResource")
 				},
 			},
 			want: want{
@@ -85,7 +83,7 @@ func TestRegisterAutoConversions(t *testing.T) {
 			args: args{
 				crdSchemaChanges: loadTestFixture(t, "valid/type-change-string-to-bool.json"),
 				setupResource: func() *Resource {
-					return newTestResource("TestResource", nil)
+					return newTestResource("TestResource")
 				},
 			},
 			want: want{
@@ -111,7 +109,7 @@ func TestRegisterAutoConversions(t *testing.T) {
 			args: args{
 				crdSchemaChanges: loadTestFixture(t, "valid/field-addition.json"),
 				setupResource: func() *Resource {
-					r := newTestResource("TestResource", nil)
+					r := newTestResource("TestResource")
 					r.AutoConversionRegistrationOptions.SkipAutoRegistration = true
 					return r
 				},
@@ -126,7 +124,7 @@ func TestRegisterAutoConversions(t *testing.T) {
 			args: args{
 				crdSchemaChanges: loadTestFixture(t, "valid/field-addition.json"),
 				setupResource: func() *Resource {
-					r := newTestResource("TestResource", nil)
+					r := newTestResource("TestResource")
 					r.AutoConversionRegistrationOptions.AutoRegisterExcludePaths = []string{
 						"spec.forProvider.newField",
 					}
@@ -143,7 +141,7 @@ func TestRegisterAutoConversions(t *testing.T) {
 			args: args{
 				crdSchemaChanges: loadTestFixture(t, "valid/field-addition.json"),
 				setupResource: func() *Resource {
-					return newTestResource("DifferentResource", nil)
+					return newTestResource("DifferentResource")
 				},
 			},
 			want: want{
@@ -156,7 +154,7 @@ func TestRegisterAutoConversions(t *testing.T) {
 			args: args{
 				crdSchemaChanges: loadTestFixture(t, "invalid/malformed.json"),
 				setupResource: func() *Resource {
-					return newTestResource("TestResource", nil)
+					return newTestResource("TestResource")
 				},
 			},
 			want: want{
@@ -168,7 +166,7 @@ func TestRegisterAutoConversions(t *testing.T) {
 			args: args{
 				crdSchemaChanges: loadTestFixture(t, "valid/empty.json"),
 				setupResource: func() *Resource {
-					return newTestResource("TestResource", nil)
+					return newTestResource("TestResource")
 				},
 			},
 			want: want{
@@ -181,7 +179,7 @@ func TestRegisterAutoConversions(t *testing.T) {
 			args: args{
 				crdSchemaChanges: loadTestFixture(t, "valid/no-changes.json"),
 				setupResource: func() *Resource {
-					return newTestResource("TestResource", nil)
+					return newTestResource("TestResource")
 				},
 			},
 			want: want{
@@ -194,7 +192,7 @@ func TestRegisterAutoConversions(t *testing.T) {
 			args: args{
 				crdSchemaChanges: loadTestFixture(t, "valid/type-change-string-to-number.json"),
 				setupResource: func() *Resource {
-					r := newTestResource("TestResource", nil)
+					r := newTestResource("TestResource")
 					r.TerraformResource = nil
 					return r
 				},
@@ -209,7 +207,7 @@ func TestRegisterAutoConversions(t *testing.T) {
 			args: args{
 				crdSchemaChanges: loadTestFixture(t, "valid/type-change-string-to-number.json"),
 				setupResource: func() *Resource {
-					r := newTestResource("TestResource", nil)
+					r := newTestResource("TestResource")
 					r.TerraformResource.Schema = nil
 					return r
 				},
@@ -224,7 +222,7 @@ func TestRegisterAutoConversions(t *testing.T) {
 			args: args{
 				crdSchemaChanges: loadTestFixture(t, "invalid/unknown-change-type.json"),
 				setupResource: func() *Resource {
-					return newTestResource("TestResource", nil)
+					return newTestResource("TestResource")
 				},
 			},
 			want: want{
@@ -237,7 +235,7 @@ func TestRegisterAutoConversions(t *testing.T) {
 			args: args{
 				crdSchemaChanges: loadTestFixture(t, "invalid/missing-change-type.json"),
 				setupResource: func() *Resource {
-					return newTestResource("TestResource", nil)
+					return newTestResource("TestResource")
 				},
 			},
 			want: want{
@@ -276,7 +274,7 @@ func TestRegisterAutoConversions(t *testing.T) {
 			args: args{
 				crdSchemaChanges: loadTestFixture(t, "invalid/type-change-unsupported.json"),
 				setupResource: func() *Resource {
-					return newTestResource("TestResource", nil)
+					return newTestResource("TestResource")
 				},
 			},
 			want: want{
@@ -315,7 +313,7 @@ func TestRegisterAutoConversions(t *testing.T) {
 			args: args{
 				crdSchemaChanges: loadTestFixture(t, "valid/deeply-nested.json"),
 				setupResource: func() *Resource {
-					return newTestResource("TestResource", nil)
+					return newTestResource("TestResource")
 				},
 			},
 			want: want{
@@ -380,7 +378,7 @@ func TestRegisterAutoConversions(t *testing.T) {
 			args: args{
 				crdSchemaChanges: loadTestFixture(t, "valid/exclude-multiple-paths.json"),
 				setupResource: func() *Resource {
-					r := newTestResource("TestResource", nil)
+					r := newTestResource("TestResource")
 					r.AutoConversionRegistrationOptions.AutoRegisterExcludePaths = []string{
 						"spec.forProvider.field1",
 						"spec.forProvider.field2",
@@ -398,7 +396,7 @@ func TestRegisterAutoConversions(t *testing.T) {
 			args: args{
 				crdSchemaChanges: loadTestFixture(t, "valid/exclude-multiple-paths.json"),
 				setupResource: func() *Resource {
-					r := newTestResource("TestResource", nil)
+					r := newTestResource("TestResource")
 					r.AutoConversionRegistrationOptions.AutoRegisterExcludePaths = []string{
 						"spec.forProvider.field1",
 						"spec.forProvider.field2",
@@ -417,7 +415,7 @@ func TestRegisterAutoConversions(t *testing.T) {
 			args: args{
 				crdSchemaChanges: loadTestFixture(t, "valid/field-addition.json"),
 				setupResource: func() *Resource {
-					r := newTestResource("TestResource", nil)
+					r := newTestResource("TestResource")
 					r.AutoConversionRegistrationOptions.AutoRegisterExcludePaths = []string{
 						"spec.forProvider.nonExistentField",
 					}
@@ -434,7 +432,7 @@ func TestRegisterAutoConversions(t *testing.T) {
 			args: args{
 				crdSchemaChanges: loadTestFixture(t, "valid/field-addition.json"),
 				setupResource: func() *Resource {
-					r := newTestResource("TestResource", nil)
+					r := newTestResource("TestResource")
 					r.AutoConversionRegistrationOptions.SkipAutoRegistration = true
 					r.AutoConversionRegistrationOptions.AutoRegisterExcludePaths = []string{
 						"spec.forProvider.newField",
@@ -486,20 +484,20 @@ func TestRegisterAutoConversionsMultipleResources(t *testing.T) {
 	pc := newTestProvider(t)
 
 	// Setup multiple resources with different short groups
-	pc.Resources["ResourceOne"] = newTestResource("ResourceOne", nil)
+	pc.Resources["ResourceOne"] = newTestResource("ResourceOne")
 	pc.Resources["ResourceTwo"] = newTestResourceWithIntField("ResourceTwo", "count")
-	pc.Resources["ResourceThree"] = newTestResource("ResourceThree", nil)
+	pc.Resources["ResourceThree"] = newTestResource("ResourceThree")
 
 	// ResourceFour has a different short group
-	r4 := newTestResource("ResourceFour", nil)
+	r4 := newTestResource("ResourceFour")
 	r4.ShortGroup = "other"
 	pc.Resources["ResourceFour"] = r4
 
 	// ResourceFive has no changes
-	pc.Resources["ResourceFive"] = newTestResource("ResourceFive", nil)
+	pc.Resources["ResourceFive"] = newTestResource("ResourceFive")
 
 	// ResourceSix not in JSON at all
-	pc.Resources["ResourceSix"] = newTestResource("ResourceSix", nil)
+	pc.Resources["ResourceSix"] = newTestResource("ResourceSix")
 
 	err := RegisterAutoConversions(pc, crdSchemaChanges)
 	if err != nil {
@@ -508,9 +506,9 @@ func TestRegisterAutoConversionsMultipleResources(t *testing.T) {
 
 	// Verify each resource has correct number of conversions
 	cases := map[string]struct {
-		resourceName    string
-		expectedCount   int
-		reason          string
+		resourceName  string
+		expectedCount int
+		reason        string
 	}{
 		"ResourceOne": {
 			resourceName:  "ResourceOne",
@@ -557,9 +555,8 @@ func TestRegisterAutoConversionsMultipleResources(t *testing.T) {
 
 func TestExcludeTypeChangesFromIdentity(t *testing.T) {
 	type args struct {
-		pc                *Provider
-		crdSchemaChanges  []byte
-		setupResource     func() *Resource
+		crdSchemaChanges []byte
+		setupResource    func() *Resource
 	}
 	type want struct {
 		identityExcludePaths []string
@@ -602,7 +599,7 @@ func TestExcludeTypeChangesFromIdentity(t *testing.T) {
 			args: args{
 				crdSchemaChanges: loadTestFixture(t, "valid/field-addition.json"),
 				setupResource: func() *Resource {
-					return newTestResource("TestResource", nil)
+					return newTestResource("TestResource")
 				},
 			},
 			want: want{
@@ -632,7 +629,7 @@ func TestExcludeTypeChangesFromIdentity(t *testing.T) {
 			args: args{
 				crdSchemaChanges: loadTestFixture(t, "valid/empty.json"),
 				setupResource: func() *Resource {
-					return newTestResource("TestResource", nil)
+					return newTestResource("TestResource")
 				},
 			},
 			want: want{
@@ -645,7 +642,7 @@ func TestExcludeTypeChangesFromIdentity(t *testing.T) {
 			args: args{
 				crdSchemaChanges: loadTestFixture(t, "valid/no-changes.json"),
 				setupResource: func() *Resource {
-					return newTestResource("TestResource", nil)
+					return newTestResource("TestResource")
 				},
 			},
 			want: want{
@@ -658,7 +655,7 @@ func TestExcludeTypeChangesFromIdentity(t *testing.T) {
 			args: args{
 				crdSchemaChanges: loadTestFixture(t, "invalid/malformed.json"),
 				setupResource: func() *Resource {
-					return newTestResource("TestResource", nil)
+					return newTestResource("TestResource")
 				},
 			},
 			want: want{
@@ -670,7 +667,7 @@ func TestExcludeTypeChangesFromIdentity(t *testing.T) {
 			args: args{
 				crdSchemaChanges: loadTestFixture(t, "valid/multiple-type-changes.json"),
 				setupResource: func() *Resource {
-					return newTestResource("TestResource", nil)
+					return newTestResource("TestResource")
 				},
 			},
 			want: want{
@@ -683,7 +680,7 @@ func TestExcludeTypeChangesFromIdentity(t *testing.T) {
 			args: args{
 				crdSchemaChanges: loadTestFixture(t, "valid/evolving-field.json"),
 				setupResource: func() *Resource {
-					return newTestResource("TestResource", nil)
+					return newTestResource("TestResource")
 				},
 			},
 			want: want{
@@ -696,7 +693,7 @@ func TestExcludeTypeChangesFromIdentity(t *testing.T) {
 			args: args{
 				crdSchemaChanges: loadTestFixture(t, "valid/multiple-type-changes.json"),
 				setupResource: func() *Resource {
-					r := newTestResource("TestResource", nil)
+					r := newTestResource("TestResource")
 					r.AutoConversionRegistrationOptions.AutoRegisterExcludePaths = []string{
 						"spec.forProvider.field1",
 						"spec.initProvider.field3",
@@ -969,7 +966,7 @@ func TestSetIdentityConversionExcludePath(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			r := newTestResource("TestResource", nil)
+			r := newTestResource("TestResource")
 			r.AutoConversionRegistrationOptions.IdentityConversionExcludePaths = tc.args.existing
 			m := map[string]bool{}
 
@@ -996,11 +993,11 @@ func TestIntegrationBothFunctions(t *testing.T) {
 	}
 
 	cases := map[string]struct {
-		reason            string
-		crdSchemaChanges  []byte
-		setupResource     func() *Resource
-		callOrder         string // "correct", "reversed"
-		want              want
+		reason           string
+		crdSchemaChanges []byte
+		setupResource    func() *Resource
+		callOrder        string // "correct", "reversed"
+		want             want
 	}{
 		"CorrectOrder": {
 			reason:           "Calling ExcludeTypeChanges then RegisterAutoConversions should work correctly",
@@ -1045,7 +1042,7 @@ func TestIntegrationBothFunctions(t *testing.T) {
 			reason:           "Resource with both functions applied should have conversions and exclude paths",
 			crdSchemaChanges: loadTestFixture(t, "valid/multiple-type-changes.json"),
 			setupResource: func() *Resource {
-				return newTestResource("TestResource", nil)
+				return newTestResource("TestResource")
 			},
 			callOrder: "correct",
 			want: want{
@@ -1106,10 +1103,10 @@ func TestIntegrationBothFunctions(t *testing.T) {
 
 func TestConversionFunctionValidation(t *testing.T) {
 	cases := map[string]struct {
-		reason            string
-		crdSchemaChanges  []byte
-		setupResource     func() *Resource
-		expectedCount     int
+		reason           string
+		crdSchemaChanges []byte
+		setupResource    func() *Resource
+		expectedCount    int
 	}{
 		"MultipleChanges": {
 			reason:           "Multiple changes should register correct number of conversions",
@@ -1123,7 +1120,7 @@ func TestConversionFunctionValidation(t *testing.T) {
 			reason:           "Field addition should register 2 bidirectional conversions",
 			crdSchemaChanges: loadTestFixture(t, "valid/field-addition.json"),
 			setupResource: func() *Resource {
-				return newTestResource("TestResource", nil)
+				return newTestResource("TestResource")
 			},
 			expectedCount: 2,
 		},
@@ -1147,7 +1144,7 @@ func TestConversionFunctionValidation(t *testing.T) {
 			reason:           "Multiple type changes should register conversions for supported types",
 			crdSchemaChanges: loadTestFixture(t, "valid/multiple-type-changes.json"),
 			setupResource: func() *Resource {
-				return newTestResource("TestResource", nil)
+				return newTestResource("TestResource")
 			},
 			expectedCount: 4, // string->bool (field2: 2) + number->string (field3: 2), string->number skipped (no schema)
 		},

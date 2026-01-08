@@ -40,6 +40,7 @@ provider.
 - [Monitoring](monitoring.md) the Upjet runtime using Prometheus.
 - [Migration Framework](migration-framework.md)
 - [Managing CRD Versions](managing-crd-versions.md) when Terraform schemas change.
+- [Breaking Change Detection and Auto-Conversion](breaking-change-detection.md) - Automatically handle CRD schema breaking changes (field additions/deletions, type changes).
 
 Feel free to ask your questions by opening an issue or starting a discussion in
 the [#upjet](https://crossplane.slack.com/archives/C05T19TB729) channel in

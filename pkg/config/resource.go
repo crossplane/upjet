@@ -679,21 +679,13 @@ type Resource struct {
 //
 // The automatic conversion system (see pkg/config/conversion.go) processes CRD schema changes
 // and registers conversion functions for:
-//   - Field additions/deletions (using annotation-based persistence)
-//   - Type changes (string↔number, string↔boolean)
+// - Field additions/deletions (using annotation-based persistence)
+// - Type changes (string↔number, string↔boolean)
 //
 // This struct provides three control mechanisms:
-//   1. Complete opt-out via SkipAutoRegistration
-//   2. Exclusion of specific paths from auto-registration
-//   3. Tracking of paths excluded from identity conversion (populated automatically)
-//
-// Example - Completely disable auto-registration for a resource:
-//   r.AutoConversionRegistrationOptions.SkipAutoRegistration = true
-//
-// Example - Exclude specific fields from auto-registration:
-//   r.AutoConversionRegistrationOptions.AutoRegisterExcludePaths = []string{
-//       "spec.forProvider.complexField",  // Will register manually
-//   }
+// 1. Complete opt-out via SkipAutoRegistration
+// 2. Exclusion of specific paths from auto-registration
+// 3. Tracking of paths excluded from identity conversion (populated automatically)
 //
 // Note: IdentityConversionExcludePaths is automatically populated by
 // ExcludeTypeChangesFromIdentity and should not be manually set.
