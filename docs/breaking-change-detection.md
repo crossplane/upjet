@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 The Crossplane Authors <https://crossplane.io>
+
+SPDX-License-Identifier: CC-BY-4.0
+-->
+
 # Breaking Change Detection and Auto-Conversion System
 
 ## Table of Contents
