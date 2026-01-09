@@ -1,0 +1,189 @@
+// SPDX-FileCopyrightText: 2026 The Crossplane Authors <https://crossplane.io>
+//
+// SPDX-License-Identifier: Apache-2.0
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  // The maximum number of PRs to be created in parallel
+  "prConcurrentLimit": 5,
+  // The branches renovate should target
+  "baseBranchPatterns": ["main"],
+  "ignorePaths": ["design/**"],
+  "postUpdateOptions": ["gomodTidy"],
+  // By default renovate will auto detect whether semantic commits have been used
+  // in the recent history and comply with that, we explicitly disable it
+  "semanticCommits": "disabled",
+  // All PRs should have a label
+  "labels": ["automated"],
+  "customManagers": [
+    {
+      // We want a PR to bump Go versions used through env variables in any Github
+      // Actions, taking it from the official Github repository.
+      "customType": "regex",
+      "description": "Bump Go version in workflows",
+      "managerFilePatterns": ["/^\\.github\\/workflows\\/[^/]+\\.ya?ml$/"],
+      "matchStrings": [
+        "GO_VERSION: '(?<currentValue>.*?)'\\n"
+      ],
+      "datasourceTemplate": "golang-version",
+      "depNameTemplate": "golang"
+    },
+    {
+      // We want a PR to bump golangci-lint versions used through env variables in
+      // any Github Actions, taking it from the official Github repository tags.
+      "customType": "regex",
+      "description": "Bump golangci-lint version in workflows",
+      "managerFilePatterns": ["/^\\.github\\/workflows\\/[^/]+\\.ya?ml$/"],
+      "matchStrings": [
+        "GOLANGCI_VERSION: '(?<currentValue>.*?)'\\n"
+      ],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "golangci/golangci-lint"
+    },
+    {
+      // We want a PR to bump docker buildx versions used through env variables in
+      // any Github Actions, taking it from the official Github repository releases.
+      "customType": "regex",
+      "description": "Bump Docker Buildx version in workflows",
+      "managerFilePatterns": ["/^\\.github\\/workflows\\/[^/]+\\.ya?ml$/"],
+      "matchStrings": [
+        "DOCKER_BUILDX_VERSION: '(?<currentValue>.*?)'\\n"
+      ],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "docker/buildx"
+    },
+    {
+      // We want a PR to bump golangci-lint versions used through make variables in
+      // the Makefile, taking it from the official Github repository releases.
+      "customType": "regex",
+      "description": "Bump golangci-lint version in the Makefile",
+      "managerFilePatterns": [
+        "/^Makefile$/",
+        "/^\\.github\\/workflows\\/[^/]+\\.ya?ml$/"
+      ],
+      "matchStrings": ["GOLANGCILINT_VERSION \\??= (?<currentValue>.*?)\\n"],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "golangci/golangci-lint",
+      "extractVersionTemplate": "^(?<version>.*)$"
+    },
+    {
+      // We want a PR to bump up CLI versions used through make variables in
+      // the Makefile, taking it from the official Github repository releases.
+      "customType": "regex",
+      "description": "Bump up CLI version in the Makefile",
+      "managerFilePatterns": ["/^Makefile$/"],
+      "matchStrings": ["UP_VERSION \\??= (?<currentValue>.*?)\\n"],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "upbound/up"
+    },
+    {
+      // We want a PR to bump uptest versions used through make variables in
+      // the Makefile, taking it from the official Github repository releases.
+      "customType": "regex",
+      "description": "Bump Uptest version in the Makefile",
+      "managerFilePatterns": ["/^Makefile$/"],
+      "matchStrings": ["UPTEST_VERSION \\??= (?<currentValue>.*?)\\n"],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "crossplane/uptest"
+    },
+    {
+      // We want a PR to bump kind versions used through make variables in
+      // the Makefile, taking it from the official Github repository releases.
+      "customType": "regex",
+      "description": "Bump kind version in the Makefile",
+      "managerFilePatterns": ["/^Makefile$/"],
+      "matchStrings": ["KIND_VERSION \\??= (?<currentValue>.*?)\\n"],
+      "datasourceTemplate": "github-tags",
+      "depNameTemplate": "kubernetes-sigs/kind"
+    },
+    {
+      // We want a PR to bump Crossplane versions used through make variables in
+      // the Makefile, taking it from the official Github repository releases.
+      "customType": "regex",
+      "description": "Bump Crossplane version in the Makefile",
+      "managerFilePatterns": ["/^Makefile$/"],
+      "matchStrings": ["CROSSPLANE_VERSION \\??= (?<currentValue>.*?)\\n"],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "crossplane/crossplane",
+      "extractVersionTemplate": "^(?<version>.*)$"
+    },
+    {
+      // We want a PR to bump Crossplane CLI versions used through make variables in
+      // the Makefile, taking it from the official Github repository releases.
+      "customType": "regex",
+      "description": "Bump Crossplane CLI version in the Makefile",
+      "managerFilePatterns": ["/^Makefile$/"],
+      "matchStrings": ["CROSSPLANE_CLI_VERSION ??= (?<currentValue>.*?)\\n"],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "crossplane/crossplane"
+    }
+  ],
+  // PackageRules disabled below should be enabled in case of vulnerabilities
+  "vulnerabilityAlerts": {"enabled": true},
+  "packageRules": [
+    {
+      // We need to ignore k8s.io/client-go older versions as they switched to
+      // semantic version and old tags are still available in the repo.
+      "matchDatasources": ["go"],
+      "matchDepNames": ["k8s.io/client-go"],
+      "allowedVersions": "<1.0"
+    },
+    {
+      // We want a single PR for all the patches bumps of kubernetes related
+      // dependencies, as most of the times these are all strictly related.
+      "matchDatasources": ["go"],
+      "groupName": "kubernetes patches",
+      "matchUpdateTypes": ["patch", "digest"],
+      "matchPackageNames": ["k8s.io{/,}**", "sigs.k8s.io{/,}**"]
+    },
+    {
+      // We want dedicated PRs for each minor and major bumps to kubernetes related
+      // dependencies.
+      "matchDatasources": ["go"],
+      "matchUpdateTypes": ["major", "minor"],
+      "matchPackageNames": ["k8s.io{/,}**", "sigs.k8s.io{/,}**"]
+    },
+    {
+      // We want dedicated PRs for each bump to non-kubernetes Go dependencies, but
+      // only if there are known vulnerabilities in the current version.
+      "matchDatasources": ["go"],
+      "matchPackageNames": ["*", "!k8s.io{/,}**", "!sigs.k8s.io{/,}**"],
+      "enabled": false,
+      "matchUpdateTypes": ["major"]
+    },
+    {
+      // We want a single PR for all minor and patch bumps to non-kubernetes Go
+      // dependencies, but only if there are known vulnerabilities in the current
+      // version.
+      "matchDatasources": ["go"],
+      "matchPackageNames": ["*", "!k8s.io{/,}**", "!sigs.k8s.io{/,}**"],
+      "enabled": false,
+      "matchUpdateTypes": ["minor", "patch", "digest"],
+      "groupName": "all non-major go dependencies"
+    },
+    {
+      // We want a single PR for all minor and patch bumps of Github Actions
+      "matchDepTypes": ["action"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "all non-major github action",
+      "pinDigests": true
+    },
+    {
+      // We want a single PR for bumping Crossplane and Crossplane CLI versions in CI
+      "matchDepNames": ["crossplane/crossplane"],
+      "groupName": "crossplane versions in CI",
+      "groupSlug": "crossplane-in-ci"
+    },
+    {
+      // We want a single PR for bumping golangci-lint versions
+      "matchDepNames": ["golangci/golangci-lint"],
+      "groupName": "golangci-lint versions in CI",
+      "groupSlug": "golangci-lint-in-ci"
+    },
+    {
+      // We want dedicated PRs for each major bump to Github Actions
+      "matchDepTypes": ["action"],
+      "pinDigests": true
+    }
+  ]
+}
