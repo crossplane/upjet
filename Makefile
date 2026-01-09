@@ -12,7 +12,7 @@ GO_PROJECT := github.com/crossplane/$(PROJECT_NAME)/v2
 
 # GOLANGCILINT_VERSION is inherited from build submodule by default.
 # Uncomment below if you need to override the version.
-GOLANGCILINT_VERSION ?= 2.6.1
+GOLANGCILINT_VERSION ?= 2.8.0
 # GO_REQUIRED_VERSION ?= 1.22
 
 PLATFORMS ?= linux_amd64 linux_arm64
