@@ -435,6 +435,27 @@ type MergeStrategy struct {
 // configuration entry set.
 type ServerSideApplyMergeStrategies map[string]MergeStrategy
 
+// VersionDeprecation holds deprecation metadata for a specific API version.
+// This information is used to generate Kubernetes CRD deprecation warnings
+// and to track the deprecation lifecycle according to the API versioning policy.
+type VersionDeprecation struct {
+	// Warning is the deprecation warning message shown to users when they
+	// interact with the deprecated API version. This message should explain
+	// which version to migrate to and any important migration considerations.
+	// Maps to the +kubebuilder:deprecatedversion:warning marker in generated CRDs.
+	Warning string
+
+	// DeprecatedInRelease indicates which provider release deprecated this version.
+	// Format: "v1.2.3"
+	DeprecatedInRelease string
+
+	// RemovalPlannedRelease indicates the provider release in which this version
+	// is planned to be removed. According to the versioning policy, a version must
+	// remain deprecated for at least one release before removal.
+	// Format: "v1.3.0"
+	RemovalPlannedRelease string
+}
+
 // Resource is the set of information that you can override at different steps
 // of the code generation pipeline.
 type Resource struct {
@@ -464,6 +485,48 @@ type Resource struct {
 	// resource for multi-versioned managed resources. upjet will attempt to load
 	// the type definitions from these previous versions if configured.
 	PreviousVersions []string
+
+	// ServedVersions specifies which API versions should be served by the API server.
+	// If empty or nil, all versions (Version + PreviousVersions) are served by default
+	// for backward compatibility. This allows explicit control over which versions are
+	// available during lifecycle transitions (e.g., removing a deprecated version).
+	// Use GetServedVersions() to access this field with proper defaulting behavior.
+	//
+	// Example during Bridge phase:
+	//   Version: "v1beta2"
+	//   PreviousVersions: []string{"v1beta1"}
+	//   ServedVersions: []string{"v1beta2", "v1beta1"}  // Both served during bridge
+	//
+	// Example after deprecation:
+	//   Version: "v1beta2"
+	//   PreviousVersions: []string{"v1beta1"}
+	//   ServedVersions: []string{"v1beta2", "v1beta1"}  // Still served but v1beta1 marked deprecated
+	//
+	// Example after removal:
+	//   Version: "v1beta2"
+	//   PreviousVersions: []string{}  // v1beta1 removed
+	//   ServedVersions: []string{"v1beta2"}  // Only v1beta2 served
+	ServedVersions []string
+
+	// DeprecatedVersions maps API versions to their deprecation configuration.
+	// The key is the version string (e.g., "v1beta1"), and the value contains
+	// deprecation metadata including warning messages and release information.
+	// Deprecated versions should still be listed in ServedVersions until they are
+	// completely removed from the API.
+	//
+	// Example:
+	//   DeprecatedVersions: map[string]VersionDeprecation{
+	//       "v1beta1": {
+	//           Warning: "v1beta1 is deprecated. Please migrate to v1beta2.",
+	//           DeprecatedInRelease: "v1.5.0",
+	//           RemovalPlannedRelease: "v1.7.0",
+	//       },
+	//   }
+	//
+	// This information will be used to generate the +kubebuilder:deprecatedversion
+	// marker in the CRD, which causes the Kubernetes API server to emit warnings
+	// when clients interact with the deprecated version.
+	DeprecatedVersions map[string]VersionDeprecation
 
 	// ControllerReconcileVersion is the CRD API version the associated
 	// controller will watch & reconcile. If left unspecified,
@@ -810,6 +873,30 @@ func (r *Resource) CRDHubVersion() string {
 // being generated.
 func (r *Resource) SetCRDHubVersion(v string) {
 	r.crdHubVersion = v
+}
+
+// GetServedVersions returns the list of API versions that should be served
+// by the API server. If ServedVersions is explicitly configured, it returns
+// that list. Otherwise, it defaults to serving all versions: the current
+// Version plus all PreviousVersions, maintaining backward compatibility.
+//
+// This method ensures that:
+// - If ServedVersions is explicitly set, it's used as-is
+// - If ServedVersions is empty/nil, all versions are served by default
+// - The returned slice is a new slice to prevent external modifications
+func (r *Resource) GetServedVersions() []string {
+	if len(r.ServedVersions) > 0 {
+		// Return a copy to prevent external modifications
+		result := make([]string, len(r.ServedVersions))
+		copy(result, r.ServedVersions)
+		return result
+	}
+
+	// Default: serve all versions (current + previous)
+	allVersions := make([]string, 0, len(r.PreviousVersions)+1)
+	allVersions = append(allVersions, r.Version)
+	allVersions = append(allVersions, r.PreviousVersions...)
+	return allVersions
 }
 
 // AddSingletonListConversion configures the list at the specified Terraform

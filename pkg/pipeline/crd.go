@@ -83,20 +83,44 @@ func (cg *CRDGenerator) Generate(cfg *config.Resource) (string, error) {
 	if err != nil {
 		return "", errors.Wrap(err, "cannot print the type list")
 	}
+	crdMap := map[string]string{
+		"APIVersion":         cfg.Version,
+		"Group":              cg.Group,
+		"Kind":               cfg.Kind,
+		"MarkStorageVersion": strconv.FormatBool(cfg.CRDStorageVersion() == cfg.Version),
+		"ForProviderType":    gen.ForProviderType.Obj().Name(),
+		"InitProviderType":   gen.InitProviderType.Obj().Name(),
+		"AtProviderType":     gen.AtProviderType.Obj().Name(),
+		"ValidationRules":    gen.ValidationRules,
+		"Path":               cfg.Path,
+		"Scope":              string(cg.Scope),
+	}
+
+	// Add deprecation information if this version is deprecated
+	if deprecation, isDeprecated := cfg.DeprecatedVersions[cfg.Version]; isDeprecated {
+		crdMap["DeprecationWarning"] = buildEnhancedDeprecationWarning(deprecation)
+		crdMap["DeprecationNotice"] = buildDeprecationNotice(cfg.Version, deprecation)
+	}
+
+	// Check if this version should be marked as unserved
+	// Only mark as unserved if ServedVersions is explicitly configured
+	// and the current version is NOT in that list
+	if len(cfg.ServedVersions) > 0 {
+		isServed := false
+		for _, v := range cfg.ServedVersions {
+			if v == cfg.Version {
+				isServed = true
+				break
+			}
+		}
+		if !isServed {
+			crdMap["MarkUnserved"] = "true"
+		}
+	}
+
 	vars := map[string]any{
 		"Types": typesStr,
-		"CRD": map[string]string{
-			"APIVersion":         cfg.Version,
-			"Group":              cg.Group,
-			"Kind":               cfg.Kind,
-			"MarkStorageVersion": strconv.FormatBool(cfg.CRDStorageVersion() == cfg.Version),
-			"ForProviderType":    gen.ForProviderType.Obj().Name(),
-			"InitProviderType":   gen.InitProviderType.Obj().Name(),
-			"AtProviderType":     gen.AtProviderType.Obj().Name(),
-			"ValidationRules":    gen.ValidationRules,
-			"Path":               cfg.Path,
-			"Scope":              string(cg.Scope),
-		},
+		"CRD":   crdMap,
 		"Provider": map[string]string{
 			"ShortName": cg.ProviderShortName,
 		},
@@ -123,4 +147,45 @@ func deleteOmittedFields(sch map[string]*schema.Schema, omittedFields []string) 
 			current = current[f].Elem.(*schema.Resource).Schema
 		}
 	}
+}
+
+// buildEnhancedDeprecationWarning creates an enhanced deprecation warning message
+// by appending release information to the base warning message if available.
+func buildEnhancedDeprecationWarning(deprecation config.VersionDeprecation) string {
+	warning := deprecation.Warning
+	if warning == "" {
+		warning = "This API version is deprecated."
+	}
+
+	// Append release information if available
+	if deprecation.DeprecatedInRelease != "" {
+		warning += fmt.Sprintf(" Deprecated since %s.", deprecation.DeprecatedInRelease)
+	}
+	if deprecation.RemovalPlannedRelease != "" {
+		warning += fmt.Sprintf(" Planned removal in %s.", deprecation.RemovalPlannedRelease)
+	}
+
+	return warning
+}
+
+// buildDeprecationNotice creates a deprecation notice for the CRD description.
+// This notice provides clear, formatted information about the deprecation status
+// that will be visible in kubectl explain and API documentation.
+func buildDeprecationNotice(version string, deprecation config.VersionDeprecation) string {
+	var notice strings.Builder
+	notice.WriteString("// Deprecated: This API version (")
+	notice.WriteString(version)
+	notice.WriteString(") has been deprecated")
+
+	if deprecation.DeprecatedInRelease != "" {
+		notice.WriteString(fmt.Sprintf(" in release %s", deprecation.DeprecatedInRelease))
+	}
+
+	if deprecation.RemovalPlannedRelease != "" {
+		notice.WriteString(fmt.Sprintf(" and is planned for removal in release %s.", deprecation.RemovalPlannedRelease))
+	} else {
+		notice.WriteString(".")
+	}
+
+	return notice.String()
 }

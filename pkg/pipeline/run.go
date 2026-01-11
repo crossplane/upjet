@@ -42,6 +42,11 @@ func Run(pcCluster, pcNamespace *config.Provider, rootDir string) {
 			ModulePathControllers: filepath.Join(pcCluster.ModulePath, "internal", "controller"),
 
 			Scope: tjtypes.CRDScopeCluster,
+			// Register built-in post-generation hooks
+			PostGenerationHooks: []PostGenerationHook{
+				NewStorageVersionMarkerUpdateHook(),
+				NewVersionMarkerUpdateHook(),
+			},
 		}
 
 		groups = cluster.Run(pcCluster)
@@ -64,6 +69,11 @@ func Run(pcCluster, pcNamespace *config.Provider, rootDir string) {
 		ModulePathControllers: filepath.Join(pcCluster.ModulePath, "internal", "controller", "cluster"),
 
 		Scope: tjtypes.CRDScopeCluster,
+		// Register built-in post-generation hooks
+		PostGenerationHooks: []PostGenerationHook{
+			NewStorageVersionMarkerUpdateHook(),
+			NewVersionMarkerUpdateHook(),
+		},
 	}
 
 	namespaced := &PipelineRunner{
@@ -76,6 +86,11 @@ func Run(pcCluster, pcNamespace *config.Provider, rootDir string) {
 		ModulePathControllers: filepath.Join(pcNamespace.ModulePath, "internal", "controller", "namespaced"),
 
 		Scope: tjtypes.CRDScopeNamespaced,
+		// Register built-in post-generation hooks
+		PostGenerationHooks: []PostGenerationHook{
+			NewStorageVersionMarkerUpdateHook(),
+			NewVersionMarkerUpdateHook(),
+		},
 	}
 
 	// Map of service name (e.g. ec2) to resource controller packages. Should be
@@ -99,6 +114,8 @@ type PipelineRunner struct {
 	ModulePathControllers string
 
 	Scope tjtypes.CRDScope
+
+	PostGenerationHooks []PostGenerationHook
 }
 
 func (r *PipelineRunner) Run(pc *config.Provider) []string { //nolint:gocyclo
@@ -297,6 +314,17 @@ func (r *PipelineRunner) Run(pc *config.Provider) []string { //nolint:gocyclo
 	}
 
 	fmt.Printf("\nGenerated %d resources with scope %s!\n", count, r.Scope)
+
+	// Run post-generation hooks
+	if len(r.PostGenerationHooks) > 0 {
+		fmt.Printf("Running %d post-generation hook(s)...\n", len(r.PostGenerationHooks))
+		for i, hook := range r.PostGenerationHooks {
+			if err := hook.Run(r, pc, resourcesGroups); err != nil {
+				panic(errors.Wrapf(err, "post-generation hook %d failed", i+1))
+			}
+		}
+		fmt.Println("Post-generation hooks completed successfully!")
+	}
 
 	groups := make([]string, 0, len(controllerPkgMap))
 	for g := range controllerPkgMap {
