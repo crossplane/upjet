@@ -463,6 +463,39 @@ func TestWriteMainTF(t *testing.T) {
 				maintf: `{"provider":{"provider-test":null},"resource":{"":{"":{"lifecycle":{"prevent_destroy":true},"name":"some-id","param":"paramval"}}},"terraform":{"required_providers":{"provider-test":{"source":"my-company/namespace/provider-test","version":"1.2.3"}}}}`,
 			},
 		},
+		"LocalNameOverride": {
+			reason: "When LocalName is set, it should be used instead of deriving from the source path (fixes issue #565)",
+			args: args{
+				tr: &fake.LegacyTerraformed{
+					LegacyManaged: xpfake.LegacyManaged{
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: map[string]string{
+								resource.AnnotationKeyPrivateRawAttribute: "privateraw",
+								meta.AnnotationKeyExternalName:            "some-id",
+							},
+						},
+					},
+					Parameterizable: fake.Parameterizable{Parameters: map[string]any{
+						"param": "paramval",
+					}},
+					Observable: fake.Observable{Observation: map[string]any{
+						"obs": "obsval",
+					}},
+				},
+				cfg: config.DefaultResource("upjet_resource", nil, nil, nil),
+				s: Setup{
+					Requirement: ProviderRequirement{
+						Source:    "port-labs/port-labs",
+						Version:   "1.0.0",
+						LocalName: "port",
+					},
+					Configuration: nil,
+				},
+			},
+			want: want{
+				maintf: `{"provider":{"port":null},"resource":{"":{"":{"lifecycle":{"prevent_destroy":true},"name":"some-id","param":"paramval"}}},"terraform":{"required_providers":{"port":{"source":"port-labs/port-labs","version":"1.0.0"}}}}`,
+			},
+		},
 		"SuccessManagementPolicies": {
 			reason: "Management policies enabled with ignore changes resources and merging initProvider should be able to write everything it has into maintf file",
 			args: args{

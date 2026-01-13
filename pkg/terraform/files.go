@@ -192,18 +192,23 @@ func (fp *FileProducer) BuildMainTF() map[string]any {
 
 	// Note(turkenh): To use third party providers, we need to configure
 	// provider name in required_providers.
-	providerSource := strings.Split(fp.Setup.Requirement.Source, "/")
+	// Use LocalName if set, otherwise derive from source path (last segment).
+	providerName := fp.Setup.Requirement.LocalName
+	if providerName == "" {
+		providerSource := strings.Split(fp.Setup.Requirement.Source, "/")
+		providerName = providerSource[len(providerSource)-1]
+	}
 	return map[string]any{
 		"terraform": map[string]any{
 			"required_providers": map[string]any{
-				providerSource[len(providerSource)-1]: map[string]string{
+				providerName: map[string]string{
 					"source":  fp.Setup.Requirement.Source,
 					"version": fp.Setup.Requirement.Version,
 				},
 			},
 		},
 		"provider": map[string]any{
-			providerSource[len(providerSource)-1]: fp.Setup.Configuration,
+			providerName: fp.Setup.Configuration,
 		},
 		"resource": map[string]any{
 			fp.Resource.GetTerraformResourceType(): map[string]any{
@@ -362,8 +367,13 @@ func (fp *FileProducer) needProviderUpgrade() (bool, error) {
 	if err := json.JSParser.Unmarshal(data, &mainConfiguration); err != nil {
 		return false, errors.Wrap(err, errReadMainTF)
 	}
-	providerSource := strings.Split(fp.Setup.Requirement.Source, "/")
-	providerConfiguration, ok := mainConfiguration.Terraform.RequiredProviders[providerSource[len(providerSource)-1]]
+	// Use LocalName if set, otherwise derive from source path (last segment).
+	providerName := fp.Setup.Requirement.LocalName
+	if providerName == "" {
+		providerSource := strings.Split(fp.Setup.Requirement.Source, "/")
+		providerName = providerSource[len(providerSource)-1]
+	}
+	providerConfiguration, ok := mainConfiguration.Terraform.RequiredProviders[providerName]
 	if !ok {
 		return false, errors.New("cannot get provider configuration")
 	}
