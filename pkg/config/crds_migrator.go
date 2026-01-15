@@ -7,11 +7,13 @@ package config
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/crossplane/crossplane-runtime/v2/pkg/errors"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/logging"
 	extv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -42,8 +44,15 @@ func NewCRDsMigrator(gvkList []schema.GroupVersionKind) *CRDsMigrator {
 // of the old storage version, patching them to trigger conversion to the new
 // storage version, and updating the CRD status to reflect only the new storage version.
 func (c *CRDsMigrator) Run(ctx context.Context, logr logging.Logger, discoveryClient discovery.DiscoveryInterface, kube client.Client) error { //nolint:gocyclo // easier to follow as a unit
+	// Perform API discovery once before the loop to avoid expensive repeated discovery calls
+	groupResources, err := restmapper.GetAPIGroupResources(discoveryClient)
+	if err != nil {
+		return errors.Wrap(err, "failed to get API group resources")
+	}
+	mapper := restmapper.NewDiscoveryRESTMapper(groupResources)
+
 	for _, gvk := range c.gvkList {
-		crdName, err := GetCRDNameFromGVK(discoveryClient, gvk)
+		crdName, err := GetCRDNameFromGVK(mapper, gvk)
 		if err != nil {
 			return errors.Wrap(err, fmt.Sprintf("failed to get CRD name from GVK %s", gvk.Kind))
 		}
@@ -66,6 +75,9 @@ func (c *CRDsMigrator) Run(ctx context.Context, logr logging.Logger, discoveryCl
 				break
 			}
 		}
+		if storageVersion == "" {
+			return errors.Errorf("no storage version found for CRD %s", crdName)
+		}
 		storedVersions := crd.Status.StoredVersions
 
 		// Check if migration is needed by comparing stored versions with the current storage version
@@ -73,6 +85,7 @@ func (c *CRDsMigrator) Run(ctx context.Context, logr logging.Logger, discoveryCl
 		for _, storedVersion := range storedVersions {
 			if storedVersion != storageVersion {
 				needMigration = true
+				break
 			}
 		}
 
@@ -137,14 +150,8 @@ func (c *CRDsMigrator) Run(ctx context.Context, logr logging.Logger, discoveryCl
 }
 
 // GetCRDNameFromGVK returns the CRD name (e.g., "resources.group.example.com") for a given GroupVersionKind
-// by using the discovery client to find the REST mapping.
-func GetCRDNameFromGVK(discoveryClient discovery.DiscoveryInterface, gvk schema.GroupVersionKind) (string, error) {
-	groupResources, err := restmapper.GetAPIGroupResources(discoveryClient)
-	if err != nil {
-		return "", err
-	}
-
-	mapper := restmapper.NewDiscoveryRESTMapper(groupResources)
+// by using the provided REST mapper to find the REST mapping.
+func GetCRDNameFromGVK(mapper meta.RESTMapper, gvk schema.GroupVersionKind) (string, error) {
 	mapping, err := mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
 	if err != nil {
 		return "", err
@@ -161,7 +168,7 @@ func PrepareCRDsMigrator(pc *Provider) {
 	for _, r := range pc.Resources {
 		if len(r.PreviousVersions) != 0 {
 			gvkList = append(gvkList, schema.GroupVersionKind{
-				Group:   r.ShortGroup + "." + pc.RootGroup,
+				Group:   strings.ToLower(r.ShortGroup + "." + pc.RootGroup),
 				Version: r.CRDStorageVersion(),
 				Kind:    r.Kind,
 			})
