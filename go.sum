@@ -226,8 +226,6 @@ github.com/prometheus/procfs v0.15.1/go.mod h1:fB45yRUv8NstnjriLhBQLuOUt+WW4BsoG
 github.com/rogpeppe/go-internal v1.13.1 h1:KvO1DLK/DRN07sQ1LQKScxyZJuNnedQ5/wKSR38lUII=
 github.com/rogpeppe/go-internal v1.13.1/go.mod h1:uMEvuHeurkdAXX61udpOXGD/AzZDWNMNyH2VO9fmH0o=
 github.com/russross/blackfriday/v2 v2.1.0/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
-github.com/sergenyalcin/uptest v0.0.0-20251223200730-59f258b5357c h1:GG81D4l+Oi/qUKFjekGEKXDghC60cRW7ffkAjeqlTUw=
-github.com/sergenyalcin/uptest v0.0.0-20251223200730-59f258b5357c/go.mod h1:cYJsTucNFXD0p7SOx05l7pI0/kgyytb6/NBNfQuutlE=
 github.com/sergi/go-diff v1.0.0/go.mod h1:0CfEIISq7TuYL3j771MWULgwwjU+GofnZX9QAmXWZgo=
 github.com/spf13/afero v1.12.0 h1:UcOPyRBYczmFn6yvphxkn9ZEOY65cpwGKb5mL36mrqs=
 github.com/spf13/afero v1.12.0/go.mod h1:ZTlWwG4/ahT8W7T0WQ5uYmjI9duaLQGy3Q2OAl4sk/4=
@@ -255,6 +253,8 @@ github.com/tmccombs/hcl2json v0.3.3 h1:+DLNYqpWE0CsOQiEZu+OZm5ZBImake3wtITYxQ8uL
 github.com/tmccombs/hcl2json v0.3.3/go.mod h1:Y2chtz2x9bAeRTvSibVRVgbLJhLJXKlUeIvjeVdnm4w=
 github.com/tufin/oasdiff v1.2.6 h1:npdeFfs1lvTTcsT5HB/zDJZntl6tG2oMMK0dfFSF+yM=
 github.com/tufin/oasdiff v1.2.6/go.mod h1:7Ukdw7vE8EFNl8mf7e9rNX/aXptYn0RGtXoPCjjjlBU=
+github.com/upbound/uptest v0.12.1-0.20260115130402-161407324a6d h1:AS7qtvaAhZznoC39I4RwIl363AU+hL/ZUEvuZ1Wqvcc=
+github.com/upbound/uptest v0.12.1-0.20260115130402-161407324a6d/go.mod h1:cYJsTucNFXD0p7SOx05l7pI0/kgyytb6/NBNfQuutlE=
 github.com/vmihailenco/msgpack v3.3.3+incompatible/go.mod h1:fy3FlTQTDXWkZ7Bh6AcGMlsjHatGryHQYUTf1ShIgkk=
 github.com/vmihailenco/msgpack v4.0.4+incompatible h1:dSLoQfGFAo3F6OoNhwUmLwVgaUXK79GlxNBwueZn0xI=
 github.com/vmihailenco/msgpack v4.0.4+incompatible/go.mod h1:fy3FlTQTDXWkZ7Bh6AcGMlsjHatGryHQYUTf1ShIgkk=

@@ -29,7 +29,7 @@ require (
 	github.com/spf13/afero v1.12.0
 	github.com/stretchr/testify v1.10.0
 	github.com/tmccombs/hcl2json v0.3.3
-	github.com/upbound/uptest v0.12.1
+	github.com/upbound/uptest v0.12.1-0.20260115130402-161407324a6d
 	github.com/yuin/goldmark v1.5.3
 	github.com/zclconf/go-cty v1.16.2
 	github.com/zclconf/go-cty-yaml v1.0.3
@@ -44,8 +44,6 @@ require (
 	sigs.k8s.io/controller-runtime v0.19.0
 	sigs.k8s.io/yaml v1.4.0
 )
-
-replace github.com/upbound/uptest => github.com/sergenyalcin/uptest v0.0.0-20251223200730-59f258b5357c
 
 require (
 	cloud.google.com/go v0.116.0 // indirect
