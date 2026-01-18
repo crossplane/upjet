@@ -346,6 +346,361 @@ func TestIdentityConversion(t *testing.T) {
 	}
 }
 
+func TestTypeConversion(t *testing.T) {
+	type args struct {
+		sourceVersion string
+		sourceMap     map[string]any
+		targetVersion string
+		targetMap     map[string]any
+		paths         []string
+		mode          TypeChangingMode
+	}
+	type want struct {
+		converted bool
+		err       error
+		targetMap map[string]any
+	}
+	tests := map[string]struct {
+		reason string
+		args   args
+		want   want
+	}{
+		"SuccessfulConversionWholeNumberFloatToStringTopLevel": {
+			reason: "Successfully convert a top-level integer-valued float to a string.",
+			args: args{
+				sourceVersion: AllVersions,
+				sourceMap: map[string]any{
+					"k1": 1,
+					"k2": "v2",
+					"k3": map[string]any{
+						"nk1": "nv1",
+					},
+				},
+				targetVersion: AllVersions,
+				targetMap: map[string]any{
+					"k2": "v2",
+					"k1": "wrong",
+				},
+				paths: []string{
+					"k1",
+				},
+				mode: FloatToString,
+			},
+			want: want{
+				converted: true,
+				targetMap: map[string]any{
+					"k1": "1",
+					"k2": "v2",
+				},
+			},
+		},
+		"SuccessfulConversionFloatToStringTopLevel": {
+			reason: "Successfully convert a top-level float to a string.",
+			args: args{
+				sourceVersion: AllVersions,
+				sourceMap: map[string]any{
+					"k1": 1.23,
+					"k2": "v2",
+					"k3": map[string]any{
+						"nk1": "nv1",
+					},
+				},
+				targetVersion: AllVersions,
+				targetMap: map[string]any{
+					"k2": "v2",
+					"k1": 12,
+				},
+				paths: []string{
+					"k1",
+				},
+				mode: FloatToString,
+			},
+			want: want{
+				converted: true,
+				targetMap: map[string]any{
+					"k1": "1.23",
+					"k2": "v2",
+				},
+			},
+		},
+		"SuccessfulConversionFloatToStringMultipleValuesComplexPath": {
+			reason: "Successfully convert multiple floats to strings with complex path expressions",
+			args: args{
+				sourceVersion: AllVersions,
+				sourceMap: map[string]any{
+					"l1": []map[string]any{
+						{
+							"a": 48,
+						},
+						{
+							"a": 12,
+						},
+					},
+					"l2": []map[string]any{
+						{
+							"c": 13,
+						},
+					},
+					"o1": map[string]any{
+						"b": 14,
+					},
+				},
+				targetVersion: AllVersions,
+				targetMap:     map[string]any{},
+				paths: []string{
+					"l1[*].a",
+					"l2[0].c",
+					"o1.b",
+				},
+				mode: FloatToString,
+			},
+			want: want{
+				converted: true,
+				targetMap: map[string]any{
+					"l1": []map[string]any{
+						{
+							"a": "48",
+						},
+						{
+							"a": "12",
+						},
+					},
+					"l2": []map[string]any{
+						{
+							"c": "13",
+						},
+					},
+					"o1": map[string]any{
+						"b": "14",
+					},
+				},
+			},
+		},
+		"SuccessfulConversionWholeNumberStringToFloatTopLevel": {
+			reason: "Successfully convert a top-level integer-valued string to a float.",
+			args: args{
+				sourceVersion: AllVersions,
+				sourceMap: map[string]any{
+					"k1": "1",
+					"k2": "v2",
+					"k3": map[string]any{
+						"nk1": "nv1",
+					},
+				},
+				targetVersion: AllVersions,
+				targetMap: map[string]any{
+					"k2": "v2",
+					"k1": "wrong",
+				},
+				paths: []string{
+					"k1",
+				},
+				mode: StringToFloat,
+			},
+			want: want{
+				converted: true,
+				targetMap: map[string]any{
+					"k1": 1,
+					"k2": "v2",
+				},
+			},
+		},
+		"SuccessfulConversionStringToFloatTopLevel": {
+			reason: "Successfully convert a top-level string to a float.",
+			args: args{
+				sourceVersion: AllVersions,
+				sourceMap: map[string]any{
+					"k1": "1.23",
+					"k2": "v2",
+					"k3": map[string]any{
+						"nk1": "nv1",
+					},
+				},
+				targetVersion: AllVersions,
+				targetMap: map[string]any{
+					"k2": "v2",
+					"k1": "wrong",
+				},
+				paths: []string{
+					"k1",
+				},
+				mode: StringToFloat,
+			},
+			want: want{
+				converted: true,
+				targetMap: map[string]any{
+					"k1": 1.23,
+					"k2": "v2",
+				},
+			},
+		},
+		"SuccessfulConversionStringToFloatMultipleValuesComplexPath": {
+			reason: "Successfully convert multiple strings to floats with complex path expressions",
+			args: args{
+				sourceVersion: AllVersions,
+				sourceMap: map[string]any{
+					"l1": []map[string]any{
+						{
+							"a": "48",
+						},
+						{
+							"a": "12",
+						},
+					},
+					"l2": []map[string]any{
+						{
+							"c": "13",
+						},
+					},
+					"o1": map[string]any{
+						"b": "14",
+					},
+				},
+				targetVersion: AllVersions,
+				targetMap:     map[string]any{},
+				paths: []string{
+					"l1[*].a",
+					"l2[0].c",
+					"o1.b",
+				},
+				mode: StringToFloat,
+			},
+			want: want{
+				converted: true,
+				targetMap: map[string]any{
+					"l1": []map[string]any{
+						{
+							"a": 48,
+						},
+						{
+							"a": 12,
+						},
+					},
+					"l2": []map[string]any{
+						{
+							"c": 13,
+						},
+					},
+					"o1": map[string]any{
+						"b": 14,
+					},
+				},
+			},
+		},
+		"StringToFloatWithEmptyInputShouldNullOutExistingValue": {
+			reason: "Successfully remove a value from the target map when the source value is an empty string",
+			args: args{
+				sourceVersion: AllVersions,
+				sourceMap: map[string]any{
+					"k1": "",
+					"k2": "v2",
+					"k3": map[string]any{
+						"nk1": "nv1",
+					},
+				},
+				targetVersion: AllVersions,
+				targetMap: map[string]any{
+					"k2": "v2",
+					"k1": "wrong",
+				},
+				paths: []string{
+					"k1",
+				},
+				mode: StringToFloat,
+			},
+			want: want{
+				converted: true,
+				targetMap: map[string]any{
+					"k2": "v2",
+				},
+			},
+		},
+		"FloatToStringWithNullInputShouldBeSkipped": {
+			reason: "Leaves the target unchanged if the field path is not present",
+			args: args{
+				sourceVersion: AllVersions,
+				sourceMap: map[string]any{
+					"k2": "v2",
+					"k3": map[string]any{
+						"nk1": "nv1",
+					},
+				},
+				targetVersion: AllVersions,
+				targetMap: map[string]any{
+					"k2": "v2",
+					"k1": "wrong",
+				},
+				paths: []string{
+					"k1",
+				},
+				mode: FloatToString,
+			},
+			want: want{
+				converted: false,
+				targetMap: map[string]any{
+					"k1": "wrong",
+					"k2": "v2",
+				},
+			},
+		},
+		"StringToFloatWithNullInputShouldBeSkipped": {
+			reason: "Leaves the target unchanged if the field path is not present",
+			args: args{
+				sourceVersion: AllVersions,
+				sourceMap: map[string]any{
+					"k2": "v2",
+					"k3": map[string]any{
+						"nk1": "nv1",
+					},
+				},
+				targetVersion: AllVersions,
+				targetMap: map[string]any{
+					"k2": "v2",
+					"k1": "wrong",
+				},
+				paths: []string{
+					"k1",
+				},
+				mode: StringToFloat,
+			},
+			want: want{
+				converted: false,
+				targetMap: map[string]any{
+					"k1": "wrong",
+					"k2": "v2",
+				},
+			},
+		},
+	}
+	for n, tc := range tests {
+		t.Run(n, func(t *testing.T) {
+			c := NewTypeChangeConversion(tc.args.sourceVersion, tc.args.targetVersion, tc.args.paths, tc.args.mode)
+			sourceMap, err := roundTrip(tc.args.sourceMap)
+			if err != nil {
+				t.Fatalf("Failed to preprocess tc.args.sourceMap: %v", err)
+			}
+			targetMap, err := roundTrip(tc.args.targetMap)
+			if err != nil {
+				t.Fatalf("Failed to preprocess tc.args.targetMap: %v", err)
+			}
+			converted, err := c.(*typeChangingFieldCopy).ConvertPaved(fieldpath.Pave(sourceMap), fieldpath.Pave(targetMap))
+			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
+				t.Fatalf("\n%s\nConvertPaved(source, target): -wantErr, +gotErr:\n%s", tc.reason, diff)
+			}
+			if diff := cmp.Diff(tc.want.converted, converted); diff != "" {
+				t.Errorf("\n%s\nConvertPaved(source, target): -wantConverted, +gotConverted:\n%s", tc.reason, diff)
+			}
+			m, err := roundTrip(tc.want.targetMap)
+			if err != nil {
+				t.Fatalf("Failed to preprocess tc.want.targetMap: %v", err)
+			}
+			if diff := cmp.Diff(m, targetMap); diff != "" {
+				t.Errorf("\n%s\nConvertPaved(source, target): -wantTarget, +gotTarget:\n%s", tc.reason, diff)
+			}
+		})
+	}
+}
+
 func TestDefaultPathPrefixes(t *testing.T) {
 	// no need for a table-driven test here as we assert all the parameter roots
 	// in the MR schema are asserted.
@@ -411,6 +766,98 @@ func TestSingletonListConversion(t *testing.T) {
 				},
 			},
 		},
+		"SuccessfulNestedToEmbeddedObjectConversion": {
+			reason: "Successful conversion from a nested singleton list to an embedded object.",
+			args: args{
+				sourceVersion: AllVersions,
+				sourceMap: map[string]any{
+					"spec": map[string]any{
+						"initProvider": map[string]any{
+							"o": []map[string]any{
+								{
+									"n": []map[string]any{
+										{
+											"k": "v",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				targetVersion: AllVersions,
+				targetMap:     map[string]any{},
+				crdPaths:      []string{"o", "o[*].n"},
+				mode:          ToEmbeddedObject,
+			},
+			want: want{
+				converted: true,
+				targetMap: map[string]any{
+					"spec": map[string]any{
+						"initProvider": map[string]any{
+							"o": map[string]any{
+								"n": map[string]any{
+									"k": "v",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		"SuccessfulNestedToEmbeddedObjectConversionPartial": {
+			reason: "Successful conversion from an singleton list nested in a non-singleton list to an embedded object nested in a list.",
+			args: args{
+				sourceVersion: AllVersions,
+				sourceMap: map[string]any{
+					"spec": map[string]any{
+						"initProvider": map[string]any{
+							"o": []map[string]any{
+								{
+									"n": []map[string]any{
+										{
+											"k": "v",
+										},
+									},
+								},
+								{
+									"n": []map[string]any{
+										{
+											"k": "v2",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				targetVersion: AllVersions,
+				targetMap:     map[string]any{},
+				crdPaths:      []string{"o[*].n"},
+				mode:          ToEmbeddedObject,
+			},
+			want: want{
+				converted: true,
+				targetMap: map[string]any{
+					"spec": map[string]any{
+						"initProvider": map[string]any{
+							"o": []map[string]any{
+								{
+									"n": map[string]any{
+										"k": "v",
+									},
+								},
+								{
+									"n": map[string]any{
+										"k": "v2",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 		"SuccessfulToSingletonListConversion": {
 			reason: "Successful conversion from an embedded object to a singleton list.",
 			args: args{
@@ -437,6 +884,98 @@ func TestSingletonListConversion(t *testing.T) {
 							"o": []map[string]any{
 								{
 									"k": "v",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		"SuccessfulNestedToSingletonListConversion": {
+			reason: "Successful conversion from a nested embedded object to a singleton list.",
+			args: args{
+				sourceVersion: AllVersions,
+				sourceMap: map[string]any{
+					"spec": map[string]any{
+						"initProvider": map[string]any{
+							"o": map[string]any{
+								"n": map[string]any{
+									"k": "v",
+								},
+							},
+						},
+					},
+				},
+				targetVersion: AllVersions,
+				targetMap:     map[string]any{},
+				crdPaths:      []string{"o", "o[*].n"},
+				mode:          ToSingletonList,
+			},
+			want: want{
+				converted: true,
+				targetMap: map[string]any{
+					"spec": map[string]any{
+						"initProvider": map[string]any{
+							"o": []map[string]any{
+								{
+									"n": []map[string]any{
+										{
+											"k": "v",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		"SuccessfulNestedToSingletonListConversionPartial": {
+			reason: "Successful conversion from an embedded object nested in a non-singleton list to a nested list.",
+			args: args{
+				sourceVersion: AllVersions,
+				sourceMap: map[string]any{
+					"spec": map[string]any{
+						"initProvider": map[string]any{
+							"o": []map[string]any{
+								{
+									"n": map[string]any{
+										"k": "v",
+									},
+								},
+								{
+									"n": map[string]any{
+										"k": "v2",
+									},
+								},
+							},
+						},
+					},
+				},
+				targetVersion: AllVersions,
+				targetMap:     map[string]any{},
+				crdPaths:      []string{"o[*].n"},
+				mode:          ToSingletonList,
+			},
+			want: want{
+				converted: true,
+				targetMap: map[string]any{
+					"spec": map[string]any{
+						"initProvider": map[string]any{
+							"o": []map[string]any{
+								{
+									"n": []map[string]any{
+										{
+											"k": "v",
+										},
+									},
+								},
+								{
+									"n": []map[string]any{
+										{
+											"k": "v2",
+										},
+									},
 								},
 							},
 						},
