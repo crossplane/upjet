@@ -97,25 +97,25 @@ func (cg *CRDGenerator) Generate(cfg *config.Resource) (string, error) {
 	}
 
 	// Add deprecation information if this version is deprecated
-	if deprecation, isDeprecated := cfg.DeprecatedVersions[cfg.Version]; isDeprecated {
+	if deprecation, isDeprecated := cfg.IsVersionDeprecated(cfg.Version); isDeprecated {
 		crdMap["DeprecationWarning"] = buildEnhancedDeprecationWarning(deprecation)
 		crdMap["DeprecationNotice"] = buildDeprecationNotice(cfg.Version, deprecation)
 	}
 
 	// Check if this version should be marked as unserved
-	// Only mark as unserved if ServedVersions is explicitly configured
-	// and the current version is NOT in that list
-	if len(cfg.ServedVersions) > 0 {
-		isServed := false
-		for _, v := range cfg.ServedVersions {
-			if v == cfg.Version {
-				isServed = true
-				break
-			}
+	// With SetServedVersions() validation, the current version MUST be included
+	// if served versions are explicitly configured. This check is defensive but should
+	// not trigger under normal circumstances with validated configuration.
+	servedVersions := cfg.GetServedVersions()
+	isServed := false
+	for _, v := range servedVersions {
+		if v == cfg.Version {
+			isServed = true
+			break
 		}
-		if !isServed {
-			crdMap["MarkUnserved"] = "true"
-		}
+	}
+	if !isServed {
+		crdMap["MarkUnserved"] = "true"
 	}
 
 	vars := map[string]any{
@@ -152,17 +152,17 @@ func deleteOmittedFields(sch map[string]*schema.Schema, omittedFields []string) 
 // buildEnhancedDeprecationWarning creates an enhanced deprecation warning message
 // by appending release information to the base warning message if available.
 func buildEnhancedDeprecationWarning(deprecation config.VersionDeprecation) string {
-	warning := deprecation.Warning
+	warning := strings.TrimSpace(deprecation.Warning)
 	if warning == "" {
 		warning = "This API version is deprecated."
 	}
 
 	// Append release information if available
-	if deprecation.DeprecatedInRelease != "" {
-		warning += fmt.Sprintf(" Deprecated since %s.", deprecation.DeprecatedInRelease)
+	if deprecation.DeprecationRelease != "" {
+		warning += fmt.Sprintf(" Deprecated since %s.", deprecation.DeprecationRelease)
 	}
-	if deprecation.RemovalPlannedRelease != "" {
-		warning += fmt.Sprintf(" Planned removal in %s.", deprecation.RemovalPlannedRelease)
+	if deprecation.PlannedRemovalRelease != "" {
+		warning += fmt.Sprintf(" Planned removal in %s.", deprecation.PlannedRemovalRelease)
 	}
 
 	return warning
@@ -177,15 +177,16 @@ func buildDeprecationNotice(version string, deprecation config.VersionDeprecatio
 	notice.WriteString(version)
 	notice.WriteString(") has been deprecated")
 
-	if deprecation.DeprecatedInRelease != "" {
-		notice.WriteString(fmt.Sprintf(" in release %s", deprecation.DeprecatedInRelease))
+	if deprecation.DeprecationRelease != "" {
+		notice.WriteString(fmt.Sprintf(" in release %s", deprecation.DeprecationRelease))
 	}
 
-	if deprecation.RemovalPlannedRelease != "" {
-		notice.WriteString(fmt.Sprintf(" and is planned for removal in release %s.", deprecation.RemovalPlannedRelease))
-	} else {
-		notice.WriteString(".")
+	if deprecation.PlannedRemovalRelease != "" {
+		notice.WriteString(fmt.Sprintf(" and is planned for removal in release %s", deprecation.PlannedRemovalRelease))
 	}
+
+	// Always terminate with a period
+	notice.WriteString(".")
 
 	return notice.String()
 }

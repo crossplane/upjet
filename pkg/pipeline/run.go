@@ -43,9 +43,9 @@ func Run(pcCluster, pcNamespace *config.Provider, rootDir string) {
 
 			Scope: tjtypes.CRDScopeCluster,
 			// Register built-in post-generation hooks
-			PostGenerationHooks: []PostGenerationHook{
-				NewStorageVersionMarkerUpdateHook(),
-				NewVersionMarkerUpdateHook(),
+			postGenerationHooks: []postGenerationHook{
+				newStorageVersionMarkerUpdateHook(),
+				newLifecycleMarkerUpdateHook(),
 			},
 		}
 
@@ -70,9 +70,9 @@ func Run(pcCluster, pcNamespace *config.Provider, rootDir string) {
 
 		Scope: tjtypes.CRDScopeCluster,
 		// Register built-in post-generation hooks
-		PostGenerationHooks: []PostGenerationHook{
-			NewStorageVersionMarkerUpdateHook(),
-			NewVersionMarkerUpdateHook(),
+		postGenerationHooks: []postGenerationHook{
+			newStorageVersionMarkerUpdateHook(),
+			newLifecycleMarkerUpdateHook(),
 		},
 	}
 
@@ -87,9 +87,9 @@ func Run(pcCluster, pcNamespace *config.Provider, rootDir string) {
 
 		Scope: tjtypes.CRDScopeNamespaced,
 		// Register built-in post-generation hooks
-		PostGenerationHooks: []PostGenerationHook{
-			NewStorageVersionMarkerUpdateHook(),
-			NewVersionMarkerUpdateHook(),
+		postGenerationHooks: []postGenerationHook{
+			newStorageVersionMarkerUpdateHook(),
+			newLifecycleMarkerUpdateHook(),
 		},
 	}
 
@@ -115,7 +115,7 @@ type PipelineRunner struct {
 
 	Scope tjtypes.CRDScope
 
-	PostGenerationHooks []PostGenerationHook
+	postGenerationHooks []postGenerationHook
 }
 
 func (r *PipelineRunner) Run(pc *config.Provider) []string { //nolint:gocyclo
@@ -316,9 +316,9 @@ func (r *PipelineRunner) Run(pc *config.Provider) []string { //nolint:gocyclo
 	fmt.Printf("\nGenerated %d resources with scope %s!\n", count, r.Scope)
 
 	// Run post-generation hooks
-	if len(r.PostGenerationHooks) > 0 {
-		fmt.Printf("Running %d post-generation hook(s)...\n", len(r.PostGenerationHooks))
-		for i, hook := range r.PostGenerationHooks {
+	if len(r.postGenerationHooks) > 0 {
+		fmt.Printf("Running %d post-generation hook(s)...\n", len(r.postGenerationHooks))
+		for i, hook := range r.postGenerationHooks {
 			if err := hook.Run(r, pc, resourcesGroups); err != nil {
 				panic(errors.Wrapf(err, "post-generation hook %d failed", i+1))
 			}

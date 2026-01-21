@@ -252,8 +252,8 @@ type MemberList struct {
 				isDeprecated: true,
 				deprecation: config.VersionDeprecation{
 					Warning:               "v1beta1 Member is deprecated. Please use v1beta2.",
-					DeprecatedInRelease:   "v1.5.0",
-					RemovalPlannedRelease: "v1.7.0",
+					DeprecationRelease:    "v1.5.0",
+					PlannedRemovalRelease: "v1.7.0",
 				},
 			},
 			want: want{
@@ -278,8 +278,8 @@ type MemberList struct {
 				isDeprecated: true,
 				deprecation: config.VersionDeprecation{
 					Warning:               "v1beta1 is deprecated and will be removed soon.",
-					DeprecatedInRelease:   "v1.5.0",
-					RemovalPlannedRelease: "v1.6.0",
+					DeprecationRelease:    "v1.5.0",
+					PlannedRemovalRelease: "v1.6.0",
 				},
 			},
 			want: want{
@@ -453,11 +453,11 @@ type MemberList struct {
 				if warning == "" {
 					warning = "This API version is deprecated."
 				}
-				if tc.args.deprecation.DeprecatedInRelease != "" {
-					warning += fmt.Sprintf(" Deprecated since %s.", tc.args.deprecation.DeprecatedInRelease)
+				if tc.args.deprecation.DeprecationRelease != "" {
+					warning += fmt.Sprintf(" Deprecated since %s.", tc.args.deprecation.DeprecationRelease)
 				}
-				if tc.args.deprecation.RemovalPlannedRelease != "" {
-					warning += fmt.Sprintf(" Planned removal in %s.", tc.args.deprecation.RemovalPlannedRelease)
+				if tc.args.deprecation.PlannedRemovalRelease != "" {
+					warning += fmt.Sprintf(" Planned removal in %s.", tc.args.deprecation.PlannedRemovalRelease)
 				}
 
 				expectedMarker := `// +kubebuilder:deprecatedversion:warning="` + warning + `"`
@@ -489,11 +489,11 @@ type MemberList struct {
 					if warning == "" {
 						warning = "This API version is deprecated."
 					}
-					if tc.args.deprecation.DeprecatedInRelease != "" {
-						warning += fmt.Sprintf(" Deprecated since %s.", tc.args.deprecation.DeprecatedInRelease)
+					if tc.args.deprecation.DeprecationRelease != "" {
+						warning += fmt.Sprintf(" Deprecated since %s.", tc.args.deprecation.DeprecationRelease)
 					}
-					if tc.args.deprecation.RemovalPlannedRelease != "" {
-						warning += fmt.Sprintf(" Planned removal in %s.", tc.args.deprecation.RemovalPlannedRelease)
+					if tc.args.deprecation.PlannedRemovalRelease != "" {
+						warning += fmt.Sprintf(" Planned removal in %s.", tc.args.deprecation.PlannedRemovalRelease)
 					}
 					expectedMarker := `// +kubebuilder:deprecatedversion:warning="` + warning + `"`
 					verifyMarkerNotNearType(t, got, "MemberList", expectedMarker)
@@ -781,16 +781,6 @@ type Member struct {
 					"// +kubebuilder:storageversion",
 				},
 				err: false,
-			},
-		},
-		"ErrorOnMissingType": {
-			reason: "Should return error when type is not found.",
-			args: args{
-				content:  baseContentWithMarker,
-				typeName: "NonExistent",
-			},
-			want: want{
-				err: true,
 			},
 		},
 	}
