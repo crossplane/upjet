@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Crossplane Authors <https://crossplane.io>
+#
+# SPDX-License-Identifier: CC0-1.0
+
 {
   "locations.conditionalaccess.azuread.upbound.io":"v1beta2",
   "invitations.invitations.azuread.upbound.io":"v1beta2",
