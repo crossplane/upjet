@@ -33,19 +33,11 @@ import (
 // CRDsMigrator makes sure the CRDs are using the latest storage version.
 type CRDsMigrator struct {
 	gvkList      []schema.GroupVersionKind
-	maxRetries   int
 	retryBackoff wait.Backoff
 }
 
 // CRDsMigratorOption is a functional option for configuring CRDsMigrator.
 type CRDsMigratorOption func(*CRDsMigrator)
-
-// WithMaxRetries sets the maximum number of retries for transient failures.
-func WithMaxRetries(maxRetries int) CRDsMigratorOption {
-	return func(c *CRDsMigrator) {
-		c.maxRetries = maxRetries
-	}
-}
 
 // WithRetryBackoff sets the retry backoff configuration.
 func WithRetryBackoff(backoff wait.Backoff) CRDsMigratorOption {
@@ -57,12 +49,12 @@ func WithRetryBackoff(backoff wait.Backoff) CRDsMigratorOption {
 // NewCRDsMigrator returns a new *CRDsMigrator with default retry configuration.
 func NewCRDsMigrator(gvkList []schema.GroupVersionKind, opts ...CRDsMigratorOption) *CRDsMigrator {
 	c := &CRDsMigrator{
-		gvkList:    gvkList,
-		maxRetries: 10,
+		gvkList: gvkList,
 		retryBackoff: wait.Backoff{
 			Duration: 1 * time.Second,
 			Factor:   2.0,
 			Jitter:   0.1,
+			Steps:    10,
 		},
 	}
 

@@ -36,10 +36,10 @@ var (
 	updateCmd      = app.Command("update", "Update CRD status to reflect the current storage version")
 	updateCRDNames = updateCmd.Flag("crd-names", "Comma-separated list of CRD:version pairs (e.g., 'buckets.s3.aws.upbound.io:v1beta2,users.iam.aws.upbound.io:v1beta1')").String()
 	updateCRDFile  = updateCmd.Flag("crd-file", "Path to YAML file containing CRD to storage version mappings").String()
-	updateRetries  = updateCmd.Flag("retries", "Number of retry attempts").Default("5").Int()
-	updateDuration = updateCmd.Flag("retry-duration", "Initial retry duration in seconds").Default("1").Int()
-	updateFactor   = updateCmd.Flag("retry-factor", "Retry backoff factor").Default("2.0").Float64()
-	updateJitter   = updateCmd.Flag("retry-jitter", "Retry jitter (0.0-1.0)").Default("0.1").Float64()
+	updateRetries  = updateCmd.Flag("retries", "Number of retry attempts (must be > 0)").Default("10").Int()
+	updateDuration = updateCmd.Flag("retry-duration", "Initial retry duration in seconds (must be > 0)").Default("1").Int()
+	updateFactor   = updateCmd.Flag("retry-factor", "Retry backoff factor (must be > 1.0 for exponential growth)").Default("2.0").Float64()
+	updateJitter   = updateCmd.Flag("retry-jitter", "Retry jitter between 0.0 and 1.0").Default("0.1").Float64()
 	skipPermCheck  = updateCmd.Flag("skip-permission-check", "Skip permission check before updating CRD").Bool()
 )
 
@@ -86,7 +86,11 @@ func runUpdate() error { //nolint:gocyclo // easier to follow as a unit
 		return errors.Wrap(err, "failed to create kube client")
 	}
 
-	// Configure retry backoff
+	// Validate and configure retry backoff
+	if err := validateRetryConfig(*updateRetries, *updateDuration, *updateFactor, *updateJitter); err != nil {
+		return errors.Wrap(err, "invalid retry configuration")
+	}
+
 	retryBackoff := wait.Backoff{
 		Duration: time.Duration(*updateDuration) * time.Second,
 		Factor:   *updateFactor,
@@ -189,6 +193,22 @@ func parseCRDMappings(crdNamesFlag, crdFile string) (map[string]string, error) {
 	}
 
 	return nil, nil
+}
+
+func validateRetryConfig(retries, duration int, factor, jitter float64) error {
+	if retries <= 0 {
+		return errors.Errorf("retries must be greater than 0, got %d", retries)
+	}
+	if duration <= 0 {
+		return errors.Errorf("retry-duration must be greater than 0, got %d", duration)
+	}
+	if factor <= 1.0 {
+		return errors.Errorf("retry-factor must be greater than 1.0 for exponential backoff, got %.2f", factor)
+	}
+	if jitter < 0.0 || jitter > 1.0 {
+		return errors.Errorf("retry-jitter must be between 0.0 and 1.0, got %.2f", jitter)
+	}
+	return nil
 }
 
 func buildKubeConfig(kubeconfigPath string) (*rest.Config, error) {
