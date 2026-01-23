@@ -147,10 +147,15 @@ func (c *CRDsMigrator) Run(ctx context.Context, logr logging.Logger, discoveryCl
 			for i := range resources.Items {
 				// apply empty patch for storage version upgrade with retry
 				res := resources.Items[i]
-				patchErr := retry.OnError(c.retryBackoff, func(err error) bool { return true }, func() error {
+				patchErr := retry.OnError(c.retryBackoff, func(err error) bool {
+					return !kerrors.IsNotFound(err)
+				}, func() error {
 					return kube.Patch(ctx, &res, client.RawPatch(types.MergePatchType, []byte(`{}`)))
 				})
 				if patchErr != nil {
+					if kerrors.IsNotFound(patchErr) {
+						continue
+					}
 					return errors.Wrapf(patchErr, "cannot patch %s %q", crd.Spec.Names.Kind, res.GetName())
 				}
 			}
@@ -239,6 +244,9 @@ func CheckCRDStatusUpdatePermission(ctx context.Context, kube client.Client, crd
 	}
 
 	if err := kube.Create(ctx, ssar); err != nil {
+		if kerrors.IsForbidden(err) || kerrors.IsUnauthorized(err) || kerrors.IsNotFound(err) {
+			return false, nil
+		}
 		return false, errors.Wrap(err, "failed to create SelfSubjectAccessReview for verb patch")
 	}
 
