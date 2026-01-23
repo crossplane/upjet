@@ -1,0 +1,5 @@
+{
+  "locations.conditionalaccess.azuread.upbound.io":"v1beta2",
+  "invitations.invitations.azuread.upbound.io":"v1beta2",
+  "principals.serviceprincipals.azuread.upbound.io":"v1beta2"
+}
