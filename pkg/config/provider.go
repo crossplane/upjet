@@ -179,6 +179,10 @@ type Provider struct {
 	// modify the Provider configuration based on the underlying Terraform
 	// resource schemas.
 	schemaTraversers []traverser.SchemaTraverser
+
+	// StorageVersionMigrator handles the migration of CRD resources from old
+	// storage versions to new storage versions when the CRD schema is updated.
+	StorageVersionMigrator *CRDsMigrator
 }
 
 // ReferenceInjector injects cross-resource references across the resources
@@ -305,6 +309,14 @@ func WithSchemaTraversers(traversers ...traverser.SchemaTraverser) ProviderOptio
 func WithExampleManifestConfiguration(emc ExampleManifestConfiguration) ProviderOption {
 	return func(p *Provider) {
 		p.ExampleManifestConfiguration = emc
+	}
+}
+
+// WithStorageVersionMigrator configures a CRDsMigrator for handling storage version
+// migrations of CRD resources when their schemas are updated.
+func WithStorageVersionMigrator(migrator *CRDsMigrator) ProviderOption {
+	return func(p *Provider) {
+		p.StorageVersionMigrator = migrator
 	}
 }
 
