@@ -8,17 +8,21 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/crossplane/crossplane-runtime/v2/pkg/errors"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/logging"
+	authv1 "k8s.io/api/authorization/v1"
 	extv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/restmapper"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -28,13 +32,42 @@ import (
 
 // CRDsMigrator makes sure the CRDs are using the latest storage version.
 type CRDsMigrator struct {
-	gvkList []schema.GroupVersionKind
+	gvkList      []schema.GroupVersionKind
+	maxRetries   int
+	retryBackoff wait.Backoff
 }
 
-// NewCRDsMigrator returns a new *CRDsMigrator.
-func NewCRDsMigrator(gvkList []schema.GroupVersionKind) *CRDsMigrator {
+// CRDsMigratorOption is a functional option for configuring CRDsMigrator.
+type CRDsMigratorOption func(*CRDsMigrator)
+
+// WithMaxRetries sets the maximum number of retries for transient failures.
+func WithMaxRetries(maxRetries int) CRDsMigratorOption {
+	return func(c *CRDsMigrator) {
+		c.maxRetries = maxRetries
+	}
+}
+
+// WithRetryBackoff sets the retry backoff configuration.
+func WithRetryBackoff(backoff wait.Backoff) CRDsMigratorOption {
+	return func(c *CRDsMigrator) {
+		c.retryBackoff = backoff
+	}
+}
+
+// NewCRDsMigrator returns a new *CRDsMigrator with default retry configuration.
+func NewCRDsMigrator(gvkList []schema.GroupVersionKind, opts ...CRDsMigratorOption) *CRDsMigrator {
 	c := &CRDsMigrator{
-		gvkList: gvkList,
+		gvkList:    gvkList,
+		maxRetries: 10,
+		retryBackoff: wait.Backoff{
+			Duration: 1 * time.Second,
+			Factor:   2.0,
+			Jitter:   0.1,
+		},
+	}
+
+	for _, opt := range opts {
+		opt(c)
 	}
 
 	return c
@@ -90,6 +123,7 @@ func (c *CRDsMigrator) Run(ctx context.Context, logr logging.Logger, discoveryCl
 		}
 
 		if !needMigration {
+			logr.Debug("Skipping CRD migration for CRD because it has already been migrated", crdName)
 			continue
 		}
 
@@ -107,18 +141,25 @@ func (c *CRDsMigrator) Run(ctx context.Context, logr logging.Logger, discoveryCl
 		// and write it back in the current storage version.
 		var continueToken string
 		for {
-			if err := kube.List(ctx, &resources,
-				client.Limit(500),
-				client.Continue(continueToken),
-			); err != nil {
-				return errors.Wrapf(err, "cannot list %s", resources.GroupVersionKind().String())
+			// Retry resource listing with exponential backoff
+			listErr := retry.OnError(c.retryBackoff, func(err error) bool { return true }, func() error {
+				return kube.List(ctx, &resources,
+					client.Limit(500),
+					client.Continue(continueToken),
+				)
+			})
+			if listErr != nil {
+				return errors.Wrapf(listErr, "cannot list %s", resources.GroupVersionKind().String())
 			}
 
 			for i := range resources.Items {
-				// apply empty patch for storage version upgrade
+				// apply empty patch for storage version upgrade with retry
 				res := resources.Items[i]
-				if err := kube.Patch(ctx, &res, client.RawPatch(types.MergePatchType, []byte(`{}`))); err != nil {
-					return errors.Wrapf(err, "cannot patch %s %q", crd.Spec.Names.Kind, res.GetName())
+				patchErr := retry.OnError(c.retryBackoff, func(err error) bool { return true }, func() error {
+					return kube.Patch(ctx, &res, client.RawPatch(types.MergePatchType, []byte(`{}`)))
+				})
+				if patchErr != nil {
+					return errors.Wrapf(patchErr, "cannot patch %s %q", crd.Spec.Names.Kind, res.GetName())
 				}
 			}
 
@@ -128,21 +169,20 @@ func (c *CRDsMigrator) Run(ctx context.Context, logr logging.Logger, discoveryCl
 			}
 		}
 
+		// Check if the client has permission to update/patch CRD status before attempting the update
+		hasPermission, err := CheckCRDStatusUpdatePermission(ctx, kube, crdName)
+		if err != nil {
+			return errors.Wrapf(err, "permission check failed for CRD %s", crdName)
+		}
+
+		if !hasPermission {
+			logr.Info(fmt.Sprintf("This client does not have permission to execute %s operation for patch", crdName))
+			continue
+		}
+
 		// Update CRD status to reflect that only the new storage version is stored
-		origCrd := crd.DeepCopy()
-
-		crd.Status.StoredVersions = []string{storageVersion}
-		if err := kube.Status().Patch(ctx, &crd, client.MergeFrom(origCrd)); err != nil {
-			return errors.Wrapf(err, "couldn't update %s crd", crd.Name)
-		}
-
-		// One more check just to be sure we actually updated the crd
-		if err := kube.Get(ctx, client.ObjectKey{Name: crd.Name}, &crd); err != nil {
-			return errors.Wrapf(err, "cannot get %s crd to check", crd.Name)
-		}
-
-		if len(crd.Status.StoredVersions) != 1 || crd.Status.StoredVersions[0] != storageVersion {
-			return errors.Errorf("was expecting CRD %q to only have %s, got instead: %v", crd.Name, storageVersion, crd.Status.StoredVersions)
+		if err := UpdateCRDStorageVersion(ctx, kube, c.retryBackoff, crdName, storageVersion); err != nil {
+			return err
 		}
 		logr.Debug("Storage version migration completed", "crd", crdName)
 	}
@@ -158,6 +198,63 @@ func GetCRDNameFromGVK(mapper meta.RESTMapper, gvk schema.GroupVersionKind) (str
 	}
 
 	return mapping.Resource.Resource + "." + mapping.Resource.Group, nil
+}
+
+// UpdateCRDStorageVersion updates the CRD status to reflect only the specified storage version.
+// It retries the update with exponential backoff and verifies the update was successful.
+func UpdateCRDStorageVersion(ctx context.Context, kube client.Client, retryBackoff wait.Backoff, crdName, storageVersion string) error {
+	var crd extv1.CustomResourceDefinition
+	// Update CRD status to reflect that only the new storage version is stored
+	// Use retry for status updates as they can fail due to conflicts
+	statusUpdateErr := retry.OnError(retryBackoff, func(err error) bool { return true }, func() error {
+		// Re-fetch the CRD to get the latest version before patching
+		if err := kube.Get(ctx, client.ObjectKey{Name: crdName}, &crd); err != nil {
+			return err
+		}
+		origCrd := crd.DeepCopy()
+		crd.Status.StoredVersions = []string{storageVersion}
+		return kube.Status().Patch(ctx, &crd, client.MergeFrom(origCrd))
+	})
+	if statusUpdateErr != nil {
+		return errors.Wrapf(statusUpdateErr, "couldn't update %s crd", crd.Name)
+	}
+
+	// One more check just to be sure we actually updated the crd
+	if err := kube.Get(ctx, client.ObjectKey{Name: crd.Name}, &crd); err != nil {
+		return errors.Wrapf(err, "cannot get %s crd to check", crd.Name)
+	}
+
+	if len(crd.Status.StoredVersions) != 1 || crd.Status.StoredVersions[0] != storageVersion {
+		return errors.Errorf("was expecting CRD %q to only have %s, got instead: %v", crd.Name, storageVersion, crd.Status.StoredVersions)
+	}
+	return nil
+}
+
+// CheckCRDStatusUpdatePermission checks if the current client has permission to update/patch
+// the status subresource of the specified CRD using SelfSubjectAccessReview.
+func CheckCRDStatusUpdatePermission(ctx context.Context, kube client.Client, crdName string) (bool, error) {
+	// Check for both 'patch' verb on the status subresource
+	ssar := &authv1.SelfSubjectAccessReview{
+		Spec: authv1.SelfSubjectAccessReviewSpec{
+			ResourceAttributes: &authv1.ResourceAttributes{
+				Group:       "apiextensions.k8s.io",
+				Resource:    "customresourcedefinitions",
+				Subresource: "status",
+				Name:        crdName,
+				Verb:        "patch",
+			},
+		},
+	}
+
+	if err := kube.Create(ctx, ssar); err != nil {
+		return false, errors.Wrap(err, "failed to create SelfSubjectAccessReview for verb patch")
+	}
+
+	if !ssar.Status.Allowed {
+		return false, nil
+	}
+
+	return true, nil
 }
 
 // PrepareCRDsMigrator scans the provider's resources for any that have previous versions
