@@ -665,6 +665,77 @@ type Resource struct {
 	// silently modify resource data without notifying the management layer
 	// (e.g., sanitized XML fields).
 	UpdateLoopPrevention UpdateLoopPrevention
+
+	// AutoConversionRegistrationOptions controls the automatic registration of
+	// API version conversion functions based on detected CRD schema changes.
+	// See RegisterAutoConversions and ExcludeTypeChangesFromIdentity
+	// for details on how these options are used.
+	AutoConversionRegistrationOptions AutoConversionRegistrationOptions
+}
+
+// AutoConversionRegistrationOptions configures how automatic conversion function registration
+// behaves for a specific resource. This allows fine-grained control over the automatic
+// conversion system that detects breaking changes and registers appropriate conversions.
+//
+// The automatic conversion system (see pkg/config/conversion.go) processes CRD schema changes
+// and registers conversion functions for:
+// - Field additions/deletions (using annotation-based persistence)
+// - Type changes (string↔number, string↔boolean)
+//
+// This struct provides three control mechanisms:
+// 1. Complete opt-out via SkipAutoRegistration
+// 2. Exclusion of specific paths from auto-registration
+// 3. Tracking of paths excluded from identity conversion (populated automatically)
+//
+// Note: IdentityConversionExcludePaths is automatically populated by
+// ExcludeTypeChangesFromIdentity and should not be manually set.
+type AutoConversionRegistrationOptions struct {
+	// SkipAutoRegistration completely disables automatic conversion registration for this resource.
+	// When true, the resource will be skipped by RegisterAutoConversions.
+	//
+	// Use this when:
+	//   - The resource has complex custom conversions that cannot be auto-generated
+	//   - You want full manual control over all conversions for this resource
+	//   - The automatic system produces incorrect conversions for this resource
+	//
+	// Default: false (auto-registration enabled)
+	SkipAutoRegistration bool
+
+	// IdentityConversionExcludePaths contains field paths that should be excluded from
+	// identity conversion because their types changed between API versions.
+	//
+	// This field is AUTOMATICALLY POPULATED by ExcludeTypeChangesFromIdentity
+	// and should not be manually set by resource configurations. It is used by:
+	//   - Identity converters to skip type-changed fields during copying
+	//   - Singleton list converters to avoid incompatible type conversions
+	//
+	// The paths in this slice use Terraform schema format (without spec.forProvider prefix).
+	// Example: ["instanceType", "tags[*].value"]
+	//
+	// Technical note: Type-changed fields must be excluded from identity conversion
+	// because direct field copying would fail when types don't match (e.g., copying
+	// a string value into a number field). These fields are instead handled by
+	// specialized type conversion functions.
+	IdentityConversionExcludePaths []string
+
+	// AutoRegisterExcludePaths specifies field paths that should be excluded from
+	// automatic conversion registration, even if changes are detected.
+	//
+	// Use this to override automatic registration for specific fields when:
+	//   - The automatic conversion is incorrect (e.g., wrong int vs float guess)
+	//   - You need custom conversion logic for specific fields
+	//   - You want to manually register conversions with special handling
+	//
+	// Paths must use the full CRD format including prefixes.
+	// Example: []string{"spec.forProvider.configuration", "status.atProvider.metadata"}
+	//
+	// After excluding a path, you can manually register conversions:
+	//   r.AutoConversionRegistrationOptions.AutoRegisterExcludePaths = []string{"spec.forProvider.price"}
+	//   r.Conversions = append(r.Conversions,
+	//       conversion.NewFieldTypeConversion("v1beta1", "v1beta2", "spec.forProvider.price", conversion.StringToFloat),
+	//       conversion.NewFieldTypeConversion("v1beta2", "v1beta1", "spec.forProvider.price", conversion.FloatToString),
+	//   )
+	AutoRegisterExcludePaths []string
 }
 
 // UpdateLoopPrevention is an interface that defines the behavior to prevent
