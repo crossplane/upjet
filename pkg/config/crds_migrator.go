@@ -115,7 +115,7 @@ func (c *CRDsMigrator) Run(ctx context.Context, logr logging.Logger, discoveryCl
 		}
 
 		if !needMigration {
-			logr.Debug("Skipping CRD migration for CRD because it has already been migrated", crdName)
+			logr.Debug("Skipping CRD migration for CRD because it has already been migrated", "crd-name", crdName)
 			continue
 		}
 
