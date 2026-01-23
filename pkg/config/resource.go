@@ -435,6 +435,27 @@ type MergeStrategy struct {
 // configuration entry set.
 type ServerSideApplyMergeStrategies map[string]MergeStrategy
 
+// VersionDeprecation holds deprecation metadata for a specific API version.
+// This information is used to generate Kubernetes CRD deprecation warnings
+// and to track the deprecation lifecycle according to the API versioning policy.
+type VersionDeprecation struct {
+	// Warning is the deprecation warning message shown to users when they
+	// interact with the deprecated API version. This message should explain
+	// which version to migrate to and any important migration considerations.
+	// Maps to the +kubebuilder:deprecatedversion:warning marker in generated CRDs.
+	Warning string
+
+	// DeprecationRelease indicates which provider release deprecated this version.
+	// Format: "v1.2.3"
+	DeprecationRelease string
+
+	// PlannedRemovalRelease indicates the provider release in which this version
+	// is planned to be removed. According to the versioning policy, a version must
+	// remain deprecated for at least one release before removal.
+	// Format: "v1.3.0"
+	PlannedRemovalRelease string
+}
+
 // Resource is the set of information that you can override at different steps
 // of the code generation pipeline.
 type Resource struct {
@@ -463,7 +484,58 @@ type Resource struct {
 	// PreviousVersions is the list of API versions previously generated for this
 	// resource for multi-versioned managed resources. upjet will attempt to load
 	// the type definitions from these previous versions if configured.
+	//
+	// This field is optional in the API and managed by provider maintainers. Providers
+	// may choose not to set PreviousVersions even when multiple API versions exist,
+	// as they may manage version history through other means.
+	//
+	// However, this is not recommended. For the code generation pipeline to function
+	// correctly and as intended, the relevant field is expected to be properly configured.
+	//
+	// If PreviousVersions is not configured, the defaulting behavior of
+	// GetServedVersions() will only include the current Version. Provider maintainers
+	// using SetServedVersions() with incomplete PreviousVersions must ensure they
+	// explicitly list all versions they want served.
+	//
+	// Please consider the post processor hooks like for storage, deprecation and served
+	// version management also relies on the PreviousVersions.
 	PreviousVersions []string
+
+	// servedVersions specifies which API versions should be served by the API server.
+	// If empty or nil, all versions (Version + PreviousVersions) are served by default
+	// for backward compatibility. This allows explicit control over which versions are
+	// available during lifecycle transitions (e.g., removing a deprecated version).
+	//
+	// This field is unexported to enforce validation through SetServedVersions().
+	// Use SetServedVersions() to configure and GetServedVersions() to access with
+	// proper defaulting behavior.
+	//
+	// Example usage:
+	//   resource.Version = "v1beta2"
+	//   resource.PreviousVersions = []string{"v1beta1"}
+	//   resource.SetServedVersions([]string{"v1beta2", "v1beta1"})  // Both served during bridge
+	//   resource.SetServedVersions([]string{"v1beta2"})  // Only v1beta2 served after removal
+	servedVersions []string
+
+	// deprecatedVersions maps API versions to their deprecation configuration.
+	// The key is the version string (e.g., "v1beta1"), and the value contains
+	// deprecation metadata including warning messages and release information.
+	//
+	// This field is unexported to enforce validation through SetDeprecatedVersion().
+	// Use SetDeprecatedVersion() or SetDeprecatedVersions() to configure, and
+	// GetDeprecatedVersions() or IsVersionDeprecated() to access.
+	//
+	// Example usage:
+	//   resource.SetDeprecatedVersion("v1beta1", VersionDeprecation{
+	//       Warning: "v1beta1 is deprecated. Please migrate to v1beta2.",
+	//       DeprecationRelease: "v1.5.0",
+	//       PlannedRemovalRelease: "v1.7.0",
+	//   })
+	//
+	// This information will be used to generate the +kubebuilder:deprecatedversion
+	// marker in the CRD, which causes the Kubernetes API server to emit warnings
+	// when clients interact with the deprecated version.
+	deprecatedVersions map[string]VersionDeprecation
 
 	// ControllerReconcileVersion is the CRD API version the associated
 	// controller will watch & reconcile. If left unspecified,
@@ -810,6 +882,180 @@ func (r *Resource) CRDHubVersion() string {
 // being generated.
 func (r *Resource) SetCRDHubVersion(v string) {
 	r.crdHubVersion = v
+}
+
+// SetServedVersions configures which API versions should be served by the API server.
+// This method validates the input to prevent misconfigurations.
+//
+// Validation rules:
+// - The current Version must be included in the served versions
+// - All served versions must be either the current Version or in PreviousVersions
+// - No duplicate versions are allowed
+//
+// If versions is nil or empty, the configuration is cleared and GetServedVersions()
+// will default to serving all versions (Version + PreviousVersions).
+//
+// NOTE: PreviousVersions is optional in the configuration API and managed by
+// provider maintainers. If you need to serve versions not listed in
+// PreviousVersions, you must first add them to PreviousVersions before
+// calling SetServedVersions().
+//
+// Example usage:
+//
+//	resource.Version = "v1beta2"
+//	resource.PreviousVersions = []string{"v1beta1"}
+//	err := resource.SetServedVersions([]string{"v1beta2", "v1beta1"})
+func (r *Resource) SetServedVersions(versions []string) error {
+	// Allow clearing the configuration
+	if len(versions) == 0 {
+		r.servedVersions = nil
+		return nil
+	}
+
+	// Validate: current version must be included
+	hasCurrentVersion := false
+	for _, v := range versions {
+		if v == r.Version {
+			hasCurrentVersion = true
+			break
+		}
+	}
+	if !hasCurrentVersion {
+		return errors.Errorf("served versions must include the current version %q", r.Version)
+	}
+
+	// Build a set of all known versions (current + previous)
+	knownVersions := make(map[string]bool)
+	knownVersions[r.Version] = true
+	for _, v := range r.PreviousVersions {
+		knownVersions[v] = true
+	}
+
+	// Validate: all served versions must be known, check for duplicates
+	seenVersions := make(map[string]bool)
+	for _, v := range versions {
+		// Check for duplicates
+		if seenVersions[v] {
+			return errors.Errorf("duplicate version %q in served versions", v)
+		}
+		seenVersions[v] = true
+
+		// Check if version is known
+		if !knownVersions[v] {
+			return errors.Errorf("served version %q is not in Version or PreviousVersions", v)
+		}
+	}
+
+	// Validation passed, store directly
+	r.servedVersions = versions
+	return nil
+}
+
+// HasExplicitServedVersions returns true if ServedVersions has been explicitly
+// configured via SetServedVersions(), false if it's using the default behavior
+// (serving all versions).
+func (r *Resource) HasExplicitServedVersions() bool {
+	return len(r.servedVersions) > 0
+}
+
+// GetServedVersions returns the list of API versions that should be served
+// by the API server. If ServedVersions is explicitly configured, it returns
+// that list. Otherwise, it defaults to serving all versions: the current
+// Version plus all PreviousVersions, maintaining backward compatibility.
+//
+// This method ensures that:
+// - If ServedVersions is explicitly set, it's used as-is
+// - If ServedVersions is empty/nil, all versions are served by default
+// - The returned slice is a new slice to prevent external modifications
+func (r *Resource) GetServedVersions() []string {
+	if len(r.servedVersions) > 0 {
+		// Return a copy to prevent external modifications
+		result := make([]string, len(r.servedVersions))
+		copy(result, r.servedVersions)
+		return result
+	}
+
+	// Default: serve all versions (current + previous)
+	allVersions := make([]string, 0, len(r.PreviousVersions)+1)
+	allVersions = append(allVersions, r.Version)
+	allVersions = append(allVersions, r.PreviousVersions...)
+	return allVersions
+}
+
+// SetDeprecatedVersion configures deprecation metadata for a specific API version.
+// This method validates the input to prevent misconfigurations.
+//
+// Validation rules:
+// The version must be either the current Version or in PreviousVersions
+// A deprecation warning message is required
+// If both DeprecationRelease and PlannedRemovalRelease are provided, PlannedRemovalRelease
+// must come after DeprecationRelease (basic semver ordering check)
+//
+// Example usage:
+//
+//	resource.SetDeprecatedVersion("v1beta1", VersionDeprecation{
+//	    Warning: "v1beta1 is deprecated. Please migrate to v1beta2.",
+//	    DeprecationRelease: "v1.5.0",
+//	    PlannedRemovalRelease: "v1.7.0",
+//	})
+func (r *Resource) SetDeprecatedVersion(version string, deprecation VersionDeprecation) error {
+	// Validate version is known
+	isKnown := version == r.Version
+	if !isKnown {
+		for _, v := range r.PreviousVersions {
+			if v == version {
+				isKnown = true
+				break
+			}
+		}
+	}
+	if !isKnown {
+		return errors.Errorf("version %q is not in Version or PreviousVersions", version)
+	}
+
+	// Validate warning message exists
+	if strings.TrimSpace(deprecation.Warning) == "" {
+		return errors.Errorf("deprecation warning is required for version %q", version)
+	}
+
+	// Validate release ordering if both are provided
+	if deprecation.DeprecationRelease != "" && deprecation.PlannedRemovalRelease != "" {
+		// Simple string comparison works for semver format (v1.5.0 < v1.7.0)
+		if deprecation.PlannedRemovalRelease <= deprecation.DeprecationRelease {
+			return errors.Errorf("PlannedRemovalRelease %q must be after DeprecationRelease %q",
+				deprecation.PlannedRemovalRelease, deprecation.DeprecationRelease)
+		}
+	}
+
+	// Initialize map if needed
+	if r.deprecatedVersions == nil {
+		r.deprecatedVersions = make(map[string]VersionDeprecation)
+	}
+
+	r.deprecatedVersions[version] = deprecation
+	return nil
+}
+
+// GetDeprecatedVersions returns a copy of the deprecated versions map.
+// Returns an empty map if no versions are deprecated.
+func (r *Resource) GetDeprecatedVersions() map[string]VersionDeprecation {
+	if len(r.deprecatedVersions) == 0 {
+		return make(map[string]VersionDeprecation)
+	}
+
+	// Return a copy to prevent external modifications
+	result := make(map[string]VersionDeprecation, len(r.deprecatedVersions))
+	for k, v := range r.deprecatedVersions {
+		result[k] = v
+	}
+	return result
+}
+
+// IsVersionDeprecated checks if a specific version is deprecated and returns
+// its deprecation metadata if so.
+func (r *Resource) IsVersionDeprecated(version string) (VersionDeprecation, bool) {
+	deprecation, ok := r.deprecatedVersions[version]
+	return deprecation, ok
 }
 
 // AddSingletonListConversion configures the list at the specified Terraform
