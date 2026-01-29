@@ -150,23 +150,39 @@ func tfJSONBlockTypeToV2Schema(nb *tfjson.SchemaBlockType) *schemav2.Schema { //
 	if nb.MinItems == 0 {
 		v2sch.Optional = true
 	}
-	if nb.MinItems == 0 && nb.MaxItems == 0 {
-		v2sch.Computed = true
-	}
 
 	switch nb.NestingMode { //nolint:exhaustive
 	case tfjson.SchemaNestingModeSet:
 		v2sch.Type = schemav2.TypeSet
+		// For collection types (Set/List/Map), infer Computed when MinItems and
+		// MaxItems are both 0, following SDK v2 semantics.
+		if nb.MinItems == 0 && nb.MaxItems == 0 {
+			v2sch.Computed = true
+		}
 	case tfjson.SchemaNestingModeList:
 		v2sch.Type = schemav2.TypeList
+		// For collection types (Set/List/Map), infer Computed when MinItems and
+		// MaxItems are both 0, following SDK v2 semantics.
+		if nb.MinItems == 0 && nb.MaxItems == 0 {
+			v2sch.Computed = true
+		}
 	case tfjson.SchemaNestingModeMap:
 		v2sch.Type = schemav2.TypeMap
-	case tfjson.SchemaNestingModeSingle:
+		// For collection types (Set/List/Map), infer Computed when MinItems and
+		// MaxItems are both 0, following SDK v2 semantics.
+		if nb.MinItems == 0 && nb.MaxItems == 0 {
+			v2sch.Computed = true
+		}
+	case tfjson.SchemaNestingModeSingle, tfjson.SchemaNestingModeGroup:
+		// For SchemaNestingModeSingle and SchemaNestingModeGroup (Plugin
+		// Framework), we do NOT infer Computed=true from MinItems/MaxItems==0,
+		// because Plugin Framework resources default to 0 for these values even
+		// for user-configurable blocks. Instead, we determine Required/Optional
+		// based on whether the block has required children.
+		// Note: Group is similar to Single but guarantees non-null result even
+		// when the block is absent.
 		v2sch.Type = schemav2.TypeList
 		v2sch.MinItems = 0
-		// TODO(erhan): not sure whether we need this
-		// the block itself can be optional, even if some child attribute
-		// or block is required
 		v2sch.Required = hasRequiredChild(nb)
 		v2sch.Optional = !v2sch.Required
 		if v2sch.Required {
