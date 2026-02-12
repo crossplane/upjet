@@ -25,7 +25,7 @@ func TestTfJSONBlockTypeToV2Schema(t *testing.T) {
 		want
 	}{
 		"SchemaNestingModeSingleWithRequiredChildren": {
-			reason: "Plugin Framework single block with required children should be Required=true, Optional=false, Computed=false.",
+			reason: "Plugin Framework single block with required children should be Required=true, Optional=false, Computed=false, and Type=SchemaTypeObject (embedded object, not list).",
 			args: args{
 				nb: &tfjson.SchemaBlockType{
 					NestingMode: tfjson.SchemaNestingModeSingle,
@@ -45,7 +45,7 @@ func TestTfJSONBlockTypeToV2Schema(t *testing.T) {
 			},
 			want: want{
 				schema: &schemav2.Schema{
-					Type:     schemav2.TypeList,
+					Type:     SchemaTypeObject,
 					Required: true,
 					Optional: false,
 					Computed: false,
@@ -65,7 +65,7 @@ func TestTfJSONBlockTypeToV2Schema(t *testing.T) {
 			},
 		},
 		"SchemaNestingModeSingleWithOnlyOptionalChildren": {
-			reason: "Plugin Framework single block with only optional children should be Required=false, Optional=true, Computed=false. This was the bug - it was incorrectly marked Computed=true.",
+			reason: "Plugin Framework single block with only optional children should be Required=false, Optional=true, Computed=false, and Type=SchemaTypeObject (embedded object, not list). This was the bug - it was incorrectly marked Computed=true and TypeList.",
 			args: args{
 				nb: &tfjson.SchemaBlockType{
 					NestingMode: tfjson.SchemaNestingModeSingle,
@@ -82,7 +82,7 @@ func TestTfJSONBlockTypeToV2Schema(t *testing.T) {
 			},
 			want: want{
 				schema: &schemav2.Schema{
-					Type:     schemav2.TypeList,
+					Type:     SchemaTypeObject,
 					Required: false,
 					Optional: true,
 					Computed: false,
@@ -99,7 +99,7 @@ func TestTfJSONBlockTypeToV2Schema(t *testing.T) {
 			},
 		},
 		"SchemaNestingModeSingleEmptyBlock": {
-			reason: "Single block with empty block definition should be Optional and not Computed.",
+			reason: "Single block with empty block definition should be Optional, not Computed, and Type=SchemaTypeObject.",
 			args: args{
 				nb: &tfjson.SchemaBlockType{
 					NestingMode: tfjson.SchemaNestingModeSingle,
@@ -110,7 +110,7 @@ func TestTfJSONBlockTypeToV2Schema(t *testing.T) {
 			},
 			want: want{
 				schema: &schemav2.Schema{
-					Type:     schemav2.TypeList,
+					Type:     SchemaTypeObject,
 					Required: false,
 					Optional: true,
 					Computed: false,
@@ -123,7 +123,7 @@ func TestTfJSONBlockTypeToV2Schema(t *testing.T) {
 			},
 		},
 		"SchemaNestingModeSingleNilBlock": {
-			reason: "Single block with nil block definition should be Optional and not Computed.",
+			reason: "Single block with nil block definition should be Optional, not Computed, and Type=SchemaTypeObject.",
 			args: args{
 				nb: &tfjson.SchemaBlockType{
 					NestingMode: tfjson.SchemaNestingModeSingle,
@@ -134,7 +134,7 @@ func TestTfJSONBlockTypeToV2Schema(t *testing.T) {
 			},
 			want: want{
 				schema: &schemav2.Schema{
-					Type:     schemav2.TypeList,
+					Type:     SchemaTypeObject,
 					Required: false,
 					Optional: true,
 					Computed: false,
@@ -144,7 +144,7 @@ func TestTfJSONBlockTypeToV2Schema(t *testing.T) {
 			},
 		},
 		"SchemaNestingModeSingleNestedBlockWithRequiredChildren": {
-			reason: "Single block containing a nested block with required children should be Required because hasRequiredChild recurses.",
+			reason: "Single block containing a nested block with required children should be Required because hasRequiredChild recurses, and both should be Type=SchemaTypeObject.",
 			args: args{
 				nb: &tfjson.SchemaBlockType{
 					NestingMode: tfjson.SchemaNestingModeSingle,
@@ -175,7 +175,7 @@ func TestTfJSONBlockTypeToV2Schema(t *testing.T) {
 			},
 			want: want{
 				schema: &schemav2.Schema{
-					Type:     schemav2.TypeList,
+					Type:     SchemaTypeObject,
 					Required: true,
 					Optional: false,
 					Computed: false,
@@ -187,7 +187,7 @@ func TestTfJSONBlockTypeToV2Schema(t *testing.T) {
 								Optional: true,
 							},
 							"nested": {
-								Type:     schemav2.TypeList,
+								Type:     SchemaTypeObject,
 								Required: true,
 								Optional: false,
 								Computed: false,
@@ -343,7 +343,7 @@ func TestTfJSONBlockTypeToV2Schema(t *testing.T) {
 			},
 		},
 		"SchemaNestingModeGroupWithOptionalChildren": {
-			reason: "SchemaNestingModeGroup should be treated like SchemaNestingModeSingle - not Computed, and Optional when no required children.",
+			reason: "SchemaNestingModeGroup should be treated like SchemaNestingModeSingle - not Computed, Optional when no required children, and Type=SchemaTypeObject.",
 			args: args{
 				nb: &tfjson.SchemaBlockType{
 					NestingMode: tfjson.SchemaNestingModeGroup,
@@ -360,7 +360,7 @@ func TestTfJSONBlockTypeToV2Schema(t *testing.T) {
 			},
 			want: want{
 				schema: &schemav2.Schema{
-					Type:     schemav2.TypeList,
+					Type:     SchemaTypeObject,
 					Required: false,
 					Optional: true,
 					Computed: false,

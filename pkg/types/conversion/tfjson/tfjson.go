@@ -181,7 +181,11 @@ func tfJSONBlockTypeToV2Schema(nb *tfjson.SchemaBlockType) *schemav2.Schema { //
 		// based on whether the block has required children.
 		// Note: Group is similar to Single but guarantees non-null result even
 		// when the block is absent.
-		v2sch.Type = schemav2.TypeList
+		// Use SchemaTypeObject to generate an embedded object (not a list),
+		// matching the behavior for nested attributes with SchemaNestingModeSingle
+		// and the Terraform Plugin Framework documentation which states that
+		// SingleNestedBlock values are represented by an object type.
+		v2sch.Type = SchemaTypeObject
 		v2sch.MinItems = 0
 		v2sch.Required = hasRequiredChild(nb)
 		v2sch.Optional = !v2sch.Required
