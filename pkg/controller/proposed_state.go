@@ -320,7 +320,7 @@ func proposedNewNestingList(schema nestedSchema, prior, config tftypes.Value) tf
 		switch schema := schema.(type) {
 		case rschema.Block:
 			if config.Type().Is(tftypes.Tuple{}) {
-				var elementTypes []tftypes.Type
+				elementTypes := make([]tftypes.Type, 0, len(newVals))
 				for _, val := range newVals {
 					elementTypes = append(elementTypes, val.Type())
 				}
@@ -333,7 +333,7 @@ func proposedNewNestingList(schema nestedSchema, prior, config tftypes.Value) tf
 
 		case rschema.Schema:
 			if config.Type().Is(tftypes.Tuple{}) {
-				var elementTypes []tftypes.Type
+				elementTypes := make([]tftypes.Type, 0, len(newVals))
 				for _, val := range newVals {
 					elementTypes = append(elementTypes, val.Type())
 				}
