@@ -103,7 +103,7 @@ func (mg *MainGenerator) Generate(groups []string) error {
 		}
 		defer func() {
 			if err := m.Close(); err != nil {
-				log.Fatalf("Failed to close the templated main %q: %s", f, err.Error())
+				log.Fatalf("Failed to close the templated main %q: %v", f, err)
 			}
 		}()
 		if err := t.Execute(m, map[string]any{
