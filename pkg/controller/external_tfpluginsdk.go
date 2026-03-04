@@ -433,7 +433,27 @@ func getTimeoutParameters(config *config.Resource) map[string]any { //nolint:goc
 }
 
 func (n *terraformPluginSDKExternal) getResourceDataDiff(tr resource.Terraformed, ctx context.Context, s *tf.InstanceState, resourceExists bool) (*tf.InstanceDiff, error) { //nolint:gocyclo
-	resourceConfig := tf.NewResourceConfigRaw(n.params)
+	// before we calculate the diff and thus what we send over into the terraform provider
+	// code, we construct the desired resource fully specified, by taking the observed
+	// state from the upstream resource and then apply the desired spec.forProvider of the crossplane
+	// resource over it. This mirrors what terraform/opentofu do, because some terraform providers
+	// do not like nil values when processing the desired resource. This is especially important
+	// when managementPolicies have LateInitialize excluded, which means spec.forProvider can
+	// be very sparse.
+	params := n.params
+	if resourceExists && s != nil && len(n.params) > 0 {
+		stateValueMap, err := n.fromInstanceStateToJSONMapForDiff(s)
+		if err == nil && len(stateValueMap) > 0 {
+			params = make(map[string]any, len(stateValueMap)+len(n.params))
+			for k, v := range stateValueMap {
+				params[k] = v
+			}
+			for k, v := range n.params {
+				params[k] = v
+			}
+		}
+	}
+	resourceConfig := tf.NewResourceConfigRaw(params)
 	instanceDiff, err := schema.InternalMap(n.config.TerraformResource.Schema).Diff(ctx, s, resourceConfig, n.config.TerraformResource.CustomizeDiff, n.ts.Meta, false)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get *terraform.InstanceDiff")
@@ -816,4 +836,17 @@ func (n *terraformPluginSDKExternal) fromInstanceStateToJSONMap(newState *tf.Ins
 		return nil, cty.NilVal, errors.Wrap(err, "could not convert instance state value to JSON")
 	}
 	return stateValueMap, attrsAsCtyValue, nil
+}
+
+func (n *terraformPluginSDKExternal) fromInstanceStateToJSONMapForDiff(newState *tf.InstanceState) (map[string]interface{}, error) {
+	impliedType := n.config.TerraformResource.CoreConfigSchema().ImpliedType()
+	attrsAsCtyValue, err := newState.AttrsAsObjectValue(impliedType)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not convert attrs to cty value")
+	}
+	stateValueMap, err := schema.StateValueToJSONMap(attrsAsCtyValue, impliedType)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not convert instance state value to JSON")
+	}
+	return stateValueMap, nil
 }
