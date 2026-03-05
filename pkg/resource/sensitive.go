@@ -238,9 +238,13 @@ func storeSensitiveData(ctx context.Context, client SecretClient, tfPath, jsonPa
 				if resource.IgnoreNotFound(err) != nil {
 					return errors.Wrapf(err, errFmtCannotGetSecretValue, ref)
 				}
+
+				expandedTFPath, _ := expandWildcardTFPath(tfPath, expandedJSONPath)
+
 				for key, value := range data {
-					if err = pavedTF.SetValue(fmt.Sprintf("%s.%s", tfPath, key), string(value)); err != nil {
-						return errors.Wrapf(err, "cannot set string as terraform attribute for fieldpath %q", fmt.Sprintf("%s.%s", tfPath, key))
+					fp := fmt.Sprintf("%s.%s", expandedTFPath, key)
+					if err = pavedTF.SetValue(fp, string(value)); err != nil {
+						return errors.Wrapf(err, "cannot set string as terraform attribute for fieldpath %q", fp)
 					}
 				}
 				continue
@@ -296,6 +300,39 @@ func storeSensitiveData(ctx context.Context, client SecretClient, tfPath, jsonPa
 		}
 	}
 	return nil
+}
+
+// expandWildcardTFPath replaces segments like "options[*]" with the concrete index
+// found in expandedJSONPath (e.g. "...options[0]....").
+// Example:
+// tfPath: "options[*].configuration"
+// expandedJSONPath: "spec.forProvider.options[0].configurationSecretRef"
+// => "options[0].configuration"
+func expandWildcardTFPath(tfPath, expandedJSONPath string) (string, error) {
+	segs := strings.Split(tfPath, ".")
+	// match "options[*]"
+	reWildcard := regexp.MustCompile(`^([A-Za-z0-9_-]+)\[\*\]$`)
+	// match "options[0]" in expandedJSONPath
+	// we build this per-field: fmt.Sprintf(`\b%s\[(\d+)\]`, field)
+	out := make([]string, 0, len(segs))
+
+	for _, s := range segs {
+		m := reWildcard.FindStringSubmatch(s)
+		if len(m) == 0 {
+			out = append(out, s)
+			continue
+		}
+		field := m[1]
+		reIndex := regexp.MustCompile(fmt.Sprintf(`\b%v\[(\d+)\]`, regexp.QuoteMeta(field)))
+		mi := reIndex.FindStringSubmatch(expandedJSONPath)
+		if len(mi) < 2 {
+			// if we cannot find an index, keep as-is (fallback)
+			out = append(out, s)
+			continue
+		}
+		out = append(out, fmt.Sprintf("%s[%s]", field, mi[1]))
+	}
+	return strings.Join(out, "."), nil
 }
 
 // GetSensitiveObservation will return sensitive information as terraform state
