@@ -178,11 +178,11 @@ func buildDeprecationNotice(version string, deprecation config.VersionDeprecatio
 	notice.WriteString(") has been deprecated")
 
 	if deprecation.DeprecationRelease != "" {
-		notice.WriteString(fmt.Sprintf(" in release %s", deprecation.DeprecationRelease))
+		fmt.Fprintf(&notice, " in release %s", deprecation.DeprecationRelease)
 	}
 
 	if deprecation.PlannedRemovalRelease != "" {
-		notice.WriteString(fmt.Sprintf(" and is planned for removal in release %s", deprecation.PlannedRemovalRelease))
+		fmt.Fprintf(&notice, " and is planned for removal in release %s", deprecation.PlannedRemovalRelease)
 	}
 
 	// Always terminate with a period
