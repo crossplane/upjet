@@ -250,7 +250,13 @@ func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, cp
 				elemType = types.Universe.Lookup("int64").Type()
 			case schema.TypeString:
 				elemType = types.Universe.Lookup("string").Type()
-			case schema.TypeMap, schema.TypeList, schema.TypeSet, schema.TypeInvalid:
+			case schema.TypeMap:
+				elemType = types.NewMap(types.Universe.Lookup("string").Type(), types.Universe.Lookup("string").Type())
+			case schema.TypeList:
+				elemType = types.NewSlice(types.Universe.Lookup("string").Type())
+			case schema.TypeSet:
+				elemType = types.NewSlice(types.Universe.Lookup("string").Type())
+			case schema.TypeInvalid:
 				return nil, nil, errors.Errorf("element type of %s is basic but not one of known basic types", traverser.FieldPath(names))
 			default:
 				return nil, nil, errors.Errorf("element type of %s is basic but not one of known types: %v", traverser.FieldPath(names), et)
