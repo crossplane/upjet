@@ -478,7 +478,7 @@ func proposedNewObjectAttributes(schema rschema.NestedAttribute, prior, config t
 		rs[k] = rat
 	}
 
-	return tftypes.NewValue(schema.GetType().TerraformType(context.TODO()), proposedNewAttributes(rs, prior, config))
+	return tftypes.NewValue(schema.GetNestedObject().Type().TerraformType(context.TODO()), proposedNewAttributes(rs, prior, config))
 }
 
 func proposedNewAttributes(attrs map[string]rschema.Attribute, prior, config tftypes.Value) map[string]tftypes.Value {
