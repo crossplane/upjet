@@ -17,9 +17,9 @@ import (
 
 // Observable is mock Observable.
 type Observable struct {
-	Observation                 map[string]any
-	AdditionalConnectionDetails map[string][]byte
-	ID                          string
+	Observation                 map[string]any    `json:"observation,omitempty"`
+	AdditionalConnectionDetails map[string][]byte `json:"additionalConnectionDetails,omitempty"`
+	ID                          string            `json:"id,omitempty"`
 }
 
 // GetObservation is a mock.
@@ -45,8 +45,8 @@ func (o *Observable) GetAdditionalConnectionDetails(_ map[string]any) (map[strin
 
 // Parameterizable is mock Parameterizable.
 type Parameterizable struct {
-	Parameters     map[string]any
-	InitParameters map[string]any
+	Parameters     map[string]any `json:"parameters,omitempty"`
+	InitParameters map[string]any `json:"initParameters,omitempty"`
 }
 
 func (t *Terraformed) GetMergedParameters(_ bool) (map[string]any, error) {
@@ -71,9 +71,9 @@ func (p *Parameterizable) GetInitParameters() (map[string]any, error) {
 
 // MetadataProvider is mock MetadataProvider.
 type MetadataProvider struct {
-	Type                     string
-	SchemaVersion            int
-	ConnectionDetailsMapping map[string]string
+	Type                     string            `json:"type,omitempty"`
+	SchemaVersion            int               `json:"schemaVersion,omitempty"`
+	ConnectionDetailsMapping map[string]string `json:"connectionDetailsMapping,omitempty"`
 }
 
 // GetTerraformResourceType is a mock.
@@ -93,8 +93,8 @@ func (mp *MetadataProvider) GetConnectionDetailsMapping() map[string]string {
 
 // LateInitializer is mock LateInitializer.
 type LateInitializer struct {
-	Result bool
-	Err    error
+	Result bool  `json:"result,omitempty"`
+	Err    error `json:"err,omitempty"`
 }
 
 // LateInitialize is a mock.
@@ -106,10 +106,10 @@ func (li *LateInitializer) LateInitialize(_ []byte) (bool, error) {
 type Terraformed struct {
 	metav1.TypeMeta `json:",inline"`
 	fake.Managed
-	Observable
-	Parameterizable
-	MetadataProvider
-	LateInitializer
+	Observable       `json:"observable"`
+	Parameterizable  `json:"parameterizable"`
+	MetadataProvider `json:"metadataProvider"`
+	LateInitializer  `json:"lateInitializer"`
 }
 
 // GetObjectKind returns schema.ObjectKind.
@@ -132,10 +132,10 @@ func (t *Terraformed) DeepCopyObject() runtime.Object {
 type LegacyTerraformed struct {
 	metav1.TypeMeta `json:",inline"`
 	fake.LegacyManaged
-	Observable
-	Parameterizable
-	MetadataProvider
-	LateInitializer
+	Observable       `json:"observable"`
+	Parameterizable  `json:"parameterizable"`
+	MetadataProvider `json:"metadataProvider"`
+	LateInitializer  `json:"lateInitializer"`
 }
 
 // GetObjectKind returns schema.ObjectKind.
@@ -162,10 +162,10 @@ func (t *LegacyTerraformed) GetMergedParameters(_ bool) (map[string]any, error) 
 type ModernTerraformed struct {
 	metav1.TypeMeta `json:",inline"`
 	fake.ModernManaged
-	Observable
-	Parameterizable
-	MetadataProvider
-	LateInitializer
+	Observable       `json:"observable"`
+	Parameterizable  `json:"parameterizable"`
+	MetadataProvider `json:"metadataProvider"`
+	LateInitializer  `json:"lateInitializer"`
 }
 
 // GetObjectKind returns schema.ObjectKind.
