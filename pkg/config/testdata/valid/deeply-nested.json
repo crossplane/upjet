@@ -1,0 +1,34 @@
+{
+  "test.example.io/TestResource": {
+    "versions": {
+      "v1beta1": {
+        "oldVersion": "v1alpha1",
+        "newVersion": "v1beta1",
+        "changes": [
+          {
+            "path": "spec.forProvider.level1.level2.level3.level4.level5.deepField",
+            "pathParts": ["spec", "forProvider", "level1", "level2", "level3", "level4", "level5", "deepField"],
+            "changeType": "field_added"
+          },
+          {
+            "path": "spec.initProvider.config.items[*].network.subnets[*].vpc.region.name",
+            "pathParts": ["spec", "initProvider", "config", "items[*]", "network", "subnets[*]", "vpc", "region", "name"],
+            "changeType": "type_changed",
+            "oldValue": "string",
+            "newValue": "number"
+          },
+          {
+            "path": "status.atProvider.resources[*].nested.objects[*].deep.hierarchy.value",
+            "pathParts": ["status", "atProvider", "resources[*]", "nested", "objects[*]", "deep", "hierarchy", "value"],
+            "changeType": "field_deleted"
+          },
+          {
+            "path": "spec.forProvider.endpoints[*].configuration.settings[*].parameters[*].key",
+            "pathParts": ["spec", "forProvider", "endpoints[*]", "configuration", "settings[*]", "parameters[*]", "key"],
+            "changeType": "field_added"
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "test.example.io/BoolToStringResource": {
+    "versions": {
+      "v1beta1": {
+        "oldVersion": "v1alpha1",
+        "newVersion": "v1beta1",
+        "changes": [
+          {
+            "path": "spec.forProvider.flag",
+            "pathParts": ["spec", "forProvider", "flag"],
+            "changeType": "type_changed",
+            "oldValue": "boolean",
+            "newValue": "string"
+          }
+        ]
+      }
+    }
+  }
+}
