@@ -10,6 +10,7 @@ import (
 
 	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/logging"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/pkg/errors"
@@ -213,6 +214,23 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 	// required fields to be set, which is not the case for import.
 	if !policySet.HasAny(xpv1.ManagementActionCreate, xpv1.ManagementActionUpdate, xpv1.ManagementActionAll) {
 		return e.Import(ctx, tr)
+	}
+
+	// For async resources that were previously created, use Import instead
+	// of Refresh if the resource has been successfully created before.
+	// This prevents duplicate resource creation after provider pod restarts
+	// when the ephemeral workspace state in /tmp is lost.
+	// The external-create-succeeded annotation persists in Kubernetes and
+	// indicates the resource was successfully created or imported previously.
+	if e.config.UseAsync && meta.GetExternalName(tr) != "" {
+		annotations := tr.GetAnnotations()
+		if _, hasCreateSucceeded := annotations["crossplane.io/external-create-succeeded"]; hasCreateSucceeded {
+			e.logger.Debug("Using Import instead of Refresh for async resource with external-create-succeeded annotation", "external-name", meta.GetExternalName(tr))
+			return e.Import(ctx, tr)
+		}
+		e.logger.Debug("Async resource missing external-create-succeeded annotation, using Refresh", "external-name", meta.GetExternalName(tr), "annotations", annotations)
+	} else {
+		e.logger.Debug("Not using Import fallback", "useAsync", e.config.UseAsync, "externalName", meta.GetExternalName(tr))
 	}
 
 	res, err := e.workspace.Refresh(ctx)
