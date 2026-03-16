@@ -1,0 +1,19 @@
+{
+  "test.example.io/NumberToStringResource": {
+    "versions": {
+      "v1beta1": {
+        "oldVersion": "v1alpha1",
+        "newVersion": "v1beta1",
+        "changes": [
+          {
+            "path": "spec.forProvider.value",
+            "pathParts": ["spec", "forProvider", "value"],
+            "changeType": "type_changed",
+            "oldValue": "number",
+            "newValue": "string"
+          }
+        ]
+      }
+    }
+  }
+}

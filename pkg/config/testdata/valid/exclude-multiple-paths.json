@@ -1,0 +1,27 @@
+{
+  "test.example.io/TestResource": {
+    "versions": {
+      "v1beta1": {
+        "oldVersion": "v1alpha1",
+        "newVersion": "v1beta1",
+        "changes": [
+          {
+            "path": "spec.forProvider.field1",
+            "pathParts": ["spec", "forProvider", "field1"],
+            "changeType": "field_added"
+          },
+          {
+            "path": "spec.forProvider.field2",
+            "pathParts": ["spec", "forProvider", "field2"],
+            "changeType": "field_added"
+          },
+          {
+            "path": "spec.forProvider.field3",
+            "pathParts": ["spec", "forProvider", "field3"],
+            "changeType": "field_added"
+          }
+        ]
+      }
+    }
+  }
+}
