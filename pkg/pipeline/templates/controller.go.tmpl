@@ -125,8 +125,7 @@ func Setup(mgr ctrl.Manager, o tjcontroller.Options) error {
 	// register webhooks for the kind {{ .TypePackageAlias }}{{ .CRD.Kind }}
 	// if they're enabled.
 	if o.StartWebhooks {
-		if err := ctrl.NewWebhookManagedBy(mgr).
-			For(&{{ .TypePackageAlias }}{{ .CRD.Kind }}{}).
+		if err := ctrl.NewWebhookManagedBy(mgr, &{{ .TypePackageAlias }}{{ .CRD.Kind }}{}).
 			Complete(); err != nil {
 			return errors.Wrap(err, "cannot register webhook for the kind {{ .TypePackageAlias }}{{ .CRD.Kind }}")
 		}
