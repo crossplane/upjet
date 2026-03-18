@@ -130,6 +130,6 @@ func SetUpToDateCondition(mg xpresource.Managed, upToDate bool) {
 	// After running refresh, if the resource is up-to-date and a test resource
 	// we can set the UpToDate condition
 	if upToDate && IsTest(mg) {
-		mg.SetConditions(UpToDateCondition())
+		mg.SetConditions(UpToDateCondition().WithObservedGeneration(mg.GetGeneration()))
 	}
 }
