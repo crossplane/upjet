@@ -55,6 +55,13 @@ type AsyncTracker struct {
 	tfState *tfsdk.InstanceState
 	// TF Plugin Framework instance state for TF Plugin Framework-based resources
 	fwState *tfprotov6.DynamicValue
+	// TF Plugin Framework resource identity for TF Plugin Framework-based resources.
+	// Unlike fwState, fwIdentity is not persisted or reconstructed across restarts.
+	// This is safe because CurrentIdentity is optional in ReadResourceRequest —
+	// after a restart, the first Observe sends nil CurrentIdentity, and the
+	// provider's identity interceptor populates NewIdentity from state/client
+	// data in the ReadResourceResponse, rehydrating the tracker.
+	fwIdentity *tfprotov6.ResourceIdentityData
 	// stateMark holds meta-information about the state
 	stateMark stateMark
 	// lifecycle of certain external resources are bound to a parent resource's
@@ -212,6 +219,24 @@ func (a *AsyncTracker) ResetReconstructedFrameworkTFState() {
 		a.fwState = nil
 		a.stateMark = defaultState
 	}
+}
+
+// GetFrameworkIdentity returns the stored Terraform Plugin Framework resource
+// identity in this AsyncTracker as *tfprotov6.ResourceIdentityData.
+// MUST be used only for Terraform Plugin Framework resources.
+func (a *AsyncTracker) GetFrameworkIdentity() *tfprotov6.ResourceIdentityData {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.fwIdentity
+}
+
+// SetFrameworkIdentity stores the given *tfprotov6.ResourceIdentityData
+// Terraform Plugin Framework resource identity into this AsyncTracker.
+// MUST be used only for Terraform Plugin Framework resources.
+func (a *AsyncTracker) SetFrameworkIdentity(id *tfprotov6.ResourceIdentityData) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.fwIdentity = id
 }
 
 // OperationTrackerStore stores the AsyncTracker instances associated with the

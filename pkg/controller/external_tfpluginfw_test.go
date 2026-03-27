@@ -115,6 +115,16 @@ type testConfiguration struct {
 
 	planErr   error
 	planDiags []*tfprotov6.Diagnostic
+
+	// Identity fields for response mocking
+	readNewIdentity     *tfprotov6.ResourceIdentityData
+	planPlannedIdentity *tfprotov6.ResourceIdentityData
+	applyNewIdentity    *tfprotov6.ResourceIdentityData
+
+	// Capture fields for verifying identity in requests
+	capturedReadRequest  **tfprotov6.ReadResourceRequest
+	capturedPlanRequest  **tfprotov6.PlanResourceChangeRequest
+	capturedApplyRequest **tfprotov6.ApplyResourceChangeRequest
 }
 
 func prepareTPFExternalWithTestConfig(testConfig testConfiguration) *terraformPluginFrameworkExternalClient {
@@ -139,27 +149,39 @@ func prepareTPFExternalWithTestConfig(testConfig testConfiguration) *terraformPl
 		ts: terraform.Setup{
 			FrameworkProvider: &mockTPFProvider{},
 		},
-		config: cfg,
+		config: testConfig.cfg,
 		logger: logTest,
 		// metricRecorder:             nil,
 		opTracker: NewAsyncTracker(),
 		resource:  testConfig.r,
 		server: &mockTPFProviderServer{
 			ReadResourceFn: func(ctx context.Context, request *tfprotov6.ReadResourceRequest) (*tfprotov6.ReadResourceResponse, error) {
+				if testConfig.capturedReadRequest != nil {
+					*testConfig.capturedReadRequest = request
+				}
 				return &tfprotov6.ReadResourceResponse{
 					NewState:    currentStateVal,
+					NewIdentity: testConfig.readNewIdentity,
 					Diagnostics: testConfig.readDiags,
 				}, testConfig.readErr
 			},
 			PlanResourceChangeFn: func(ctx context.Context, request *tfprotov6.PlanResourceChangeRequest) (*tfprotov6.PlanResourceChangeResponse, error) {
+				if testConfig.capturedPlanRequest != nil {
+					*testConfig.capturedPlanRequest = request
+				}
 				return &tfprotov6.PlanResourceChangeResponse{
-					PlannedState: plannedStateVal,
-					Diagnostics:  testConfig.planDiags,
+					PlannedState:    plannedStateVal,
+					PlannedIdentity: testConfig.planPlannedIdentity,
+					Diagnostics:     testConfig.planDiags,
 				}, testConfig.planErr
 			},
 			ApplyResourceChangeFn: func(ctx context.Context, request *tfprotov6.ApplyResourceChangeRequest) (*tfprotov6.ApplyResourceChangeResponse, error) {
+				if testConfig.capturedApplyRequest != nil {
+					*testConfig.capturedApplyRequest = request
+				}
 				return &tfprotov6.ApplyResourceChangeResponse{
 					NewState:    newStateAfterApplyVal,
+					NewIdentity: testConfig.applyNewIdentity,
 					Diagnostics: testConfig.applyDiags,
 				}, testConfig.applyErr
 			},
@@ -508,6 +530,385 @@ func TestTPFDelete(t *testing.T) {
 			}
 		})
 	}
+}
+
+// newTestIdentityData creates a *tfprotov6.ResourceIdentityData for testing.
+func newTestIdentityData(id string) *tfprotov6.ResourceIdentityData {
+	identityType := tftypes.Object{
+		AttributeTypes: map[string]tftypes.Type{
+			"id": tftypes.String,
+		},
+	}
+	identityVal := tftypes.NewValue(identityType, map[string]tftypes.Value{
+		"id": tftypes.NewValue(tftypes.String, id),
+	})
+	dv, err := tfprotov6.NewDynamicValue(identityType, identityVal)
+	if err != nil {
+		panic("cannot create test identity data: " + err.Error())
+	}
+	return &tfprotov6.ResourceIdentityData{
+		IdentityData: &dv,
+	}
+}
+
+func TestTPFObserveIdentityPropagation(t *testing.T) {
+	t.Run("ObservePassesCurrentIdentityAndStoresNewIdentity", func(t *testing.T) {
+		existingIdentity := newTestIdentityData("existing-id")
+		newIdentity := newTestIdentityData("refreshed-id")
+
+		var capturedReadReq *tfprotov6.ReadResourceRequest
+		tc := testConfiguration{
+			r:   newMockBaseTPFResource(),
+			cfg: newBaseUpjetConfig(),
+			obj: newBaseObject(),
+			params: map[string]any{
+				"id":   "example-id",
+				"name": "example",
+			},
+			currentStateMap: map[string]any{
+				"id":   "example-id",
+				"name": "example",
+			},
+			plannedStateMap: map[string]any{
+				"id":   "example-id",
+				"name": "example",
+			},
+			readNewIdentity:     newIdentity,
+			capturedReadRequest: &capturedReadReq,
+		}
+		tpfExternal := prepareTPFExternalWithTestConfig(tc)
+		// Pre-set identity on the tracker to verify it's passed in the request
+		tpfExternal.opTracker.SetFrameworkIdentity(existingIdentity)
+
+		_, err := tpfExternal.Observe(context.TODO(), &tc.obj)
+		if err != nil {
+			t.Fatalf("Observe returned unexpected error: %v", err)
+		}
+		// Verify CurrentIdentity was passed in the read request
+		if capturedReadReq == nil {
+			t.Fatal("ReadResource was not called")
+		}
+		if capturedReadReq.CurrentIdentity != existingIdentity {
+			t.Error("ReadResourceRequest.CurrentIdentity was not set to the tracker's identity")
+		}
+		// Verify NewIdentity from response was stored in the tracker
+		storedIdentity := tpfExternal.opTracker.GetFrameworkIdentity()
+		if storedIdentity != newIdentity {
+			t.Error("NewIdentity from ReadResourceResponse was not stored in the tracker")
+		}
+	})
+
+	t.Run("ObserveHandlesNilIdentity", func(t *testing.T) {
+		var capturedReadReq *tfprotov6.ReadResourceRequest
+		tc := testConfiguration{
+			r:   newMockBaseTPFResource(),
+			cfg: newBaseUpjetConfig(),
+			obj: newBaseObject(),
+			params: map[string]any{
+				"id":   "example-id",
+				"name": "example",
+			},
+			currentStateMap: map[string]any{
+				"id":   "example-id",
+				"name": "example",
+			},
+			plannedStateMap: map[string]any{
+				"id":   "example-id",
+				"name": "example",
+			},
+			readNewIdentity:     nil,
+			capturedReadRequest: &capturedReadReq,
+		}
+		tpfExternal := prepareTPFExternalWithTestConfig(tc)
+
+		_, err := tpfExternal.Observe(context.TODO(), &tc.obj)
+		if err != nil {
+			t.Fatalf("Observe returned unexpected error: %v", err)
+		}
+		// With no pre-set identity, request should have nil CurrentIdentity
+		if capturedReadReq.CurrentIdentity != nil {
+			t.Error("ReadResourceRequest.CurrentIdentity should be nil when tracker has no identity")
+		}
+		// With nil identity in response, tracker should store nil
+		if tpfExternal.opTracker.GetFrameworkIdentity() != nil {
+			t.Error("Tracker identity should be nil when response has no identity")
+		}
+	})
+}
+
+func TestTPFCreateIdentityPropagation(t *testing.T) {
+	t.Run("CreatePassesPlannedIdentityAndStoresNewIdentity", func(t *testing.T) {
+		plannedIdentity := newTestIdentityData("planned-id")
+		newIdentity := newTestIdentityData("created-id")
+
+		var capturedApplyReq *tfprotov6.ApplyResourceChangeRequest
+		tc := testConfiguration{
+			r:               newMockBaseTPFResource(),
+			cfg:             newBaseUpjetConfig(),
+			obj:             obj,
+			currentStateMap: nil,
+			plannedStateMap: map[string]any{
+				"name": "example",
+			},
+			params: map[string]any{
+				"name": "example",
+			},
+			newStateMap: map[string]any{
+				"name": "example",
+				"id":   "example-id",
+			},
+			planPlannedIdentity:  plannedIdentity,
+			applyNewIdentity:     newIdentity,
+			capturedApplyRequest: &capturedApplyReq,
+		}
+		tpfExternal := prepareTPFExternalWithTestConfig(tc)
+		// Pre-set plannedIdentity as it would be after a Plan call
+		tpfExternal.plannedIdentity = plannedIdentity
+
+		_, err := tpfExternal.Create(context.TODO(), &tc.obj)
+		if err != nil {
+			t.Fatalf("Create returned unexpected error: %v", err)
+		}
+		if capturedApplyReq == nil {
+			t.Fatal("ApplyResourceChange was not called")
+		}
+		if capturedApplyReq.PlannedIdentity != plannedIdentity {
+			t.Error("ApplyResourceChangeRequest.PlannedIdentity was not set to the planned identity")
+		}
+		storedIdentity := tpfExternal.opTracker.GetFrameworkIdentity()
+		if storedIdentity != newIdentity {
+			t.Error("NewIdentity from ApplyResourceChangeResponse was not stored in the tracker")
+		}
+	})
+
+	t.Run("CreateStoresIdentityEvenOnDiagError", func(t *testing.T) {
+		newIdentity := newTestIdentityData("partial-id")
+
+		tc := testConfiguration{
+			r:               newMockBaseTPFResource(),
+			cfg:             newBaseUpjetConfig(),
+			obj:             obj,
+			currentStateMap: nil,
+			plannedStateMap: map[string]any{
+				"name": "example",
+			},
+			params: map[string]any{
+				"name": "example",
+			},
+			newStateMap: nil,
+			applyDiags: []*tfprotov6.Diagnostic{
+				{
+					Severity: tfprotov6.DiagnosticSeverityError,
+					Summary:  "partial failure",
+					Detail:   "resource partially created",
+				},
+			},
+			applyNewIdentity: newIdentity,
+		}
+		tpfExternal := prepareTPFExternalWithTestConfig(tc)
+
+		_, err := tpfExternal.Create(context.TODO(), &tc.obj)
+		if err == nil {
+			t.Fatal("Create should have returned an error on diag error")
+		}
+		// Identity should still be stored even on error (like state is)
+		storedIdentity := tpfExternal.opTracker.GetFrameworkIdentity()
+		if storedIdentity != newIdentity {
+			t.Error("NewIdentity should be stored in tracker even when apply returns error diags")
+		}
+	})
+}
+
+func TestTPFUpdateIdentityPropagation(t *testing.T) {
+	t.Run("UpdatePassesPlannedIdentityAndStoresNewIdentity", func(t *testing.T) {
+		plannedIdentity := newTestIdentityData("planned-id")
+		newIdentity := newTestIdentityData("updated-id")
+
+		var capturedApplyReq *tfprotov6.ApplyResourceChangeRequest
+		tc := testConfiguration{
+			r:   newMockBaseTPFResource(),
+			cfg: newBaseUpjetConfig(),
+			obj: newBaseObject(),
+			currentStateMap: map[string]any{
+				"name": "example",
+				"id":   "example-id",
+			},
+			plannedStateMap: map[string]any{
+				"name": "example-updated",
+				"id":   "example-id",
+			},
+			params: map[string]any{
+				"name": "example-updated",
+			},
+			newStateMap: map[string]any{
+				"name": "example-updated",
+				"id":   "example-id",
+			},
+			planPlannedIdentity:  plannedIdentity,
+			applyNewIdentity:     newIdentity,
+			capturedApplyRequest: &capturedApplyReq,
+		}
+		tpfExternal := prepareTPFExternalWithTestConfig(tc)
+		// Pre-set plannedIdentity as it would be after a Plan call
+		tpfExternal.plannedIdentity = plannedIdentity
+
+		_, err := tpfExternal.Update(context.TODO(), &tc.obj)
+		if err != nil {
+			t.Fatalf("Update returned unexpected error: %v", err)
+		}
+		if capturedApplyReq == nil {
+			t.Fatal("ApplyResourceChange was not called")
+		}
+		if capturedApplyReq.PlannedIdentity != plannedIdentity {
+			t.Error("ApplyResourceChangeRequest.PlannedIdentity was not set to the planned identity")
+		}
+		storedIdentity := tpfExternal.opTracker.GetFrameworkIdentity()
+		if storedIdentity != newIdentity {
+			t.Error("NewIdentity from ApplyResourceChangeResponse was not stored in the tracker")
+		}
+	})
+}
+
+func TestTPFDeleteIdentityPropagation(t *testing.T) {
+	t.Run("DeletePassesPlannedIdentityAndStoresNewIdentity", func(t *testing.T) {
+		plannedIdentity := newTestIdentityData("planned-id")
+
+		var capturedApplyReq *tfprotov6.ApplyResourceChangeRequest
+		tc := testConfiguration{
+			r:   newMockBaseTPFResource(),
+			cfg: newBaseUpjetConfig(),
+			obj: newBaseObject(),
+			currentStateMap: map[string]any{
+				"name": "example",
+				"id":   "example-id",
+			},
+			plannedStateMap: nil,
+			params: map[string]any{
+				"name": "example",
+			},
+			newStateMap:          nil,
+			planPlannedIdentity:  plannedIdentity,
+			applyNewIdentity:     nil,
+			capturedApplyRequest: &capturedApplyReq,
+		}
+		tpfExternal := prepareTPFExternalWithTestConfig(tc)
+		// Pre-set plannedIdentity as it would be after a Plan call
+		tpfExternal.plannedIdentity = plannedIdentity
+
+		_, err := tpfExternal.Delete(context.TODO(), &tc.obj)
+		if err != nil {
+			t.Fatalf("Delete returned unexpected error: %v", err)
+		}
+		if capturedApplyReq == nil {
+			t.Fatal("ApplyResourceChange was not called")
+		}
+		if capturedApplyReq.PlannedIdentity != plannedIdentity {
+			t.Error("ApplyResourceChangeRequest.PlannedIdentity was not set to the planned identity")
+		}
+		// After delete, identity from response (nil) should be stored
+		storedIdentity := tpfExternal.opTracker.GetFrameworkIdentity()
+		if storedIdentity != nil {
+			t.Error("Tracker identity should be nil after delete with nil response identity")
+		}
+	})
+}
+
+// TestTPFPlanIdentityPropagation tests identity propagation through
+// getDiffPlanResponse, which is unexported and invoked internally by Observe.
+func TestTPFPlanIdentityPropagation(t *testing.T) {
+	t.Run("ObserveRehydratesIdentityBeforePlan", func(t *testing.T) {
+		refreshedIdentity := newTestIdentityData("refreshed-id")
+		plannedIdentity := newTestIdentityData("planned-id")
+
+		var capturedReadReq *tfprotov6.ReadResourceRequest
+		var capturedPlanReq *tfprotov6.PlanResourceChangeRequest
+		tc := testConfiguration{
+			r:   newMockBaseTPFResource(),
+			cfg: newBaseUpjetConfig(),
+			obj: newBaseObject(),
+			params: map[string]any{
+				"id":   "example-id",
+				"name": "example",
+			},
+			currentStateMap: map[string]any{
+				"id":   "example-id",
+				"name": "example",
+			},
+			plannedStateMap: map[string]any{
+				"id":   "example-id",
+				"name": "example",
+			},
+			readNewIdentity:     refreshedIdentity,
+			planPlannedIdentity: plannedIdentity,
+			capturedReadRequest: &capturedReadReq,
+			capturedPlanRequest: &capturedPlanReq,
+		}
+
+		tpfExternal := prepareTPFExternalWithTestConfig(tc)
+		// Do NOT pre-set identity on the tracker — simulates a restart
+		_, err := tpfExternal.Observe(context.TODO(), &tc.obj)
+		if err != nil {
+			t.Fatalf("Observe returned unexpected error: %v", err)
+		}
+		if capturedReadReq == nil {
+			t.Fatal("ReadResource was not called")
+		}
+		if capturedReadReq.CurrentIdentity != nil {
+			t.Fatal("ReadResourceRequest.CurrentIdentity should be nil during rehydration")
+		}
+		if capturedPlanReq == nil {
+			t.Fatal("PlanResourceChange was not called")
+		}
+		if diff := cmp.Diff(refreshedIdentity, capturedPlanReq.PriorIdentity); diff != "" {
+			t.Fatalf("PlanResourceChangeRequest.PriorIdentity mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("PlanPassesPriorIdentityAndCapturesPlannedIdentity", func(t *testing.T) {
+		existingIdentity := newTestIdentityData("existing-id")
+		plannedIdentity := newTestIdentityData("planned-id")
+
+		var capturedPlanReq *tfprotov6.PlanResourceChangeRequest
+		tc := testConfiguration{
+			r:   newMockBaseTPFResource(),
+			cfg: newBaseUpjetConfig(),
+			obj: newBaseObject(),
+			params: map[string]any{
+				"id":   "example-id",
+				"name": "example",
+			},
+			currentStateMap: map[string]any{
+				"id":   "example-id",
+				"name": "example",
+			},
+			plannedStateMap: map[string]any{
+				"id":   "example-id",
+				"name": "example",
+			},
+			readNewIdentity:     existingIdentity,
+			planPlannedIdentity: plannedIdentity,
+			capturedPlanRequest: &capturedPlanReq,
+		}
+		tpfExternal := prepareTPFExternalWithTestConfig(tc)
+		// Pre-set identity on the tracker to verify it's passed as PriorIdentity
+		tpfExternal.opTracker.SetFrameworkIdentity(existingIdentity)
+
+		// Observe triggers getDiffPlanResponse internally
+		_, err := tpfExternal.Observe(context.TODO(), &tc.obj)
+		if err != nil {
+			t.Fatalf("Observe returned unexpected error: %v", err)
+		}
+		if capturedPlanReq == nil {
+			t.Fatal("PlanResourceChange was not called")
+		}
+		if capturedPlanReq.PriorIdentity != existingIdentity {
+			t.Error("PlanResourceChangeRequest.PriorIdentity was not set to the tracker's identity")
+		}
+		// Verify planned identity was captured on the client
+		if tpfExternal.plannedIdentity != plannedIdentity {
+			t.Error("PlannedIdentity from PlanResourceChangeResponse was not stored on the client")
+		}
+	})
 }
 
 // Mocks
