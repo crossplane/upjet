@@ -521,9 +521,19 @@ func (e *external) Import(ctx context.Context, tr resource.Terraformed) (managed
 	}
 
 	tr.SetConditions(xpv1.Available())
+
+	// Check for drift by running terraform plan after import
+	plan, err := e.workspace.Plan(ctx)
+	if err != nil {
+		return managed.ExternalObservation{}, errors.Wrap(err, errPlan)
+	}
+
+	resource.SetUpToDateCondition(tr, plan.UpToDate)
+	e.logger.Debug("Called plan after import", "upToDate", plan.UpToDate, "external-name", meta.GetExternalName(tr))
+
 	return managed.ExternalObservation{
 		ResourceExists:    true,
-		ResourceUpToDate:  true,
+		ResourceUpToDate:  plan.UpToDate,
 		ConnectionDetails: conn,
 	}, nil
 }
