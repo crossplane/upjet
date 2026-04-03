@@ -813,6 +813,89 @@ func TestTPFDeleteIdentityPropagation(t *testing.T) {
 	})
 }
 
+func TestHasMissingResourceIdentityDiagnostic(t *testing.T) {
+	cases := map[string]struct {
+		diags []*tfprotov6.Diagnostic
+		want  bool
+	}{
+		"NilDiags": {
+			diags: nil,
+			want:  false,
+		},
+		"EmptyDiags": {
+			diags: []*tfprotov6.Diagnostic{},
+			want:  false,
+		},
+		"UnrelatedError": {
+			diags: []*tfprotov6.Diagnostic{
+				{Severity: tfprotov6.DiagnosticSeverityError, Summary: "Some other error"},
+			},
+			want: false,
+		},
+		"WarningNotError": {
+			diags: []*tfprotov6.Diagnostic{
+				{Severity: tfprotov6.DiagnosticSeverityWarning, Summary: diagSummaryMissingResourceIdentity},
+			},
+			want: false,
+		},
+		"MatchingDiagnostic": {
+			diags: []*tfprotov6.Diagnostic{
+				{Severity: tfprotov6.DiagnosticSeverityError, Summary: diagSummaryMissingResourceIdentity},
+			},
+			want: true,
+		},
+		"MatchingAmongMultiple": {
+			diags: []*tfprotov6.Diagnostic{
+				{Severity: tfprotov6.DiagnosticSeverityWarning, Summary: "some warning"},
+				{Severity: tfprotov6.DiagnosticSeverityError, Summary: diagSummaryMissingResourceIdentity},
+			},
+			want: true,
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			got := hasMissingResourceIdentityDiagnostic(tc.diags)
+			if got != tc.want {
+				t.Errorf("hasMissingResourceIdentityDiagnostic() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestTPFObserveMissingIdentityTreatedAsNotFound(t *testing.T) {
+	tc := testConfiguration{
+		r:   newMockBaseTPFResource(),
+		cfg: newBaseUpjetConfig(),
+		obj: newBaseObject(),
+		params: map[string]any{
+			"name": "example",
+		},
+		currentStateMap: map[string]any{
+			"id":   "example-id",
+			"name": "example",
+		},
+		plannedStateMap: map[string]any{
+			"name": "example",
+		},
+		readDiags: []*tfprotov6.Diagnostic{
+			{Severity: tfprotov6.DiagnosticSeverityError, Summary: diagSummaryMissingResourceIdentity},
+		},
+	}
+
+	tpfExternal := prepareTPFExternalWithTestConfig(tc)
+	obs, err := tpfExternal.Observe(context.TODO(), &tc.obj)
+	if err != nil {
+		t.Fatalf("Observe returned unexpected error: %v", err)
+	}
+	if obs.ResourceExists {
+		t.Error("Expected ResourceExists to be false when Missing Resource Identity diagnostic is returned")
+	}
+	storedIdentity := tpfExternal.opTracker.GetFrameworkIdentity()
+	if storedIdentity != nil {
+		t.Error("Expected tracker identity to be nil after Missing Resource Identity diagnostic")
+	}
+}
+
 // TestTPFPlanIdentityPropagation tests identity propagation through
 // getDiffPlanResponse, which is unexported and invoked internally by Observe.
 func TestTPFPlanIdentityPropagation(t *testing.T) {

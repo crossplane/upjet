@@ -483,6 +483,25 @@ func (n *terraformPluginFrameworkExternalClient) hasResourceNotFoundDiagnostic(d
 	}
 	return n.config.ExternalName.IsNotFoundDiagnosticFn(diags)
 }
+
+// diagSummaryMissingResourceIdentity is the diagnostic summary returned by
+// terraform-plugin-framework when a resource with an IdentitySchema has its
+// state set to null (resource deleted externally or not yet created) but the
+// provider's identity interceptor skips populating identity for null states.
+const diagSummaryMissingResourceIdentity = "Missing Resource Identity After Read"
+
+// hasMissingResourceIdentityDiagnostic checks whether the diagnostics contain
+// the "Missing Resource Identity After Read" error. We treat this as a
+// resource-not-found condition.
+func hasMissingResourceIdentityDiagnostic(diags []*tfprotov6.Diagnostic) bool {
+	for _, d := range diags {
+		if d.Severity == tfprotov6.DiagnosticSeverityError && d.Summary == diagSummaryMissingResourceIdentity {
+			return true
+		}
+	}
+	return false
+}
+
 func (n *terraformPluginFrameworkExternalClient) Observe(ctx context.Context, mg xpresource.Managed) (managed.ExternalObservation, error) { //nolint:gocyclo
 	n.logger.Debug("Observing the external resource")
 
@@ -508,11 +527,18 @@ func (n *terraformPluginFrameworkExternalClient) Observe(ctx context.Context, mg
 	// suppress them if the resource has such configuration.
 	isResourceNotFoundDiags := n.hasResourceNotFoundDiagnostic(readResponse.Diagnostics)
 	if fatalDiags := getFatalDiagnostics(readResponse.Diagnostics); fatalDiags != nil {
-		if !isResourceNotFoundDiags {
+		isMissingIdentityDiags := hasMissingResourceIdentityDiagnostic(readResponse.Diagnostics)
+		if !isResourceNotFoundDiags && !isMissingIdentityDiags {
 			n.opTracker.ResetReconstructedFrameworkTFState()
 			return managed.ExternalObservation{}, errors.Wrap(fatalDiags, "read resource request failed")
 		}
-		n.logger.Debug("TF ReadResource returned error diagnostics, but XP resource was configured to treat them as `Resource not exists`. Skipping", "skippedDiags", fatalDiags)
+		if isResourceNotFoundDiags {
+			n.logger.Debug("TF ReadResource returned error diagnostics, but XP resource was configured to treat them as `Resource not exists`. Skipping", "skippedDiags", fatalDiags)
+		}
+		if isMissingIdentityDiags {
+			n.logger.Debug("TF ReadResource returned Missing Resource Identity diagnostic, treating as resource not found", "skippedDiags", fatalDiags)
+			isResourceNotFoundDiags = true
+		}
 	}
 
 	var tfStateValue tftypes.Value
