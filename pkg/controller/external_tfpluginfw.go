@@ -1221,7 +1221,7 @@ func (n *terraformPluginFrameworkExternalClient) setExternalName(mg xpresource.M
 // tftypes.Bool => bool
 // tftypes.Number => int64, float64
 // tftypes.String => string
-// tftypes.DynamicPseudoType => conversion not supported and returns an error
+// tftypes.DynamicPseudoType => unwraps to inner concrete type
 func tfValueToGoValue(input tftypes.Value) (any, error) { //nolint:gocyclo
 	if !input.IsKnown() {
 		return nil, fmt.Errorf("cannot convert unknown value")
@@ -1295,8 +1295,13 @@ func tfValueToGoValue(input tftypes.Value) (any, error) { //nolint:gocyclo
 		var x string
 		return x, input.As(&x)
 	case valType.Is(tftypes.DynamicPseudoType):
-		if input.IsKnown() && input.IsNull() {
+		if input.IsNull() {
 			return nil, nil
+		}
+		// Unwrap DynamicPseudoType — the underlying value has a concrete type
+		var innerVal tftypes.Value
+		if err := input.As(&innerVal); err == nil {
+			return tfValueToGoValue(innerVal)
 		}
 		return nil, errors.New("DynamicPseudoType conversion is not supported")
 	default:
