@@ -558,7 +558,7 @@ func TestTPFObserveIdentityPropagation(t *testing.T) {
 
 		var capturedReadReq *tfprotov6.ReadResourceRequest
 		tc := testConfiguration{
-			r:   newMockBaseTPFResource(),
+			r:   newMockTPFResourceWithIdentity(),
 			cfg: newBaseUpjetConfig(),
 			obj: newBaseObject(),
 			params: map[string]any{
@@ -601,7 +601,7 @@ func TestTPFObserveIdentityPropagation(t *testing.T) {
 	t.Run("ObserveHandlesNilIdentity", func(t *testing.T) {
 		var capturedReadReq *tfprotov6.ReadResourceRequest
 		tc := testConfiguration{
-			r:   newMockBaseTPFResource(),
+			r:   newMockTPFResourceWithIdentity(),
 			cfg: newBaseUpjetConfig(),
 			obj: newBaseObject(),
 			params: map[string]any{
@@ -643,7 +643,7 @@ func TestTPFCreateIdentityPropagation(t *testing.T) {
 
 		var capturedApplyReq *tfprotov6.ApplyResourceChangeRequest
 		tc := testConfiguration{
-			r:               newMockBaseTPFResource(),
+			r:               newMockTPFResourceWithIdentity(),
 			cfg:             newBaseUpjetConfig(),
 			obj:             obj,
 			currentStateMap: nil,
@@ -685,7 +685,7 @@ func TestTPFCreateIdentityPropagation(t *testing.T) {
 		newIdentity := newTestIdentityData("partial-id")
 
 		tc := testConfiguration{
-			r:               newMockBaseTPFResource(),
+			r:               newMockTPFResourceWithIdentity(),
 			cfg:             newBaseUpjetConfig(),
 			obj:             obj,
 			currentStateMap: nil,
@@ -726,7 +726,7 @@ func TestTPFUpdateIdentityPropagation(t *testing.T) {
 
 		var capturedApplyReq *tfprotov6.ApplyResourceChangeRequest
 		tc := testConfiguration{
-			r:   newMockBaseTPFResource(),
+			r:   newMockTPFResourceWithIdentity(),
 			cfg: newBaseUpjetConfig(),
 			obj: newBaseObject(),
 			currentStateMap: map[string]any{
@@ -770,12 +770,12 @@ func TestTPFUpdateIdentityPropagation(t *testing.T) {
 }
 
 func TestTPFDeleteIdentityPropagation(t *testing.T) {
-	t.Run("DeletePassesPlannedIdentityAndStoresNewIdentity", func(t *testing.T) {
+	t.Run("DeleteSendsNilPlannedIdentityAndStoresNewIdentity", func(t *testing.T) {
 		plannedIdentity := newTestIdentityData("planned-id")
 
 		var capturedApplyReq *tfprotov6.ApplyResourceChangeRequest
 		tc := testConfiguration{
-			r:   newMockBaseTPFResource(),
+			r:   newMockTPFResourceWithIdentity(),
 			cfg: newBaseUpjetConfig(),
 			obj: newBaseObject(),
 			currentStateMap: map[string]any{
@@ -787,12 +787,12 @@ func TestTPFDeleteIdentityPropagation(t *testing.T) {
 				"name": "example",
 			},
 			newStateMap:          nil,
-			planPlannedIdentity:  plannedIdentity,
 			applyNewIdentity:     nil,
 			capturedApplyRequest: &capturedApplyReq,
 		}
 		tpfExternal := prepareTPFExternalWithTestConfig(tc)
-		// Pre-set plannedIdentity as it would be after a Plan call
+		// Pre-set plannedIdentity to simulate state after a prior Observe/Plan
+		// call. Delete should NOT forward this stale update-plan identity.
 		tpfExternal.plannedIdentity = plannedIdentity
 
 		_, err := tpfExternal.Delete(context.TODO(), &tc.obj)
@@ -802,8 +802,10 @@ func TestTPFDeleteIdentityPropagation(t *testing.T) {
 		if capturedApplyReq == nil {
 			t.Fatal("ApplyResourceChange was not called")
 		}
-		if capturedApplyReq.PlannedIdentity != plannedIdentity {
-			t.Error("ApplyResourceChangeRequest.PlannedIdentity was not set to the planned identity")
+		// PlannedIdentity must be nil for delete: the planned state is null
+		// (resource is going away) so there is no meaningful planned identity.
+		if capturedApplyReq.PlannedIdentity != nil {
+			t.Error("ApplyResourceChangeRequest.PlannedIdentity should be nil for delete operations")
 		}
 		// After delete, identity from response (nil) should be stored
 		storedIdentity := tpfExternal.opTracker.GetFrameworkIdentity()
@@ -864,7 +866,7 @@ func TestHasMissingResourceIdentityDiagnostic(t *testing.T) {
 
 func TestTPFObserveMissingIdentityTreatedAsNotFound(t *testing.T) {
 	tc := testConfiguration{
-		r:   newMockBaseTPFResource(),
+		r:   newMockTPFResourceWithIdentity(),
 		cfg: newBaseUpjetConfig(),
 		obj: newBaseObject(),
 		params: map[string]any{
@@ -906,7 +908,7 @@ func TestTPFPlanIdentityPropagation(t *testing.T) {
 		var capturedReadReq *tfprotov6.ReadResourceRequest
 		var capturedPlanReq *tfprotov6.PlanResourceChangeRequest
 		tc := testConfiguration{
-			r:   newMockBaseTPFResource(),
+			r:   newMockTPFResourceWithIdentity(),
 			cfg: newBaseUpjetConfig(),
 			obj: newBaseObject(),
 			params: map[string]any{
@@ -953,7 +955,7 @@ func TestTPFPlanIdentityPropagation(t *testing.T) {
 
 		var capturedPlanReq *tfprotov6.PlanResourceChangeRequest
 		tc := testConfiguration{
-			r:   newMockBaseTPFResource(),
+			r:   newMockTPFResourceWithIdentity(),
 			cfg: newBaseUpjetConfig(),
 			obj: newBaseObject(),
 			params: map[string]any{
@@ -1242,4 +1244,31 @@ func (r *mockTPFResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 
 	r.UpdateMethod(ctx, req, resp)
+}
+
+// mockTPFResourceWithIdentity extends mockTPFResource by also implementing
+// resource.ResourceWithIdentity, so supportsIdentity() returns true.
+type mockTPFResourceWithIdentity struct {
+	mockTPFResource
+}
+
+var _ resource.ResourceWithIdentity = &mockTPFResourceWithIdentity{}
+
+func (r *mockTPFResourceWithIdentity) IdentitySchema(_ context.Context, _ resource.IdentitySchemaRequest, _ *resource.IdentitySchemaResponse) {
+}
+
+func newMockTPFResourceWithIdentity() *mockTPFResourceWithIdentity {
+	return &mockTPFResourceWithIdentity{
+		mockTPFResource: mockTPFResource{
+			SchemaMethod: func(ctx context.Context, request resource.SchemaRequest, response *resource.SchemaResponse) {
+				response.Schema = newBaseSchema()
+			},
+			ReadMethod: func(ctx context.Context, request resource.ReadRequest, response *resource.ReadResponse) {
+				response.State = tfsdk.State{
+					Raw:    tftypes.Value{},
+					Schema: nil,
+				}
+			},
+		},
+	}
 }
