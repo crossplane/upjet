@@ -16,6 +16,7 @@ import (
 	k8sExec "k8s.io/utils/exec"
 	testingexec "k8s.io/utils/exec/testing"
 
+	"github.com/crossplane/upjet/v2/pkg/resource/fake"
 	"github.com/crossplane/upjet/v2/pkg/resource/json"
 	tferrors "github.com/crossplane/upjet/v2/pkg/terraform/errors"
 )
@@ -64,6 +65,25 @@ func newFakeExec(stdOut string, err error) *testingexec.FakeExec {
 					CombinedOutputScript: []testingexec.FakeAction{
 						func() ([]byte, []byte, error) {
 							return []byte(stdOut), nil, err
+						},
+					},
+				}
+			},
+		},
+	}
+}
+
+func newFakeImportExec(fs afero.Afero, tfstate string, err error) *testingexec.FakeExec {
+	return &testingexec.FakeExec{
+		CommandScript: []testingexec.FakeCommandAction{
+			func(_ string, _ ...string) k8sExec.Cmd {
+				return &testingexec.FakeCmd{
+					CombinedOutputScript: []testingexec.FakeAction{
+						func() ([]byte, []byte, error) {
+							if err == nil {
+								_ = fs.WriteFile(directory+"terraform.tfstate", []byte(tfstate), 0o777)
+							}
+							return nil, nil, err
 						},
 					},
 				}
@@ -252,11 +272,64 @@ func TestWorkspaceRefresh(t *testing.T) {
 				err: tferrors.NewRefreshFailed([]byte(filter)),
 			},
 		},
+		"NullID": {
+			args: args{
+				w: NewWorkspace(
+					directory, WithExecutor(&testingexec.FakeExec{DisableScripts: true}), WithAferoFs(fs),
+					WithFilterFn(filterFn)),
+			},
+			want: want{
+				r: RefreshResult{
+					Exists: false,
+					State: &json.StateV4{
+						Resources: []json.ResourceStateV4{
+							{
+								Instances: []json.InstanceObjectStateV4{
+									{
+										AttributesRaw: []byte(`{"id":null}`),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		"IDlessSchema": {
+			args: args{
+				w: NewWorkspace(
+					directory, WithExecutor(&testingexec.FakeExec{DisableScripts: true}), WithAferoFs(fs),
+					WithFilterFn(filterFn), WithWorkspaceHasIDAttribute(false)),
+			},
+			want: want{
+				r: RefreshResult{
+					Exists: true,
+					State: &json.StateV4{
+						Resources: []json.ResourceStateV4{
+							{
+								Instances: []json.InstanceObjectStateV4{
+									{
+										AttributesRaw: []byte(`{"name":"example"}`),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			if err := tc.w.fs.WriteFile(directory+"terraform.tfstate", []byte(tfstate), 0777); err != nil {
+			statePayload := tfstate
+			switch name {
+			case "NullID":
+				statePayload = `{"resources":[{"instances":[{"attributes":{"id":null}}]}]}`
+			case "IDlessSchema":
+				statePayload = `{"resources":[{"instances":[{"attributes":{"name":"example"}}]}]}`
+			}
+			if err := tc.w.fs.WriteFile(directory+"terraform.tfstate", []byte(statePayload), 0777); err != nil {
 				panic(err)
 			}
 			r, err := tc.w.Refresh(context.TODO())
@@ -265,6 +338,88 @@ func TestWorkspaceRefresh(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.want.r, r, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nRefresh(...): -want error, +got error:\n%s", name, diff)
+			}
+		})
+	}
+}
+
+func TestWorkspaceImport(t *testing.T) {
+	type args struct {
+		w       *Workspace
+		tr      *fake.LegacyTerraformed
+		tfstate string
+	}
+	type want struct {
+		r   ImportResult
+		err error
+	}
+
+	newTerraformed := func() *fake.LegacyTerraformed {
+		return &fake.LegacyTerraformed{
+			MetadataProvider: fake.MetadataProvider{
+				Type: "upjet_resource",
+			},
+		}
+	}
+
+	cases := map[string]struct {
+		args
+		want
+	}{
+		"NullID": {
+			args: args{
+				w:       NewWorkspace(directory, WithAferoFs(afero.NewMemMapFs()), WithFilterFn(filterFn)),
+				tr:      newTerraformed(),
+				tfstate: `{"resources":[{"instances":[{"attributes":{"id":null}}]}]}`,
+			},
+			want: want{
+				r: ImportResult{
+					Exists: false,
+					State: &json.StateV4{
+						Resources: []json.ResourceStateV4{
+							{
+								Instances: []json.InstanceObjectStateV4{
+									{AttributesRaw: []byte(`{"id":null}`)},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		"IDlessSchema": {
+			args: args{
+				w:       NewWorkspace(directory, WithAferoFs(afero.NewMemMapFs()), WithFilterFn(filterFn), WithWorkspaceHasIDAttribute(false)),
+				tr:      newTerraformed(),
+				tfstate: `{"resources":[{"instances":[{"attributes":{"name":"example"}}]}]}`,
+			},
+			want: want{
+				r: ImportResult{
+					Exists: true,
+					State: &json.StateV4{
+						Resources: []json.ResourceStateV4{
+							{
+								Instances: []json.InstanceObjectStateV4{
+									{AttributesRaw: []byte(`{"name":"example"}`)},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			tc.w.terraformID = "import-id"
+			tc.w.executor = newFakeImportExec(tc.w.fs, tc.args.tfstate, nil)
+			r, err := tc.w.Import(context.TODO(), tc.tr)
+			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
+				t.Errorf("\n%s\nImport(...): -want error, +got error:\n%s", name, diff)
+			}
+			if diff := cmp.Diff(tc.want.r, r, test.EquateErrors()); diff != "" {
+				t.Errorf("\n%s\nImport(...): -want result, +got result:\n%s", name, diff)
 			}
 		})
 	}
