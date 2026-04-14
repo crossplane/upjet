@@ -546,7 +546,7 @@ func (n *terraformPluginSDKExternal) Observe(ctx context.Context, mg xpresource.
 			mg.GetCondition(xpv1.TypeReady).Status == corev1.ConditionFalse {
 			addTTR(mg)
 		}
-		mg.SetConditions(xpv1.Available())
+		mg.SetConditions(xpv1.Available().WithObservedGeneration(mg.GetGeneration()))
 
 		// we get the connection details from the observed state before
 		// the conversion because the sensitive paths assume the native Terraform

@@ -124,7 +124,7 @@ func (ac *APICallbacks) callbackFn(nn types.NamespacedName, op string) terraform
 		// status condition but we need changes in the managed reconciler
 		// to do so. So we keep the `LastAsyncOperation` condition.
 		// TODO: move this to the `Synced` condition.
-		tr.SetConditions(resource.LastAsyncOperationCondition(err))
+		tr.SetConditions(resource.LastAsyncOperationCondition(err).WithObservedGeneration(tr.GetGeneration()))
 		if err != nil {
 			wrapMsg := ""
 			switch op {
@@ -135,12 +135,12 @@ func (ac *APICallbacks) callbackFn(nn types.NamespacedName, op string) terraform
 			case "destroy":
 				wrapMsg = errXPReconcileDelete
 			}
-			tr.SetConditions(xpv1.ReconcileError(errors.Wrap(err, wrapMsg)))
+			tr.SetConditions(xpv1.ReconcileError(errors.Wrap(err, wrapMsg)).WithObservedGeneration(tr.GetGeneration()))
 		} else {
-			tr.SetConditions(xpv1.ReconcileSuccess())
+			tr.SetConditions(xpv1.ReconcileSuccess().WithObservedGeneration(tr.GetGeneration()))
 		}
 		if ac.enableStatusUpdates {
-			tr.SetConditions(resource.AsyncOperationFinishedCondition())
+			tr.SetConditions(resource.AsyncOperationFinishedCondition().WithObservedGeneration(tr.GetGeneration()))
 		}
 		uErr := errors.Wrapf(ac.kube.Status().Update(ctx, tr), errUpdateStatusFmt, tr.GetObjectKind().GroupVersionKind().String(), nn, op)
 		if ac.eventHandler != nil {

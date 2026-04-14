@@ -472,7 +472,7 @@ func (e *external) Import(ctx context.Context, tr resource.Terraformed) (managed
 	// in progress. In that case, we want to wait for the operation to finish
 	// before we start observing.
 	if res.ASyncInProgress {
-		tr.SetConditions(resource.AsyncOperationOngoingCondition())
+		tr.SetConditions(resource.AsyncOperationOngoingCondition().WithObservedGeneration(tr.GetGeneration()))
 		return managed.ExternalObservation{
 			ResourceExists:   true,
 			ResourceUpToDate: true,
@@ -502,7 +502,7 @@ func (e *external) Import(ctx context.Context, tr resource.Terraformed) (managed
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot get connection details")
 	}
 
-	tr.SetConditions(xpv1.Available())
+	tr.SetConditions(xpv1.Available().WithObservedGeneration(tr.GetGeneration()))
 	return managed.ExternalObservation{
 		ResourceExists:    true,
 		ResourceUpToDate:  true,
