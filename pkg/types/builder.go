@@ -165,6 +165,16 @@ func (g *Builder) buildResource(res *schema.Resource, cfg *config.Resource, tfPa
 			if drop {
 				continue
 			}
+			// If AllowPlaintextValue is enabled, also generate the regular field
+			if cfg.Sensitive.AllowPlaintextValue && !IsObservation(res.Schema[snakeFieldName]) {
+				regularField, err := NewField(g, cfg, r, res.Schema[snakeFieldName], snakeFieldName, tfPath, xpPath, names, asBlocksMode)
+				if err != nil {
+					return nil, nil, nil, err
+				}
+				// Track that these fields are alternatives for validation
+				regularField.AlternateFieldName = f.TransformedName
+				regularField.AddToResource(g, r, typeNames, ptr.Deref(cfg.SchemaElementOptions[cPath], config.SchemaElementOption{}))
+			}
 		case reference != nil:
 			f, err = NewReferenceField(g, cfg, r, res.Schema[snakeFieldName], reference, snakeFieldName, tfPath, xpPath, names, asBlocksMode)
 			if err != nil {
@@ -204,7 +214,16 @@ func (g *Builder) AddToBuilder(typeNames *TypeNames, r *resource) (*types.Named,
 	for _, p := range r.topLevelRequiredParams {
 		g.validationRules += "\n"
 		sp := sanitizePath(p.path)
-		if p.includeInit {
+		if p.alternateFieldPath != "" {
+			// When there's an alternate field path (e.g., AllowPlaintextValue),
+			// create an OR condition requiring at least one of the two fields
+			asp := sanitizePath(p.alternateFieldPath)
+			if p.includeInit {
+				g.validationRules += fmt.Sprintf(`// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.%s) || has(self.forProvider.%s) || (has(self.initProvider) && (has(self.initProvider.%s) || has(self.initProvider.%s)))",message="spec.forProvider.%s or spec.forProvider.%s is a required parameter"`, sp, asp, sp, asp, p.path, p.alternateFieldPath)
+			} else {
+				g.validationRules += fmt.Sprintf(`// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.%s) || has(self.forProvider.%s)",message="spec.forProvider.%s or spec.forProvider.%s is a required parameter"`, sp, asp, p.path, p.alternateFieldPath)
+			}
+		} else if p.includeInit {
 			g.validationRules += fmt.Sprintf(`// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.%s) || (has(self.initProvider) && has(self.initProvider.%s))",message="spec.forProvider.%s is a required parameter"`, sp, sp, p.path)
 		} else {
 			g.validationRules += fmt.Sprintf(`// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.%s)",message="spec.forProvider.%s is a required parameter"`, sp, p.path)
@@ -374,12 +393,17 @@ type resource struct {
 }
 
 type topLevelRequiredParam struct {
-	path        string
-	includeInit bool
+	path          string
+	includeInit   bool
+	alternateFieldPath string // Alternative field path (e.g., for AllowPlaintextValue)
 }
 
 func newTopLevelRequiredParam(path string, includeInit bool) *topLevelRequiredParam {
 	return &topLevelRequiredParam{path: path, includeInit: includeInit}
+}
+
+func newTopLevelRequiredParamWithAlternate(path string, includeInit bool, alternatePath string) *topLevelRequiredParam {
+	return &topLevelRequiredParam{path: path, includeInit: includeInit, alternateFieldPath: alternatePath}
 }
 
 func (r *resource) addParameterField(f *Field, field *types.Var) {
@@ -401,7 +425,12 @@ func (r *resource) addParameterField(f *Field, field *types.Var) {
 		requiredBySchema = false
 		// If the field is not a terraform field, we should not require it in init,
 		// as it is not an initProvider field.
-		r.topLevelRequiredParams = append(r.topLevelRequiredParams, newTopLevelRequiredParam(f.TransformedName, !f.TFTag.AlwaysOmitted()))
+		if f.AlternateFieldName != "" {
+			// This field has an alternate (e.g., AllowPlaintextValue scenario)
+			r.topLevelRequiredParams = append(r.topLevelRequiredParams, newTopLevelRequiredParamWithAlternate(f.TransformedName, !f.TFTag.AlwaysOmitted(), f.AlternateFieldName))
+		} else {
+			r.topLevelRequiredParams = append(r.topLevelRequiredParams, newTopLevelRequiredParam(f.TransformedName, !f.TFTag.AlwaysOmitted()))
+		}
 	}
 
 	// Note(lsviben): Only fields which are not also initProvider fields should have a required kubebuilder comment.
