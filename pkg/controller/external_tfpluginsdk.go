@@ -323,7 +323,7 @@ func (c *TerraformPluginSDKConnector) Connect(ctx context.Context, mg xpresource
 	}, nil
 }
 
-func filterInitExclusiveDiffs(tr resource.Terraformed, instanceDiff *tf.InstanceDiff) error { //nolint:gocyclo
+func filterInitExclusiveDiffs(config *config.Resource, tr resource.Terraformed, instanceDiff *tf.InstanceDiff) error { //nolint:gocyclo
 	if instanceDiff == nil || instanceDiff.Empty() {
 		return nil
 	}
@@ -338,6 +338,25 @@ func filterInitExclusiveDiffs(tr resource.Terraformed, instanceDiff *tf.Instance
 	}
 
 	initProviderExclusiveParamKeys := getTerraformIgnoreChanges(paramsForProvider, paramsInitProvider)
+
+	/* process singleton list expansions */
+	initProviderExclusiveParamKeysConverted := []string{}
+	for _, key := range initProviderExclusiveParamKeys {
+		matched := false
+		for _, p := range config.TFListConversionPaths() {
+			matchPrefix := fmt.Sprintf("%s.", p)
+			if strings.HasPrefix(key, matchPrefix) {
+				initProviderExclusiveParamKeysConverted = append(initProviderExclusiveParamKeysConverted, strings.Replace(key, matchPrefix, fmt.Sprintf("%s0.", matchPrefix), 1))
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			initProviderExclusiveParamKeysConverted = append(initProviderExclusiveParamKeysConverted, key)
+		}
+	}
+	initProviderExclusiveParamKeys = initProviderExclusiveParamKeysConverted
+
 	for _, keyToIgnore := range initProviderExclusiveParamKeys {
 		for attributeKey := range instanceDiff.Attributes {
 			keyToIgnoreAsPrefix := fmt.Sprintf("%s.", keyToIgnore)
@@ -451,7 +470,7 @@ func (n *terraformPluginSDKExternal) getResourceDataDiff(tr resource.Terraformed
 	}
 
 	if resourceExists {
-		if err := filterInitExclusiveDiffs(tr, instanceDiff); err != nil {
+		if err := filterInitExclusiveDiffs(n.config, tr, instanceDiff); err != nil {
 			return nil, errors.Wrap(err, "failed to filter the diffs exclusive to spec.initProvider in the terraform.InstanceDiff")
 		}
 	}
