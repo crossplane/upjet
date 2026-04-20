@@ -348,7 +348,7 @@ func filterInitExclusiveDiffs(config *config.Resource, tr resource.Terraformed, 
 			if strings.HasPrefix(key, matchPrefix) {
 				initProviderExclusiveParamKeysConverted = append(initProviderExclusiveParamKeysConverted, strings.Replace(key, matchPrefix, fmt.Sprintf("%s0.", matchPrefix), 1))
 				matched = true
-				continue
+				break
 			}
 		}
 		if !matched {
