@@ -222,6 +222,104 @@ func NewFieldRenameConversion(sourceVersion, sourceField, targetVersion, targetF
 	}
 }
 
+type TypeChangingMode = int
+
+const (
+	// FloatToString converts a *float64 to a string, using an empty string for nil
+	FloatToString = iota
+	// StringToFloat converts a string to a *float64, using nil for an empty string.
+	// I don't know what I should have it do if the string is not a number. Panic?
+	// Return empty string?
+	StringToFloat
+)
+
+type typeChangingFieldCopy struct {
+	baseConversion
+	paths []string
+	mode  TypeChangingMode
+}
+
+func (f *typeChangingFieldCopy) ConvertPaved(src, target *fieldpath.Paved) (bool, error) {
+	// TODO maybe refactor to instantiate these so I can extract their gvk for error messages
+	if !f.Applicable(&unstructured.Unstructured{Object: src.UnstructuredContent()},
+		&unstructured.Unstructured{Object: target.UnstructuredContent()}) {
+		return false, nil
+	}
+
+	modified := false
+	for _, p := range f.paths {
+		exp, err := src.ExpandWildcards(p)
+		if err != nil {
+			return modified, errors.Wrapf(err, "cannot expand wildcards for the field path expression %s", p)
+		}
+		for _, e := range exp {
+			v, err := src.GetValue(e)
+			if fieldpath.IsNotFound(err) {
+				continue
+			}
+			if err != nil {
+				return modified, errors.Wrapf(err, "failed to get the field %q from the %s conversion source object", e, f.sourceVersion)
+			}
+			switch f.mode {
+			case FloatToString:
+				// While the go stdlibrary unmarshalls all json numbers as float64, crossplane-runtime (perhaps accidentally?) uses
+				// the kubernetes json library, which delegates to UnmarshallCaseSensitivePreserveInts, which sometimes unmarshalls numbers
+				// to float64 and sometimes to int64.
+				// In order to be compatible with both types of deserialization, this can handle either float or int types.
+				strVal := fmt.Sprintf("%v", v)
+				if _, err := strconv.ParseFloat(strVal, 64); err != nil {
+					return modified, errors.Errorf("expected number at field %q with value %s in %s, got %T", e, f.sourceVersion, strVal, v)
+				}
+				err = target.SetValue(e, strVal)
+				if err != nil {
+					return modified, errors.Wrapf(err, "failed to set the field %q of the %s conversion target object", e, f.targetVersion)
+				}
+				modified = true
+			case StringToFloat:
+				strVal, ok := v.(string)
+				if !ok {
+					return modified, errors.Errorf("expected string at field %q in %s, got %T", e, f.sourceVersion, v)
+				}
+				if strVal != "" {
+					parsed, err := strconv.ParseFloat(strVal, 64)
+					if err != nil {
+						return modified, errors.Wrapf(err, "converting %s from %s to %s: failed to parse string %q as float64", e, f.sourceVersion, f.targetVersion, strVal)
+					}
+					// SetValue does a round trip json serialization/deserialization step using the kubernetes JSON library,
+					// which converts floats which are whole numbers to integers
+					err = target.SetValue(e, parsed)
+					if err != nil {
+						return modified, errors.Wrapf(err, "failed to set the field %q of the %s conversion target object", e, f.targetVersion)
+					}
+					modified = true
+				} else {
+					// Special behavior for if a string field is defined and set to "" to remove the existing contents of the field.
+					// I believe this is necessary because otherwise we would be unable to unset anything, but I need to think about it
+					// some more.
+					err := target.DeleteField(e)
+					if err != nil {
+						return modified, errors.Wrapf(err, "failed to unset the field %q of the %s conversion target object", e, f.targetVersion)
+					}
+					modified = true
+				}
+			}
+		}
+
+	}
+	return modified, nil
+}
+
+// NewTypeChangeConversion returns a new Conversion that implements a
+// conversion from the specified `sourceVersion` to the specified
+// `targetVersion` of an API that also changes the type of the field.
+func NewTypeChangeConversion(sourceVersion, targetVersion string, paths []string, mode TypeChangingMode) Conversion {
+	return &typeChangingFieldCopy{
+		baseConversion: newBaseConversion(sourceVersion, targetVersion),
+		paths:          paths,
+		mode:           mode,
+	}
+}
+
 type customConverter func(src, target resource.Managed) error
 
 type customConversion struct {
