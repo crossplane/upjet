@@ -1165,6 +1165,85 @@ func TestGetSensitiveParameters(t *testing.T) {
 				},
 			},
 		},
+		// Test for the bug where secret keys containing dots were
+		// incorrectly split by dot notation when building the TF attribute
+		// path, producing a wrong nested structure instead of a dotted map key.
+		// e.g. SetValue("tls_config.tls.crt", v) → {"tls_config":{"tls":{"crt":v}}} (wrong)
+		//      SetValue("tls_config[tls.crt]", v) → {"tls_config":{"tls.crt":v}} (correct)
+		"SecretReferenceWithDottedKeys": {
+			args: args{
+				clientFn: func(client *mocks.MockSecretClient) {
+					client.EXPECT().GetSecretData(gomock.Any(), gomock.Eq(&xpv1.SecretReference{
+						Name:      "tls-secret",
+						Namespace: "crossplane-system",
+					})).Return(map[string][]byte{
+						"tls.crt": []byte("cert_data"),
+						"tls.key": []byte("key_data"),
+					}, nil)
+				},
+				from: &unstructured.Unstructured{
+					Object: map[string]any{
+						"spec": map[string]any{
+							"forProvider": map[string]any{
+								"tlsSecretRef": map[string]any{
+									"name":      "tls-secret",
+									"namespace": "crossplane-system",
+								},
+							},
+						},
+					},
+				},
+				into: map[string]any{},
+				mapping: map[string]string{
+					"tls_config": "spec.forProvider.tlsSecretRef",
+				},
+			},
+			want: want{
+				out: map[string]any{
+					"tls_config": map[string]any{
+						"tls.crt": "cert_data",
+						"tls.key": "key_data",
+					},
+				},
+			},
+		},
+		"SecretReferenceWithDottedKeysInitProvider": {
+			args: args{
+				clientFn: func(client *mocks.MockSecretClient) {
+					client.EXPECT().GetSecretData(gomock.Any(), gomock.Eq(&xpv1.SecretReference{
+						Name:      "tls-secret",
+						Namespace: "crossplane-system",
+					})).Return(map[string][]byte{
+						"tls.crt": []byte("cert_data"),
+						"tls.key": []byte("key_data"),
+					}, nil)
+				},
+				from: &unstructured.Unstructured{
+					Object: map[string]any{
+						"spec": map[string]any{
+							"initProvider": map[string]any{
+								"tlsSecretRef": map[string]any{
+									"name":      "tls-secret",
+									"namespace": "crossplane-system",
+								},
+							},
+						},
+					},
+				},
+				into: map[string]any{},
+				mapping: map[string]string{
+					"tls_config": "spec.forProvider.tlsSecretRef",
+				},
+			},
+			want: want{
+				out: map[string]any{
+					"tls_config": map[string]any{
+						"tls.crt": "cert_data",
+						"tls.key": "key_data",
+					},
+				},
+			},
+		},
 	}
 	for name, tc := range cases {
 		ctrl := gomock.NewController(t)
