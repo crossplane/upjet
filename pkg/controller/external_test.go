@@ -273,8 +273,9 @@ func TestObserve(t *testing.T) {
 			},
 			want: want{
 				obs: managed.ExternalObservation{
-					ResourceExists:   true,
-					ResourceUpToDate: true,
+					ResourceExists:           true,
+					ResourceUpToDate:         true,
+					AsyncOperationInProgress: true,
 				},
 			},
 		},
@@ -398,8 +399,9 @@ func TestObserve(t *testing.T) {
 			},
 			want: want{
 				obs: managed.ExternalObservation{
-					ResourceExists:   true,
-					ResourceUpToDate: true,
+					ResourceExists:           true,
+					ResourceUpToDate:         true,
+					AsyncOperationInProgress: true,
 				},
 			},
 		},

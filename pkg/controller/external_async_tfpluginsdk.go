@@ -119,8 +119,9 @@ func (n *terraformPluginSDKAsyncExternal) Observe(ctx context.Context, mg xpreso
 	if n.opTracker.LastOperation.IsRunning() {
 		n.logger.WithValues("opType", n.opTracker.LastOperation.Type).Debug("ongoing async operation")
 		return managed.ExternalObservation{
-			ResourceExists:   true,
-			ResourceUpToDate: true,
+			ResourceExists:           true,
+			ResourceUpToDate:         true,
+			AsyncOperationInProgress: true,
 		}, nil
 	}
 	n.opTracker.LastOperation.Clear(true)
