@@ -224,8 +224,9 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 	case res.ASyncInProgress:
 		mg.SetConditions(resource.AsyncOperationOngoingCondition())
 		return managed.ExternalObservation{
-			ResourceExists:   true,
-			ResourceUpToDate: true,
+			ResourceExists:           true,
+			ResourceUpToDate:         true,
+			AsyncOperationInProgress: true,
 		}, nil
 	case !res.Exists:
 		return managed.ExternalObservation{
@@ -474,8 +475,9 @@ func (e *external) Import(ctx context.Context, tr resource.Terraformed) (managed
 	if res.ASyncInProgress {
 		tr.SetConditions(resource.AsyncOperationOngoingCondition())
 		return managed.ExternalObservation{
-			ResourceExists:   true,
-			ResourceUpToDate: true,
+			ResourceExists:           true,
+			ResourceUpToDate:         true,
+			AsyncOperationInProgress: true,
 		}, nil
 	}
 	// If the resource doesn't exist, we don't need to do anything else.
