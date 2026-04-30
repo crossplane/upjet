@@ -247,7 +247,10 @@ func (fp *FileProducer) EnsureTFState(_ context.Context, tfID string) error { //
 	// This is especially useful for resources whose deletion are scheduled for
 	// a long period of time, where if we fill the ID, the queries would actually
 	// succeed, i.e. GCP KMS KeyRing.
-	if !empty || meta.WasDeleted(fp.Resource) {
+	// Skip synthetic state creation when: state already exists, resource is
+	// being deleted, or there is no external identifier yet (new resource).
+	// Without an ID, Refresh would fail on providers that require it for Read.
+	if !empty || meta.WasDeleted(fp.Resource) || tfID == "" {
 		return nil
 	}
 	base := make(map[string]any)
