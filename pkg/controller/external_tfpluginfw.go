@@ -357,10 +357,20 @@ func (c *TerraformPluginFrameworkConnector) getResourceConfigTerraformValue(ctx 
 // when only computed attributes or not-specified argument diffs
 // exist in the raw diff and no actual diff exists in the
 // parametrizable attributes.
+// Exception: a diff where the prior value (Value2) is non-null and the
+// planned value (Value1) is null represents an explicit removal of a
+// previously-set optional attribute and must not be filtered.
 func (n *terraformPluginFrameworkExternalClient) filteredDiffExists(rawDiff []tftypes.ValueDiff) bool {
 	filteredDiff := make([]tftypes.ValueDiff, 0)
 	for _, diff := range rawDiff {
+		// Keep diffs where the planned value is non-null and known.
 		if diff.Value1 != nil && diff.Value1.IsKnown() && !diff.Value1.IsNull() {
+			filteredDiff = append(filteredDiff, diff)
+			continue
+		}
+		// Keep diffs where the prior value was non-null and the planned value
+		// is null — this is an explicit removal of a previously-set attribute.
+		if diff.Value1 != nil && diff.Value1.IsNull() && diff.Value2 != nil && !diff.Value2.IsNull() {
 			filteredDiff = append(filteredDiff, diff)
 		}
 	}
