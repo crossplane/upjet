@@ -1343,8 +1343,8 @@ func TestFilteredDiffExists(t *testing.T) {
 		"NestedObjectRemoval": {
 			rawDiff: []tftypes.ValueDiff{
 				{Value1: nil, Value2: strVal("ClusterIP")}, // child attr, Value1 nil
-				{Value1: nil, Value2: strVal("Cluster")},  // child attr, Value1 nil
-				{Value1: nullVal(), Value2: strVal("3")},  // parent object null → removal
+				{Value1: nil, Value2: strVal("Cluster")},   // child attr, Value1 nil
+				{Value1: nullVal(), Value2: strVal("3")},   // parent object null → removal
 			},
 			want: true,
 		},
