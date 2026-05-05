@@ -86,7 +86,7 @@ func TestProposedNewAttributes(t *testing.T) {
 						panicked = true
 					}
 				}()
-				result = proposedState(schema, tc.args.prior, tc.args.config)
+				result = proposedNew(schema, tc.args.prior.Copy(), tc.args.config.Copy())
 			}()
 
 			if panicked {
