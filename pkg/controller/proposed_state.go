@@ -490,7 +490,9 @@ func proposedNewAttributes(attrs map[string]rschema.Attribute, prior, config tft
 	for name, attr := range attrs {
 		var priorV tftypes.Value
 		if prior.IsNull() {
-			priorV = tftypes.NewValue(priorMap[name].Type(), nil)
+			// prior.As silently fails on null values, leaving priorMap empty.
+			// Derive the null value's type from the schema instead of priorMap.
+			priorV = tftypes.NewValue(attr.GetType().TerraformType(context.TODO()), nil)
 		} else {
 			priorV = priorMap[name]
 		}
