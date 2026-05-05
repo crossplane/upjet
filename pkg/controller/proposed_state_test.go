@@ -7,65 +7,95 @@ package controller
 import (
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	rschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
 
-// TestProposedNewAttributes_NullPriorNestedAttribute is a regression test for a
-// panic that occurred when a SingleNestedAttribute's prior value was a typed
-// null (e.g. the TF provider returned null for an unset optional addon).
-//
-// proposedNewAttributes previously called priorMap[name].Type() where priorMap
-// was empty (prior.As silently fails on null), yielding a zero-value
-// tftypes.Value whose Type() returns nil, causing tftypes.NewValue to panic.
-func TestProposedNewAttributes_NullPriorNestedAttribute(t *testing.T) {
+func TestProposedNewAttributes(t *testing.T) {
 	addonAttrTypes := map[string]tftypes.Type{
 		"external_traffic_policy": tftypes.String,
 		"replicas":                tftypes.Number,
 	}
 	addonObjType := tftypes.Object{AttributeTypes: addonAttrTypes}
 	topObjType := tftypes.Object{
-		AttributeTypes: map[string]tftypes.Type{
-			"addon": addonObjType,
-		},
+		AttributeTypes: map[string]tftypes.Type{"addon": addonObjType},
 	}
-
 	schema := rschema.Schema{
 		Attributes: map[string]rschema.Attribute{
 			"addon": rschema.SingleNestedAttribute{
 				Optional: true,
 				Attributes: map[string]rschema.Attribute{
-					"external_traffic_policy": rschema.StringAttribute{
-						Optional: true,
-						Computed: true,
-					},
-					"replicas": rschema.NumberAttribute{
-						Optional: true,
-						Computed: true,
-					},
+					"external_traffic_policy": rschema.StringAttribute{Optional: true, Computed: true},
+					"replicas":                rschema.NumberAttribute{Optional: true, Computed: true},
 				},
 			},
 		},
 	}
 
-	// prior: resource exists, but addon attribute is a typed null (unset optional
-	// nested attribute as returned by a TF provider Read).
-	prior := tftypes.NewValue(topObjType, map[string]tftypes.Value{
-		"addon": tftypes.NewValue(addonObjType, nil),
-	})
+	type args struct {
+		prior  tftypes.Value
+		config tftypes.Value
+	}
+	type want struct {
+		result tftypes.Value
+	}
 
-	// config: user has now specified the addon.
-	config := tftypes.NewValue(topObjType, map[string]tftypes.Value{
-		"addon": tftypes.NewValue(addonObjType, map[string]tftypes.Value{
-			"external_traffic_policy": tftypes.NewValue(tftypes.String, nil),
-			"replicas":                tftypes.NewValue(tftypes.Number, nil),
-		}),
-	})
+	// cmp.Comparer via tftypes.Value.Equal handles unexported fields.
+	tfValueCmp := cmp.Comparer(func(a, b tftypes.Value) bool { return a.Equal(b) })
 
-	// Must not panic.
-	result := proposedState(schema, prior, config)
+	cases := map[string]struct {
+		reason string
+		args
+		want
+	}{
+		"NullPriorNestedAttributeWithNonNullConfig": {
+			reason: "Must not panic and must return a known non-null result when prior nested attribute is a typed null but config sets it.",
+			args: args{
+				prior: tftypes.NewValue(topObjType, map[string]tftypes.Value{
+					// Typed null: TF provider returned null for an unset optional addon.
+					"addon": tftypes.NewValue(addonObjType, nil),
+				}),
+				config: tftypes.NewValue(topObjType, map[string]tftypes.Value{
+					"addon": tftypes.NewValue(addonObjType, map[string]tftypes.Value{
+						"external_traffic_policy": tftypes.NewValue(tftypes.String, nil),
+						"replicas":                tftypes.NewValue(tftypes.Number, nil),
+					}),
+				}),
+			},
+			want: want{
+				// Optional+Computed children with null config keep prior value.
+				// Prior children are typed nulls derived from the schema (not priorMap).
+				result: tftypes.NewValue(topObjType, map[string]tftypes.Value{
+					"addon": tftypes.NewValue(addonObjType, map[string]tftypes.Value{
+						"external_traffic_policy": tftypes.NewValue(tftypes.String, nil),
+						"replicas":                tftypes.NewValue(tftypes.Number, nil),
+					}),
+				}),
+			},
+		},
+	}
 
-	if !result.IsKnown() || result.IsNull() {
-		t.Errorf("expected a known non-null result, got %s", result)
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			var result tftypes.Value
+			panicked := false
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						panicked = true
+					}
+				}()
+				result = proposedState(schema, tc.args.prior, tc.args.config)
+			}()
+
+			if panicked {
+				t.Errorf("\n%s\nproposedState(...): unexpected panic", tc.reason)
+				return
+			}
+			if diff := cmp.Diff(tc.want.result, result, tfValueCmp); diff != "" {
+				t.Errorf("\n%s\nproposedState(...): -want, +got:\n%s", tc.reason, diff)
+			}
+		})
 	}
 }
