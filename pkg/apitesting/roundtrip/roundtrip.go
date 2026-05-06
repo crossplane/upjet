@@ -76,6 +76,13 @@ var defaultIgnoredKinds = sets.New(
 	"ListOptions", "CreateOptions", "GetOptions",
 	"UpdateOptions", "PatchOptions", "DeleteOptions", "WatchEvent")
 
+// FuzzFunc is a randfill-compatible fuzzer function. The concrete value must
+// have the signature func(*T, randfill.Continue) where T is the type whose
+// instances should be fuzz-filled. Values are registered with
+// randfill.Filler.Funcs and called during fuzzing. The alias preserves full
+// compatibility with the k8s fuzzer infrastructure, which expects []interface{}.
+type FuzzFunc = any
+
 var (
 	// cmpoptIgnoreFieldConversionAnnotation drops the upjet internal annotation
 	// that records per-field conversion metadata from object comparisons. The
@@ -121,7 +128,7 @@ type RoundTripTest struct {
 	fuzzerConfigs []fuzzerOptions
 	// extraFuzzFns are additional randfill-compatible fuzzer functions appended
 	// to every fuzzer built from fuzzerConfigs.  Add them with WithExtraFuzzFuncs.
-	extraFuzzFns []any
+	extraFuzzFns []FuzzFunc
 
 	// cmpOpts are the cmp.Options used when comparing objects after a round
 	// trip.  Defaults to defaultComparisonOptions; extend with
@@ -289,7 +296,7 @@ func WithComparisonOptions(cmpOpts ...cmp.Option) TestOption {
 // (signature: func(*T, randfill.Continue)) to every fuzzer built by the test
 // suite.  This is useful to restrict a field to a valid value domain (e.g.
 // only valid enum strings).
-func WithExtraFuzzFuncs(fns ...any) TestOption {
+func WithExtraFuzzFuncs(fns ...FuzzFunc) TestOption {
 	return func(rtt *RoundTripTest) {
 		rtt.extraFuzzFns = append(rtt.extraFuzzFns, fns...)
 	}
@@ -547,8 +554,8 @@ func (rt *RoundTripTest) TestConversionRoundtrip(t *testing.T) {
 // customFuzzFuncs returns the set of fuzzer functions that are always applied:
 // ASCIIStringFuzzer (to keep generated strings within printable ASCII) plus any
 // functions registered by the caller via WithExtraFuzzFuncs.
-func (rt *RoundTripTest) customFuzzFuncs(_ serializer.CodecFactory) []any {
-	fuzzFns := make([]any, 0, len(rt.extraFuzzFns)+1)
+func (rt *RoundTripTest) customFuzzFuncs(_ serializer.CodecFactory) []FuzzFunc {
+	fuzzFns := make([]FuzzFunc, 0, len(rt.extraFuzzFns)+1)
 	fuzzFns = append(fuzzFns, ASCIIStringFuzzer)
 	fuzzFns = append(fuzzFns, rt.extraFuzzFns...)
 	return fuzzFns
