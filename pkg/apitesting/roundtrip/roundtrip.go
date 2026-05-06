@@ -452,15 +452,11 @@ func (rt *RoundTripTest) getFuzzer(opts fuzzerOptions) *randfill.Filler {
 //
 // Callers must not share the returned slice across goroutines: randfill.Filler
 // is not goroutine-safe.  Call getFillers once per kind sub-test.
-func (rt *RoundTripTest) getFillers(namespaced bool) []fillerWithIterations {
+func (rt *RoundTripTest) getFillers(isNamespaced bool) []fillerWithIterations {
 	fillers := make([]fillerWithIterations, 0, len(rt.fuzzerConfigs))
 	for _, cfg := range rt.fuzzerConfigs {
 		f := rt.getFuzzer(cfg)
-		if namespaced {
-			f = f.Funcs(namespacedFuzzer)
-		} else {
-			f = f.Funcs(clusterScopedFuzzer)
-		}
+		f = f.Funcs(objectMetaNamespaceFuzzer(isNamespaced))
 		iters := defaultFuzzIterations
 		if cfg.FuzzIterations != nil {
 			iters = *cfg.FuzzIterations

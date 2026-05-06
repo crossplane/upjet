@@ -29,18 +29,18 @@ func ASCIIStringFuzzer(s *string, c randfill.Continue) {
 	*s = string(b)
 }
 
-// clusterScopedFuzzer is a randfill-compatible fuzzer function for
-// metav1.ObjectMeta that forces Namespace to empty string, ensuring generated
-// objects are valid for cluster-scoped resources.
-func clusterScopedFuzzer(meta *metav1.ObjectMeta, c randfill.Continue) {
-	c.FillNoCustom(meta)
-	meta.Namespace = ""
-}
-
-// namespacedFuzzer is a randfill-compatible fuzzer function for
-// metav1.ObjectMeta that fills Namespace with a random string, ensuring
-// generated objects are valid for namespace-scoped resources.
-func namespacedFuzzer(meta *metav1.ObjectMeta, c randfill.Continue) {
-	c.FillNoCustom(meta)
-	meta.Namespace = c.String(16)
+// objectMetaNamespaceFuzzer returns a randfill-compatible fuzzer function for
+// metav1.ObjectMeta. When namespaced is true the Namespace field is set to a
+// non-empty random string (prefixed with "ns" because c.String(n) picks a
+// length in [0, n) and can produce ""); when false Namespace is cleared to the
+// empty string.
+func objectMetaNamespaceFuzzer(namespaced bool) func(*metav1.ObjectMeta, randfill.Continue) {
+	return func(meta *metav1.ObjectMeta, c randfill.Continue) {
+		c.FillNoCustom(meta)
+		if namespaced {
+			meta.Namespace = "ns" + c.String(15)
+		} else {
+			meta.Namespace = ""
+		}
+	}
 }
