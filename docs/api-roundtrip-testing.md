@@ -133,13 +133,12 @@ When no include filter is set, all groups registered in the scheme are tested
 registered configuration is run in sequence for every (kind, version-pair),
 accumulating coverage across different fuzz parameters.  When no
 `WithFuzzerConfig` call is made a single default configuration is used
-(NilChance≈0.2, NumElements 0–3, 10 iterations).
+(NilChance≈0.2, NumElements 0–1, 5 iterations).
 
 Multiple calls each add a **distinct** configuration:
 
 ```go
-rt, _ := roundtrip.NewRoundTripTest(provider, nil,
-    roundtrip.WithScheme(testScheme),
+rt, _ := roundtrip.NewRoundTripTest(provider, nil, testScheme,
     // First pass: no nil pointers, 20 iterations
     roundtrip.WithFuzzerConfig(
         roundtrip.FuzzerNilChance(0),
@@ -158,16 +157,21 @@ Available `FuzzerOption` constructors:
 
 | Constructor | Description |
 |---|---|
-| `FuzzerIterations(n)` | Number of fuzz-fill + round-trip cycles for this config. Default: 10. |
+| `FuzzerIterations(n)` | Number of fuzz-fill + round-trip cycles for this config. Default: 5. |
 | `FuzzerNilChance(p)` | Probability [0,1] that pointer fields are left nil. Default: ~0.2. |
-| `FuzzerNumElements(min, max)` | Min/max elements for maps and slices. Default: 0–3. |
+| `FuzzerNumElements(min, max)` | Min/max elements for maps and slices. Default: 0–1. |
 | `FuzzerMaxDepth(d)` | Maximum recursion depth for nested structs. |
 | `FuzzerRandSource(src)` | Deterministic random source (e.g. `rand.NewSource(42)`). |
 | `FuzzerSkipPatterns(patterns...)` | Skip fields whose names match any regexp. |
 | `FuzzerAllowUnexportedFields(bool)` | Whether to fill unexported struct fields. |
 
-`WithExtraFuzzFuncs(fns...)` adds `func(*T, randfill.Continue)` functions that
-are applied globally to **every** fuzzer configuration.
+> [!WARNING]
+> Providers that utilize singleton list/embedded object conversions
+> should not set `FuzzerNumElements` option.
+> By default, fuzzer cannot determine whether a given slice field corresponds 
+> to a singleton list or a regular list. 
+> When max element is >=2 , singleton lists can be filled with multiple elements.
+> This expectedly fails the conversions, and the test.
 
 ### Comparison options
 
@@ -175,25 +179,71 @@ are applied globally to **every** fuzzer configuration.
 |---|---|
 | `WithComparisonOptions(opts...)` | Append `cmp.Option` values used when comparing objects after round trip. |
 
+Exported helper comparison options:
+
+| Helper | Description |
+|---|---|
+| `EquateEmptyAndSingleZeroSlice` | Considers empty slices and slices of length 1 with zero-value elements equal |
 ---
 
-## Exported fuzzer helpers
+You can also use ones at [cmpopts package](https://pkg.go.dev/github.com/google/go-cmp/cmp/cmpopts) and/or define your custom
+own [cmp.Option](https://pkg.go.dev/github.com/google/go-cmp/cmp#Option)
 
-These can be passed to `WithExtraFuzzFuncs`:
+## Optional Custom Fuzzer functions
+
+`WithExtraFuzzFuncs(fns...)` adds `func(*T, randfill.Continue)` functions that
+are applied globally to **every** fuzzer configuration.
+
+
+| Option | Description |
+|---|---|
+| `WithExtraFuzzFuncs(fns...)` | adds `func(*T, randfill.Continue)` functions that are applied globally to **every** fuzzer configuration |
+
+
+Exported built-in fuzzers
 
 | Helper | Description |
 |---|---|
 | `ASCIIStringFuzzer` | Fills strings with random lowercase-alphanumeric characters (included by default). |
 
 
+When you need more control on the fuzzed values, you can define
+a custom fuzzer for a particular type.
+
 Example:
 
 ```go
-rt, err := roundtrip.NewRoundTripTest(provider, nil,
-    roundtrip.WithScheme(testScheme),
+
+type State string
+
+const (
+	StatePending   State = "PENDING"
+	StateRunning   State = "RUNNING"
+	StateCompleted State = "COMPLETED"
+)
+
+var validStates = []State{ StatePending, StateRunning, StateCompleted }
+
+type MyWorkload struct {
+	Name string
+	State State // enum-like field with restricted set of valid values
+	PendingJobCount int 
+}
+
+// define a custom fuzzer for MyWorkload type
+func myCustomWorkloadFuzzer(f *MyWorkload, c randfill.Continue) {
+	c.FillNoCustom() // run default fillers first
+	randIndex := c.Rand.Intn(len(validStates)) 
+	f.State = validStates[randIndex] // set a random valid state value
+	if f.State ==  StateCompleted {
+		f.PendingJobCount = 0 // should be zero for completed workloads 
+	}
+}
+
+rt, err := roundtrip.NewRoundTripTest(provider, nil, testScheme,
     roundtrip.WithExtraFuzzFuncs(
-        roundtrip.NoNilElementsInPointerSlices(codecFactory)...),
-    roundtrip.WithComparisonOptions(roundtrip.EquateNilPtr()),
+        myCustomWorkloadFuzzer),
+    roundtrip.WithComparisonOptions(roundtrip.EquateEmptyAndSingleZeroSlice()),
 )
 ```
 
