@@ -11,7 +11,7 @@
 //  1. Serialization round-trip: an object fuzzed with random data can be
 //     encoded to JSON/YAML and decoded back to an identical object.
 //
-//  2. Conversion round-trip: an object converted spoke→hub→spoke (or
+//  2. Conversion round-trip: an object converted spoke→hub→spoke (and
 //     hub→spoke→hub) is bit-identical to the original, proving that no
 //     data is lost across API version conversions registered via
 //     pkg/controller/conversion.RegisterConversions.
@@ -67,7 +67,7 @@ const (
 	defaultFuzzMinElements = 0
 	// defaultFuzzMaxElements is the upper bound on the number of elements
 	// generated for maps and slices during fuzzing.
-	defaultFuzzMaxElements = 3
+	defaultFuzzMaxElements = 1
 )
 
 // defaultIgnoredKinds lists Kubernetes meta-API kinds that carry no provider
@@ -110,7 +110,9 @@ type RoundTripTest struct {
 	// codecFactory is derived from scheme and handed to the k8s fuzzing
 	// infrastructure.
 	codecFactory serializer.CodecFactory
-
+	// when true, skips initialization of codecFactory from given scheme
+	// and user-supplied custom codecFactory is directly used
+	useCustomCodec bool
 	// fuzzerConfigs is the list of fuzzer configurations to run per
 	// (kind, version-pair).  Each configuration produces an independent
 	// randfill.Filler and runs its own iteration count.  At least one entry is
@@ -237,6 +239,7 @@ type TestOption func(*RoundTripTest)
 func WithCodecFactory(c serializer.CodecFactory) TestOption {
 	return func(rtt *RoundTripTest) {
 		rtt.codecFactory = c
+		rtt.useCustomCodec = true
 	}
 }
 
@@ -311,7 +314,7 @@ func WithExtraFuzzFuncs(fns ...any) TestOption {
 //	)
 //
 // When no WithFuzzerConfig is provided, a single default configuration is used
-// (NilChance≈0.2, NumElements 0–3, 10 iterations).
+// (NilChance≈0.2, NumElements 0–1, 10 iterations).
 func WithFuzzerConfig(opts ...FuzzerOption) TestOption {
 	return func(rtt *RoundTripTest) {
 		cfg := fuzzerOptions{}
@@ -363,9 +366,11 @@ func NewRoundTripTest(provider *config.Provider, providerNamespaced *config.Prov
 // scheme and registers hub↔spoke conversions for both cluster-scoped and
 // namespaced providers.
 func (rt *RoundTripTest) setupTestInfrastructure() error {
-	rt.codecFactory = serializer.NewCodecFactory(rt.scheme)
+	if !rt.useCustomCodec {
+		rt.codecFactory = serializer.NewCodecFactory(rt.scheme)
+	}
 	if err := ujconversion.RegisterConversions(rt.providerCluster, rt.providerNamespaced, rt.scheme); err != nil {
-		return fmt.Errorf("failed to register conversions: %w", err)
+		return errors.Wrapf(err, "failed to register conversions")
 	}
 	return nil
 }
@@ -435,17 +440,15 @@ func (rt *RoundTripTest) getFuzzer(opts fuzzerOptions) *randfill.Filler {
 }
 
 // getFillers builds one fillerWithIterations per entry in rt.fuzzerConfigs.
-// Each filler has NumElements(0,1) and NilChance(0) applied on top of its
-// config — a temporary workaround for singleton-list and pointer-slice
-// handling in upjet conversions — and the appropriate scope function
-// (namespaced or cluster-scoped) for ObjectMeta.
+// Each filler has the appropriate (namespaced or cluster-scoped) scope-aware
+// fuzzer function appended for filling ObjectMeta.
 //
 // Callers must not share the returned slice across goroutines: randfill.Filler
 // is not goroutine-safe.  Call getFillers once per kind sub-test.
 func (rt *RoundTripTest) getFillers(namespaced bool) []fillerWithIterations {
 	fillers := make([]fillerWithIterations, 0, len(rt.fuzzerConfigs))
 	for _, cfg := range rt.fuzzerConfigs {
-		f := rt.getFuzzer(cfg).NumElements(0, 1).NilChance(0)
+		f := rt.getFuzzer(cfg)
 		if namespaced {
 			f = f.Funcs(namespacedFuzzer)
 		} else {
@@ -467,8 +470,12 @@ func (rt *RoundTripTest) getFillers(namespaced bool) []fillerWithIterations {
 // WithExcludeGroupKinds filters that apply to TestConversionRoundtrip also
 // apply here.  The first fuzzer configuration is used to build the fuzzer.
 func (rt *RoundTripTest) TestSerializationRoundtrip(t *testing.T) {
-	objFuzzer := rt.getFuzzer(rt.fuzzerConfigs[0])
-	roundtrip.RoundTripExternalTypesWithoutProtobuf(t, rt.scheme, rt.codecFactory, objFuzzer, rt.nonRoundTrippableTypes())
+	for i, fuzzerCfg := range rt.fuzzerConfigs {
+		objFuzzer := rt.getFuzzer(fuzzerCfg)
+		t.Run(fmt.Sprintf("TestSerializationWithFuzzer%d", i), func(t *testing.T) {
+			roundtrip.RoundTripExternalTypesWithoutProtobuf(t, rt.scheme, rt.codecFactory, objFuzzer, rt.nonRoundTrippableTypes())
+		})
+	}
 }
 
 // nonRoundTrippableTypes returns a map of GVKs that should be skipped by the
