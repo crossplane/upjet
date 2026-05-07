@@ -198,7 +198,7 @@ func TestFuzzerOptions(t *testing.T) {
 		}
 	})
 
-	t.Run("FuzzerSkipPatterns_append", func(t *testing.T) {
+	t.Run("FuzzerSkipPatternsAppend", func(t *testing.T) {
 		p1 := regexp.MustCompile("^a")
 		p2 := regexp.MustCompile("^b")
 		opts := fuzzerOptions{}
@@ -209,7 +209,7 @@ func TestFuzzerOptions(t *testing.T) {
 		}
 	})
 
-	t.Run("FuzzerAllowUnexportedFields_true", func(t *testing.T) {
+	t.Run("FuzzerAllowUnexportedFieldsTrue", func(t *testing.T) {
 		opts := fuzzerOptions{}
 		FuzzerAllowUnexportedFields(true)(&opts)
 		if opts.AllowUnexportedFields == nil || !*opts.AllowUnexportedFields {
@@ -217,7 +217,7 @@ func TestFuzzerOptions(t *testing.T) {
 		}
 	})
 
-	t.Run("FuzzerAllowUnexportedFields_false", func(t *testing.T) {
+	t.Run("FuzzerAllowUnexportedFieldsFalse", func(t *testing.T) {
 		opts := fuzzerOptions{}
 		FuzzerAllowUnexportedFields(false)(&opts)
 		if opts.AllowUnexportedFields == nil || *opts.AllowUnexportedFields {
@@ -229,7 +229,7 @@ func TestFuzzerOptions(t *testing.T) {
 // ---- TestOption unit tests ----
 
 func TestTestOptions(t *testing.T) {
-	t.Run("WithFuzzerConfig_appends", func(t *testing.T) {
+	t.Run("WithFuzzerConfigAppends", func(t *testing.T) {
 		rt := newTestRT(runtime.NewScheme())
 		n := 7
 		WithFuzzerConfig(FuzzerIterations(n))(rt)
@@ -283,7 +283,7 @@ func TestTestOptions(t *testing.T) {
 		}
 	})
 
-	t.Run("WithComparisonOptions_appends", func(t *testing.T) {
+	t.Run("WithComparisonOptionsAppends", func(t *testing.T) {
 		rt := newTestRT(runtime.NewScheme())
 		before := len(rt.cmpOpts)
 		WithComparisonOptions(EquateEmptyAndSingleZeroSlice())(rt)
@@ -292,7 +292,7 @@ func TestTestOptions(t *testing.T) {
 		}
 	})
 
-	t.Run("WithExtraFuzzFuncs_appends", func(t *testing.T) {
+	t.Run("WithExtraFuzzFuncsAppends", func(t *testing.T) {
 		rt := newTestRT(runtime.NewScheme())
 		fn := func() {}
 		WithExtraFuzzFuncs(fn)(rt)
@@ -301,7 +301,7 @@ func TestTestOptions(t *testing.T) {
 		}
 	})
 
-	t.Run("WithCodecFactory_sets_custom", func(t *testing.T) {
+	t.Run("WithCodecFactorySetsCustom", func(t *testing.T) {
 		rt := newTestRT(runtime.NewScheme())
 		cf := serializer.NewCodecFactory(runtime.NewScheme())
 		WithCodecFactory(cf)(rt)
@@ -534,17 +534,10 @@ func TestGetFillers(t *testing.T) {
 
 	t.Run("namespaced filler produces non-empty Namespace in most runs", func(t *testing.T) {
 		fillers := rt.getFillers(true)
-		sawNonEmpty := false
-		for range 50 {
-			var meta metav1.ObjectMeta
-			fillers[0].filler.Fill(&meta)
-			if meta.Namespace != "" {
-				sawNonEmpty = true
-				break
-			}
-		}
-		if !sawNonEmpty {
-			t.Error("namespaced filler never produced non-empty Namespace in 50 runs")
+		var meta metav1.ObjectMeta
+		fillers[0].filler.Fill(&meta)
+		if meta.Namespace == "" {
+			t.Error("namespaced filler produced empty Namespace")
 		}
 	})
 }
