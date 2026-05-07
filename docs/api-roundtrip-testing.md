@@ -6,13 +6,13 @@ SPDX-License-Identifier: CC-BY-4.0
 
 # API roundtrip testing
 
-A testing utility library for verifying that Crossplane provider managed resources
+A testing utility library for verifying that managed resources of a Crossplane provider
 correctly survive two kinds of round trips:
 
-| Test | What it checks |
-|---|---|
-| **Serialization** | Every registered type can be JSON-encoded and decoded back to an identical object. |
-| **Conversion** | Every multi-version type survives spoke→hub→spoke and hub→spoke→hub conversion with no data loss. |
+| Test              | What it checks                                                                                    |
+|-------------------|---------------------------------------------------------------------------------------------------|
+| **Serialization** | Every registered type can be JSON-encoded and decoded back to an identical object.                |
+| **Conversion**    | Every multi-version type survives spoke→hub→spoke and hub→spoke→hub conversion with no data loss. |
 
 The library builds on `k8s.io/apimachinery`'s fuzzing/round-trip infrastructure and
 `sigs.k8s.io/randfill` to generate random objects, then exercises the conversion
@@ -111,18 +111,18 @@ All options are passed to `NewRoundTripTest` as variadic `TestOption` arguments.
 
 ### Codec
 
-| Option | Description |
-|---|---|
+| Option                | Description                                         |
+|-----------------------|-----------------------------------------------------|
 | `WithCodecFactory(c)` | Override the codec factory derived from the scheme. |
 
 ### Filtering which kinds to test
 
-| Option | Description |
-|---|---|
-| `WithIncludeGroups(groups...)` | Only test these API groups. |
+| Option                          | Description                 |
+|---------------------------------|-----------------------------|
+| `WithIncludeGroups(groups...)`  | Only test these API groups. |
 | `WithIncludeGroupKinds(gks...)` | Only test these GroupKinds. |
-| `WithExcludeGroups(groups...)` | Skip these API groups. |
-| `WithExcludeGroupKinds(gks...)` | Skip these GroupKinds. |
+| `WithExcludeGroups(groups...)`  | Skip these API groups.      |
+| `WithExcludeGroupKinds(gks...)` | Skip these GroupKinds.      |
 
 When no include filter is set, all groups registered in the scheme are tested
 (minus `defaultIgnoredKinds` and the empty/core group).
@@ -155,15 +155,16 @@ rt, _ := roundtrip.NewRoundTripTest(provider, nil, testScheme,
 
 Available `FuzzerOption` constructors:
 
-| Constructor | Description |
-|---|---|
-| `FuzzerIterations(n)` | Number of fuzz-fill + round-trip cycles for this config. Default: 5. |
-| `FuzzerNilChance(p)` | Probability [0,1] that pointer fields are left nil. Default: ~0.2. |
-| `FuzzerNumElements(min, max)` | Min/max elements for maps and slices. Default: 0–1. |
-| `FuzzerMaxDepth(d)` | Maximum recursion depth for nested structs. |
-| `FuzzerRandSource(src)` | Deterministic random source (e.g. `rand.NewSource(42)`). |
-| `FuzzerSkipPatterns(patterns...)` | Skip fields whose names match any regexp. |
-| `FuzzerAllowUnexportedFields(bool)` | Whether to fill unexported struct fields. |
+| Constructor                         | Description                                                          |
+|-------------------------------------|----------------------------------------------------------------------|
+| `FuzzerIterations(n)`               | Number of fuzz-fill + round-trip cycles for this config. Default: 5. |
+| `FuzzerNilChance(p)`                | Probability [0,1] that pointer fields are left nil. Default: ~0.2.   |
+| `FuzzerNumElements(min, max)`       | Min/max elements for maps and slices. Default: 0–1.                  |
+| `FuzzerMaxDepth(d)`                 | Maximum recursion depth for nested structs.                          |
+| `FuzzerRandSource(src)`             | Deterministic random source (e.g. `rand.NewSource(42)`).             |
+| `FuzzerSkipPatterns(patterns...)`   | Skip fields whose names match any regexp.                            |
+| `FuzzerAllowUnexportedFields(bool)` | Whether to fill unexported struct fields.                            |
+
 
 > [!WARNING]
 > Providers that utilize singleton list/embedded object conversions
@@ -175,35 +176,36 @@ Available `FuzzerOption` constructors:
 
 ### Comparison options
 
-| Option | Description |
-|---|---|
+| Option                           | Description                                                              |
+|----------------------------------|--------------------------------------------------------------------------|
 | `WithComparisonOptions(opts...)` | Append `cmp.Option` values used when comparing objects after round trip. |
 
 Exported helper comparison options:
 
-| Helper | Description |
-|---|---|
+| Helper                          | Description                                                                  |
+|---------------------------------|------------------------------------------------------------------------------|
 | `EquateEmptyAndSingleZeroSlice` | Considers empty slices and slices of length 1 with zero-value elements equal |
----
+
 
 You can also use ones at [cmpopts package](https://pkg.go.dev/github.com/google/go-cmp/cmp/cmpopts) and/or define your custom
 own [cmp.Option](https://pkg.go.dev/github.com/google/go-cmp/cmp#Option)
 
 ## Optional Custom Fuzzer functions
 
-`WithExtraFuzzFuncs(fns...)` adds `func(*T, randfill.Continue)` functions that
-are applied globally to **every** fuzzer configuration.
+By default, k8s runtime objects are fuzzed using the generic fuzzer at
+[k8s.io/apimachinery](https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/fuzzer) module  
+Fuzzing behavior can be further controlled via extra fuzzer functions.
 
 
-| Option | Description |
-|---|---|
+| Option                       | Description                                                                                              |
+|------------------------------|----------------------------------------------------------------------------------------------------------|
 | `WithExtraFuzzFuncs(fns...)` | adds `func(*T, randfill.Continue)` functions that are applied globally to **every** fuzzer configuration |
 
 
 Exported built-in fuzzers
 
-| Helper | Description |
-|---|---|
+| Helper              | Description                                                                        |
+|---------------------|------------------------------------------------------------------------------------|
 | `ASCIIStringFuzzer` | Fills strings with random lowercase-alphanumeric characters (included by default). |
 
 
@@ -232,7 +234,7 @@ type MyWorkload struct {
 
 // define a custom fuzzer for MyWorkload type
 func myCustomWorkloadFuzzer(f *MyWorkload, c randfill.Continue) {
-	c.FillNoCustom() // run default fillers first
+	c.FillNoCustom(f) // run default fillers first
 	randIndex := c.Rand.Intn(len(validStates)) 
 	f.State = validStates[randIndex] // set a random valid state value
 	if f.State ==  StateCompleted {
@@ -246,5 +248,3 @@ rt, err := roundtrip.NewRoundTripTest(provider, nil, testScheme,
     roundtrip.WithComparisonOptions(roundtrip.EquateEmptyAndSingleZeroSlice()),
 )
 ```
-
----
