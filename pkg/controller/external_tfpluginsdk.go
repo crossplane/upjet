@@ -221,9 +221,14 @@ func (c *TerraformPluginSDKConnector) applyHCLParserToParam(sc *schema.Schema, p
 			}
 		}
 	case schema.TypeString:
+		paramStr, ok := param.(string)
+		if !ok {
+			c.logger.Debug("expected parameter value to be string", "parameterType", fmt.Sprintf("%T", param))
+			return param
+		}
 		// For String types check if it is an HCL string and process
-		if isHCLSnippetPattern.MatchString(param.(string)) {
-			hclProccessedParam, err := processHCLParam(param.(string))
+		if isHCLSnippetPattern.MatchString(paramStr) {
+			hclProccessedParam, err := processHCLParam(paramStr)
 			if err != nil {
 				c.logger.Debug("could not process param, returning original", "param", sc.GoString())
 			} else {
