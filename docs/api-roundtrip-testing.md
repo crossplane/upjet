@@ -174,7 +174,7 @@ Available `FuzzerOption` constructors:
 > When max element is >=2 , singleton lists can be filled with multiple elements.
 > This expectedly fails the conversions, and the test.
 
-### Comparison options
+ø### Comparison options
 
 | Option                           | Description                                                              |
 |----------------------------------|--------------------------------------------------------------------------|
@@ -182,9 +182,10 @@ Available `FuzzerOption` constructors:
 
 Exported helper comparison options:
 
-| Helper                          | Description                                                                  |
-|---------------------------------|------------------------------------------------------------------------------|
-| `EquateEmptyAndSingleZeroSlice` | Considers empty slices and slices of length 1 with zero-value elements equal |
+| Helper                          | Description                                                                                            |
+|---------------------------------|--------------------------------------------------------------------------------------------------------|
+| `EquateEmptyAndSingleZeroSlice` | Considers empty slices and slices of length 1 with zero-value elements equal (recursively)             |
+| `EquateNilAndZeroValuePtr`      | Considers a nil struct pointer equal to a pointer to an effectively-zero struct (e.g. `nil == &Foo{}`) |
 
 
 You can also use ones at [cmpopts package](https://pkg.go.dev/github.com/google/go-cmp/cmp/cmpopts) and/or define your custom
@@ -215,7 +216,6 @@ a custom fuzzer for a particular type.
 Example:
 
 ```go
-
 type State string
 
 const (
