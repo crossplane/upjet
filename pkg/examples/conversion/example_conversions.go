@@ -28,7 +28,7 @@ import (
 // All (generated) manifests under the `startPath` are scanned and the
 // header at the specified path `licenseHeaderPath` is used for the converted
 // example manifests.
-func ApplyAPIConverters(pc *config.Provider, startPath, licenseHeaderPath string) error {
+func ApplyAPIConverters(pc *config.Provider, startPath, licenseHeaderPath string) error { //nolint:gocyclo // easier to follow as a unit
 	resourceRegistry := prepareResourceRegistry(pc)
 
 	var license string
@@ -129,7 +129,7 @@ func writeExampleContent(path string, convertedFileContent string, examples []*u
 	dir := filepath.Dir(newPath)
 
 	// Create all necessary directories if they do not exist
-	if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+	if err := os.MkdirAll(dir, os.ModePerm); err != nil { //nolint:gosec
 		return errors.Wrap(err, "failed to create directory")
 	}
 	f, err := os.Create(filepath.Clean(newPath))
@@ -144,7 +144,7 @@ func writeExampleContent(path string, convertedFileContent string, examples []*u
 }
 
 func getLicenseHeader(licensePath string) (string, error) {
-	licenseData, err := os.ReadFile(licensePath)
+	licenseData, err := os.ReadFile(licensePath) //nolint:gosec // used only on generation time
 	if err != nil {
 		return "", errors.Wrapf(err, "failed to read license file: %s", licensePath)
 	}

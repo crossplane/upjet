@@ -447,12 +447,12 @@ func fieldPathToSecretKey(s string) (string, error) {
 		switch s.Type {
 		case fieldpath.SegmentField:
 			if strings.ContainsRune(s.Field, '.') {
-				b.WriteString(fmt.Sprintf("...%s...", s.Field))
+				fmt.Fprintf(&b, "...%s...", s.Field)
 				continue
 			}
-			b.WriteString(fmt.Sprintf(".%s", s.Field))
+			fmt.Fprintf(&b, ".%s", s.Field)
 		case fieldpath.SegmentIndex:
-			b.WriteString(fmt.Sprintf(".%d", s.Index))
+			fmt.Fprintf(&b, ".%d", s.Index)
 		}
 	}
 

@@ -45,6 +45,7 @@ func (o *Operation) MarkEnd() {
 
 // Flush cleans the operation information including the registered error from
 // the last reconciliation.
+//
 // Deprecated: Please use Clear, which allows optionally preserving the error
 // from the last reconciliation to implement proper SYNC status condition for
 // the asynchronous external clients.
