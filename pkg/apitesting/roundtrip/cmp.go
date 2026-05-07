@@ -22,6 +22,33 @@ func normalizeMeta(obj metav1.Object) {
 	obj.SetCreationTimestamp(metav1.Time{})
 }
 
+// isEffectivelyZero recursively reports whether v is "effectively zero" under
+// the equate-empty-or-single-zero semantics used by this package:
+//   - slice/array: nil, len==0, or len==1 with an effectively-zero element
+//   - struct: every field is effectively zero
+//   - ptr/interface: nil or the pointed-to value is effectively zero
+//   - map: nil or len==0
+//   - everything else: reflect.Value.IsZero()
+func isEffectivelyZero(v reflect.Value) bool { //nolint:gocyclo // easier to follow as a unit
+	switch v.Kind() { //nolint:exhaustive // default covers remaining kinds
+	case reflect.Slice, reflect.Array:
+		return v.Len() == 0 || (v.Len() == 1 && isEffectivelyZero(v.Index(0)))
+	case reflect.Struct:
+		for i := 0; i < v.NumField(); i++ {
+			if !isEffectivelyZero(v.Field(i)) {
+				return false
+			}
+		}
+		return true
+	case reflect.Pointer, reflect.Interface:
+		return v.IsNil() || isEffectivelyZero(v.Elem())
+	case reflect.Map:
+		return v.IsNil() || v.Len() == 0
+	default:
+		return v.IsZero()
+	}
+}
+
 // EquateEmptyAndSingleZeroSlice returns a cmp.Option that treats an empty (or
 // nil) slice as equal to a slice containing exactly one zero-value element:
 //
@@ -43,34 +70,6 @@ func normalizeMeta(obj metav1.Object) {
 //	rt, _ := roundtrip.NewRoundTripTest(provider, nil,
 //	    roundtrip.WithComparisonOptions(roundtrip.EquateEmptyAndSingleZeroSlice()))
 func EquateEmptyAndSingleZeroSlice() cmp.Option { //nolint:gocyclo // easier to follow as a unit
-	// isEffectivelyZero recursively checks whether v is "effectively zero"
-	// under the same equate-empty-or-single-zero semantics:
-	//   - slice/array: nil, len==0, or len==1 with an effectively-zero element
-	//   - struct: every exported and unexported field is effectively zero
-	//   - ptr/interface: nil or the pointed-to value is effectively zero
-	//   - map: nil or len==0
-	//   - everything else: reflect.Value.IsZero()
-	var isEffectivelyZero func(v reflect.Value) bool
-	isEffectivelyZero = func(v reflect.Value) bool {
-		switch v.Kind() { //nolint:exhaustive // default covers remaining kinds
-		case reflect.Slice, reflect.Array:
-			return v.Len() == 0 || (v.Len() == 1 && isEffectivelyZero(v.Index(0)))
-		case reflect.Struct:
-			for i := 0; i < v.NumField(); i++ {
-				if !isEffectivelyZero(v.Field(i)) {
-					return false
-				}
-			}
-			return true
-		case reflect.Ptr, reflect.Interface:
-			return v.IsNil() || isEffectivelyZero(v.Elem())
-		case reflect.Map:
-			return v.IsNil() || v.Len() == 0
-		default:
-			return v.IsZero()
-		}
-	}
-
 	// isSingleZero reports whether v is a slice with exactly one element that
 	// is effectively zero (nil for pointers, "" for strings, recursively zero
 	// for structs containing nested slices, etc.).
@@ -81,7 +80,7 @@ func EquateEmptyAndSingleZeroSlice() cmp.Option { //nolint:gocyclo // easier to 
 		return v.Len() == 0 || isSingleZero(v)
 	}
 	return cmp.FilterValues(
-		func(x, y interface{}) bool {
+		func(x, y any) bool {
 			vx, vy := reflect.ValueOf(x), reflect.ValueOf(y)
 			if !vx.IsValid() || !vy.IsValid() {
 				return false
@@ -103,9 +102,56 @@ func EquateEmptyAndSingleZeroSlice() cmp.Option { //nolint:gocyclo // easier to 
 			return (isSingleZero(vx) || isSingleZero(vy)) &&
 				isEmptyOrSingleZero(vx) && isEmptyOrSingleZero(vy)
 		},
-		cmp.Comparer(func(x, y interface{}) bool {
+		cmp.Comparer(func(x, y any) bool {
 			vx, vy := reflect.ValueOf(x), reflect.ValueOf(y)
 			return isEmptyOrSingleZero(vx) && isEmptyOrSingleZero(vy)
+		}),
+	)
+}
+
+// EquateNilAndZeroValuePtr returns a cmp.Option that treats a nil pointer as
+// equal to a pointer to an effectively-zero struct value:
+//
+//	(*Foo)(nil)  ≡  &Foo{}
+//	(*Foo)(nil)  ≡  &Foo{Nested: []Bar{{}}}   // nested slices also effectively zero
+//
+// Only struct pointer types are intercepted; pointers to scalars, maps, or
+// other non-struct types fall through to go-cmp's default comparison.
+//
+// Use with WithComparisonOptions:
+//
+//	rt, _ := roundtrip.NewRoundTripTest(provider, nil,
+//	    roundtrip.WithComparisonOptions(roundtrip.EquateNilAndZeroValuePtr()))
+func EquateNilAndZeroValuePtr() cmp.Option {
+	// nonNilPointsToEffectivelyZeroStruct returns the non-nil value when
+	// exactly one of the two is nil and the non-nil one points to an
+	// effectively-zero struct, otherwise returns the zero reflect.Value.
+	shouldEquate := func(vx, vy reflect.Value) bool {
+		if vx.Kind() != reflect.Pointer || vy.Kind() != reflect.Pointer {
+			return false
+		}
+		xNil, yNil := vx.IsNil(), vy.IsNil()
+		if xNil == yNil {
+			// both nil or both non-nil: don't intercept
+			return false
+		}
+		nonNil := vy
+		if yNil {
+			nonNil = vx
+		}
+		elem := nonNil.Elem()
+		return elem.Kind() == reflect.Struct && isEffectivelyZero(elem)
+	}
+	return cmp.FilterValues(
+		func(x, y any) bool {
+			vx, vy := reflect.ValueOf(x), reflect.ValueOf(y)
+			if !vx.IsValid() || !vy.IsValid() {
+				return false
+			}
+			return shouldEquate(vx, vy)
+		},
+		cmp.Comparer(func(_, _ any) bool {
+			return true // filter already guarantees equivalence
 		}),
 	)
 }
