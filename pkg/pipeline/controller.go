@@ -9,21 +9,27 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/crossplane/crossplane-runtime/v2/pkg/errors"
 	"github.com/muvaf/typewriter/pkg/wrapper"
-	"github.com/pkg/errors"
 
 	"github.com/crossplane/upjet/v2/pkg/config"
-	"github.com/crossplane/upjet/v2/pkg/pipeline/templates"
 )
 
 // NewControllerGenerator returns a new ControllerGenerator.
-func NewControllerGenerator(ctrlDir, hackDir, ctrlModulePath, group string) *ControllerGenerator {
-	return &ControllerGenerator{
+func NewControllerGenerator(ctrlDir, hackDir, ctrlModulePath, group string, o ...ControllerGeneratorOption) *ControllerGenerator {
+	g := &ControllerGenerator{
 		Group:              group,
 		ControllerGroupDir: filepath.Join(ctrlDir, strings.Split(group, ".")[0]),
 		ModulePath:         ctrlModulePath,
 		LicenseHeaderPath:  filepath.Join(hackDir, "boilerplate.go.txt"),
 	}
+
+	// apply the specified configuration options.
+	for _, fn := range o {
+		fn(g)
+	}
+
+	return g
 }
 
 // ControllerGenerator generates controller setup functions.
@@ -32,12 +38,23 @@ type ControllerGenerator struct {
 	ControllerGroupDir string
 	ModulePath         string
 	LicenseHeaderPath  string
+
+	controllerTemplate string
+}
+
+// A ControllerGeneratorOption configures a ControllerGenerator option.
+type ControllerGeneratorOption func(*ControllerGenerator)
+
+func WithControllerTemplate(template string) ControllerGeneratorOption {
+	return func(g *ControllerGenerator) {
+		g.controllerTemplate = template
+	}
 }
 
 // Generate writes controller setup functions.
 func (cg *ControllerGenerator) Generate(cfg *config.Resource, typesPkgPath string, featuresPkgPath string) (pkgPath string, err error) {
 	controllerPkgPath := filepath.Join(cg.ModulePath, strings.ToLower(strings.Split(cg.Group, ".")[0]), strings.ToLower(cfg.Kind))
-	ctrlFile := wrapper.NewFile(controllerPkgPath, strings.ToLower(cfg.Kind), templates.ControllerTemplate,
+	ctrlFile := wrapper.NewFile(controllerPkgPath, strings.ToLower(cfg.Kind), cg.controllerTemplate,
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath(cg.LicenseHeaderPath),
 	)

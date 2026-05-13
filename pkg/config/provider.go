@@ -118,6 +118,14 @@ type Provider struct {
 	// ensure backwards-compatibility.
 	MainTemplate string
 
+	// ControllerTemplate is the template string to be used to render the
+	// managed resource controller setup code for each managed resource.
+	// The provider calls the generated controller setup code to start
+	// the reconciler for a managed resource. If this is not set, the default
+	// controller template in pkg/pipeline/templates/controller.go.tmpl is used
+	// to ensure backwards-compatibility.
+	ControllerTemplate string
+
 	// skippedResourceNames is a list of Terraform resource names
 	// available in the Terraform provider schema, but
 	// not in the include list or in the skip list, meaning that
@@ -287,6 +295,15 @@ func WithFeaturesPackage(s string) ProviderOption {
 func WithMainTemplate(template string) ProviderOption {
 	return func(p *Provider) {
 		p.MainTemplate = template
+	}
+}
+
+// WithControllerTemplate configures the managed resource
+// controller setup template. If a controller template is not configured for
+// the provider, a default template will be used.
+func WithControllerTemplate(template string) ProviderOption {
+	return func(p *Provider) {
+		p.ControllerTemplate = template
 	}
 }
 

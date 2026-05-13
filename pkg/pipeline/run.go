@@ -194,7 +194,14 @@ func (r *PipelineRunner) Run(pc *config.Provider) []string { //nolint:gocyclo
 			versionGen := NewVersionGenerator(r.DirAPIs, r.DirHack, r.ModulePathAPIs, group, version)
 			crdGen := NewCRDGenerator(versionGen.Package(), r.DirAPIs, r.DirHack, pc.ShortName, group, version, r.Scope)
 			tfGen := NewTerraformedGenerator(versionGen.Package(), r.DirAPIs, r.DirHack, group, version)
-			ctrlGen := NewControllerGenerator(r.DirControllers, r.DirHack, r.ModulePathControllers, group)
+
+			// Configure the controller template to be used by
+			// the controller generator.
+			ctrlTemplate := templates.ControllerTemplate
+			if pc.ControllerTemplate != "" {
+				ctrlTemplate = pc.ControllerTemplate
+			}
+			ctrlGen := NewControllerGenerator(r.DirControllers, r.DirHack, r.ModulePathControllers, group, WithControllerTemplate(ctrlTemplate))
 
 			if err := versionGen.InsertPreviousObjects(versions); err != nil {
 				fmt.Println(errors.Wrapf(err, "cannot insert type definitions from the previous versions into the package scope for group %q", group))
