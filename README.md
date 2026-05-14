@@ -30,7 +30,6 @@ community providers.
 
 </div>
 
-
 ## Table of Contents
 
 - [Key Features](#key-features)
@@ -46,12 +45,14 @@ community providers.
 ## Key Features
 
 - **Multiple Terraform Execution Modes**
+
   - *Terraform CLI*: Traditional fork-based Terraform CLI and Terraform provider
     process spawning
   - *Terraform Plugin SDK v2*: Direct Go library integration (no-CLI invocation)
   - *Terraform Plugin Framework*: Protocol-based communication via protov6 (no-CLI invocation)
 
 - **Automatic Resource Generation**
+
   - Kubernetes CRDs highly conformant to the Crossplane Resource Model
     ([XRM](https://docs.crossplane.io/latest/managed-resources/managed-resources/))
     from Terraform schemas
@@ -59,14 +60,17 @@ community providers.
   - Example manifests, API documentation, (partial) API validation rules, etc.
 
 - **Cross-Resource References**
+
   - Kubernetes-native reference resolution between resources
   - Automatic selector generation for resource lookups
 
 - **Management Policies** (Crossplane v1.11+)
+
   - Fine-grained control over resource lifecycle operations
   - Observe-only mode for importing existing infrastructure
 
 - **Advanced Capabilities**
+
   - External name mapping for resource identification
   - Late initialization from provider responses
   - Sync & async operations for long-running resources
@@ -105,18 +109,18 @@ infrastructure, while exposing a pure Kubernetes API to users.
 
 1. **Code Generation Pipeline** - Transforms Terraform schemas into Go types,
    CRDs, and controllers
-2. **Generic CR Reconcilers** - Runtimes that handle reconciliation for all
+1. **Generic CR Reconcilers** - Runtimes that handle reconciliation for all
    generated resources
-3. **Documentation Scraper** - Extracts and generates API documentation, example
+1. **Documentation Scraper** - Extracts and generates API documentation, example
    manifests (used for e2e testing and documentation), cross-resource references,
    etc. from Terraform docs
-4. **Migration Framework** - Supports migrating resources between different
+1. **Migration Framework** - Supports migrating resources between different
    providers of the same external API, like migrating from the community AWS
    provider (crossplane-contrib/provider-aws) to the official provider
    (upbound/provider-aws)
-5. **API Conversion Framework** - Handles lifecycle management and breaking
+1. **API Conversion Framework** - Handles lifecycle management and breaking
    changes between API versions of the same CRD
-6. **Resource Configuration Framework** - Implements various configuration
+1. **Resource Configuration Framework** - Implements various configuration
    aspects (external name, sync/async behavior, API naming, API versions,
    cross-resource references, etc.) for Upjet resources
 
@@ -138,7 +142,7 @@ Browse the [Upbound Marketplace](https://marketplace.upbound.io/providers) for a
 ## Documentation
 
 | Guide | Description |
-|-------|-------------|
+|-------|-----------------------------------------------------------------------|
 | [Generating a Provider](docs/generating-a-provider.md) | Create a new Crossplane provider from scratch |
 | [Configuring a Resource](docs/configuring-a-resource.md) | External names, references, and resource customization |
 | [Adding New Resources](docs/adding-new-resource.md) | Add resources to an existing provider |
@@ -146,6 +150,8 @@ Browse the [Upbound Marketplace](https://marketplace.upbound.io/providers) for a
 | [Monitoring](docs/monitoring.md) | Prometheus metrics for the Upjet runtime |
 | [Upgrading to v2](docs/upjet-v2-upgrade.md) | Migration guide from Upjet v1 to v2 |
 | [Managing CRD Versions](docs/managing-crd-versions.md) | Handle Terraform schema changes across versions |
+| [Controller Template Variables](docs/controller-template-variables.md) | Variables available to the managed resource controller setup template |
+| [Main Template Variables](docs/main-template-variables.md) | Variables available to the provider family main program template |
 
 ## Contributing
 
@@ -160,12 +166,12 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 ## Prior Art
 
-Upjet originates from the [Terrajet][terrajet] project. See the original
+Upjet originates from the [Terrajet] project. See the original
 [design document][terrajet-design-doc].
 
 ## License
 
 Upjet is under [the Apache 2.0 license](LICENSE) with [notice](NOTICE).
 
-[terrajet-design-doc]: https://github.com/crossplane/crossplane/blob/main/design/design-doc-terrajet.md
 [terrajet]: https://github.com/crossplane/terrajet
+[terrajet-design-doc]: https://github.com/crossplane/crossplane/blob/main/design/design-doc-terrajet.md
