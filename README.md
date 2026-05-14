@@ -137,15 +137,17 @@ Browse the [Upbound Marketplace](https://marketplace.upbound.io/providers) for a
 
 ## Documentation
 
-| Guide | Description |
-|-------|-------------|
-| [Generating a Provider](docs/generating-a-provider.md) | Create a new Crossplane provider from scratch |
-| [Configuring a Resource](docs/configuring-a-resource.md) | External names, references, and resource customization |
-| [Adding New Resources](docs/adding-new-resource.md) | Add resources to an existing provider |
-| [Testing with Uptest](docs/testing-with-uptest.md) | End-to-end testing framework |
-| [Monitoring](docs/monitoring.md) | Prometheus metrics for the Upjet runtime |
-| [Upgrading to v2](docs/upjet-v2-upgrade.md) | Migration guide from Upjet v1 to v2 |
-| [Managing CRD Versions](docs/managing-crd-versions.md) | Handle Terraform schema changes across versions |
+| Guide | Description                                                           |
+|-------|-----------------------------------------------------------------------|
+| [Generating a Provider](docs/generating-a-provider.md) | Create a new Crossplane provider from scratch                         |
+| [Configuring a Resource](docs/configuring-a-resource.md) | External names, references, and resource customization                |
+| [Adding New Resources](docs/adding-new-resource.md) | Add resources to an existing provider                                 |
+| [Testing with Uptest](docs/testing-with-uptest.md) | End-to-end testing framework                                          |
+| [Monitoring](docs/monitoring.md) | Prometheus metrics for the Upjet runtime                              |
+| [Upgrading to v2](docs/upjet-v2-upgrade.md) | Migration guide from Upjet v1 to v2                                   |
+| [Managing CRD Versions](docs/managing-crd-versions.md) | Handle Terraform schema changes across versions                       |
+| [Controller Template Variables](docs/controller-template-variables.md) | Variables available to the managed resource controller setup template |
+| [Main Template Variables](docs/main-template-variables.md) | Variables available to the provider family main program template      |
 
 ## Contributing
 
