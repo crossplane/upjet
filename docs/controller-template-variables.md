@@ -13,7 +13,7 @@ for each managed resource and are used to render the per-resource
 `zz_controller.go` file.
 
 The controller template can be overridden via
-`config.Provider` (see `WithControllerTemplate` in `pkg/pipeline/controller.go`).
+`config.Provider` (see `WithControllerTemplate` in `pkg/config/provider.go`).
 Any custom template MUST honor the contract described below.
 
 > [!WARNING]
@@ -60,11 +60,11 @@ The template chooses the external connector based on the combination of
 
 | SDK | Framework | Async | Connector |
 |---|---|---|---|
-| `true`  | `false` | `false` | `tjcontroller.NewTerraformPluginSDKConnector` |
-| `true`  | `false` | `true`  | `tjcontroller.NewTerraformPluginSDKAsyncConnector` |
-| `false` | `true`  | `false` | `tjcontroller.NewTerraformPluginFrameworkConnector` |
-| `false` | `true`  | `true`  | `tjcontroller.NewTerraformPluginFrameworkAsyncConnector` |
-| `false` | `false` | any     | `tjcontroller.NewConnector` (CLI / fork-based) |
+| `true` | `false` | `false` | `tjcontroller.NewTerraformPluginSDKConnector` |
+| `true` | `false` | `true` | `tjcontroller.NewTerraformPluginSDKAsyncConnector` |
+| `false` | `true` | `false` | `tjcontroller.NewTerraformPluginFrameworkConnector` |
+| `false` | `true` | `true` | `tjcontroller.NewTerraformPluginFrameworkAsyncConnector` |
+| `false` | `false` | any | `tjcontroller.NewConnector` (CLI / fork-based) |
 
 `UseTerraformPluginSDKClient` and `UseTerraformPluginFrameworkClient` must not
 both be `true` for the same resource.
@@ -85,7 +85,22 @@ populated at runtime, regardless of which connector is selected.
 ## Overriding the Template
 
 To supply a custom controller template (for example, when extending the
-generated `Setup` function), pass `pipeline.WithControllerTemplate` through
+generated `Setup` function), pass `config.WithControllerTemplate` through
 `config.Provider`. The custom template must accept all variables documented
 above; otherwise the rendered file will not compile against the upjet runtime
 contracts.
+
+### When Template Errors Surface
+
+Errors in a custom controller template are reported at two distinct stages:
+
+- **Provider generation time.** Static template errors — such as a template
+  string that fails to parse (`text/template.Parse()` failures), malformed
+  actions, or references to undefined fields evaluated during execution — are
+  raised by the code generation pipeline and cause provider generation to
+  fail.
+- **Provider build / lint time.** Syntactically valid templates that produce
+  invalid Go (for example, an empty template that emits no `package` clause,
+  or output that omits imports required by the upjet runtime contracts) parse
+  cleanly but fail later when the generated `zz_controller.go` files are
+  compiled or linted as part of the provider build.

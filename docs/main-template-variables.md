@@ -71,3 +71,18 @@ To supply a custom main template, set `config.Provider.MainTemplate` via
 `config.WithMainTemplate`. The custom template must accept the variables
 documented above; otherwise the rendered file will not compile against the
 upjet runtime contracts.
+
+### When Template Errors Surface
+
+Errors in a custom main template are reported at two distinct stages:
+
+- **Provider generation time.** Static template errors — such as a template
+  string that fails to parse (`text/template.Parse()` failures), malformed
+  actions, or references to undefined fields evaluated during execution — are
+  raised by the code generation pipeline and cause provider generation to
+  fail.
+- **Provider build / lint time.** Syntactically valid templates that produce
+  invalid Go (for example, an empty template that emits no `package` clause,
+  or output that omits imports required by the upjet runtime contracts) parse
+  cleanly but fail later when the generated `zz_main.go` files are compiled
+  or linted as part of the provider build.
