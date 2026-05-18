@@ -1,0 +1,24 @@
+// SPDX-FileCopyrightText: 2026 The Crossplane Authors <https://crossplane.io>
+//
+// SPDX-License-Identifier: Apache-2.0
+
+package reconciliationpolicy
+
+import (
+	"context"
+
+	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
+	"github.com/crossplane/upjet/v2/apis/configuration/v1alpha1"
+	"github.com/crossplane/upjet/v2/pkg/internal/ratelimiter"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+)
+
+// Source represents a configuration source for reconciliation policies.
+type Source func (context.Context, client.Client, resource.Managed) (*v1alpha1.ReconciliationPolicy, error)
+
+type ExponentialFailureRateLimiter = ratelimiter.EncapsulatingRateLimiter[efrlKey]
+
+type efrlKey struct {
+	maxDelay, baseDelay metav1.Duration
+}
