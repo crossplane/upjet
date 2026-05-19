@@ -22,7 +22,7 @@ type FinalizerOption func(*Finalizer)
 
 func WithFinalizerRateLimiter(rl *ExponentialFailureRateLimiter) FinalizerOption {
 	return func(f *Finalizer) {
-		f.targets.encapsulatingRateLimiter = rl
+		f.targets.exponentialFailureRateLimiter = rl
 	}
 }
 
@@ -48,8 +48,8 @@ func (cf *Finalizer) AddFinalizer(ctx context.Context, obj resource.Object) erro
 // RemoveFinalizer cleans up the reconciler resources before removing
 // the Kubernetes resource finalizer.
 func (cf *Finalizer) RemoveFinalizer(ctx context.Context, obj resource.Object) error {
-	if cf.targets.encapsulatingRateLimiter != nil {
-		cf.targets.encapsulatingRateLimiter.Remove(
+	if cf.targets.exponentialFailureRateLimiter != nil {
+		cf.targets.exponentialFailureRateLimiter.Remove(
 			reconcile.Request{
 				NamespacedName: types.NamespacedName{
 					Namespace: obj.GetNamespace(),

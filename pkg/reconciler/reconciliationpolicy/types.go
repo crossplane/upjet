@@ -6,6 +6,7 @@ package reconciliationpolicy
 
 import (
 	"context"
+	"time"
 
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/crossplane/upjet/v2/apis/configuration/v1alpha1"
@@ -17,7 +18,12 @@ import (
 // Source represents a configuration source for reconciliation policies.
 type Source func (context.Context, client.Client, resource.Managed) (*v1alpha1.ReconciliationPolicy, error)
 
-type ExponentialFailureRateLimiter = ratelimiter.EncapsulatingRateLimiter[efrlKey]
+type ExponentialFailureRateLimiter struct {
+	*ratelimiter.EncapsulatingRateLimiter[efrlKey]
+
+	defaultBaseDelay time.Duration
+	defaultMaxDelay  time.Duration
+}
 
 type efrlKey struct {
 	maxDelay, baseDelay metav1.Duration

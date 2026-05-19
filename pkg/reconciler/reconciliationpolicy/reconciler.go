@@ -6,10 +6,12 @@ package reconciliationpolicy
 
 import (
 	"context"
+	"time"
 
 	"github.com/crossplane/crossplane-runtime/v2/pkg/errors"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/crossplane/upjet/v2/pkg/internal/ratelimiter"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -23,7 +25,7 @@ const (
 )
 
 type targets struct {
-	encapsulatingRateLimiter *ExponentialFailureRateLimiter
+	exponentialFailureRateLimiter *ExponentialFailureRateLimiter
 }
 
 // Reconciler wraps the supplied Reconciler and
@@ -41,7 +43,7 @@ type ReconcilerOption func(*Reconciler)
 
 func WithRateLimiter(rl *ExponentialFailureRateLimiter) ReconcilerOption {
 	return func(r *Reconciler) {
-		r.targets.encapsulatingRateLimiter = rl
+		r.targets.exponentialFailureRateLimiter = rl
 	}
 }
 
@@ -77,7 +79,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 }
 
 func (r *Reconciler) setRateLimiter(ctx context.Context, req reconcile.Request) error {
-	if r.source == nil || r.targets.encapsulatingRateLimiter == nil {
+	if r.source == nil || r.targets.exponentialFailureRateLimiter == nil {
 		return nil
 	}
 
@@ -98,19 +100,33 @@ func (r *Reconciler) setRateLimiter(ctx context.Context, req reconcile.Request) 
 		return nil
 	}
 
-
-	// TODO: handle unspecified (nil) parameter values...
-	rlKey := efrlKey{
-		baseDelay: *rp.ExponentialFailureRateLimiter.BaseDelay,
-		maxDelay:  *rp.ExponentialFailureRateLimiter.MaxDelay,
+	rlKey := efrlKey{}
+	if rp.ExponentialFailureRateLimiter.BaseDelay != nil {
+		rlKey.baseDelay = *rp.ExponentialFailureRateLimiter.BaseDelay
+	} else {
+		rlKey.baseDelay = metav1.Duration{
+			Duration: r.targets.exponentialFailureRateLimiter.defaultBaseDelay,
+		}
 	}
-	r.targets.encapsulatingRateLimiter.Add(
+	if rp.ExponentialFailureRateLimiter.MaxDelay != nil {
+		rlKey.maxDelay = *rp.ExponentialFailureRateLimiter.MaxDelay
+	} else {
+		rlKey.maxDelay = metav1.Duration{
+			Duration: r.targets.exponentialFailureRateLimiter.defaultMaxDelay,
+		}
+	}
+
+	r.targets.exponentialFailureRateLimiter.Add(
 		rlKey,
 		workqueue.NewTypedItemExponentialFailureRateLimiter[reconcile.Request](rlKey.baseDelay.Duration, rlKey.maxDelay.Duration),
 		req)
 	return nil
 }
 
-func NewExponentialFailureRateLimiter(defaultRateLimiter workqueue.TypedRateLimiter[reconcile.Request]) *ExponentialFailureRateLimiter {
-	return ratelimiter.NewEncapsulatingRateLimiter[efrlKey](defaultRateLimiter)
+func NewExponentialFailureRateLimiter(defaultBaseDelay time.Duration, defaultMaxDelay time.Duration) *ExponentialFailureRateLimiter {
+	return &ExponentialFailureRateLimiter{
+		EncapsulatingRateLimiter: ratelimiter.NewEncapsulatingRateLimiter[efrlKey](workqueue.NewTypedItemExponentialFailureRateLimiter[reconcile.Request](defaultBaseDelay, defaultMaxDelay)),
+		defaultBaseDelay:         defaultBaseDelay,
+		defaultMaxDelay:          defaultMaxDelay,
+	}
 }
