@@ -5,8 +5,6 @@
 package ratelimiter
 
 import (
-	"fmt"
-	"strconv"
 	"sync"
 	"time"
 
@@ -106,16 +104,7 @@ func (c *EncapsulatingRateLimiter[K]) When(req reconcile.Request) time.Duration 
 	defer c.mu.RUnlock()
 
 	rl := c.getRateLimiterFor(req)
-	when := rl.When(req)
-
-	// TODO: remove debug printing
-	fmt.Println("---------------------------------------------------------------")
-	fmt.Println("Item: " + req.String())
-	fmt.Println("When: " + when.String())
-	fmt.Println("Num requeues: " + strconv.Itoa(rl.NumRequeues(req)))
-	fmt.Println("---------------------------------------------------------------")
-
-	return when
+	return rl.When(req)
 }
 
 func (c *EncapsulatingRateLimiter[K]) Forget(req reconcile.Request) {
