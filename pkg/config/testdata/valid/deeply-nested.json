@@ -14,8 +14,10 @@
             "path": "spec.initProvider.config.items[*].network.subnets[*].vpc.region.name",
             "pathParts": ["spec", "initProvider", "config", "items[*]", "network", "subnets[*]", "vpc", "region", "name"],
             "changeType": "type_changed",
-            "oldValue": "string",
-            "newValue": "number"
+            "typeChangeDetails": {
+              "deleted": ["string"],
+              "added": ["number"]
+            }
           },
           {
             "path": "status.atProvider.resources[*].nested.objects[*].deep.hierarchy.value",

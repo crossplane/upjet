@@ -29,7 +29,7 @@ require (
 	github.com/spf13/afero v1.15.0
 	github.com/stretchr/testify v1.11.1
 	github.com/tmccombs/hcl2json v0.3.3
-	github.com/upbound/uptest v0.12.1-0.20260122114836-7ce94bc0de92
+	github.com/upbound/uptest v0.12.1-0.20260123170102-8965579a213b
 	github.com/yuin/goldmark v1.7.16
 	github.com/zclconf/go-cty v1.16.2
 	github.com/zclconf/go-cty-yaml v1.0.3

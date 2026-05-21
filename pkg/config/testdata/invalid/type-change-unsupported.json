@@ -9,8 +9,10 @@
             "path": "spec.forProvider.field",
             "pathParts": ["spec", "forProvider", "field"],
             "changeType": "type_changed",
-            "oldValue": "array",
-            "newValue": "string"
+            "typeChangeDetails": {
+              "deleted": ["array"],
+              "added": ["string"]
+            }
           }
         ]
       }

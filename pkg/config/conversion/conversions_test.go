@@ -804,6 +804,56 @@ func TestOptionalFieldConversion(t *testing.T) {
 				}),
 			},
 		},
+		"ToAnnotationFieldRemoved": {
+			reason: "When source field is deleted from source object, it should be removed from the annotation",
+			args: args{
+				sourceVersion: "v1beta2",
+				targetVersion: "v1beta1",
+				fieldPath:     "spec.forProvider.foo",
+				mode:          ToAnnotation,
+				sourceObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"commonField": "value",
+							// foo field got deleted
+						},
+					},
+				}),
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta1",
+					"kind":       "TestResource",
+					"metadata": map[string]any{
+						"annotations": map[string]any{
+							"internal.upjet.crossplane.io/field-conversions": `{"spec.forProvider.foo":"restored-value"}`,
+						},
+					},
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"commonField": "value",
+						},
+					},
+				}),
+			},
+			want: want{
+				converted: true,
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta1",
+					"kind":       "TestResource",
+					"metadata": map[string]any{
+						"annotations": map[string]any{
+							"internal.upjet.crossplane.io/field-conversions": `{}`, // foo field should be removed
+						},
+					},
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"commonField": "value",
+						},
+					},
+				}),
+			},
+		},
 		"VersionMismatch": {
 			reason: "No conversion when API versions don't match the conversion configuration.",
 			args: args{
@@ -941,6 +991,157 @@ func TestOptionalFieldConversion(t *testing.T) {
 							"a": map[string]any{
 								"b": "nested-restored-value",
 							},
+						},
+					},
+				}),
+			},
+		},
+		"SuccessfulToAnnotationNestedSliceField": {
+			reason: "Successfully convert a nested slice field to annotation",
+			args: args{
+				sourceVersion: "v1beta2",
+				targetVersion: "v1beta1",
+				fieldPath:     "spec.forProvider.a.b[*].c",
+				mode:          ToAnnotation,
+				sourceObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"a": map[string]any{
+								"b": []any{
+									map[string]any{
+										"fizz": "fizz-val-0",
+										"c":    "c-val-0",
+									},
+									map[string]any{
+										"fizz": "fizz-val-1",
+										// no c here
+									},
+									map[string]any{
+										"fizz": "fizz-val-2",
+										"c":    "c-val-2",
+									},
+								},
+							},
+							"existingField": "existing",
+						},
+					},
+				}),
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta1",
+					"kind":       "TestResource",
+				}),
+			},
+			want: want{
+				converted: true,
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta1",
+					"kind":       "TestResource",
+					"metadata": map[string]any{
+						"annotations": map[string]any{
+							"internal.upjet.crossplane.io/field-conversions": `{"spec.forProvider.a.b[0].c":"c-val-0","spec.forProvider.a.b[2].c":"c-val-2"}`,
+						},
+					},
+				}),
+			},
+		},
+		"SuccessfulFromAnnotationNestedSliceField": {
+			reason: "Successfully convert annotation back to nested slice field.",
+			args: args{
+				sourceVersion: "v1beta1",
+				targetVersion: "v1beta2",
+				fieldPath:     "spec.forProvider.a.b[*].c",
+				mode:          FromAnnotation,
+				sourceObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta1",
+					"kind":       "TestResource",
+					"metadata": map[string]any{
+						"annotations": map[string]any{
+							"internal.upjet.crossplane.io/field-conversions": `{"spec.forProvider.a.b[0].c":"c-val-0","spec.forProvider.a.b[2].c":"c-val-2"}`,
+						},
+					},
+				}),
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"existingField": "existing",
+						},
+					},
+				}),
+			},
+			want: want{
+				converted: true,
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"existingField": "existing",
+							"a": map[string]any{
+								"b": []any{
+									map[string]any{
+										"c": "c-val-0",
+									},
+									// nil at index 1: fieldpath.SetValue builds the slice by
+									// index, leaving a nil placeholder for indices that were
+									// never written (b[1].c was absent from the annotation).
+									nil,
+									map[string]any{
+										"c": "c-val-2",
+									},
+								},
+							},
+						},
+					},
+				}),
+			},
+		},
+		"ToAnnotationWildcardStaleEntriesRemoved": {
+			reason: "When list elements are removed from source, their stale annotation entries must be cleaned up.",
+			args: args{
+				sourceVersion: "v1beta2",
+				targetVersion: "v1beta1",
+				fieldPath:     "spec.forProvider.a.b[*].c",
+				mode:          ToAnnotation,
+				sourceObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"a": map[string]any{
+								"b": []any{
+									map[string]any{
+										"c": "c-val-0",
+									},
+									// b[1] and b[2] were removed; only b[0] remains
+								},
+							},
+						},
+					},
+				}),
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta1",
+					"kind":       "TestResource",
+					"metadata": map[string]any{
+						"annotations": map[string]any{
+							// Stale entries from a previous conversion when b had 3 elements
+							"internal.upjet.crossplane.io/field-conversions": `{"spec.forProvider.a.b[0].c":"c-val-0","spec.forProvider.a.b[1].c":"c-val-1","spec.forProvider.a.b[2].c":"c-val-2"}`,
+						},
+					},
+				}),
+			},
+			want: want{
+				converted: true,
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta1",
+					"kind":       "TestResource",
+					"metadata": map[string]any{
+						"annotations": map[string]any{
+							// Only b[0].c survives; b[1].c and b[2].c are removed
+							"internal.upjet.crossplane.io/field-conversions": `{"spec.forProvider.a.b[0].c":"c-val-0"}`,
 						},
 					},
 				}),

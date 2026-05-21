@@ -9,8 +9,10 @@
             "path": "spec.forProvider.enabled",
             "pathParts": ["spec", "forProvider", "enabled"],
             "changeType": "type_changed",
-            "oldValue": "boolean",
-            "newValue": "string"
+            "typeChangeDetails": {
+              "deleted": ["boolean"],
+              "added": ["string"]
+            }
           }
         ]
       }

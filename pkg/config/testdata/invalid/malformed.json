@@ -9,7 +9,6 @@
         "changes": [
           {
             "path": "spec.forProvider.field"
-            // Missing comma - malformed JSON
             "changeType": "field_added"
           }
         ]

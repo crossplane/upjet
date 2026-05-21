@@ -309,8 +309,8 @@ github.com/tmccombs/hcl2json v0.3.3 h1:+DLNYqpWE0CsOQiEZu+OZm5ZBImake3wtITYxQ8uL
 github.com/tmccombs/hcl2json v0.3.3/go.mod h1:Y2chtz2x9bAeRTvSibVRVgbLJhLJXKlUeIvjeVdnm4w=
 github.com/ugorji/go/codec v1.2.11 h1:BMaWp1Bb6fHwEtbplGBGJ498wD+LKlNSl25MjdZY4dU=
 github.com/ugorji/go/codec v1.2.11/go.mod h1:UNopzCgEMSXjBc6AOMqYvWC1ktqTAfzJZUZgYf6w6lg=
-github.com/upbound/uptest v0.12.1-0.20260122114836-7ce94bc0de92 h1:RUiWA1hhcx7aBHXahzwpfLvfO1GI+ENtLsaMjOZNQjw=
-github.com/upbound/uptest v0.12.1-0.20260122114836-7ce94bc0de92/go.mod h1:LaaCdCFepE8h8UtssvRbKBgrNUK4CKNh+bEyE0HnLvc=
+github.com/upbound/uptest v0.12.1-0.20260123170102-8965579a213b h1:3skJb1zt9rBR/4wUWMT32Ip02OckGzYyMhjCkEeCdfA=
+github.com/upbound/uptest v0.12.1-0.20260123170102-8965579a213b/go.mod h1:LaaCdCFepE8h8UtssvRbKBgrNUK4CKNh+bEyE0HnLvc=
 github.com/vmihailenco/msgpack v3.3.3+incompatible/go.mod h1:fy3FlTQTDXWkZ7Bh6AcGMlsjHatGryHQYUTf1ShIgkk=
 github.com/vmihailenco/msgpack v4.0.4+incompatible h1:dSLoQfGFAo3F6OoNhwUmLwVgaUXK79GlxNBwueZn0xI=
 github.com/vmihailenco/msgpack v4.0.4+incompatible/go.mod h1:fy3FlTQTDXWkZ7Bh6AcGMlsjHatGryHQYUTf1ShIgkk=

@@ -19,8 +19,10 @@
             "path": "spec.forProvider.count",
             "pathParts": ["spec", "forProvider", "count"],
             "changeType": "type_changed",
-            "oldValue": "string",
-            "newValue": "number"
+            "typeChangeDetails": {
+              "deleted": ["string"],
+              "added": ["number"]
+            }
           }
         ]
       }

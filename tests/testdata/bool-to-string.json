@@ -9,8 +9,10 @@
             "path": "spec.forProvider.flag",
             "pathParts": ["spec", "forProvider", "flag"],
             "changeType": "type_changed",
-            "oldValue": "boolean",
-            "newValue": "string"
+            "typeChangeDetails": {
+              "deleted": ["boolean"],
+              "added": ["string"]
+            }
           }
         ]
       }

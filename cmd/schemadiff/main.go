@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/alecthomas/kingpin/v2"
@@ -84,6 +85,14 @@ func main() { //nolint:gocyclo // easier to follow as a unit
 		// Add this CRD's change report to the output map
 		// Key format: "{group}/{kind}" matches what conversion.go expects
 		crdSpec := sd.GetCRD().Spec
+		// the final document is typically checked out to VCS (e.g. Git)
+		// sort changes by path to avoid producing diffs due to ordering
+		// for the semantically-equivalent JSON
+		for _, versionChange := range changeReport.Versions {
+			slices.SortStableFunc(versionChange.Changes, func(a, b crdschema.SchemaChange) int {
+				return strings.Compare(a.Path, b.Path)
+			})
+		}
 		jsonData[fmt.Sprintf("%s/%s", crdSpec.Group, crdSpec.Names.Kind)] = changeReport
 	}
 

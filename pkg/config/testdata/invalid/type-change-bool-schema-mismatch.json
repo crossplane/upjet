@@ -9,9 +9,10 @@
             "path": "spec.forProvider.count",
             "pathParts": ["spec", "forProvider", "count"],
             "changeType": "type_changed",
-            "oldValue": "string",
-            "newValue": "number",
-            "comment": "TF schema will be TypeBool, causing mismatch"
+            "typeChangeDetails": {
+              "deleted": ["string"],
+              "added": ["number"]
+            }
           }
         ]
       }

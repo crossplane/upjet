@@ -24,8 +24,10 @@
             "path": "spec.forProvider.count",
             "pathParts": ["spec", "forProvider", "count"],
             "changeType": "type_changed",
-            "oldValue": "string",
-            "newValue": "number"
+            "typeChangeDetails": {
+              "deleted": ["string"],
+              "added": ["number"]
+            }
           }
         ]
       }
@@ -61,8 +63,10 @@
             "path": "spec.forProvider.enabled",
             "pathParts": ["spec", "forProvider", "enabled"],
             "changeType": "type_changed",
-            "oldValue": "string",
-            "newValue": "boolean"
+            "typeChangeDetails": {
+              "deleted": ["string"],
+              "added": ["boolean"]
+            }
           }
         ]
       }

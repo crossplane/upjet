@@ -8,23 +8,25 @@
           {
             "path": "spec.forProvider.newField",
             "pathParts": ["spec", "forProvider", "newField"],
-            "changeType": "field_added",
-            "oldValue": null,
-            "newValue": "string"
+            "changeType": "field_added"
           },
           {
             "path": "spec.forProvider.count",
             "pathParts": ["spec", "forProvider", "count"],
             "changeType": "type_changed",
-            "oldValue": "string",
-            "newValue": "number"
+            "typeChangeDetails": {
+              "deleted": ["string"],
+              "added": ["number"]
+            }
           },
           {
             "path": "spec.forProvider.enabled",
             "pathParts": ["spec", "forProvider", "enabled"],
             "changeType": "type_changed",
-            "oldValue": "string",
-            "newValue": "boolean"
+            "typeChangeDetails": {
+              "deleted": ["string"],
+              "added": ["boolean"]
+            }
           }
         ]
       }
