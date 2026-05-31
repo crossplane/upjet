@@ -18,7 +18,7 @@ type {{ .CRD.Kind }}Spec struct {
   {{- if (eq .CRD.Scope "Namespaced") }}
 	{{ .XPV2CommonAPIsPackageAlias }}ManagedResourceSpec `json:",inline"`
   {{- else }}
-	{{ .XPCommonAPIsPackageAlias }}ResourceSpec `json:",inline"`
+	{{ .XPCommonAPIsPackageAlias }}ClusterManagedResourceSpec `json:",inline"`
   {{- end }}
 	ForProvider       {{ .CRD.ForProviderType }} `json:"forProvider"`
 	// THIS IS A BETA FIELD. It will be honored
@@ -36,7 +36,7 @@ type {{ .CRD.Kind }}Spec struct {
 
 // {{ .CRD.Kind }}Status defines the observed state of {{ .CRD.Kind }}.
 type {{ .CRD.Kind }}Status struct {
-	{{ .XPCommonAPIsPackageAlias }}ResourceStatus `json:",inline"`
+	{{ .XPCommonAPIsPackageAlias }}ManagedResourceStatus `json:",inline"`
 	AtProvider          {{ .CRD.AtProviderType }} `json:"atProvider,omitempty"`
 }
 

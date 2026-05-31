@@ -5,7 +5,7 @@
 package testconversion
 
 import (
-	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	xpv1 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -29,7 +29,7 @@ type TestResource struct {
 
 // TestResourceSpec defines the desired state of TestResource
 type TestResourceSpec struct {
-	xpv1.ResourceSpec `json:",inline"`
+	xpv1.ClusterManagedResourceSpec `json:",inline"`
 	ForProvider       TestResourceParameters `json:"forProvider"`
 }
 
@@ -41,7 +41,7 @@ type TestResourceObservation map[string]interface{}
 
 // TestResourceStatus defines the observed state of TestResource.
 type TestResourceStatus struct {
-	xpv1.ResourceStatus `json:",inline"`
+	xpv1.ManagedResourceStatus `json:",inline"`
 	AtProvider          TestResourceObservation `json:"atProvider,omitempty"`
 }
 

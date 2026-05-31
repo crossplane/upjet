@@ -12,7 +12,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	common "github.com/crossplane/crossplane-runtime/v2/apis/common"
+	common "github.com/crossplane/crossplane/apis/v2/core/v2"
 	gomock "github.com/golang/mock/gomock"
 )
 
