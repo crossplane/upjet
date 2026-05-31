@@ -30,7 +30,7 @@ type TestResource struct {
 // TestResourceSpec defines the desired state of TestResource
 type TestResourceSpec struct {
 	xpv1.ClusterManagedResourceSpec `json:",inline"`
-	ForProvider       TestResourceParameters `json:"forProvider"`
+	ForProvider                     TestResourceParameters `json:"forProvider"`
 }
 
 // TestResourceParameters are the configurable fields of a TestResource.
@@ -42,7 +42,7 @@ type TestResourceObservation map[string]interface{}
 // TestResourceStatus defines the observed state of TestResource.
 type TestResourceStatus struct {
 	xpv1.ManagedResourceStatus `json:",inline"`
-	AtProvider          TestResourceObservation `json:"atProvider,omitempty"`
+	AtProvider                 TestResourceObservation `json:"atProvider,omitempty"`
 }
 
 // Ensure TestResource implements resource.Terraformed

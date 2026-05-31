@@ -168,13 +168,13 @@ import (
 )
 
 type MemberSpec struct {
-	v1.ResourceSpec ` + "`json:\",inline\"`" + `
-	ForProvider     MemberParameters ` + "`json:\"forProvider\"`" + `
+	v1.ClusterManagedResourceSpec ` + "`json:\",inline\"`" + `
+	ForProvider                   MemberParameters ` + "`json:\"forProvider\"`" + `
 }
 
 type MemberStatus struct {
-	v1.ResourceStatus ` + "`json:\",inline\"`" + `
-	AtProvider        MemberObservation ` + "`json:\"atProvider,omitempty\"`" + `
+	v1.ManagedResourceStatus ` + "`json:\",inline\"`" + `
+	AtProvider               MemberObservation ` + "`json:\"atProvider,omitempty\"`" + `
 }
 
 // +kubebuilder:object:root=true
