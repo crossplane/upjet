@@ -4,14 +4,14 @@
 
 module github.com/crossplane/upjet/v2
 
-go 1.25.10
+go 1.25.11
 
 require (
 	dario.cat/mergo v1.0.2
 	github.com/alecthomas/kingpin/v2 v2.4.0
 	github.com/antchfx/htmlquery v1.2.4
-	github.com/crossplane/crossplane-runtime/v2 v2.3.1
-	github.com/crossplane/crossplane/apis/v2 v2.3.1
+	github.com/crossplane/crossplane-runtime/v2 v2.3.3
+	github.com/crossplane/crossplane/apis/v2 v2.3.3
 	github.com/fatih/camelcase v1.0.0
 	github.com/golang/mock v1.6.0
 	github.com/google/go-cmp v0.7.0
@@ -34,7 +34,7 @@ require (
 	github.com/yuin/goldmark v1.7.16
 	github.com/zclconf/go-cty v1.16.2
 	github.com/zclconf/go-cty-yaml v1.0.3
-	golang.org/x/net v0.54.0
+	golang.org/x/net v0.55.0
 	golang.org/x/tools v0.44.0
 	golang.org/x/tools/go/packages/packagestest v0.1.1-deprecated
 	gopkg.in/yaml.v2 v2.4.0
