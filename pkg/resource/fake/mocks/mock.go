@@ -12,7 +12,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	common "github.com/crossplane/crossplane/apis/v2/core/v2"
+	v2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	gomock "github.com/golang/mock/gomock"
 )
 
@@ -40,7 +40,7 @@ func (m *MockSecretClient) EXPECT() *MockSecretClientMockRecorder {
 }
 
 // GetSecretData mocks base method.
-func (m *MockSecretClient) GetSecretData(arg0 context.Context, arg1 *common.SecretReference) (map[string][]byte, error) {
+func (m *MockSecretClient) GetSecretData(arg0 context.Context, arg1 *v2.SecretReference) (map[string][]byte, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetSecretData", arg0, arg1)
 	ret0, _ := ret[0].(map[string][]byte)
@@ -55,7 +55,7 @@ func (mr *MockSecretClientMockRecorder) GetSecretData(arg0, arg1 interface{}) *g
 }
 
 // GetSecretValue mocks base method.
-func (m *MockSecretClient) GetSecretValue(arg0 context.Context, arg1 common.SecretKeySelector) ([]byte, error) {
+func (m *MockSecretClient) GetSecretValue(arg0 context.Context, arg1 v2.SecretKeySelector) ([]byte, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetSecretValue", arg0, arg1)
 	ret0, _ := ret[0].([]byte)

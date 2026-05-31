@@ -164,17 +164,17 @@ package v1beta1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	v1 "github.com/crossplane/crossplane/apis/v2/core/v2"
+	v2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 )
 
 type MemberSpec struct {
-	v1.ResourceSpec ` + "`json:\",inline\"`" + `
-	ForProvider     MemberParameters ` + "`json:\"forProvider\"`" + `
+	v2.ClusterManagedResourceSpec ` + "`json:\",inline\"`" + `
+	ForProvider                   MemberParameters ` + "`json:\"forProvider\"`" + `
 }
 
 type MemberStatus struct {
-	v1.ResourceStatus ` + "`json:\",inline\"`" + `
-	AtProvider        MemberObservation ` + "`json:\"atProvider,omitempty\"`" + `
+	v2.ManagedResourceStatus ` + "`json:\",inline\"`" + `
+	AtProvider               MemberObservation ` + "`json:\"atProvider,omitempty\"`" + `
 }
 
 // +kubebuilder:object:root=true
