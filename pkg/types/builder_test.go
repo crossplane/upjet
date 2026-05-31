@@ -759,7 +759,7 @@ func TestBuild(t *testing.T) {
 				},
 			},
 			want: want{
-				forProvider: `type example.Parameters struct{Name *string "json:\"name,omitempty\" tf:\"name,omitempty\""; SubnetID *string "json:\"subnetId,omitempty\" tf:\"subnet_id,omitempty\""; SubnetIDRef *github.com/crossplane/crossplane-runtime/v2/apis/common/v1.Reference "json:\"subnetIdRef,omitempty\" tf:\"-\""; SubnetIDSelector *github.com/crossplane/crossplane-runtime/v2/apis/common/v1.Selector "json:\"subnetIdSelector,omitempty\" tf:\"-\""}`,
+				forProvider: `type example.Parameters struct{Name *string "json:\"name,omitempty\" tf:\"name,omitempty\""; SubnetID *string "json:\"subnetId,omitempty\" tf:\"subnet_id,omitempty\""; SubnetIDRef *github.com/crossplane/crossplane/apis/v2/core/v2.Reference "json:\"subnetIdRef,omitempty\" tf:\"-\""; SubnetIDSelector *github.com/crossplane/crossplane/apis/v2/core/v2.Selector "json:\"subnetIdSelector,omitempty\" tf:\"-\""}`,
 				atProvider:  `type example.Observation struct{Name *string "json:\"name,omitempty\" tf:\"name,omitempty\""; SubnetID *string "json:\"subnetId,omitempty\" tf:\"subnet_id,omitempty\""}`,
 				// Only "name" should have an XValidation; "subnet_id" is satisfiable via SubnetIDRef/SubnetIDSelector.
 				validationRules: `
