@@ -31,43 +31,43 @@ const (
 // Types to use from by reference generator.
 var (
 	typeReferenceField types.Type = types.NewNamed(
-		types.NewTypeName(token.NoPos, types.NewPackage(PackagePathXPCommonAPIs, "v1"), "Reference", nil),
+		types.NewTypeName(token.NoPos, types.NewPackage(PackagePathXPCommonAPIs, "v2"), "Reference", nil),
 		types.NewStruct(nil, nil),
 		nil,
 	)
 	typeSelectorField types.Type = types.NewNamed(
-		types.NewTypeName(token.NoPos, types.NewPackage(PackagePathXPCommonAPIs, "v1"), "Selector", nil),
+		types.NewTypeName(token.NoPos, types.NewPackage(PackagePathXPCommonAPIs, "v2"), "Selector", nil),
 		types.NewStruct(nil, nil),
 		nil,
 	)
 	typeSecretKeySelector types.Type = types.NewNamed(
-		types.NewTypeName(token.NoPos, types.NewPackage(PackagePathXPCommonAPIs, "v1"), "SecretKeySelector", nil),
+		types.NewTypeName(token.NoPos, types.NewPackage(PackagePathXPCommonAPIs, "v2"), "SecretKeySelector", nil),
 		types.NewStruct(nil, nil),
 		nil,
 	)
 	typeSecretReference types.Type = types.NewNamed(
-		types.NewTypeName(token.NoPos, types.NewPackage(PackagePathXPCommonAPIs, "v1"), "SecretReference", nil),
+		types.NewTypeName(token.NoPos, types.NewPackage(PackagePathXPCommonAPIs, "v2"), "SecretReference", nil),
 		types.NewStruct(nil, nil),
 		nil,
 	)
 	typeLocalSecretReference types.Type = types.NewNamed(
-		types.NewTypeName(token.NoPos, types.NewPackage(PackagePathXPCommonAPIs, "v1"), "LocalSecretReference", nil),
+		types.NewTypeName(token.NoPos, types.NewPackage(PackagePathXPCommonAPIs, "v2"), "LocalSecretReference", nil),
 		types.NewStruct(nil, nil),
 		nil,
 	)
 	typeLocalSecretKeySelector types.Type = types.NewNamed(
-		types.NewTypeName(token.NoPos, types.NewPackage(PackagePathXPCommonAPIs, "v1"), "LocalSecretKeySelector", nil),
+		types.NewTypeName(token.NoPos, types.NewPackage(PackagePathXPCommonAPIs, "v2"), "LocalSecretKeySelector", nil),
 		types.NewStruct(nil, nil),
 		nil,
 	)
 	typeNamespacedReferenceField types.Type = types.NewNamed(
-		types.NewTypeName(token.NoPos, types.NewPackage(PackagePathXPCommonAPIs, "v1"), "NamespacedReference", nil),
+		types.NewTypeName(token.NoPos, types.NewPackage(PackagePathXPCommonAPIs, "v2"), "NamespacedReference", nil),
 		types.NewStruct(nil, nil),
 		nil,
 	)
 
 	typeNamespacedSelectorField types.Type = types.NewNamed(
-		types.NewTypeName(token.NoPos, types.NewPackage(PackagePathXPCommonAPIs, "v1"), "NamespacedSelector", nil),
+		types.NewTypeName(token.NoPos, types.NewPackage(PackagePathXPCommonAPIs, "v2"), "NamespacedSelector", nil),
 		types.NewStruct(nil, nil),
 		nil,
 	)
