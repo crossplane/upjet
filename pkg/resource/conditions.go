@@ -5,8 +5,8 @@
 package resource
 
 import (
-	xpv1 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
+	xpv1 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 

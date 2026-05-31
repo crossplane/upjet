@@ -20,11 +20,11 @@ import (
 )
 
 const (
-	// PackagePathXPCommonAPIs is the go path for the Crossplane Runtime package
-	// with common APIs
+	// PackagePathXPCommonAPIs is the go path for the Crossplane core APIs
+	// package with common APIs (relocated from crossplane-runtime in v2.3.0).
 	PackagePathXPCommonAPIs = "github.com/crossplane/crossplane/apis/v2/core/v2"
-	// PackagePathXPV2CommonAPIs is the go path for the Crossplane Runtime package
-	// with common v2 APIs
+	// PackagePathXPV2CommonAPIs is the go path for the Crossplane core APIs
+	// package with common v2 APIs (consolidated into the same package in v2.3.0).
 	PackagePathXPV2CommonAPIs = "github.com/crossplane/crossplane/apis/v2/core/v2"
 )
 
