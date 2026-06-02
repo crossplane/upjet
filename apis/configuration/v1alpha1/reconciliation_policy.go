@@ -30,10 +30,16 @@ type ExponentialFailureRateLimiter struct {
 	BaseDelay *metav1.Duration `json:"baseDelay,omitempty"`
 }
 
-// ReconciliationPolicy
+// ReconciliationPolicy configures how a managed resource is reconciled.
+// It currently allows overriding the controller's failure rate limiter
+// parameters on a per-resource basis via ExponentialFailureRateLimiter.
 //
 // +kubebuilder:object:generate=true
 type ReconciliationPolicy struct {
+	// ExponentialFailureRateLimiter, when set, overrides the parameters of the
+	// exponential failure rate limiter used to schedule retries for the
+	// managed resource that this policy applies to.
+	//
 	// +optional
 	ExponentialFailureRateLimiter *ExponentialFailureRateLimiter `json:"exponentialFailureRateLimiter"`
 }

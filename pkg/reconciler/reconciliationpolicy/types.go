@@ -19,6 +19,12 @@ import (
 // Source represents a configuration source for reconciliation policies.
 type Source func(context.Context, client.Client, resource.Managed) (*v1alpha1.ReconciliationPolicy, error)
 
+// ExponentialFailureRateLimiter is a workqueue rate limiter whose base and
+// max delays can be overridden per managed resource via a ReconciliationPolicy.
+// Requests that have no override are scheduled with the default base and
+// max delays supplied to NewExponentialFailureRateLimiter. Requests with an
+// override share the rate limiter (and therefore the retry/backoff state)
+// of every other request configured with the same base and max delays.
 type ExponentialFailureRateLimiter struct {
 	*ratelimiter.EncapsulatingRateLimiter[efrlKey]
 

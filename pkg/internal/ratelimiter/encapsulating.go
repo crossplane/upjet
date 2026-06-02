@@ -18,7 +18,14 @@ type requestSet struct {
 	requests    sets.Set[reconcile.Request]
 }
 
-// EncapsulatingRateLimiter
+// EncapsulatingRateLimiter is a workqueue.TypedRateLimiter[reconcile.Request]
+// that wraps a default rate limiter and lets callers override it on a
+// per-request basis. Requests are bucketed under a caller-supplied key of
+// type K; all requests sharing a key share the same backing rate limiter
+// and therefore share its retry state. A request with no override is rate
+// limited by the default rate limiter supplied to NewEncapsulatingRateLimiter.
+//
+// EncapsulatingRateLimiter is safe for concurrent use.
 type EncapsulatingRateLimiter[K comparable] struct {
 	defaultRateLimiter workqueue.TypedRateLimiter[reconcile.Request]
 
@@ -99,6 +106,9 @@ func (c *EncapsulatingRateLimiter[K]) getRateLimiterFor(req reconcile.Request) w
 	return rl
 }
 
+// When returns the delay before req should be retried. It is delegated to
+// the rate limiter associated with req via Add, or to the default rate
+// limiter if no override has been registered for req.
 func (c *EncapsulatingRateLimiter[K]) When(req reconcile.Request) time.Duration {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -107,6 +117,9 @@ func (c *EncapsulatingRateLimiter[K]) When(req reconcile.Request) time.Duration 
 	return rl.When(req)
 }
 
+// Forget clears the retry state for req on its associated rate limiter, or
+// on the default rate limiter if no override has been registered for req.
+// It does not remove req from the registry; use Remove for that.
 func (c *EncapsulatingRateLimiter[K]) Forget(req reconcile.Request) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -114,6 +127,9 @@ func (c *EncapsulatingRateLimiter[K]) Forget(req reconcile.Request) {
 	c.getRateLimiterFor(req).Forget(req)
 }
 
+// NumRequeues returns the number of times req has been requeued, as
+// reported by the rate limiter associated with req via Add, or by the
+// default rate limiter if no override has been registered for req.
 func (c *EncapsulatingRateLimiter[K]) NumRequeues(req reconcile.Request) int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -121,6 +137,9 @@ func (c *EncapsulatingRateLimiter[K]) NumRequeues(req reconcile.Request) int {
 	return c.getRateLimiterFor(req).NumRequeues(req)
 }
 
+// NewEncapsulatingRateLimiter returns an EncapsulatingRateLimiter that
+// delegates to defaultRateLimiter for any request that has not had a
+// per-key override registered via Add.
 func NewEncapsulatingRateLimiter[K comparable](defaultRateLimiter workqueue.TypedRateLimiter[reconcile.Request]) *EncapsulatingRateLimiter[K] {
 	return &EncapsulatingRateLimiter[K]{
 		defaultRateLimiter: defaultRateLimiter,

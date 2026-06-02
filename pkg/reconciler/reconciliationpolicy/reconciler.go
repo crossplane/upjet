@@ -40,14 +40,21 @@ type Reconciler struct {
 	targets targets
 }
 
+// ReconcilerOption configures a Reconciler returned by NewReconciler.
 type ReconcilerOption func(*Reconciler)
 
+// WithRateLimiter configures the Reconciler to (re)configure rl on every
+// Reconcile call using the ReconciliationPolicy returned by the configured
+// Source for the managed resource being reconciled.
 func WithRateLimiter(rl *ExponentialFailureRateLimiter) ReconcilerOption {
 	return func(r *Reconciler) {
 		r.targets.exponentialFailureRateLimiter = rl
 	}
 }
 
+// WithSource configures the Reconciler to obtain ReconciliationPolicy
+// configurations from s. The Source is invoked for the managed resource
+// being reconciled on every Reconcile call.
 func WithSource(s Source) ReconcilerOption {
 	return func(r *Reconciler) {
 		r.source = s
@@ -124,6 +131,9 @@ func (r *Reconciler) setRateLimiter(ctx context.Context, req reconcile.Request) 
 	return nil
 }
 
+// NewExponentialFailureRateLimiter returns an ExponentialFailureRateLimiter
+// whose default base and max delays are used for any managed resource that
+// does not specify an override via a ReconciliationPolicy.
 func NewExponentialFailureRateLimiter(defaultBaseDelay time.Duration, defaultMaxDelay time.Duration) *ExponentialFailureRateLimiter {
 	return &ExponentialFailureRateLimiter{
 		EncapsulatingRateLimiter: ratelimiter.NewEncapsulatingRateLimiter[efrlKey](workqueue.NewTypedItemExponentialFailureRateLimiter[reconcile.Request](defaultBaseDelay, defaultMaxDelay)),

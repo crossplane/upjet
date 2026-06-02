@@ -12,13 +12,24 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
+// Finalizer wraps an inner resource.Finalizer and tears down any
+// reconciliation-policy state (e.g., per-resource rate limiter entries)
+// before delegating finalizer removal to the inner Finalizer. It must be
+// used together with a Reconciler that has been configured with the same
+// rate limiter target.
 type Finalizer struct {
 	resource.Finalizer
 	targets targets
 }
 
+// FinalizerOption configures a Finalizer returned by NewFinalizer.
 type FinalizerOption func(*Finalizer)
 
+// WithFinalizerRateLimiter configures the Finalizer to remove the managed
+// resource's entry from rl when its Kubernetes finalizer is removed.
+// It should be paired with reconciler.WithRateLimiter passing the same rl
+// so that per-resource state added during reconciliation is cleaned up on
+// deletion.
 func WithFinalizerRateLimiter(rl *ExponentialFailureRateLimiter) FinalizerOption {
 	return func(f *Finalizer) {
 		f.targets.exponentialFailureRateLimiter = rl
