@@ -15,16 +15,16 @@ import (
 
 type requestSet struct {
 	rateLimiter workqueue.TypedRateLimiter[reconcile.Request]
-	requests sets.Set[reconcile.Request]
+	requests    sets.Set[reconcile.Request]
 }
 
 // EncapsulatingRateLimiter
 type EncapsulatingRateLimiter[K comparable] struct {
 	defaultRateLimiter workqueue.TypedRateLimiter[reconcile.Request]
 
-	inner map[reconcile.Request]K
+	inner        map[reconcile.Request]K
 	rateLimiters map[K]requestSet
-	mu sync.RWMutex
+	mu           sync.RWMutex
 }
 
 // Add registers the specified rate limiter with this EncapsulatingRateLimiter
@@ -124,8 +124,8 @@ func (c *EncapsulatingRateLimiter[K]) NumRequeues(req reconcile.Request) int {
 func NewEncapsulatingRateLimiter[K comparable](defaultRateLimiter workqueue.TypedRateLimiter[reconcile.Request]) *EncapsulatingRateLimiter[K] {
 	return &EncapsulatingRateLimiter[K]{
 		defaultRateLimiter: defaultRateLimiter,
-		inner: make(map[reconcile.Request]K),
-		rateLimiters: make(map[K]requestSet),
-		mu: sync.RWMutex{},
+		inner:              make(map[reconcile.Request]K),
+		rateLimiters:       make(map[K]requestSet),
+		mu:                 sync.RWMutex{},
 	}
 }

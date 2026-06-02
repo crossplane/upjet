@@ -7,10 +7,9 @@ package reconciliationpolicy
 import (
 	"context"
 
+	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
-	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 )
 
 type Finalizer struct {
@@ -55,7 +54,7 @@ func (cf *Finalizer) RemoveFinalizer(ctx context.Context, obj resource.Object) e
 					Namespace: obj.GetNamespace(),
 					Name:      obj.GetName(),
 				},
-		})
+			})
 	}
 	return cf.Finalizer.RemoveFinalizer(ctx, obj)
 }

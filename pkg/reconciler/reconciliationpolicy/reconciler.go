@@ -10,17 +10,18 @@ import (
 
 	"github.com/crossplane/crossplane-runtime/v2/pkg/errors"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
-	"github.com/crossplane/upjet/v2/pkg/internal/ratelimiter"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	"github.com/crossplane/upjet/v2/pkg/internal/ratelimiter"
 )
 
 const (
-	errConfigureRateLimiter = "cannot configure failure rate limiter"
-	errGetManaged = "cannot get managed resource"
+	errConfigureRateLimiter    = "cannot configure failure rate limiter"
+	errGetManaged              = "cannot get managed resource"
 	errGetReconciliationPolicy = "cannot get reconciliation policy"
 )
 
@@ -31,10 +32,10 @@ type targets struct {
 // Reconciler wraps the supplied Reconciler and
 // implements the reconciliation policy if a policy source is configured.
 type Reconciler struct {
-	inner reconcile.Reconciler
-	source Source
+	inner   reconcile.Reconciler
+	source  Source
 	manager manager.Manager
-	gvk schema.GroupVersionKind
+	gvk     schema.GroupVersionKind
 
 	targets targets
 }
@@ -58,8 +59,8 @@ func WithSource(s Source) ReconcilerOption {
 func NewReconciler(inner reconcile.Reconciler, m manager.Manager, gvk schema.GroupVersionKind, o ...ReconcilerOption) *Reconciler {
 	r := &Reconciler{
 		manager: m,
-		inner: inner,
-		gvk: gvk,
+		inner:   inner,
+		gvk:     gvk,
 	}
 
 	for _, opt := range o {
