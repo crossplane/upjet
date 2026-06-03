@@ -37,7 +37,8 @@ type EncapsulatingRateLimiter[K comparable] struct {
 // Add registers the specified rate limiter with this EncapsulatingRateLimiter
 // using the specified key and associates the given request with it.
 // If there already exists a rate limiter for the given key, the existing
-// rate limiter's state is preserved.
+// rate limiter's state is preserved. rl is only associated with the given
+// key if a rate limiter for that key does not already exist.
 func (c *EncapsulatingRateLimiter[K]) Add(key K, rl workqueue.TypedRateLimiter[reconcile.Request], req reconcile.Request) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

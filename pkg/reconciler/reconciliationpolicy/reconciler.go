@@ -95,7 +95,6 @@ func (r *Reconciler) setRateLimiter(ctx context.Context, req reconcile.Request) 
 	if err := r.manager.GetClient().Get(ctx, req.NamespacedName, mg); err != nil {
 		// There's no need to requeue if the request no longer exists.
 		// Otherwise, request will be requeued because an error is returned.
-		// log.Debug("Cannot get managed resource", "error", err)
 		return errors.Wrap(resource.IgnoreNotFound(err), errGetManaged)
 	}
 
@@ -105,6 +104,9 @@ func (r *Reconciler) setRateLimiter(ctx context.Context, req reconcile.Request) 
 	}
 
 	if rp == nil || rp.ExponentialFailureRateLimiter == nil {
+		// Clear any prior per-request override so the default rate limiter
+		// applies once the policy is removed.
+		r.targets.exponentialFailureRateLimiter.Remove(req)
 		return nil
 	}
 

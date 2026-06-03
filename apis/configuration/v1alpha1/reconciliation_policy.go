@@ -41,5 +41,5 @@ type ReconciliationPolicy struct {
 	// managed resource that this policy applies to.
 	//
 	// +optional
-	ExponentialFailureRateLimiter *ExponentialFailureRateLimiter `json:"exponentialFailureRateLimiter"`
+	ExponentialFailureRateLimiter *ExponentialFailureRateLimiter `json:"exponentialFailureRateLimiter,omitempty"`
 }

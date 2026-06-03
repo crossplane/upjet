@@ -18,6 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -77,12 +78,31 @@ func TestSetRateLimiter(t *testing.T) {
 		}
 	}
 
+	// addOverride seeds rl with a per-request override whose base delay is
+	// the supplied baseDelay (and a matching max delay). It lets a test
+	// represent the state left behind by a previous reconcile that observed
+	// a ReconciliationPolicy.
+	addOverride := func(baseDelay, maxDelay time.Duration) func(rl *ExponentialFailureRateLimiter, req reconcile.Request) {
+		return func(rl *ExponentialFailureRateLimiter, req reconcile.Request) {
+			key := efrlKey{
+				baseDelay: metav1.Duration{Duration: baseDelay},
+				maxDelay:  metav1.Duration{Duration: maxDelay},
+			}
+			rl.Add(key, workqueue.NewTypedItemExponentialFailureRateLimiter[reconcile.Request](baseDelay, maxDelay), req)
+		}
+	}
+
 	type args struct {
 		mgr            *xpfake.Manager
 		gvk            schema.GroupVersionKind
 		source         Source
 		useRateLimiter bool
 		req            reconcile.Request
+		// prePopulate, if non-nil, is invoked against the freshly constructed
+		// ExponentialFailureRateLimiter before setRateLimiter is called. It is
+		// used to seed a prior per-request override so the test can assert
+		// that setRateLimiter clears it on policy removal.
+		prePopulate func(rl *ExponentialFailureRateLimiter, req reconcile.Request)
 	}
 	type want struct {
 		err error
@@ -176,6 +196,30 @@ func TestSetRateLimiter(t *testing.T) {
 			},
 			want: want{err: nil, expectedDelay: testDefaultBaseDelay},
 		},
+		"NilReconciliationPolicyClearsPriorOverride": {
+			reason: "When a prior reconcile registered a per-request override and the Source now returns a nil ReconciliationPolicy, setRateLimiter must clear the override so subsequent When(req) calls fall back to the default rate limiter.",
+			args: args{
+				mgr:            &xpfake.Manager{Client: okClient(), Scheme: scheme},
+				gvk:            gvk,
+				source:         constSource(nil),
+				useRateLimiter: true,
+				req:            req,
+				prePopulate:    addOverride(testCustomBaseDelay, testCustomMaxDelay),
+			},
+			want: want{err: nil, expectedDelay: testDefaultBaseDelay},
+		},
+		"NilExponentialFailureRateLimiterInPolicyClearsPriorOverride": {
+			reason: "When a prior reconcile registered a per-request override and the policy no longer specifies an ExponentialFailureRateLimiter, setRateLimiter must clear the override so subsequent When(req) calls fall back to the default rate limiter.",
+			args: args{
+				mgr:            &xpfake.Manager{Client: okClient(), Scheme: scheme},
+				gvk:            gvk,
+				source:         constSource(&v1alpha1.ReconciliationPolicy{}),
+				useRateLimiter: true,
+				req:            req,
+				prePopulate:    addOverride(testCustomBaseDelay, testCustomMaxDelay),
+			},
+			want: want{err: nil, expectedDelay: testDefaultBaseDelay},
+		},
 		"DefaultsAppliedWhenDelaysAbsent": {
 			reason: "When the policy has an ExponentialFailureRateLimiter without delays, the configured defaults must be used for the per-request rate limiter.",
 			args: args{
@@ -247,6 +291,9 @@ func TestSetRateLimiter(t *testing.T) {
 			if tc.args.useRateLimiter {
 				rl = NewExponentialFailureRateLimiter(testDefaultBaseDelay, testDefaultMaxDelay)
 				opts = append(opts, WithRateLimiter(rl))
+			}
+			if tc.args.prePopulate != nil {
+				tc.args.prePopulate(rl, tc.args.req)
 			}
 			r := NewReconciler(nil, tc.args.mgr, tc.args.gvk, opts...)
 

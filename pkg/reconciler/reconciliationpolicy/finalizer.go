@@ -7,16 +7,21 @@ package reconciliationpolicy
 import (
 	"context"
 
+	"github.com/crossplane/crossplane-runtime/v2/pkg/errors"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
+const (
+	errRemoveFinalizer = "cannot remove finalizer"
+)
+
 // Finalizer wraps an inner resource.Finalizer and tears down any
 // reconciliation-policy state (e.g., per-resource rate limiter entries)
-// before delegating finalizer removal to the inner Finalizer. It must be
-// used together with a Reconciler that has been configured with the same
-// rate limiter target.
+// after the inner Finalizer has successfully removed the Kubernetes
+// finalizer. It must be used together with a Reconciler that has been
+// configured with the same rate limiter target.
 type Finalizer struct {
 	resource.Finalizer
 	targets targets
@@ -55,9 +60,15 @@ func (cf *Finalizer) AddFinalizer(ctx context.Context, obj resource.Object) erro
 	return cf.Finalizer.AddFinalizer(ctx, obj)
 }
 
-// RemoveFinalizer cleans up the reconciler resources before removing
-// the Kubernetes resource finalizer.
+// RemoveFinalizer delegates to the inner Finalizer to remove the Kubernetes
+// resource finalizer and, on success, cleans up the reconciler resources
+// (e.g., per-resource rate limiter entries) associated with the object. If
+// the inner Finalizer returns an error, the reconciler resources are left
+// intact so that any per-resource retry state is preserved across requeues.
 func (cf *Finalizer) RemoveFinalizer(ctx context.Context, obj resource.Object) error {
+	if err := cf.Finalizer.RemoveFinalizer(ctx, obj); err != nil {
+		return errors.Wrap(err, errRemoveFinalizer)
+	}
 	if cf.targets.exponentialFailureRateLimiter != nil {
 		cf.targets.exponentialFailureRateLimiter.Remove(
 			reconcile.Request{
@@ -67,5 +78,5 @@ func (cf *Finalizer) RemoveFinalizer(ctx context.Context, obj resource.Object) e
 				},
 			})
 	}
-	return cf.Finalizer.RemoveFinalizer(ctx, obj)
+	return nil
 }
