@@ -15,7 +15,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
-	xpv1 "github.com/crossplane/crossplane/apis/v2/core/v2"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	"github.com/hashicorp/go-cty/cty"
 	tfdiag "github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -536,8 +536,8 @@ func (n *terraformPluginSDKExternal) Observe(ctx context.Context, mg xpresource.
 	}
 
 	n.instanceDiff = nil
-	policySet := sets.New[xpv1.ManagementAction](mg.(resource.Terraformed).GetManagementPolicies()...)
-	observeOnlyPolicy := sets.New(xpv1.ManagementActionObserve)
+	policySet := sets.New[xpv2.ManagementAction](mg.(resource.Terraformed).GetManagementPolicies()...)
+	observeOnlyPolicy := sets.New(xpv2.ManagementActionObserve)
 	isObserveOnlyPolicy := policySet.Equal(observeOnlyPolicy)
 	if !isObserveOnlyPolicy || !n.isManagementPoliciesEnabled {
 		n.instanceDiff, err = n.getResourceDataDiff(mg.(resource.Terraformed), ctx, diffState, resourceExists)
@@ -559,11 +559,11 @@ func (n *terraformPluginSDKExternal) Observe(ctx context.Context, mg xpresource.
 	var connDetails managed.ConnectionDetails
 	specUpdateRequired := false
 	if resourceExists {
-		if mg.GetCondition(xpv1.TypeReady).Status == corev1.ConditionUnknown ||
-			mg.GetCondition(xpv1.TypeReady).Status == corev1.ConditionFalse {
+		if mg.GetCondition(xpv2.TypeReady).Status == corev1.ConditionUnknown ||
+			mg.GetCondition(xpv2.TypeReady).Status == corev1.ConditionFalse {
 			addTTR(mg)
 		}
-		mg.SetConditions(xpv1.Available())
+		mg.SetConditions(xpv2.Available())
 
 		// we get the connection details from the observed state before
 		// the conversion because the sensitive paths assume the native Terraform
@@ -582,7 +582,7 @@ func (n *terraformPluginSDKExternal) Observe(ctx context.Context, mg xpresource.
 			return managed.ExternalObservation{}, errors.Wrap(err, "cannot marshal the attributes of the new state for late-initialization")
 		}
 
-		policyHasLateInit := policySet.HasAny(xpv1.ManagementActionLateInitialize, xpv1.ManagementActionAll)
+		policyHasLateInit := policySet.HasAny(xpv2.ManagementActionLateInitialize, xpv2.ManagementActionAll)
 		if policyHasLateInit {
 			specUpdateRequired, err = mg.(resource.Terraformed).LateInitialize(buff)
 			if err != nil {

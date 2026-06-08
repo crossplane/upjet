@@ -18,7 +18,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
-	xpv1 "github.com/crossplane/crossplane/apis/v2/core/v2"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	fwprovider "github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	fwresource "github.com/hashicorp/terraform-plugin-framework/resource"
@@ -638,11 +638,11 @@ func (n *terraformPluginFrameworkExternalClient) Observe(ctx context.Context, mg
 	var connDetails managed.ConnectionDetails
 	specUpdateRequired := false
 	if resourceExists {
-		if mg.GetCondition(xpv1.TypeReady).Status == corev1.ConditionUnknown ||
-			mg.GetCondition(xpv1.TypeReady).Status == corev1.ConditionFalse {
+		if mg.GetCondition(xpv2.TypeReady).Status == corev1.ConditionUnknown ||
+			mg.GetCondition(xpv2.TypeReady).Status == corev1.ConditionFalse {
 			addTTR(mg)
 		}
-		mg.SetConditions(xpv1.Available())
+		mg.SetConditions(xpv2.Available())
 
 		// we get the connection details from the observed state before
 		// the conversion because the sensitive paths assume the native Terraform
@@ -662,8 +662,8 @@ func (n *terraformPluginFrameworkExternalClient) Observe(ctx context.Context, mg
 			return managed.ExternalObservation{}, errors.Wrap(err, "cannot marshal the attributes of the new state for late-initialization")
 		}
 
-		policySet := sets.New[xpv1.ManagementAction](mg.(resource.Terraformed).GetManagementPolicies()...)
-		policyHasLateInit := policySet.HasAny(xpv1.ManagementActionLateInitialize, xpv1.ManagementActionAll)
+		policySet := sets.New[xpv2.ManagementAction](mg.(resource.Terraformed).GetManagementPolicies()...)
+		policyHasLateInit := policySet.HasAny(xpv2.ManagementActionLateInitialize, xpv2.ManagementActionAll)
 		if policyHasLateInit {
 			specUpdateRequired, err = mg.(resource.Terraformed).LateInitialize(buff)
 			if err != nil {
