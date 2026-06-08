@@ -13,7 +13,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/v2/pkg/fieldpath"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
-	xpv1 "github.com/crossplane/crossplane/apis/v2/core/v2"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	fwresource "github.com/hashicorp/terraform-plugin-framework/resource"
 	rschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
@@ -342,7 +342,7 @@ func NewTagger(kube client.Client, fieldName string) *Tagger {
 
 // Initialize is a custom initializer for setting external tags
 func (t *Tagger) Initialize(ctx context.Context, mg xpresource.Managed) error {
-	if sets.New[xpv1.ManagementAction](mg.GetManagementPolicies()...).Equal(sets.New[xpv1.ManagementAction](xpv1.ManagementActionObserve)) {
+	if sets.New[xpv2.ManagementAction](mg.GetManagementPolicies()...).Equal(sets.New[xpv2.ManagementAction](xpv2.ManagementActionObserve)) {
 		// We don't want to add tags to the spec.forProvider if the resource is
 		// only being Observed.
 		return nil
