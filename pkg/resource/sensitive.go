@@ -13,7 +13,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/v2/pkg/fieldpath"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
-	v1 "github.com/crossplane/crossplane/apis/v2/core/v2"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	"github.com/pkg/errors"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 
@@ -54,8 +54,8 @@ var (
 //
 //go:generate go run github.com/golang/mock/mockgen -copyright_file ../../hack/boilerplate.txt -destination ./fake/mocks/mock.go -package mocks github.com/crossplane/upjet/v2/pkg/resource SecretClient
 type SecretClient interface {
-	GetSecretData(ctx context.Context, ref *v1.SecretReference) (map[string][]byte, error)
-	GetSecretValue(ctx context.Context, sel v1.SecretKeySelector) ([]byte, error)
+	GetSecretData(ctx context.Context, ref *xpv2.SecretReference) (map[string][]byte, error)
+	GetSecretValue(ctx context.Context, sel xpv2.SecretKeySelector) ([]byte, error)
 }
 
 // GetConnectionDetails returns connection details including the sensitive
@@ -221,7 +221,7 @@ func storeSensitiveData(ctx context.Context, client SecretClient, tfPath, jsonPa
 				// when there is an input field of type map[string]string (or map[string]*string).
 				// In this case, we need to get the entire secret data and fill it in the terraform state as a map.
 				// This is the only case where we have one-to-many mapping between json and tf paths.
-				ref := &v1.SecretReference{}
+				ref := &xpv2.SecretReference{}
 				if err = pavedJSON.GetValueInto(expandedJSONPath, ref); err != nil {
 					return errors.Wrapf(err, errFmtCannotGetSecretKeySelectorAsMap, expandedJSONPath)
 				}
@@ -246,7 +246,7 @@ func storeSensitiveData(ctx context.Context, client SecretClient, tfPath, jsonPa
 				continue
 			}
 
-			sel := &v1.SecretKeySelector{}
+			sel := &xpv2.SecretKeySelector{}
 			if err = pavedJSON.GetValueInto(expandedJSONPath, sel); err != nil {
 				return errors.Wrapf(err, errFmtCannotGetSecretKeySelector, expandedJSONPath)
 			}
@@ -264,7 +264,7 @@ func storeSensitiveData(ctx context.Context, client SecretClient, tfPath, jsonPa
 				return err
 			}
 		case []any:
-			sel := &[]v1.SecretKeySelector{}
+			sel := &[]xpv2.SecretKeySelector{}
 			if err = pavedJSON.GetValueInto(expandedJSONPath, sel); err != nil {
 				return errors.Wrapf(err, errFmtCannotGetSecretKeySelectorAsList, expandedJSONPath)
 			}
@@ -300,7 +300,7 @@ func storeSensitiveData(ctx context.Context, client SecretClient, tfPath, jsonPa
 
 // GetSensitiveObservation will return sensitive information as terraform state
 // attributes by reading them from connection details.
-func GetSensitiveObservation(ctx context.Context, client SecretClient, from *v1.SecretReference, into map[string]any) error {
+func GetSensitiveObservation(ctx context.Context, client SecretClient, from *xpv2.SecretReference, into map[string]any) error {
 	if from == nil {
 		// No secret reference set
 		return nil

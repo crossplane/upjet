@@ -8,7 +8,7 @@ import (
 	"context"
 
 	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
-	xpv1 "github.com/crossplane/crossplane/apis/v2/core/v2"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -46,7 +46,7 @@ type APISecretClient struct {
 }
 
 // GetSecretData gets and returns data for the referenced secret
-func (a *APISecretClient) GetSecretData(ctx context.Context, ref *xpv1.SecretReference) (map[string][]byte, error) {
+func (a *APISecretClient) GetSecretData(ctx context.Context, ref *xpv2.SecretReference) (map[string][]byte, error) {
 	secret := &v1.Secret{}
 	if err := a.kube.Get(ctx, types.NamespacedName{Namespace: ref.Namespace, Name: ref.Name}, secret); err != nil {
 		return nil, err
@@ -55,7 +55,7 @@ func (a *APISecretClient) GetSecretData(ctx context.Context, ref *xpv1.SecretRef
 }
 
 // GetSecretValue gets and returns value for key of the referenced secret
-func (a *APISecretClient) GetSecretValue(ctx context.Context, sel xpv1.SecretKeySelector) ([]byte, error) {
+func (a *APISecretClient) GetSecretValue(ctx context.Context, sel xpv2.SecretKeySelector) ([]byte, error) {
 	d, err := a.GetSecretData(ctx, &sel.SecretReference)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot get secret data")
@@ -135,9 +135,9 @@ func (ac *APICallbacks) callbackFn(nn types.NamespacedName, op string) terraform
 			case "destroy":
 				wrapMsg = errXPReconcileDelete
 			}
-			tr.SetConditions(xpv1.ReconcileError(errors.Wrap(err, wrapMsg)))
+			tr.SetConditions(xpv2.ReconcileError(errors.Wrap(err, wrapMsg)))
 		} else {
-			tr.SetConditions(xpv1.ReconcileSuccess())
+			tr.SetConditions(xpv2.ReconcileSuccess())
 		}
 		if ac.enableStatusUpdates {
 			tr.SetConditions(resource.AsyncOperationFinishedCondition())

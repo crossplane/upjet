@@ -6,7 +6,7 @@ package resource
 
 import (
 	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
-	xpv1 "github.com/crossplane/crossplane/apis/v2/core/v2"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -18,30 +18,30 @@ const (
 	TypeLastAsyncOperation = "LastAsyncOperation"
 	TypeAsyncOperation     = "AsyncOperation"
 
-	ReasonApplyFailure       xpv1.ConditionReason = "ApplyFailure"
-	ReasonDestroyFailure     xpv1.ConditionReason = "DestroyFailure"
-	ReasonAsyncCreateFailure xpv1.ConditionReason = "AsyncCreateFailure"
-	ReasonAsyncUpdateFailure xpv1.ConditionReason = "AsyncUpdateFailure"
-	ReasonAsyncDeleteFailure xpv1.ConditionReason = "AsyncDeleteFailure"
-	ReasonSuccess            xpv1.ConditionReason = "Success"
-	ReasonOngoing            xpv1.ConditionReason = "Ongoing"
-	ReasonFinished           xpv1.ConditionReason = "Finished"
-	ReasonResourceUpToDate   xpv1.ConditionReason = "UpToDate"
+	ReasonApplyFailure       xpv2.ConditionReason = "ApplyFailure"
+	ReasonDestroyFailure     xpv2.ConditionReason = "DestroyFailure"
+	ReasonAsyncCreateFailure xpv2.ConditionReason = "AsyncCreateFailure"
+	ReasonAsyncUpdateFailure xpv2.ConditionReason = "AsyncUpdateFailure"
+	ReasonAsyncDeleteFailure xpv2.ConditionReason = "AsyncDeleteFailure"
+	ReasonSuccess            xpv2.ConditionReason = "Success"
+	ReasonOngoing            xpv2.ConditionReason = "Ongoing"
+	ReasonFinished           xpv2.ConditionReason = "Finished"
+	ReasonResourceUpToDate   xpv2.ConditionReason = "UpToDate"
 )
 
 // LastAsyncOperationCondition returns the condition depending on the content
 // of the error.
-func LastAsyncOperationCondition(err error) xpv1.Condition {
+func LastAsyncOperationCondition(err error) xpv2.Condition {
 	switch {
 	case err == nil:
-		return xpv1.Condition{
+		return xpv2.Condition{
 			Type:               TypeLastAsyncOperation,
 			Status:             corev1.ConditionTrue,
 			LastTransitionTime: metav1.Now(),
 			Reason:             ReasonSuccess,
 		}
 	case tferrors.IsApplyFailed(err):
-		return xpv1.Condition{
+		return xpv2.Condition{
 			Type:               TypeLastAsyncOperation,
 			Status:             corev1.ConditionFalse,
 			LastTransitionTime: metav1.Now(),
@@ -49,7 +49,7 @@ func LastAsyncOperationCondition(err error) xpv1.Condition {
 			Message:            err.Error(),
 		}
 	case tferrors.IsDestroyFailed(err):
-		return xpv1.Condition{
+		return xpv2.Condition{
 			Type:               TypeLastAsyncOperation,
 			Status:             corev1.ConditionFalse,
 			LastTransitionTime: metav1.Now(),
@@ -57,7 +57,7 @@ func LastAsyncOperationCondition(err error) xpv1.Condition {
 			Message:            err.Error(),
 		}
 	case tferrors.IsAsyncCreateFailed(err):
-		return xpv1.Condition{
+		return xpv2.Condition{
 			Type:               TypeLastAsyncOperation,
 			Status:             corev1.ConditionFalse,
 			LastTransitionTime: metav1.Now(),
@@ -65,7 +65,7 @@ func LastAsyncOperationCondition(err error) xpv1.Condition {
 			Message:            err.Error(),
 		}
 	case tferrors.IsAsyncUpdateFailed(err):
-		return xpv1.Condition{
+		return xpv2.Condition{
 			Type:               TypeLastAsyncOperation,
 			Status:             corev1.ConditionFalse,
 			LastTransitionTime: metav1.Now(),
@@ -73,7 +73,7 @@ func LastAsyncOperationCondition(err error) xpv1.Condition {
 			Message:            err.Error(),
 		}
 	case tferrors.IsAsyncDeleteFailed(err):
-		return xpv1.Condition{
+		return xpv2.Condition{
 			Type:               TypeLastAsyncOperation,
 			Status:             corev1.ConditionFalse,
 			LastTransitionTime: metav1.Now(),
@@ -81,7 +81,7 @@ func LastAsyncOperationCondition(err error) xpv1.Condition {
 			Message:            err.Error(),
 		}
 	default:
-		return xpv1.Condition{
+		return xpv2.Condition{
 			Type:               "Unknown",
 			Status:             corev1.ConditionFalse,
 			LastTransitionTime: metav1.Now(),
@@ -93,8 +93,8 @@ func LastAsyncOperationCondition(err error) xpv1.Condition {
 
 // AsyncOperationFinishedCondition returns the condition TypeAsyncOperation Finished
 // if the operation was finished
-func AsyncOperationFinishedCondition() xpv1.Condition {
-	return xpv1.Condition{
+func AsyncOperationFinishedCondition() xpv2.Condition {
+	return xpv2.Condition{
 		Type:               TypeAsyncOperation,
 		Status:             corev1.ConditionTrue,
 		LastTransitionTime: metav1.Now(),
@@ -104,8 +104,8 @@ func AsyncOperationFinishedCondition() xpv1.Condition {
 
 // AsyncOperationOngoingCondition returns the condition TypeAsyncOperation Ongoing
 // if the operation is still running
-func AsyncOperationOngoingCondition() xpv1.Condition {
-	return xpv1.Condition{
+func AsyncOperationOngoingCondition() xpv2.Condition {
+	return xpv2.Condition{
 		Type:               TypeAsyncOperation,
 		Status:             corev1.ConditionFalse,
 		LastTransitionTime: metav1.Now(),
@@ -115,8 +115,8 @@ func AsyncOperationOngoingCondition() xpv1.Condition {
 
 // UpToDateCondition returns the condition TypeAsyncOperation Ongoing
 // if the operation is still running
-func UpToDateCondition() xpv1.Condition {
-	return xpv1.Condition{
+func UpToDateCondition() xpv2.Condition {
+	return xpv2.Condition{
 		Type:               "Test",
 		Status:             corev1.ConditionTrue,
 		LastTransitionTime: metav1.Now(),

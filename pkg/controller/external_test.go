@@ -14,7 +14,7 @@ import (
 	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	xpfake "github.com/crossplane/crossplane-runtime/v2/pkg/resource/fake"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/test"
-	xpv1 "github.com/crossplane/crossplane/apis/v2/core/v2"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
@@ -200,7 +200,7 @@ func TestObserve(t *testing.T) {
 	}
 	type want struct {
 		obs       managed.ExternalObservation
-		condition *xpv1.Condition
+		condition *xpv2.Condition
 		err       error
 	}
 	cases := map[string]struct {
@@ -222,7 +222,7 @@ func TestObserve(t *testing.T) {
 				obj: &fake.Terraformed{
 					Managed: xpfake.Managed{
 						Manageable: xpfake.Manageable{
-							Policy: xpv1.ManagementPolicies{xpv1.ManagementActionAll},
+							Policy: xpv2.ManagementPolicies{xpv2.ManagementActionAll},
 						},
 					},
 				},
@@ -242,7 +242,7 @@ func TestObserve(t *testing.T) {
 				obj: &fake.Terraformed{
 					Managed: xpfake.Managed{
 						Manageable: xpfake.Manageable{
-							Policy: xpv1.ManagementPolicies{xpv1.ManagementActionAll},
+							Policy: xpv2.ManagementPolicies{xpv2.ManagementActionAll},
 						},
 					},
 				},
@@ -259,7 +259,7 @@ func TestObserve(t *testing.T) {
 				obj: &fake.Terraformed{
 					Managed: xpfake.Managed{
 						Manageable: xpfake.Manageable{
-							Policy: xpv1.ManagementPolicies{xpv1.ManagementActionAll},
+							Policy: xpv2.ManagementPolicies{xpv2.ManagementActionAll},
 						},
 					},
 				},
@@ -283,14 +283,14 @@ func TestObserve(t *testing.T) {
 			args: args{
 				obj: &fake.Terraformed{
 					Managed: xpfake.Managed{
-						ConditionedStatus: xpv1.ConditionedStatus{
+						ConditionedStatus: xpv2.ConditionedStatus{
 							// empty
 						},
 						ObjectMeta: metav1.ObjectMeta{
 							Annotations: exampleCriticalAnnotations,
 						},
 						Manageable: xpfake.Manageable{
-							Policy: xpv1.ManagementPolicies{xpv1.ManagementActionAll},
+							Policy: xpv2.ManagementPolicies{xpv2.ManagementActionAll},
 						},
 					},
 				},
@@ -321,11 +321,11 @@ func TestObserve(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{
 							Annotations: exampleCriticalAnnotations,
 						},
-						ConditionedStatus: xpv1.ConditionedStatus{
-							Conditions: []xpv1.Condition{xpv1.Available()},
+						ConditionedStatus: xpv2.ConditionedStatus{
+							Conditions: []xpv2.Condition{xpv2.Available()},
 						},
 						Manageable: xpfake.Manageable{
-							Policy: xpv1.ManagementPolicies{xpv1.ManagementActionAll},
+							Policy: xpv2.ManagementPolicies{xpv2.ManagementActionAll},
 						},
 					},
 				},
@@ -350,11 +350,11 @@ func TestObserve(t *testing.T) {
 			args: args{
 				obj: &fake.Terraformed{
 					Managed: xpfake.Managed{
-						ConditionedStatus: xpv1.ConditionedStatus{
-							Conditions: []xpv1.Condition{xpv1.Available()},
+						ConditionedStatus: xpv2.ConditionedStatus{
+							Conditions: []xpv2.Condition{xpv2.Available()},
 						},
 						Manageable: xpfake.Manageable{
-							Policy: xpv1.ManagementPolicies{xpv1.ManagementActionAll},
+							Policy: xpv2.ManagementPolicies{xpv2.ManagementActionAll},
 						},
 					},
 				},
@@ -381,10 +381,10 @@ func TestObserve(t *testing.T) {
 				obj: &fake.Terraformed{
 					Managed: xpfake.Managed{
 						Manageable: xpfake.Manageable{
-							Policy: xpv1.ManagementPolicies{xpv1.ManagementActionObserve},
+							Policy: xpv2.ManagementPolicies{xpv2.ManagementActionObserve},
 						},
-						ConditionedStatus: xpv1.ConditionedStatus{
-							Conditions: []xpv1.Condition{xpv1.Available()},
+						ConditionedStatus: xpv2.ConditionedStatus{
+							Conditions: []xpv2.Condition{xpv2.Available()},
 						},
 					},
 				},
@@ -409,10 +409,10 @@ func TestObserve(t *testing.T) {
 				obj: &fake.Terraformed{
 					Managed: xpfake.Managed{
 						Manageable: xpfake.Manageable{
-							Policy: xpv1.ManagementPolicies{xpv1.ManagementActionObserve},
+							Policy: xpv2.ManagementPolicies{xpv2.ManagementActionObserve},
 						},
-						ConditionedStatus: xpv1.ConditionedStatus{
-							Conditions: []xpv1.Condition{xpv1.Available()},
+						ConditionedStatus: xpv2.ConditionedStatus{
+							Conditions: []xpv2.Condition{xpv2.Available()},
 						},
 					},
 				},
@@ -432,10 +432,10 @@ func TestObserve(t *testing.T) {
 				obj: &fake.Terraformed{
 					Managed: xpfake.Managed{
 						Manageable: xpfake.Manageable{
-							Policy: xpv1.ManagementPolicies{xpv1.ManagementActionObserve},
+							Policy: xpv2.ManagementPolicies{xpv2.ManagementActionObserve},
 						},
-						ConditionedStatus: xpv1.ConditionedStatus{
-							Conditions: []xpv1.Condition{xpv1.Available()},
+						ConditionedStatus: xpv2.ConditionedStatus{
+							Conditions: []xpv2.Condition{xpv2.Available()},
 						},
 					},
 				},
@@ -458,9 +458,9 @@ func TestObserve(t *testing.T) {
 				obj: &fake.Terraformed{
 					Managed: xpfake.Managed{
 						Manageable: xpfake.Manageable{
-							Policy: xpv1.ManagementPolicies{xpv1.ManagementActionObserve},
+							Policy: xpv2.ManagementPolicies{xpv2.ManagementActionObserve},
 						},
-						ConditionedStatus: xpv1.ConditionedStatus{
+						ConditionedStatus: xpv2.ConditionedStatus{
 							// empty
 						},
 						ObjectMeta: metav1.ObjectMeta{
@@ -494,9 +494,9 @@ func TestObserve(t *testing.T) {
 				obj: &fake.Terraformed{
 					Managed: xpfake.Managed{
 						Manageable: xpfake.Manageable{
-							Policy: xpv1.ManagementPolicies{xpv1.ManagementActionAll},
+							Policy: xpv2.ManagementPolicies{xpv2.ManagementActionAll},
 						},
-						ConditionedStatus: xpv1.ConditionedStatus{
+						ConditionedStatus: xpv2.ConditionedStatus{
 							// empty
 						},
 						ObjectMeta: metav1.ObjectMeta{
@@ -537,11 +537,11 @@ func TestObserve(t *testing.T) {
 				},
 				obj: &fake.Terraformed{
 					Managed: xpfake.Managed{
-						ConditionedStatus: xpv1.ConditionedStatus{
+						ConditionedStatus: xpv2.ConditionedStatus{
 							// empty
 						},
 						Manageable: xpfake.Manageable{
-							Policy: xpv1.ManagementPolicies{xpv1.ManagementActionCreate},
+							Policy: xpv2.ManagementPolicies{xpv2.ManagementActionCreate},
 						},
 					},
 				},
@@ -573,7 +573,7 @@ func TestObserve(t *testing.T) {
 				obj: &fake.Terraformed{
 					Managed: xpfake.Managed{
 						Manageable: xpfake.Manageable{
-							Policy: xpv1.ManagementPolicies{xpv1.ManagementActionCreate},
+							Policy: xpv2.ManagementPolicies{xpv2.ManagementActionCreate},
 						},
 					},
 				},
@@ -610,8 +610,8 @@ func TestObserve(t *testing.T) {
 	}
 }
 
-func available() *xpv1.Condition {
-	c := xpv1.Available()
+func available() *xpv2.Condition {
+	c := xpv2.Available()
 	return &c
 }
 

@@ -12,7 +12,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
-	xpv1 "github.com/crossplane/crossplane/apis/v2/core/v2"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -172,7 +172,7 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Observe(ctx context.Contex
 	// not scheduled to be deleted.
 	if err == nil && o.ResourceExists && o.ResourceUpToDate && !meta.WasDeleted(mg) {
 		mg.(resource.Terraformed).SetConditions(resource.LastAsyncOperationCondition(nil))
-		mg.(resource.Terraformed).SetConditions(xpv1.ReconcileSuccess())
+		mg.(resource.Terraformed).SetConditions(xpv2.ReconcileSuccess())
 		n.opTracker.LastOperation.Clear(false)
 	}
 	return o, err
