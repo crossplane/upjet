@@ -15,7 +15,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
 	xpfake "github.com/crossplane/crossplane-runtime/v2/pkg/resource/fake"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/test"
-	xpv1 "github.com/crossplane/crossplane/apis/v2/core/v2"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	"github.com/golang/mock/gomock"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
@@ -644,7 +644,7 @@ func TestConnectionSecretRefResolution(t *testing.T) {
 							},
 						},
 						ConnectionSecretWriterTo: xpfake.ConnectionSecretWriterTo{
-							Ref: &xpv1.SecretReference{
+							Ref: &xpv2.SecretReference{
 								Name:      "some-legacy-mr-connection",
 								Namespace: "crossplane-system",
 							},
@@ -659,7 +659,7 @@ func TestConnectionSecretRefResolution(t *testing.T) {
 				},
 				cfg: config.DefaultResource("upjet_resource", nil, nil, nil),
 				clientFn: func(client *mocks.MockSecretClient) {
-					client.EXPECT().GetSecretData(gomock.Any(), gomock.Eq(&xpv1.SecretReference{
+					client.EXPECT().GetSecretData(gomock.Any(), gomock.Eq(&xpv2.SecretReference{
 						Name:      "some-legacy-mr-connection",
 						Namespace: "crossplane-system",
 					})).Return(map[string][]byte{
@@ -725,7 +725,7 @@ func TestConnectionSecretRefResolution(t *testing.T) {
 							},
 						},
 						LocalConnectionSecretWriterTo: xpfake.LocalConnectionSecretWriterTo{
-							Ref: &xpv1.LocalSecretReference{
+							Ref: &xpv2.LocalSecretReference{
 								Name: "some-modern-mr-connection",
 							},
 						},
@@ -739,7 +739,7 @@ func TestConnectionSecretRefResolution(t *testing.T) {
 				},
 				cfg: config.DefaultResource("upjet_resource", nil, nil, nil),
 				clientFn: func(client *mocks.MockSecretClient) {
-					client.EXPECT().GetSecretData(gomock.Any(), gomock.Eq(&xpv1.SecretReference{
+					client.EXPECT().GetSecretData(gomock.Any(), gomock.Eq(&xpv2.SecretReference{
 						Name:      "some-modern-mr-connection",
 						Namespace: "foo-namespace",
 					})).Return(map[string][]byte{
