@@ -121,7 +121,7 @@ type APICallbacks struct {
 	enableStatusUpdates bool
 }
 
-func (ac *APICallbacks) callbackFn(nn types.NamespacedName, op asyncOperation, requestReconcile bool) terraform.CallbackFn {
+func (ac *APICallbacks) callbackFn(nn types.NamespacedName, op asyncOperation, requestReconcile bool) terraform.CallbackFn { //nolint:gocyclo // for better readability
 	return func(err error, ctx context.Context) error {
 		tr := ac.newTerraformed()
 		if kErr := ac.kube.Get(ctx, nn, tr); kErr != nil {
