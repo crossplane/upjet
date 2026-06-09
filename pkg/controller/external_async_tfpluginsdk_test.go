@@ -60,20 +60,6 @@ var (
 			return nil, nil
 		}},
 	}
-	objAsync = &fake.Terraformed{
-		Parameterizable: fake.Parameterizable{
-			Parameters: map[string]any{
-				"name": "example",
-				"map": map[string]any{
-					"key": "value",
-				},
-				"list": []any{"elem1", "elem2"},
-			},
-		},
-		Observable: fake.Observable{
-			Observation: map[string]any{},
-		},
-	}
 )
 
 func prepareTerraformPluginSDKAsyncExternal(r Resource, cfg *config.Resource, fns CallbackFns) *terraformPluginSDKAsyncExternal {
@@ -118,7 +104,7 @@ func TestAsyncTerraformPluginSDKConnect(t *testing.T) {
 					return terraform.Setup{}, nil
 				},
 				cfg: cfgAsync,
-				obj: objAsync,
+				obj: newObjAsync(),
 				ots: ots,
 			},
 		},
@@ -156,7 +142,7 @@ func TestAsyncTerraformPluginSDKObserve(t *testing.T) {
 					},
 				},
 				cfg: cfgAsync,
-				obj: objAsync,
+				obj: newObjAsync(),
 			},
 			want: want{
 				obs: managed.ExternalObservation{
@@ -176,7 +162,7 @@ func TestAsyncTerraformPluginSDKObserve(t *testing.T) {
 					},
 				},
 				cfg: cfgAsync,
-				obj: objAsync,
+				obj: newObjAsync(),
 			},
 			want: want{
 				obs: managed.ExternalObservation{
@@ -225,7 +211,7 @@ func TestAsyncTerraformPluginSDKCreate(t *testing.T) {
 					},
 				},
 				cfg: cfgAsync,
-				obj: objAsync,
+				obj: newObjAsync(),
 				fns: CallbackFns{
 					CreateFn: func(s string) terraform.CallbackFn {
 						return func(err error, ctx context.Context) error {
@@ -241,7 +227,7 @@ func TestAsyncTerraformPluginSDKCreate(t *testing.T) {
 			terraformPluginSDKAsyncExternal := prepareTerraformPluginSDKAsyncExternal(tc.args.r, tc.args.cfg, tc.args.fns)
 			_, err := terraformPluginSDKAsyncExternal.Create(context.TODO(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
-				t.Errorf("\n%s\nConnect(...): -want error, +got error:\n", diff)
+				t.Errorf("\n%s\nterraformPluginSDKAsyncExternal.Create(...): -want error, +got error:\n", diff)
 			}
 		})
 	}
@@ -269,7 +255,7 @@ func TestAsyncTerraformPluginSDKUpdate(t *testing.T) {
 					},
 				},
 				cfg: cfgAsync,
-				obj: objAsync,
+				obj: newObjAsync(),
 				fns: CallbackFns{
 					UpdateFn: func(s string) terraform.CallbackFn {
 						return func(err error, ctx context.Context) error {
@@ -285,7 +271,7 @@ func TestAsyncTerraformPluginSDKUpdate(t *testing.T) {
 			terraformPluginSDKAsyncExternal := prepareTerraformPluginSDKAsyncExternal(tc.args.r, tc.args.cfg, tc.args.fns)
 			_, err := terraformPluginSDKAsyncExternal.Update(context.TODO(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
-				t.Errorf("\n%s\nConnect(...): -want error, +got error:\n", diff)
+				t.Errorf("\n%s\nterraformPluginSDKAsyncExternal.Update(...): -want error, +got error:\n", diff)
 			}
 		})
 	}
@@ -313,7 +299,7 @@ func TestAsyncTerraformPluginSDKDelete(t *testing.T) {
 					},
 				},
 				cfg: cfgAsync,
-				obj: objAsync,
+				obj: newObjAsync(),
 				fns: CallbackFns{
 					DestroyFn: func(s string) terraform.CallbackFn {
 						return func(err error, ctx context.Context) error {
@@ -329,8 +315,25 @@ func TestAsyncTerraformPluginSDKDelete(t *testing.T) {
 			terraformPluginSDKAsyncExternal := prepareTerraformPluginSDKAsyncExternal(tc.args.r, tc.args.cfg, tc.args.fns)
 			_, err := terraformPluginSDKAsyncExternal.Delete(context.TODO(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
-				t.Errorf("\n%s\nConnect(...): -want error, +got error:\n", diff)
+				t.Errorf("\n%s\nterraformPluginSDKAsyncExternal.Delete(...): -want error, +got error:\n", diff)
 			}
 		})
+	}
+}
+
+func newObjAsync() *fake.Terraformed {
+	return &fake.Terraformed{
+		Parameterizable: fake.Parameterizable{
+			Parameters: map[string]any{
+				"name": "example",
+				"map": map[string]any{
+					"key": "value",
+				},
+				"list": []any{"elem1", "elem2"},
+			},
+		},
+		Observable: fake.Observable{
+			Observation: map[string]any{},
+		},
 	}
 }
