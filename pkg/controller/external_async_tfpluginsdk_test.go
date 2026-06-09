@@ -8,19 +8,24 @@ import (
 	"context"
 	"testing"
 
+	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/test"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	tf "github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/crossplane/upjet/v2/pkg/config"
+	"github.com/crossplane/upjet/v2/pkg/resource"
 	"github.com/crossplane/upjet/v2/pkg/resource/fake"
 	"github.com/crossplane/upjet/v2/pkg/terraform"
+	tjerrors "github.com/crossplane/upjet/v2/pkg/terraform/errors"
 )
 
 var (
@@ -137,9 +142,12 @@ func TestAsyncTerraformPluginSDKConnect(t *testing.T) {
 
 func TestAsyncTerraformPluginSDKObserve(t *testing.T) {
 	type args struct {
-		r   Resource
-		cfg *config.Resource
-		obj xpresource.Managed
+		r             Resource
+		cfg           *config.Resource
+		obj           xpresource.Managed
+		prepare       func(*terraformPluginSDKAsyncExternal, xpresource.Managed)
+		wantCondition *xpv1.Condition
+		wantLastOpErr error
 	}
 	type want struct {
 		obs managed.ExternalObservation
@@ -189,16 +197,64 @@ func TestAsyncTerraformPluginSDKObserve(t *testing.T) {
 				},
 			},
 		},
+		"UpToDateWithUnresolvedAsyncFailure": {
+			args: args{
+				r: mockResource{
+					RefreshWithoutUpgradeFn: func(ctx context.Context, s *tf.InstanceState, meta interface{}) (*tf.InstanceState, diag.Diagnostics) {
+						return &tf.InstanceState{ID: "example-id", Attributes: map[string]string{"name": "example"}}, nil
+					},
+				},
+				cfg: cfgAsync,
+				obj: objAsync.DeepCopyObject().(xpresource.Managed),
+				prepare: func(e *terraformPluginSDKAsyncExternal, mg xpresource.Managed) {
+					lastErr := tjerrors.NewAsyncCreateFailed(errBoom)
+					e.opTracker.LastOperation.MarkStart("create")
+					e.opTracker.LastOperation.SetError(lastErr)
+					e.opTracker.LastOperation.MarkEnd()
+					mg.(resource.Terraformed).SetConditions(resource.LastAsyncOperationCondition(lastErr))
+				},
+				wantCondition: &xpv1.Condition{
+					Type:    resource.TypeLastAsyncOperation,
+					Status:  corev1.ConditionFalse,
+					Reason:  resource.ReasonAsyncCreateFailure,
+					Message: tjerrors.NewAsyncCreateFailed(errBoom).Error(),
+				},
+				wantLastOpErr: tjerrors.NewAsyncCreateFailed(errBoom),
+			},
+			want: want{
+				obs: managed.ExternalObservation{
+					ResourceExists:          true,
+					ResourceUpToDate:        true,
+					ResourceLateInitialized: true,
+					ConnectionDetails:       nil,
+					Diff:                    "",
+				},
+			},
+		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			terraformPluginSDKAsyncExternal := prepareTerraformPluginSDKAsyncExternal(tc.args.r, tc.args.cfg, CallbackFns{})
+			if tc.args.prepare != nil {
+				tc.args.prepare(terraformPluginSDKAsyncExternal, tc.args.obj)
+			}
 			observation, err := terraformPluginSDKAsyncExternal.Observe(context.TODO(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.obs, observation); diff != "" {
 				t.Errorf("\n%s\nObserve(...): -want observation, +got observation:\n", diff)
 			}
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nConnect(...): -want error, +got error:\n", diff)
+			}
+			if tc.args.wantCondition != nil {
+				got := tc.args.obj.(resource.Terraformed).GetCondition(tc.args.wantCondition.Type)
+				if diff := cmp.Diff(*tc.args.wantCondition, got, cmpopts.IgnoreFields(xpv1.Condition{}, "LastTransitionTime")); diff != "" {
+					t.Errorf("\nObserve(...): -want condition, +got condition:\n%s", diff)
+				}
+			}
+			if tc.args.wantLastOpErr != nil {
+				if diff := cmp.Diff(tc.args.wantLastOpErr, terraformPluginSDKAsyncExternal.opTracker.LastOperation.Error(), test.EquateErrors()); diff != "" {
+					t.Errorf("\nObserve(...): -want last operation error, +got last operation error:\n%s", diff)
+				}
 			}
 		})
 	}

@@ -157,9 +157,13 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Observe(ctx context.Contex
 			// so, we hackily return "late-initialized" to true.
 			// This might not work if the late initialization management policy
 			// is disabled.
+			//
+			// We intentionally keep ResourceUpToDate=false in this branch: the
+			// previous async create is still in failed state and must not be
+			// observed as synced/healthy before a successful retry.
 			return managed.ExternalObservation{
 				ResourceExists:          true,
-				ResourceUpToDate:        true,
+				ResourceUpToDate:        false,
 				ResourceLateInitialized: true,
 			}, nil
 		}
@@ -167,13 +171,15 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Observe(ctx context.Contex
 	n.opTracker.LastOperation.Clear(true)
 
 	o, err := n.terraformPluginFrameworkExternalClient.Observe(ctx, mg)
-	// clear any previously reported LastAsyncOperation error condition here,
-	// because there are no pending updates on the existing resource and it's
-	// not scheduled to be deleted.
+	// Only clear previously reported LastAsyncOperation failures if there is no
+	// unresolved async error cached in the operation tracker. Otherwise, an
+	// observe-only success can mask a terminal async failure.
 	if err == nil && o.ResourceExists && o.ResourceUpToDate && !meta.WasDeleted(mg) {
-		mg.(resource.Terraformed).SetConditions(resource.LastAsyncOperationCondition(nil))
-		mg.(resource.Terraformed).SetConditions(xpv1.ReconcileSuccess())
-		n.opTracker.LastOperation.Clear(false)
+		if lastErr := n.opTracker.LastOperation.Error(); lastErr == nil {
+			mg.(resource.Terraformed).SetConditions(resource.LastAsyncOperationCondition(nil))
+			mg.(resource.Terraformed).SetConditions(xpv1.ReconcileSuccess())
+			n.opTracker.LastOperation.Clear(false)
+		}
 	}
 	return o, err
 }

@@ -126,13 +126,15 @@ func (n *terraformPluginSDKAsyncExternal) Observe(ctx context.Context, mg xpreso
 	n.opTracker.LastOperation.Clear(true)
 
 	o, err := n.terraformPluginSDKExternal.Observe(ctx, mg)
-	// clear any previously reported LastAsyncOperation error condition here,
-	// because there are no pending updates on the existing resource and it's
-	// not scheduled to be deleted.
+	// Only clear previously reported LastAsyncOperation failures if there is no
+	// unresolved async error cached in the operation tracker. Otherwise, an
+	// observe-only success can mask a terminal async failure.
 	if err == nil && o.ResourceExists && o.ResourceUpToDate && !meta.WasDeleted(mg) {
-		mg.(resource.Terraformed).SetConditions(resource.LastAsyncOperationCondition(nil))
-		mg.(resource.Terraformed).SetConditions(xpv1.ReconcileSuccess())
-		n.opTracker.LastOperation.Clear(false)
+		if lastErr := n.opTracker.LastOperation.Error(); lastErr == nil {
+			mg.(resource.Terraformed).SetConditions(resource.LastAsyncOperationCondition(nil))
+			mg.(resource.Terraformed).SetConditions(xpv1.ReconcileSuccess())
+			n.opTracker.LastOperation.Clear(false)
+		}
 	}
 	return o, err
 }
