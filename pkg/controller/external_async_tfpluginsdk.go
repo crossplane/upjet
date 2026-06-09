@@ -143,6 +143,10 @@ func (n *terraformPluginSDKAsyncExternal) Create(_ context.Context, mg xpresourc
 	}
 
 	ctx, cancel := context.WithDeadline(context.Background(), n.opTracker.LastOperation.StartTime().Add(defaultAsyncTimeout))
+	// We deep-copy the managed resource to prevent a data race between the
+	// goroutine we are about to start below and the managed reconciler.
+	// Please see: https://github.com/crossplane/upjet/issues/472
+	mgCopy := mg.DeepCopyObject().(xpresource.Managed)
 	go func() {
 		// The order of deferred functions, executed last-in-first-out, is
 		// significant. The context should be canceled last, because it is
@@ -159,8 +163,8 @@ func (n *terraformPluginSDKAsyncExternal) Create(_ context.Context, mg xpresourc
 
 			n.opTracker.LastOperation.MarkEnd()
 			name := types.NamespacedName{
-				Namespace: mg.GetNamespace(),
-				Name:      mg.GetName(),
+				Namespace: mgCopy.GetNamespace(),
+				Name:      mgCopy.GetName(),
 			}
 			// we request an immediate reconcile upon success to set the status, or
 			// in case of failure (err != nil), if there's no cached error.
@@ -173,7 +177,7 @@ func (n *terraformPluginSDKAsyncExternal) Create(_ context.Context, mg xpresourc
 		defer ph.recoverIfPanic(ctx)
 
 		n.opTracker.logger.Debug("Async create starting...", "tfID", n.opTracker.GetTfID())
-		_, ph.err = n.terraformPluginSDKExternal.Create(ctx, mg)
+		_, ph.err = n.terraformPluginSDKExternal.Create(ctx, mgCopy)
 	}()
 
 	return managed.ExternalCreation{}, n.opTracker.LastOperation.Error()
@@ -185,6 +189,10 @@ func (n *terraformPluginSDKAsyncExternal) Update(_ context.Context, mg xpresourc
 	}
 
 	ctx, cancel := context.WithDeadline(context.Background(), n.opTracker.LastOperation.StartTime().Add(defaultAsyncTimeout))
+	// We deep-copy the managed resource to prevent a data race between the
+	// goroutine we are about to start below and the managed reconciler.
+	// Please see: https://github.com/crossplane/upjet/issues/472
+	mgCopy := mg.DeepCopyObject().(xpresource.Managed)
 	go func() {
 		// The order of deferred functions, executed last-in-first-out, is
 		// significant. The context should be canceled last, because it is
@@ -201,8 +209,8 @@ func (n *terraformPluginSDKAsyncExternal) Update(_ context.Context, mg xpresourc
 
 			n.opTracker.LastOperation.MarkEnd()
 			name := types.NamespacedName{
-				Namespace: mg.GetNamespace(),
-				Name:      mg.GetName(),
+				Namespace: mgCopy.GetNamespace(),
+				Name:      mgCopy.GetName(),
 			}
 			if cErr := n.callback.Update(name, err == nil || currentErr == nil)(err, ctx); cErr != nil {
 				n.opTracker.logger.Info("Async update callback failed", "error", cErr.Error())
@@ -211,7 +219,7 @@ func (n *terraformPluginSDKAsyncExternal) Update(_ context.Context, mg xpresourc
 		defer ph.recoverIfPanic(ctx)
 
 		n.opTracker.logger.Debug("Async update starting...", "tfID", n.opTracker.GetTfID())
-		_, ph.err = n.terraformPluginSDKExternal.Update(ctx, mg)
+		_, ph.err = n.terraformPluginSDKExternal.Update(ctx, mgCopy)
 	}()
 
 	return managed.ExternalUpdate{}, n.opTracker.LastOperation.Error()
