@@ -164,3 +164,5 @@ require (
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.2-0.20260122202528-d9cc6641c482 // indirect
 )
+
+replace github.com/crossplane/crossplane-runtime/v2 => github.com/ajnye/crossplane-runtime/v2 v2.2.1-0.20260429154540-465317a68bee

@@ -189,10 +189,27 @@ func TestAsyncTerraformPluginSDKObserve(t *testing.T) {
 				},
 			},
 		},
+		"AsyncInProgress": {
+			args: args{
+				r:   mockResource{},
+				cfg: cfgAsync,
+				obj: objAsync,
+			},
+			want: want{
+				obs: managed.ExternalObservation{
+					ResourceExists:           true,
+					ResourceUpToDate:         true,
+					AsyncOperationInProgress: true,
+				},
+			},
+		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			terraformPluginSDKAsyncExternal := prepareTerraformPluginSDKAsyncExternal(tc.args.r, tc.args.cfg, CallbackFns{})
+			if name == "AsyncInProgress" {
+				terraformPluginSDKAsyncExternal.opTracker.LastOperation.MarkStart("update")
+			}
 			observation, err := terraformPluginSDKAsyncExternal.Observe(context.TODO(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.obs, observation); diff != "" {
 				t.Errorf("\n%s\nObserve(...): -want observation, +got observation:\n", diff)
