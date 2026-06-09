@@ -96,7 +96,7 @@ func TestAPICallbacksCreate(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			e := NewAPICallbacks(tc.args.mgr, tc.args.mg)
-			err := e.Create(types.NamespacedName{Name: "name"})(tc.args.err, context.TODO())
+			err := e.Create(types.NamespacedName{Name: "name"}, true)(tc.args.err, context.TODO())
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nCreate(...): -want error, +got error:\n%s", tc.reason, diff)
 			}
@@ -178,7 +178,7 @@ func TestAPICallbacksUpdate(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			e := NewAPICallbacks(tc.args.mgr, tc.args.mg)
-			err := e.Update(types.NamespacedName{Name: "name"})(tc.args.err, context.TODO())
+			err := e.Update(types.NamespacedName{Name: "name"}, true)(tc.args.err, context.TODO())
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nUpdate(...): -want error, +got error:\n%s", tc.reason, diff)
 			}
@@ -260,7 +260,7 @@ func TestAPICallbacks_Destroy(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			e := NewAPICallbacks(tc.args.mgr, tc.args.mg)
-			err := e.Destroy(types.NamespacedName{Name: "name"})(tc.args.err, context.TODO())
+			err := e.Destroy(types.NamespacedName{Name: "name"}, true)(tc.args.err, context.TODO())
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nDestroy(...): -want error, +got error:\n%s", tc.reason, diff)
 			}
@@ -352,7 +352,7 @@ func TestAPICallbacksCreate_namespaced(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			e := NewAPICallbacks(tc.args.mgr, tc.args.mg)
-			err := e.Create(types.NamespacedName{Name: "name", Namespace: "foo-ns"})(tc.args.err, context.TODO())
+			err := e.Create(types.NamespacedName{Name: "name", Namespace: "foo-ns"}, true)(tc.args.err, context.TODO())
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nCreate(...): -want error, +got error:\n%s", tc.reason, diff)
 			}
@@ -444,7 +444,7 @@ func TestAPICallbacksUpdate_namespaced(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			e := NewAPICallbacks(tc.args.mgr, tc.args.mg)
-			err := e.Update(types.NamespacedName{Name: "name", Namespace: "foo-ns"})(tc.args.err, context.TODO())
+			err := e.Update(types.NamespacedName{Name: "name", Namespace: "foo-ns"}, true)(tc.args.err, context.TODO())
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nUpdate(...): -want error, +got error:\n%s", tc.reason, diff)
 			}
@@ -536,7 +536,7 @@ func TestAPICallbacks_Destroy_namespaced(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			e := NewAPICallbacks(tc.args.mgr, tc.args.mg)
-			err := e.Destroy(types.NamespacedName{Name: "name", Namespace: "foo-ns"})(tc.args.err, context.TODO())
+			err := e.Destroy(types.NamespacedName{Name: "name", Namespace: "foo-ns"}, true)(tc.args.err, context.TODO())
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nDestroy(...): -want error, +got error:\n%s", tc.reason, diff)
 			}

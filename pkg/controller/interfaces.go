@@ -42,7 +42,16 @@ type Store interface {
 // CallbackProvider provides functions that can be called with the result of
 // async operations.
 type CallbackProvider interface {
-	Create(name types.NamespacedName) terraform.CallbackFn
-	Update(name types.NamespacedName) terraform.CallbackFn
-	Destroy(name types.NamespacedName) terraform.CallbackFn
+	// Create signals completion of the async Create operation for
+	// the given name. If requestReconcile is set, an immediate or rate-limited
+	// reconcile request will be enqueued, depending on the error state.
+	Create(name types.NamespacedName, requestReconcile bool) terraform.CallbackFn
+	// Update signals completion of the async Update operation for
+	// the given name. If requestReconcile is set, an immediate or rate-limited
+	// reconcile request will be enqueued, depending on the error state.
+	Update(name types.NamespacedName, requestReconcile bool) terraform.CallbackFn
+	// Destroy signals completion of the async Destroy operation for
+	// the given name. If requestReconcile is set, an immediate or rate-limited
+	// reconcile request will be enqueued, depending on the error state.
+	Destroy(name types.NamespacedName, requestReconcile bool) terraform.CallbackFn
 }
