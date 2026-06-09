@@ -113,7 +113,7 @@ func TestAsyncTerraformPluginSDKConnect(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			c := NewTerraformPluginSDKAsyncConnector(nil, tc.args.ots, tc.args.setupFn, tc.args.cfg, WithTerraformPluginSDKAsyncLogger(logTest))
-			_, err := c.Connect(context.TODO(), tc.args.obj)
+			_, err := c.Connect(t.Context(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nConnect(...): -want error, +got error:\n", diff)
 			}
@@ -179,7 +179,7 @@ func TestAsyncTerraformPluginSDKObserve(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			terraformPluginSDKAsyncExternal := prepareTerraformPluginSDKAsyncExternal(tc.args.r, tc.args.cfg, CallbackFns{})
-			observation, err := terraformPluginSDKAsyncExternal.Observe(context.TODO(), tc.args.obj)
+			observation, err := terraformPluginSDKAsyncExternal.Observe(t.Context(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.obs, observation); diff != "" {
 				t.Errorf("\n%s\nObserve(...): -want observation, +got observation:\n", diff)
 			}
@@ -226,7 +226,7 @@ func TestAsyncTerraformPluginSDKCreate(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			terraformPluginSDKAsyncExternal := prepareTerraformPluginSDKAsyncExternal(tc.args.r, tc.args.cfg, tc.args.fns)
-			_, err := terraformPluginSDKAsyncExternal.Create(context.TODO(), tc.args.obj)
+			_, err := terraformPluginSDKAsyncExternal.Create(t.Context(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nterraformPluginSDKAsyncExternal.Create(...): -want error, +got error:\n", diff)
 			}
@@ -270,7 +270,7 @@ func TestAsyncTerraformPluginSDKUpdate(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			terraformPluginSDKAsyncExternal := prepareTerraformPluginSDKAsyncExternal(tc.args.r, tc.args.cfg, tc.args.fns)
-			_, err := terraformPluginSDKAsyncExternal.Update(context.TODO(), tc.args.obj)
+			_, err := terraformPluginSDKAsyncExternal.Update(t.Context(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nterraformPluginSDKAsyncExternal.Update(...): -want error, +got error:\n", diff)
 			}
@@ -314,12 +314,142 @@ func TestAsyncTerraformPluginSDKDelete(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			terraformPluginSDKAsyncExternal := prepareTerraformPluginSDKAsyncExternal(tc.args.r, tc.args.cfg, tc.args.fns)
-			_, err := terraformPluginSDKAsyncExternal.Delete(context.TODO(), tc.args.obj)
+			_, err := terraformPluginSDKAsyncExternal.Delete(t.Context(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nterraformPluginSDKAsyncExternal.Delete(...): -want error, +got error:\n", diff)
 			}
 		})
 	}
+}
+
+// TestAsyncTerraformPluginSDKCreateRace is a regression test for
+// the data race on a managed resource's status, between upjet's async Create
+// operation and the managed reconciler.
+// Must be run with `go test -race`.
+//
+// Please also see: https://github.com/crossplane/upjet/issues/472.
+func TestAsyncTerraformPluginSDKCreateRace(t *testing.T) {
+	obj := newObjAsync()
+	r := mockResource{
+		ApplyFn: func(_ context.Context, _ *tf.InstanceState, _ *tf.InstanceDiff, _ interface{}) (*tf.InstanceState, diag.Diagnostics) {
+			return &tf.InstanceState{ID: "example-id", Attributes: map[string]string{"name": "example"}}, nil
+		},
+	}
+
+	extDone := make(chan struct{})
+	ext := prepareTerraformPluginSDKAsyncExternal(r, cfgAsync, CallbackFns{
+		CreateFn: func(_ types.NamespacedName) terraform.CallbackFn {
+			return func(_ error, _ context.Context) error {
+				// Signal the async operation of the external client has completed.
+				close(extDone)
+				return nil
+			}
+		},
+	})
+	// This call starts the async worker that will race with
+	// the managed reconciler below.
+	if _, err := ext.Create(t.Context(), obj); err != nil {
+		t.Fatalf("terraformPluginSDKAsyncExternal.Create(...): unexpected error: %v", err)
+	}
+
+	// Simulate the managed reconciler concurrently writing to the status of
+	// the same MR (obj above).
+	mrDone := make(chan struct{})
+	go func() {
+		_ = obj.DeepCopyObject()
+		_ = obj.SetObservation(map[string]any{"name": "example"})
+		// Signal the managed reconciler has completed.
+		close(mrDone)
+	}()
+	<-extDone
+	<-mrDone
+}
+
+// TestAsyncTerraformPluginSDKUpdateRace is a regression test for
+// the data race on a managed resource's status, between upjet's async Update
+// operation and the managed reconciler.
+// Must be run with `go test -race`.
+//
+// Please also see: https://github.com/crossplane/upjet/issues/472.
+func TestAsyncTerraformPluginSDKUpdateRace(t *testing.T) {
+	obj := newObjAsync()
+	r := mockResource{
+		ApplyFn: func(_ context.Context, _ *tf.InstanceState, _ *tf.InstanceDiff, _ interface{}) (*tf.InstanceState, diag.Diagnostics) {
+			return &tf.InstanceState{ID: "example-id", Attributes: map[string]string{"name": "example"}}, nil
+		},
+	}
+
+	extDone := make(chan struct{})
+	ext := prepareTerraformPluginSDKAsyncExternal(r, cfgAsync, CallbackFns{
+		UpdateFn: func(_ types.NamespacedName) terraform.CallbackFn {
+			return func(_ error, _ context.Context) error {
+				// Signal the async operation of the external client has completed.
+				close(extDone)
+				return nil
+			}
+		},
+	})
+	// This call starts the async worker that will race with
+	// the managed reconciler below.
+	if _, err := ext.Update(t.Context(), obj); err != nil {
+		t.Fatalf("terraformPluginSDKAsyncExternal.Update(...): unexpected error: %v", err)
+	}
+
+	// Simulate the managed reconciler concurrently writing to the status of
+	// the same MR (obj above).
+	mrDone := make(chan struct{})
+	go func() {
+		_ = obj.DeepCopyObject()
+		_ = obj.SetObservation(map[string]any{"name": "example"})
+		// Signal the managed reconciler has completed.
+		close(mrDone)
+	}()
+	<-extDone
+	<-mrDone
+}
+
+// TestAsyncTerraformPluginSDKDeleteRace is a guard test asserting that upjet's
+// async Delete operation does not concurrently access a managed resource's
+// status while the managed reconciler does. Current async client Delete
+// implementation does not modify MR status or spec.
+// Must be run with `go test -race`.
+func TestAsyncTerraformPluginSDKDeleteRace(t *testing.T) {
+	obj := newObjAsync()
+	r := mockResource{
+		ApplyFn: func(_ context.Context, _ *tf.InstanceState, _ *tf.InstanceDiff, _ interface{}) (*tf.InstanceState, diag.Diagnostics) {
+			return &tf.InstanceState{ID: "example-id", Attributes: map[string]string{"name": "example"}}, nil
+		},
+	}
+
+	extDone := make(chan struct{})
+	ext := prepareTerraformPluginSDKAsyncExternal(r, cfgAsync, CallbackFns{
+		DestroyFn: func(_ types.NamespacedName) terraform.CallbackFn {
+			return func(_ error, _ context.Context) error {
+				// Signal the async operation of the external client has completed.
+				close(extDone)
+				return nil
+			}
+		},
+	})
+	// This call starts the async worker that will race with
+	// the managed reconciler below.
+	if _, err := ext.Delete(t.Context(), obj); err != nil {
+		t.Fatalf("terraformPluginSDKAsyncExternal.Delete(...): unexpected error: %v", err)
+	}
+
+	// Simulate the managed reconciler concurrently writing to the status of
+	// the same MR (obj above).
+	mrDone := make(chan struct{})
+	go func() {
+		_ = obj.DeepCopyObject()
+		// Managed reconciler does not call SetObservation during deletion.
+		// This is an extra check at the moment.
+		_ = obj.SetObservation(map[string]any{"name": "example"})
+		// Signal the managed reconciler has completed.
+		close(mrDone)
+	}()
+	<-extDone
+	<-mrDone
 }
 
 func newObjAsync() *fake.Terraformed {
