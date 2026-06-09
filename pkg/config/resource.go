@@ -197,12 +197,28 @@ type TFPluginFrameworkOptions struct {
 	ComputedIdentifierAttributes []string
 }
 
+var ErrReferenceAlreadyExists = errors.New("reference for field already exists")
+
 // References represents reference resolver configurations for the fields of a
 // given resource. Key should be the field path of the field to be referenced.
 // The key is the Terraform field path of the field to be referenced.
 // Example: "vpc_id" or "forwarding_rule.certificate_name" in case of nested
 // in another object.
 type References map[string]Reference
+
+// AddReference adds a reference configuration for the given field path.
+// The fieldPath is the Terraform field path of the field to be referenced.
+//
+// Example: "vpc_id" or "forwarding_rule.certificate_name" in case of nested
+// in another object.
+func (r References) AddReference(fieldPath string, ref Reference) error {
+	if _, ok := r[fieldPath]; ok {
+		return ErrReferenceAlreadyExists
+	}
+
+	r[fieldPath] = ref
+	return nil
+}
 
 // Reference represents the Crossplane options used to generate
 // reference resolvers for fields
