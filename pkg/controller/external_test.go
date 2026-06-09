@@ -104,15 +104,15 @@ type CallbackFns struct {
 	DestroyFn func(types.NamespacedName) terraform.CallbackFn
 }
 
-func (c CallbackFns) Create(name types.NamespacedName) terraform.CallbackFn {
+func (c CallbackFns) Create(name types.NamespacedName, _ bool) terraform.CallbackFn {
 	return c.CreateFn(name)
 }
 
-func (c CallbackFns) Update(name types.NamespacedName) terraform.CallbackFn {
+func (c CallbackFns) Update(name types.NamespacedName, _ bool) terraform.CallbackFn {
 	return c.UpdateFn(name)
 }
 
-func (c CallbackFns) Destroy(name types.NamespacedName) terraform.CallbackFn {
+func (c CallbackFns) Destroy(name types.NamespacedName, _ bool) terraform.CallbackFn {
 	return c.DestroyFn(name)
 }
 

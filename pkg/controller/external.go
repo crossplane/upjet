@@ -382,7 +382,8 @@ func (e *external) Create(ctx context.Context, mg xpresource.Managed) (managed.E
 	}
 	defer e.stopProvider()
 	if e.config.UseAsync {
-		return managed.ExternalCreation{}, errors.Wrap(e.workspace.ApplyAsync(e.callback.Create(name)), errStartAsyncApply)
+		// TODO: check whether we need a requeue or not.
+		return managed.ExternalCreation{}, errors.Wrap(e.workspace.ApplyAsync(e.callback.Create(name, true)), errStartAsyncApply)
 	}
 	tr, ok := mg.(resource.Terraformed)
 	if !ok {
@@ -421,7 +422,8 @@ func (e *external) Update(ctx context.Context, mg xpresource.Managed) (managed.E
 	}
 	defer e.stopProvider()
 	if e.config.UseAsync {
-		return managed.ExternalUpdate{}, errors.Wrap(e.workspace.ApplyAsync(e.callback.Update(name)), errStartAsyncApply)
+		// TODO: check whether we need a requeue or not.
+		return managed.ExternalUpdate{}, errors.Wrap(e.workspace.ApplyAsync(e.callback.Update(name, true)), errStartAsyncApply)
 	}
 	tr, ok := mg.(resource.Terraformed)
 	if !ok {
@@ -452,7 +454,8 @@ func (e *external) Delete(ctx context.Context, mg xpresource.Managed) (managed.E
 	}
 	defer e.stopProvider()
 	if e.config.UseAsync {
-		return managed.ExternalDelete{}, errors.Wrap(e.workspace.DestroyAsync(e.callback.Destroy(name)), errStartAsyncDestroy)
+		// TODO: check whether we need a requeue or not.
+		return managed.ExternalDelete{}, errors.Wrap(e.workspace.DestroyAsync(e.callback.Destroy(name, true)), errStartAsyncDestroy)
 	}
 	return managed.ExternalDelete{}, errors.Wrap(e.workspace.Destroy(ctx), errDestroy)
 }

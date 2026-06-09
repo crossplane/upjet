@@ -218,6 +218,7 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Create(_ context.Context, 
 		var ph panicHandler
 		defer cancel()
 		defer func() { // Finishing operations
+			currentErr := n.opTracker.LastOperation.Error()
 			err := tferrors.NewAsyncCreateFailed(ph.err)
 			n.opTracker.LastOperation.SetError(err)
 			n.opTracker.logger.Debug("Async create ended.", "error", err)
@@ -227,7 +228,11 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Create(_ context.Context, 
 				Namespace: mg.GetNamespace(),
 				Name:      mg.GetName(),
 			}
-			if cErr := n.callback.Create(name)(err, ctx); cErr != nil {
+			// we request an immediate reconcile upon success to set the status, or
+			// in case of failure (err != nil), if there's no cached error.
+			// If there already exists a cached error, managed reconciler
+			// will already requeue.
+			if cErr := n.callback.Create(name, err == nil || currentErr == nil)(err, ctx); cErr != nil {
 				n.opTracker.logger.Info("Async create callback failed", "error", cErr.Error())
 			}
 		}()
@@ -255,6 +260,7 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Update(_ context.Context, 
 		var ph panicHandler
 		defer cancel()
 		defer func() { // Finishing operations
+			currentErr := n.opTracker.LastOperation.Error()
 			err := tferrors.NewAsyncUpdateFailed(ph.err)
 			n.opTracker.LastOperation.SetError(err)
 			n.opTracker.logger.Debug("Async update ended.", "error", err)
@@ -264,7 +270,11 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Update(_ context.Context, 
 				Namespace: mg.GetNamespace(),
 				Name:      mg.GetName(),
 			}
-			if cErr := n.callback.Update(name)(err, ctx); cErr != nil {
+			// we request an immediate reconcile upon success to set the status, or
+			// in case of failure (err != nil), if there's no cached error.
+			// If there already exists a cached error, managed reconciler
+			// will already requeue.
+			if cErr := n.callback.Update(name, err == nil || currentErr == nil)(err, ctx); cErr != nil {
 				n.opTracker.logger.Info("Async update callback failed", "error", cErr.Error())
 			}
 		}()
@@ -296,6 +306,7 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Delete(_ context.Context, 
 		var ph panicHandler
 		defer cancel()
 		defer func() { // Finishing operations
+			currentErr := n.opTracker.LastOperation.Error()
 			err := tferrors.NewAsyncDeleteFailed(ph.err)
 			n.opTracker.LastOperation.SetError(err)
 			n.opTracker.logger.Debug("Async delete ended.", "error", err)
@@ -305,7 +316,11 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Delete(_ context.Context, 
 				Namespace: mg.GetNamespace(),
 				Name:      mg.GetName(),
 			}
-			if cErr := n.callback.Destroy(name)(err, ctx); cErr != nil {
+			// we request an immediate reconcile upon success to set the status, or
+			// in case of failure (err != nil), if there's no cached error.
+			// If there already exists a cached error, managed reconciler
+			// will already requeue.
+			if cErr := n.callback.Destroy(name, err == nil || currentErr == nil)(err, ctx); cErr != nil {
 				n.opTracker.logger.Info("Async delete callback failed", "error", cErr.Error())
 			}
 		}()
