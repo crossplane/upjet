@@ -212,6 +212,10 @@ func (n *terraformPluginSDKAsyncExternal) Update(_ context.Context, mg xpresourc
 				Namespace: mgCopy.GetNamespace(),
 				Name:      mgCopy.GetName(),
 			}
+			// we request an immediate reconcile upon success to set the status, or
+			// in case of failure (err != nil), if there's no cached error.
+			// If there already exists a cached error, managed reconciler
+			// will already requeue.
 			if cErr := n.callback.Update(name, err == nil || currentErr == nil)(err, ctx); cErr != nil {
 				n.opTracker.logger.Info("Async update callback failed", "error", cErr.Error())
 			}
