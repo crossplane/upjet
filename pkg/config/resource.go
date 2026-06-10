@@ -384,6 +384,7 @@ func setExternalTagsWithPaved(externalTags map[string]string, paved *fieldpath.P
 type InjectedKey struct {
 	Key          string
 	DefaultValue string
+	Description  string
 }
 
 // ListMapKeys is the list map keys when the server-side apply merge strategy

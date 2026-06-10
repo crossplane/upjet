@@ -209,6 +209,97 @@ func TestBuilder_generateTypeName(t *testing.T) {
 	}
 }
 
+func TestInjectServerSideApplyListMergeKeys(t *testing.T) {
+	type want struct {
+		description string
+		err         error
+	}
+	cases := map[string]struct {
+		cfg  *config.Resource
+		want want
+	}{
+		"DefaultDescription": {
+			cfg: &config.Resource{
+				TerraformResource: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"rule": {
+							Type: schema.TypeList,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"name": {Type: schema.TypeString},
+								},
+							},
+						},
+					},
+				},
+				ServerSideApplyMergeStrategies: map[string]config.MergeStrategy{
+					"rule": {
+						ListMergeStrategy: config.ListMergeStrategy{
+							MergeStrategy: config.ListTypeMap,
+							ListMapKeys: config.ListMapKeys{
+								InjectedKey: config.InjectedKey{
+									Key: "index",
+								},
+							},
+						},
+					},
+				},
+			},
+			want: want{
+				description: descriptionInjectedKey,
+			},
+		},
+		"CustomDescription": {
+			cfg: &config.Resource{
+				TerraformResource: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"rule": {
+							Type: schema.TypeList,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"name": {Type: schema.TypeString},
+								},
+							},
+						},
+					},
+				},
+				ServerSideApplyMergeStrategies: map[string]config.MergeStrategy{
+					"rule": {
+						ListMergeStrategy: config.ListMergeStrategy{
+							MergeStrategy: config.ListTypeMap,
+							ListMapKeys: config.ListMapKeys{
+								InjectedKey: config.InjectedKey{
+									Key:         "index",
+									Description: "Custom description for the injected key.",
+								},
+							},
+						},
+					},
+				},
+			},
+			want: want{
+				description: "Custom description for the injected key.",
+			},
+		},
+	}
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			err := injectServerSideApplyListMergeKeys(tc.cfg)
+			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
+				t.Fatalf("injectServerSideApplyListMergeKeys(...): -want error, +got error: %s", diff)
+			}
+			if err != nil {
+				return
+			}
+			el := tc.cfg.TerraformResource.Schema["rule"].Elem.(*schema.Resource)
+			got := el.Schema["index"].Description
+			if diff := cmp.Diff(tc.want.description, got); diff != "" {
+				t.Errorf("injectServerSideApplyListMergeKeys(...) description: -want, +got: %s", diff)
+			}
+		})
+	}
+}
+
 func TestBuild(t *testing.T) {
 	type args struct {
 		crdScope CRDScope
