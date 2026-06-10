@@ -8,15 +8,14 @@ import (
 	"context"
 	"testing"
 
-	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
-	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
-	"github.com/crossplane/crossplane-runtime/v2/pkg/test"
+	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
+	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
+	"github.com/crossplane/crossplane-runtime/pkg/test"
 	"github.com/google/go-cmp/cmp"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/crossplane/upjet/v2/pkg/config"
-	"github.com/crossplane/upjet/v2/pkg/terraform"
+	"github.com/crossplane/upjet/pkg/config"
+	"github.com/crossplane/upjet/pkg/terraform"
 )
 
 func prepareTerraformPluginFrameworkAsyncExternal(testConfig testConfiguration, fns CallbackFns) *terraformPluginFrameworkAsyncExternalClient {
@@ -56,7 +55,7 @@ func TestAsyncTerraformPluginFrameworkConnect(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			c := NewTerraformPluginFrameworkAsyncConnector(nil, tc.args.ots, tc.args.setupFn, tc.args.cfg, WithTerraformPluginFrameworkAsyncLogger(logTest))
-			_, err := c.Connect(t.Context(), tc.args.obj)
+			_, err := c.Connect(context.TODO(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nConnect(...): -want error, +got error:\n", diff)
 			}
@@ -128,7 +127,7 @@ func TestAsyncTerraformPluginFrameworkObserve(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			terraformPluginFrameworkAsyncExternal := prepareTerraformPluginFrameworkAsyncExternal(tc.testConfiguration, CallbackFns{})
-			observation, err := terraformPluginFrameworkAsyncExternal.Observe(t.Context(), &tc.testConfiguration.obj)
+			observation, err := terraformPluginFrameworkAsyncExternal.Observe(context.TODO(), &tc.testConfiguration.obj)
 			if diff := cmp.Diff(tc.want.obs, observation); diff != "" {
 				t.Errorf("\n%s\nObserve(...): -want observation, +got observation:\n", diff)
 			}
@@ -169,13 +168,13 @@ func TestAsyncTerraformPluginFrameworkCreate(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			terraformPluginFrameworkAsyncExternal := prepareTerraformPluginFrameworkAsyncExternal(tc.testConfiguration, CallbackFns{
-				CreateFn: func(_ types.NamespacedName) terraform.CallbackFn {
+				CreateFn: func(_ string) terraform.CallbackFn {
 					return func(err error, ctx context.Context) error {
 						return nil
 					}
 				},
 			})
-			_, err := terraformPluginFrameworkAsyncExternal.Create(t.Context(), &tc.testConfiguration.obj)
+			_, err := terraformPluginFrameworkAsyncExternal.Create(context.TODO(), &tc.testConfiguration.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nterraformPluginFrameworkAsyncExternalClient.Create(...): -want error, +got error:\n", diff)
 			}
@@ -217,13 +216,13 @@ func TestAsyncTerraformPluginFrameworkUpdate(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			terraformPluginFrameworkAsyncExternal := prepareTerraformPluginFrameworkAsyncExternal(tc.testConfiguration, CallbackFns{
-				UpdateFn: func(_ types.NamespacedName) terraform.CallbackFn {
+				UpdateFn: func(_ string) terraform.CallbackFn {
 					return func(err error, ctx context.Context) error {
 						return nil
 					}
 				},
 			})
-			_, err := terraformPluginFrameworkAsyncExternal.Update(t.Context(), &tc.testConfiguration.obj)
+			_, err := terraformPluginFrameworkAsyncExternal.Update(context.TODO(), &tc.testConfiguration.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nterraformPluginFrameworkAsyncExternalClient.Update(...): -want error, +got error:\n", diff)
 			}
@@ -259,13 +258,13 @@ func TestAsyncTerraformPluginFrameworkDelete(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			terraformPluginFrameworkAsyncExternal := prepareTerraformPluginFrameworkAsyncExternal(tc.testConfiguration, CallbackFns{
-				DestroyFn: func(_ types.NamespacedName) terraform.CallbackFn {
+				DestroyFn: func(_ string) terraform.CallbackFn {
 					return func(err error, ctx context.Context) error {
 						return nil
 					}
 				},
 			})
-			_, err := terraformPluginFrameworkAsyncExternal.Delete(t.Context(), &tc.testConfiguration.obj)
+			_, err := terraformPluginFrameworkAsyncExternal.Delete(context.TODO(), &tc.testConfiguration.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nterraformPluginFrameworkAsyncExternalClient.Delete(...): -want error, +got error:\n", diff)
 			}
@@ -299,7 +298,7 @@ func TestAsyncTerraformPluginFrameworkCreateRace(t *testing.T) {
 
 	extDone := make(chan struct{})
 	ext := prepareTerraformPluginFrameworkAsyncExternal(tc, CallbackFns{
-		CreateFn: func(_ types.NamespacedName) terraform.CallbackFn {
+		CreateFn: func(_ string) terraform.CallbackFn {
 			return func(_ error, _ context.Context) error {
 				// Signal the async operation of the external client has completed.
 				close(extDone)
@@ -309,7 +308,7 @@ func TestAsyncTerraformPluginFrameworkCreateRace(t *testing.T) {
 	})
 	// This call starts the async worker that will race with
 	// the managed reconciler below.
-	if _, err := ext.Create(t.Context(), obj); err != nil {
+	if _, err := ext.Create(context.TODO(), obj); err != nil {
 		t.Fatalf("terraformPluginFrameworkAsyncExternalClient.Create(...): unexpected error: %v", err)
 	}
 
@@ -356,7 +355,7 @@ func TestAsyncTerraformPluginFrameworkUpdateRace(t *testing.T) {
 
 	extDone := make(chan struct{})
 	ext := prepareTerraformPluginFrameworkAsyncExternal(tc, CallbackFns{
-		UpdateFn: func(_ types.NamespacedName) terraform.CallbackFn {
+		UpdateFn: func(_ string) terraform.CallbackFn {
 			return func(_ error, _ context.Context) error {
 				// Signal the async operation of the external client has completed.
 				close(extDone)
@@ -366,7 +365,7 @@ func TestAsyncTerraformPluginFrameworkUpdateRace(t *testing.T) {
 	})
 	// This call starts the async worker that will race with
 	// the managed reconciler below.
-	if _, err := ext.Update(t.Context(), obj); err != nil {
+	if _, err := ext.Update(context.TODO(), obj); err != nil {
 		t.Fatalf("terraformPluginFrameworkAsyncExternalClient.Update(...): unexpected error: %v", err)
 	}
 
@@ -406,7 +405,7 @@ func TestAsyncTerraformPluginFrameworkDeleteRace(t *testing.T) {
 
 	extDone := make(chan struct{})
 	ext := prepareTerraformPluginFrameworkAsyncExternal(tc, CallbackFns{
-		DestroyFn: func(_ types.NamespacedName) terraform.CallbackFn {
+		DestroyFn: func(_ string) terraform.CallbackFn {
 			return func(_ error, _ context.Context) error {
 				// Signal the async operation of the external client has completed.
 				close(extDone)
@@ -416,7 +415,7 @@ func TestAsyncTerraformPluginFrameworkDeleteRace(t *testing.T) {
 	})
 	// This call starts the async worker that will race with
 	// the managed reconciler below.
-	if _, err := ext.Delete(t.Context(), obj); err != nil {
+	if _, err := ext.Delete(context.TODO(), obj); err != nil {
 		t.Fatalf("terraformPluginFrameworkAsyncExternalClient.Delete(...): unexpected error: %v", err)
 	}
 
