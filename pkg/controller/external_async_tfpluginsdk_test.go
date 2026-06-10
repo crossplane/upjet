@@ -112,7 +112,7 @@ func TestAsyncTerraformPluginSDKConnect(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			c := NewTerraformPluginSDKAsyncConnector(nil, tc.args.ots, tc.args.setupFn, tc.args.cfg, WithTerraformPluginSDKAsyncLogger(logTest))
-			_, err := c.Connect(t.Context(), tc.args.obj)
+			_, err := c.Connect(context.TODO(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nConnect(...): -want error, +got error:\n", diff)
 			}
@@ -178,7 +178,7 @@ func TestAsyncTerraformPluginSDKObserve(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			terraformPluginSDKAsyncExternal := prepareTerraformPluginSDKAsyncExternal(tc.args.r, tc.args.cfg, CallbackFns{})
-			observation, err := terraformPluginSDKAsyncExternal.Observe(t.Context(), tc.args.obj)
+			observation, err := terraformPluginSDKAsyncExternal.Observe(context.TODO(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.obs, observation); diff != "" {
 				t.Errorf("\n%s\nObserve(...): -want observation, +got observation:\n", diff)
 			}
@@ -225,7 +225,7 @@ func TestAsyncTerraformPluginSDKCreate(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			terraformPluginSDKAsyncExternal := prepareTerraformPluginSDKAsyncExternal(tc.args.r, tc.args.cfg, tc.args.fns)
-			_, err := terraformPluginSDKAsyncExternal.Create(t.Context(), tc.args.obj)
+			_, err := terraformPluginSDKAsyncExternal.Create(context.TODO(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nterraformPluginSDKAsyncExternal.Create(...): -want error, +got error:\n", diff)
 			}
@@ -269,7 +269,7 @@ func TestAsyncTerraformPluginSDKUpdate(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			terraformPluginSDKAsyncExternal := prepareTerraformPluginSDKAsyncExternal(tc.args.r, tc.args.cfg, tc.args.fns)
-			_, err := terraformPluginSDKAsyncExternal.Update(t.Context(), tc.args.obj)
+			_, err := terraformPluginSDKAsyncExternal.Update(context.TODO(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nterraformPluginSDKAsyncExternal.Update(...): -want error, +got error:\n", diff)
 			}
@@ -313,7 +313,7 @@ func TestAsyncTerraformPluginSDKDelete(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			terraformPluginSDKAsyncExternal := prepareTerraformPluginSDKAsyncExternal(tc.args.r, tc.args.cfg, tc.args.fns)
-			_, err := terraformPluginSDKAsyncExternal.Delete(t.Context(), tc.args.obj)
+			_, err := terraformPluginSDKAsyncExternal.Delete(context.TODO(), tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nterraformPluginSDKAsyncExternal.Delete(...): -want error, +got error:\n", diff)
 			}
@@ -337,7 +337,7 @@ func TestAsyncTerraformPluginSDKCreateRace(t *testing.T) {
 
 	extDone := make(chan struct{})
 	ext := prepareTerraformPluginSDKAsyncExternal(r, cfgAsync, CallbackFns{
-		CreateFn: func(_ types.NamespacedName) terraform.CallbackFn {
+		CreateFn: func(_ string) terraform.CallbackFn {
 			return func(_ error, _ context.Context) error {
 				// Signal the async operation of the external client has completed.
 				close(extDone)
@@ -347,7 +347,7 @@ func TestAsyncTerraformPluginSDKCreateRace(t *testing.T) {
 	})
 	// This call starts the async worker that will race with
 	// the managed reconciler below.
-	if _, err := ext.Create(t.Context(), obj); err != nil {
+	if _, err := ext.Create(context.TODO(), obj); err != nil {
 		t.Fatalf("terraformPluginSDKAsyncExternal.Create(...): unexpected error: %v", err)
 	}
 
@@ -380,7 +380,7 @@ func TestAsyncTerraformPluginSDKUpdateRace(t *testing.T) {
 
 	extDone := make(chan struct{})
 	ext := prepareTerraformPluginSDKAsyncExternal(r, cfgAsync, CallbackFns{
-		UpdateFn: func(_ types.NamespacedName) terraform.CallbackFn {
+		UpdateFn: func(_ string) terraform.CallbackFn {
 			return func(_ error, _ context.Context) error {
 				// Signal the async operation of the external client has completed.
 				close(extDone)
@@ -390,7 +390,7 @@ func TestAsyncTerraformPluginSDKUpdateRace(t *testing.T) {
 	})
 	// This call starts the async worker that will race with
 	// the managed reconciler below.
-	if _, err := ext.Update(t.Context(), obj); err != nil {
+	if _, err := ext.Update(context.TODO(), obj); err != nil {
 		t.Fatalf("terraformPluginSDKAsyncExternal.Update(...): unexpected error: %v", err)
 	}
 
@@ -422,7 +422,7 @@ func TestAsyncTerraformPluginSDKDeleteRace(t *testing.T) {
 
 	extDone := make(chan struct{})
 	ext := prepareTerraformPluginSDKAsyncExternal(r, cfgAsync, CallbackFns{
-		DestroyFn: func(_ types.NamespacedName) terraform.CallbackFn {
+		DestroyFn: func(_ string) terraform.CallbackFn {
 			return func(_ error, _ context.Context) error {
 				// Signal the async operation of the external client has completed.
 				close(extDone)
@@ -432,7 +432,7 @@ func TestAsyncTerraformPluginSDKDeleteRace(t *testing.T) {
 	})
 	// This call starts the async worker that will race with
 	// the managed reconciler below.
-	if _, err := ext.Delete(t.Context(), obj); err != nil {
+	if _, err := ext.Delete(context.TODO(), obj); err != nil {
 		t.Fatalf("terraformPluginSDKAsyncExternal.Delete(...): unexpected error: %v", err)
 	}
 
