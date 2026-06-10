@@ -244,6 +244,12 @@ type Sensitive struct {
 	// fieldPaths keeps the mapping of sensitive fields in Terraform schema with
 	// terraform field path as key and xp field path as value.
 	fieldPaths map[string]string
+
+	// AllowPlaintextValue allows sensitive fields to be passed as plaintext
+	// in addition to secret references. When true, sensitive fields will be
+	// generated as both a regular field and a secret reference field, giving
+	// users the option to provide values directly or via secrets.
+	AllowPlaintextValue bool
 }
 
 // LateInitializer represents configurations that control
