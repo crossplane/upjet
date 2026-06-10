@@ -321,30 +321,15 @@ func (fp *FileProducer) isStateEmpty() (bool, error) {
 	if err := json.JSParser.Unmarshal(data, s); err != nil {
 		return false, errors.Wrap(err, errUnmarshalTFState)
 	}
-	attrData := s.GetAttributes()
-	if attrData == nil {
-		return true, nil
+	attr, err := stateAttributes(s.GetAttributes())
+	if err != nil {
+		return false, err
 	}
-	attr := map[string]any{}
-	if err := json.JSParser.Unmarshal(attrData, &attr); err != nil {
-		return false, errors.Wrap(err, errUnmarshalAttr)
+	exists, err := stateExists(attr, fp.hasTFID)
+	if err != nil {
+		return false, err
 	}
-
-	// for ID-less resource schemas, don't check for
-	// ID and assume empty when there is no attribute
-	if !fp.hasTFID {
-		return len(attr) == 0, nil
-	}
-
-	id, ok := attr["id"]
-	if !ok {
-		return true, nil
-	}
-	sid, ok := id.(string)
-	if !ok {
-		return false, errors.Errorf(errFmtNonString, fmt.Sprint(id))
-	}
-	return sid == "", nil
+	return !exists, nil
 }
 
 type MainConfiguration struct {
