@@ -637,6 +637,182 @@ func TestBuild(t *testing.T) {
 // +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.__namespace__) || (has(self.initProvider) && has(self.initProvider.__namespace__))",message="spec.forProvider.namespace is a required parameter"`,
 			},
 		},
+		"Map_of_Map": {
+			args: args{
+				crdScope: CRDScopeCluster,
+				cfg: &config.Resource{
+					TerraformResource: &schema.Resource{
+						Schema: map[string]*schema.Schema{
+							"name": {
+								Type:     schema.TypeString,
+								Required: true,
+							},
+							"metadata": {
+								Type:     schema.TypeMap,
+								Required: true,
+								Elem:     schema.TypeMap,
+							},
+						},
+					},
+				},
+			},
+			want: want{
+				forProvider: `type example.Parameters struct{Metadata map[string]map[string]string "json:\"metadata,omitempty\" tf:\"metadata,omitempty\""; Name *string "json:\"name,omitempty\" tf:\"name,omitempty\""}`,
+				atProvider:  `type example.Observation struct{Metadata map[string]map[string]string "json:\"metadata,omitempty\" tf:\"metadata,omitempty\""; Name *string "json:\"name,omitempty\" tf:\"name,omitempty\""}`,
+				validationRules: `
+// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.metadata) || (has(self.initProvider) && has(self.initProvider.metadata))",message="spec.forProvider.metadata is a required parameter"
+// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.name) || (has(self.initProvider) && has(self.initProvider.name))",message="spec.forProvider.name is a required parameter"`,
+			},
+		},
+		"List_of_Map": {
+			args: args{
+				crdScope: CRDScopeCluster,
+				cfg: &config.Resource{
+					TerraformResource: &schema.Resource{
+						Schema: map[string]*schema.Schema{
+							"name": {
+								Type:     schema.TypeString,
+								Required: true,
+							},
+							"methods": {
+								Type:     schema.TypeList,
+								Required: true,
+								Elem:     schema.TypeMap,
+							},
+						},
+					},
+				},
+			},
+			want: want{
+				forProvider: `type example.Parameters struct{Methods []map[string]string "json:\"methods,omitempty\" tf:\"methods,omitempty\""; Name *string "json:\"name,omitempty\" tf:\"name,omitempty\""}`,
+				atProvider:  `type example.Observation struct{Methods []map[string]string "json:\"methods,omitempty\" tf:\"methods,omitempty\""; Name *string "json:\"name,omitempty\" tf:\"name,omitempty\""}`,
+				validationRules: `
+// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.methods) || (has(self.initProvider) && has(self.initProvider.methods))",message="spec.forProvider.methods is a required parameter"
+// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.name) || (has(self.initProvider) && has(self.initProvider.name))",message="spec.forProvider.name is a required parameter"`,
+			},
+		},
+		"Set_of_Map": {
+			args: args{
+				crdScope: CRDScopeCluster,
+				cfg: &config.Resource{
+					TerraformResource: &schema.Resource{
+						Schema: map[string]*schema.Schema{
+							"name": {
+								Type:     schema.TypeString,
+								Required: true,
+							},
+							"methods": {
+								Type:     schema.TypeSet,
+								Required: true,
+								Elem:     schema.TypeMap,
+							},
+						},
+					},
+				},
+			},
+			want: want{
+				forProvider: `type example.Parameters struct{Methods []map[string]string "json:\"methods,omitempty\" tf:\"methods,omitempty\""; Name *string "json:\"name,omitempty\" tf:\"name,omitempty\""}`,
+				atProvider:  `type example.Observation struct{Methods []map[string]string "json:\"methods,omitempty\" tf:\"methods,omitempty\""; Name *string "json:\"name,omitempty\" tf:\"name,omitempty\""}`,
+				validationRules: `
+// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.methods) || (has(self.initProvider) && has(self.initProvider.methods))",message="spec.forProvider.methods is a required parameter"
+// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.name) || (has(self.initProvider) && has(self.initProvider.name))",message="spec.forProvider.name is a required parameter"`,
+			},
+		},
+		"List_of_Map_in_Resource": {
+			args: args{
+				crdScope: CRDScopeCluster,
+				cfg: &config.Resource{
+					TerraformResource: &schema.Resource{
+						Schema: map[string]*schema.Schema{
+							"name": {
+								Type:     schema.TypeString,
+								Required: true,
+							},
+							"verification": {
+								Type:     schema.TypeList,
+								Required: true,
+								Elem: &schema.Resource{
+									Schema: map[string]*schema.Schema{
+										"methods": {
+											Type:     schema.TypeList,
+											Optional: false,
+											Computed: true,
+											Elem:     schema.TypeMap,
+										},
+										"status": {
+											Type:     schema.TypeString,
+											Optional: false,
+											Computed: true,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			want: want{
+				forProvider: `type example.Parameters struct{Name *string "json:\"name,omitempty\" tf:\"name,omitempty\""; Verification []example.VerificationParameters "json:\"verification,omitempty\" tf:\"verification,omitempty\""}`,
+				atProvider:  `type example.Observation struct{Name *string "json:\"name,omitempty\" tf:\"name,omitempty\""; Verification []example.VerificationObservation "json:\"verification,omitempty\" tf:\"verification,omitempty\""}`,
+				validationRules: `
+// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.name) || (has(self.initProvider) && has(self.initProvider.name))",message="spec.forProvider.name is a required parameter"
+// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.verification) || (has(self.initProvider) && has(self.initProvider.verification))",message="spec.forProvider.verification is a required parameter"`,
+			},
+		},
+		"TypeMap_with_TypeList_Elem": {
+			args: args{
+				crdScope: CRDScopeCluster,
+				cfg: &config.Resource{
+					TerraformResource: &schema.Resource{
+						Schema: map[string]*schema.Schema{
+							"name": {
+								Type:     schema.TypeString,
+								Required: true,
+							},
+							"data": {
+								Type:     schema.TypeMap,
+								Required: true,
+								Elem:     schema.TypeList,
+							},
+						},
+					},
+				},
+			},
+			want: want{
+				forProvider: `type example.Parameters struct{Data map[string][]string "json:\"data,omitempty\" tf:\"data,omitempty\""; Name *string "json:\"name,omitempty\" tf:\"name,omitempty\""}`,
+				atProvider:  `type example.Observation struct{Data map[string][]string "json:\"data,omitempty\" tf:\"data,omitempty\""; Name *string "json:\"name,omitempty\" tf:\"name,omitempty\""}`,
+				validationRules: `
+// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.data) || (has(self.initProvider) && has(self.initProvider.data))",message="spec.forProvider.data is a required parameter"
+// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.name) || (has(self.initProvider) && has(self.initProvider.name))",message="spec.forProvider.name is a required parameter"`,
+			},
+		},
+		"TypeMap_with_TypeSet_Elem": {
+			args: args{
+				crdScope: CRDScopeCluster,
+				cfg: &config.Resource{
+					TerraformResource: &schema.Resource{
+						Schema: map[string]*schema.Schema{
+							"name": {
+								Type:     schema.TypeString,
+								Required: true,
+							},
+							"data": {
+								Type:     schema.TypeMap,
+								Required: true,
+								Elem:     schema.TypeSet,
+							},
+						},
+					},
+				},
+			},
+			want: want{
+				forProvider: `type example.Parameters struct{Data map[string][]string "json:\"data,omitempty\" tf:\"data,omitempty\""; Name *string "json:\"name,omitempty\" tf:\"name,omitempty\""}`,
+				atProvider:  `type example.Observation struct{Data map[string][]string "json:\"data,omitempty\" tf:\"data,omitempty\""; Name *string "json:\"name,omitempty\" tf:\"name,omitempty\""}`,
+				validationRules: `
+// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.data) || (has(self.initProvider) && has(self.initProvider.data))",message="spec.forProvider.data is a required parameter"
+// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.name) || (has(self.initProvider) && has(self.initProvider.name))",message="spec.forProvider.name is a required parameter"`,
+			},
+		},
 	}
 	for n, tc := range cases {
 		t.Run(n, func(t *testing.T) {
