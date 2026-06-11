@@ -130,8 +130,8 @@ func (n *terraformPluginSDKAsyncExternal) Observe(ctx context.Context, mg xpreso
 	// because there are no pending updates on the existing resource and it's
 	// not scheduled to be deleted.
 	if err == nil && o.ResourceExists && o.ResourceUpToDate && !meta.WasDeleted(mg) {
-		mg.(resource.Terraformed).SetConditions(resource.LastAsyncOperationCondition(nil))
-		mg.(resource.Terraformed).SetConditions(xpv1.ReconcileSuccess())
+		mg.(resource.Terraformed).SetConditions(resource.LastAsyncOperationCondition(nil).WithObservedGeneration(mg.GetGeneration()))
+		mg.(resource.Terraformed).SetConditions(xpv1.ReconcileSuccess().WithObservedGeneration(mg.GetGeneration()))
 		n.opTracker.LastOperation.Clear(false)
 	}
 	return o, err
