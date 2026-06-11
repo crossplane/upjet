@@ -164,6 +164,10 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Create(_ context.Context, 
 	}
 
 	ctx, cancel := context.WithDeadline(context.Background(), n.opTracker.LastOperation.StartTime().Add(defaultAsyncTimeout))
+	// We deep-copy the managed resource to prevent a data race between the
+	// goroutine we are about to start below and the managed reconciler.
+	// Please see: https://github.com/crossplane/upjet/issues/472
+	mgCopy := mg.DeepCopyObject().(xpresource.Managed)
 	go func() {
 		// The order of deferred functions, executed last-in-first-out, is
 		// significant. The context should be canceled last, because it is
@@ -178,14 +182,14 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Create(_ context.Context, 
 			n.opTracker.logger.Debug("Async create ended.", "error", err)
 
 			n.opTracker.LastOperation.MarkEnd()
-			if cErr := n.callback.Create(mg.GetName())(err, ctx); cErr != nil {
+			if cErr := n.callback.Create(mgCopy.GetName())(err, ctx); cErr != nil {
 				n.opTracker.logger.Info("Async create callback failed", "error", cErr.Error())
 			}
 		}()
 		defer ph.recoverIfPanic(ctx)
 
 		n.opTracker.logger.Debug("Async create starting...")
-		_, ph.err = n.terraformPluginFrameworkExternalClient.Create(ctx, mg)
+		_, ph.err = n.terraformPluginFrameworkExternalClient.Create(ctx, mgCopy)
 	}()
 
 	return managed.ExternalCreation{}, n.opTracker.LastOperation.Error()
@@ -197,6 +201,10 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Update(_ context.Context, 
 	}
 
 	ctx, cancel := context.WithDeadline(context.Background(), n.opTracker.LastOperation.StartTime().Add(defaultAsyncTimeout))
+	// We deep-copy the managed resource to prevent a data race between the
+	// goroutine we are about to start below and the managed reconciler.
+	// Please see: https://github.com/crossplane/upjet/issues/472
+	mgCopy := mg.DeepCopyObject().(xpresource.Managed)
 	go func() {
 		// The order of deferred functions, executed last-in-first-out, is
 		// significant. The context should be canceled last, because it is
@@ -211,14 +219,14 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Update(_ context.Context, 
 			n.opTracker.logger.Debug("Async update ended.", "error", err)
 
 			n.opTracker.LastOperation.MarkEnd()
-			if cErr := n.callback.Update(mg.GetName())(err, ctx); cErr != nil {
+			if cErr := n.callback.Update(mgCopy.GetName())(err, ctx); cErr != nil {
 				n.opTracker.logger.Info("Async update callback failed", "error", cErr.Error())
 			}
 		}()
 		defer ph.recoverIfPanic(ctx)
 
 		n.opTracker.logger.Debug("Async update starting...")
-		_, ph.err = n.terraformPluginFrameworkExternalClient.Update(ctx, mg)
+		_, ph.err = n.terraformPluginFrameworkExternalClient.Update(ctx, mgCopy)
 	}()
 
 	return managed.ExternalUpdate{}, n.opTracker.LastOperation.Error()
