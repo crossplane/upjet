@@ -5,7 +5,7 @@
 package testconversion
 
 import (
-	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -29,8 +29,8 @@ type TestResource struct {
 
 // TestResourceSpec defines the desired state of TestResource
 type TestResourceSpec struct {
-	xpv1.ResourceSpec `json:",inline"`
-	ForProvider       TestResourceParameters `json:"forProvider"`
+	xpv2.ClusterManagedResourceSpec `json:",inline"`
+	ForProvider                     TestResourceParameters `json:"forProvider"`
 }
 
 // TestResourceParameters are the configurable fields of a TestResource.
@@ -41,60 +41,60 @@ type TestResourceObservation map[string]interface{}
 
 // TestResourceStatus defines the observed state of TestResource.
 type TestResourceStatus struct {
-	xpv1.ResourceStatus `json:",inline"`
-	AtProvider          TestResourceObservation `json:"atProvider,omitempty"`
+	xpv2.ManagedResourceStatus `json:",inline"`
+	AtProvider                 TestResourceObservation `json:"atProvider,omitempty"`
 }
 
 // Ensure TestResource implements resource.Terraformed
 var _ resource.Terraformed = &TestResource{}
 
 // GetCondition of this TestResource.
-func (tr *TestResource) GetCondition(ct xpv1.ConditionType) xpv1.Condition {
+func (tr *TestResource) GetCondition(ct xpv2.ConditionType) xpv2.Condition {
 	return tr.Status.GetCondition(ct)
 }
 
 // SetConditions of this TestResource.
-func (tr *TestResource) SetConditions(c ...xpv1.Condition) {
+func (tr *TestResource) SetConditions(c ...xpv2.Condition) {
 	tr.Status.SetConditions(c...)
 }
 
 // GetDeletionPolicy of this TestResource.
-func (tr *TestResource) GetDeletionPolicy() xpv1.DeletionPolicy {
+func (tr *TestResource) GetDeletionPolicy() xpv2.DeletionPolicy {
 	return tr.Spec.DeletionPolicy
 }
 
 // SetDeletionPolicy of this TestResource.
-func (tr *TestResource) SetDeletionPolicy(r xpv1.DeletionPolicy) {
+func (tr *TestResource) SetDeletionPolicy(r xpv2.DeletionPolicy) {
 	tr.Spec.DeletionPolicy = r
 }
 
 // GetManagementPolicies of this TestResource.
-func (tr *TestResource) GetManagementPolicies() xpv1.ManagementPolicies {
+func (tr *TestResource) GetManagementPolicies() xpv2.ManagementPolicies {
 	return tr.Spec.ManagementPolicies
 }
 
 // SetManagementPolicies of this TestResource.
-func (tr *TestResource) SetManagementPolicies(r xpv1.ManagementPolicies) {
+func (tr *TestResource) SetManagementPolicies(r xpv2.ManagementPolicies) {
 	tr.Spec.ManagementPolicies = r
 }
 
 // GetProviderConfigReference of this TestResource.
-func (tr *TestResource) GetProviderConfigReference() *xpv1.Reference {
+func (tr *TestResource) GetProviderConfigReference() *xpv2.Reference {
 	return tr.Spec.ProviderConfigReference
 }
 
 // SetProviderConfigReference of this TestResource.
-func (tr *TestResource) SetProviderConfigReference(r *xpv1.Reference) {
+func (tr *TestResource) SetProviderConfigReference(r *xpv2.Reference) {
 	tr.Spec.ProviderConfigReference = r
 }
 
 // GetWriteConnectionSecretToReference of this TestResource.
-func (tr *TestResource) GetWriteConnectionSecretToReference() *xpv1.SecretReference {
+func (tr *TestResource) GetWriteConnectionSecretToReference() *xpv2.SecretReference {
 	return tr.Spec.WriteConnectionSecretToReference
 }
 
 // SetWriteConnectionSecretToReference of this TestResource.
-func (tr *TestResource) SetWriteConnectionSecretToReference(r *xpv1.SecretReference) {
+func (tr *TestResource) SetWriteConnectionSecretToReference(r *xpv2.SecretReference) {
 	tr.Spec.WriteConnectionSecretToReference = r
 }
 

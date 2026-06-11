@@ -12,10 +12,10 @@ import (
 	"strings"
 
 	"dario.cat/mergo"
-	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/feature"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
 	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	"github.com/pkg/errors"
 	"github.com/spf13/afero"
 
@@ -138,7 +138,7 @@ func NewFileProducer(ctx context.Context, client resource.SecretClient, dir stri
 	return fp, nil
 }
 
-func getConnectionSecretRef(tr resource.Terraformed) (*xpv1.SecretReference, error) {
+func getConnectionSecretRef(tr resource.Terraformed) (*xpv2.SecretReference, error) {
 	switch trt := tr.(type) {
 	case xpresource.ConnectionSecretWriterTo:
 		return trt.GetWriteConnectionSecretToReference(), nil
@@ -146,7 +146,7 @@ func getConnectionSecretRef(tr resource.Terraformed) (*xpv1.SecretReference, err
 		if trt.GetWriteConnectionSecretToReference() == nil {
 			return nil, nil
 		}
-		return &xpv1.SecretReference{
+		return &xpv2.SecretReference{
 			Name:      trt.GetWriteConnectionSecretToReference().Name,
 			Namespace: tr.GetNamespace(),
 		}, nil
