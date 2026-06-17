@@ -384,6 +384,9 @@ func setExternalTagsWithPaved(externalTags map[string]string, paved *fieldpath.P
 type InjectedKey struct {
 	Key          string
 	DefaultValue string
+	// Description is the OpenAPI schema description for the injected list-map key field.
+	// If empty, defaults to a standard description about server-side apply merge behavior.
+	Description string
 }
 
 // ListMapKeys is the list map keys when the server-side apply merge strategy

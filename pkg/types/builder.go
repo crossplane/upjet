@@ -120,10 +120,14 @@ func injectServerSideApplyListMergeKeys(cfg *config.Resource) error { //nolint:g
 				return errors.Errorf("element schema for the object list %q already contains the argument key %q", f, k)
 			}
 		}
+		desc := descriptionInjectedKey
+		if s.ListMergeStrategy.ListMapKeys.InjectedKey.Description != "" {
+			desc = s.ListMergeStrategy.ListMapKeys.InjectedKey.Description
+		}
 		el.Schema[s.ListMergeStrategy.ListMapKeys.InjectedKey.Key] = &schema.Schema{
 			Type:        schema.TypeString,
 			Required:    true,
-			Description: descriptionInjectedKey,
+			Description: desc,
 		}
 		if s.ListMergeStrategy.ListMapKeys.InjectedKey.DefaultValue != "" {
 			el.Schema[s.ListMergeStrategy.ListMapKeys.InjectedKey.Key].Default = s.ListMergeStrategy.ListMapKeys.InjectedKey.DefaultValue
