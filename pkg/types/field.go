@@ -20,7 +20,6 @@ import (
 	"github.com/crossplane/upjet/v2/pkg/config"
 	"github.com/crossplane/upjet/v2/pkg/schema/traverser"
 	"github.com/crossplane/upjet/v2/pkg/types/comments"
-	"github.com/crossplane/upjet/v2/pkg/types/markers"
 	"github.com/crossplane/upjet/v2/pkg/types/name"
 	"github.com/crossplane/upjet/v2/pkg/types/structtag"
 )
@@ -430,10 +429,15 @@ func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames, opt
 		// fields under status.atProvider. So, we don't want reference comments to
 		// be added, hence we are unsetting reference on the field comment just
 		// before adding it as an observation field.
-		// Also strip SSA merge-strategy markers and injected-key defaults to avoid
-		// conflicts when status lists contain >1 item sharing the same default value.
+		// Strip listType=map and its associated listMapKey markers from observation
+		// fields because map-type lists require an injected key with a default value,
+		// and that default causes conflicts with >1 items sharing a value during
+		// status updates.
 		f.Comment.Reference = config.Reference{}
-		f.Comment.ServerSideApplyOptions = markers.ServerSideApplyOptions{}
+		if f.Comment.ServerSideApplyOptions.ListType != nil && *f.Comment.ServerSideApplyOptions.ListType == config.ListTypeMap {
+			f.Comment.ServerSideApplyOptions.ListType = nil
+			f.Comment.ServerSideApplyOptions.ListMapKey = nil
+		}
 		f.Comment.KubebuilderOptions.Default = nil
 		g.comments.AddFieldComment(typeNames.ObservationTypeName, f.FieldNameCamel, f.Comment.Build())
 	}
