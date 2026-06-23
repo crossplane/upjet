@@ -23,6 +23,15 @@ import (
 	{{ .Imports }}
 )
 
+// SetupWebhookWithManager registers the conversion webhook for {{ .CRD.Kind }}.
+func SetupWebhookWithManager(mgr ctrl.Manager) error {
+	if err := ctrl.NewWebhookManagedBy(mgr, &{{ .TypePackageAlias }}{{ .CRD.Kind }}{}).
+		Complete(); err != nil {
+		return errors.Wrap(err, "cannot register webhook for the kind {{ .TypePackageAlias }}{{ .CRD.Kind }}")
+	}
+	return nil
+}
+
 // SetupGated adds a controller that reconciles {{ .CRD.Kind }} managed resources.
 func SetupGated(mgr ctrl.Manager, o tjcontroller.Options) error {
 	o.Options.Gate.Register(func() {
@@ -120,15 +129,6 @@ func Setup(mgr ctrl.Manager, o tjcontroller.Options) error {
 	{{- end}}
 	if o.MetricOptions != nil {
 		opts = append(opts, managed.WithMetricRecorder(o.MetricOptions.MRMetrics))
-	}
-
-	// register webhooks for the kind {{ .TypePackageAlias }}{{ .CRD.Kind }}
-	// if they're enabled.
-	if o.StartWebhooks {
-		if err := ctrl.NewWebhookManagedBy(mgr, &{{ .TypePackageAlias }}{{ .CRD.Kind }}{}).
-			Complete(); err != nil {
-			return errors.Wrap(err, "cannot register webhook for the kind {{ .TypePackageAlias }}{{ .CRD.Kind }}")
-		}
 	}
 
 	if o.MetricOptions != nil && o.MetricOptions.MRStateMetrics != nil {
