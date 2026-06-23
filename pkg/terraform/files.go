@@ -110,20 +110,26 @@ func NewFileProducer(ctx context.Context, client resource.SecretClient, dir stri
 		}
 	}
 
-	if err = resource.GetSensitiveParameters(ctx, client, tr, params, tr.GetConnectionDetailsMapping()); err != nil {
-		return nil, errors.Wrap(err, "cannot get sensitive parameters")
-	}
-	fp.Config.ExternalName.SetIdentifierArgumentFn(params, meta.GetExternalName(tr))
-	// apply dynamic-pseudo type conversions to params here
+	// Apply Terraform conversions.
 	params, err = cfg.ApplyTFConversions(params, config.ToTerraform)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot apply terraform parameter conversions")
 	}
+	if err = resource.GetSensitiveParameters(ctx, client, tr, params, tr.GetConnectionDetailsMapping()); err != nil {
+		return nil, errors.Wrap(err, "cannot get sensitive parameters")
+	}
+	fp.Config.ExternalName.SetIdentifierArgumentFn(params, meta.GetExternalName(tr))
 	fp.parameters = params
 
 	obs, err := tr.GetObservation()
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot get observation")
+	}
+
+	// Apply Terraform conversions.
+	obs, err = cfg.ApplyTFConversions(obs, config.ToTerraform)
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot apply terraform conversions on MR state")
 	}
 
 	secretRef, err := getConnectionSecretRef(tr)
@@ -171,7 +177,7 @@ type FileProducer struct {
 }
 
 // BuildMainTF produces the contents of the mainTF file as a map.  This format is conducive to
-// inspection for tests.  WriteMainTF calls this function an serializes the result to a file as JSON.
+// inspection for tests.  WriteMainTF calls this function and serializes the result to a file as JSON.
 func (fp *FileProducer) BuildMainTF() map[string]any {
 	// If the resource is in a deletion process, we need to remove the deletion
 	// protection.
