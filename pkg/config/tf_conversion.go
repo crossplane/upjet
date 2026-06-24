@@ -46,6 +46,8 @@ type TerraformConversion interface {
 // ApplyTFConversions applies the configured Terraform conversions on the
 // specified params map in the given mode, i.e., from Crossplane layer to the
 // Terraform layer or vice versa.
+// WARNING: The original params map and the returned map from
+// ApplyTFConversions share the same map object.
 func (r *Resource) ApplyTFConversions(params map[string]any, mode Mode) (map[string]any, error) {
 	var err error
 	for _, c := range r.TerraformConversions {
