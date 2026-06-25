@@ -168,7 +168,7 @@ func TestTerraformPluginSDKConnect(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			c := NewTerraformPluginSDKConnector(nil, tc.args.setupFn, tc.args.cfg, tc.args.ots, WithTerraformPluginSDKLogger(logTest))
-			_, err := c.Connect(t.Context(), &tc.args.obj)
+			_, err := c.Connect(context.TODO(), &tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nConnect(...): -want error, +got error:\n", diff)
 			}
@@ -271,7 +271,7 @@ func TestTerraformPluginSDKObserve(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			terraformPluginSDKExternal := prepareTerraformPluginSDKExternal(tc.args.r, tc.args.cfg)
-			observation, err := terraformPluginSDKExternal.Observe(t.Context(), &tc.args.obj)
+			observation, err := terraformPluginSDKExternal.Observe(context.TODO(), &tc.args.obj)
 			if diff := cmp.Diff(tc.want.obs, observation); diff != "" {
 				t.Errorf("\n%s\nObserve(...): -want observation, +got observation:\n", diff)
 			}
@@ -371,7 +371,7 @@ func TestTerraformPluginSDKObserveNotFound(t *testing.T) {
 				}
 			}()
 
-			_, err := ext.Observe(t.Context(), &obj)
+			_, err := ext.Observe(context.TODO(), &obj)
 			if err != nil {
 				t.Fatalf("Observe(...) returned an unexpected error: %v", err)
 			}
@@ -421,7 +421,7 @@ func TestTerraformPluginSDKCreate(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			terraformPluginSDKExternal := prepareTerraformPluginSDKExternal(tc.args.r, tc.args.cfg)
-			_, err := terraformPluginSDKExternal.Create(t.Context(), &tc.args.obj)
+			_, err := terraformPluginSDKExternal.Create(context.TODO(), &tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nConnect(...): -want error, +got error:\n", diff)
 			}
@@ -457,7 +457,7 @@ func TestTerraformPluginSDKUpdate(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			terraformPluginSDKExternal := prepareTerraformPluginSDKExternal(tc.args.r, tc.args.cfg)
-			_, err := terraformPluginSDKExternal.Update(t.Context(), &tc.args.obj)
+			_, err := terraformPluginSDKExternal.Update(context.TODO(), &tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nConnect(...): -want error, +got error:\n", diff)
 			}
@@ -493,7 +493,7 @@ func TestTerraformPluginSDKDelete(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			terraformPluginSDKExternal := prepareTerraformPluginSDKExternal(tc.args.r, tc.args.cfg)
-			_, err := terraformPluginSDKExternal.Delete(t.Context(), &tc.args.obj)
+			_, err := terraformPluginSDKExternal.Delete(context.TODO(), &tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nConnect(...): -want error, +got error:\n", diff)
 			}
