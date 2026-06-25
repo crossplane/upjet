@@ -503,6 +503,18 @@ func (n *terraformPluginSDKExternal) Observe(ctx context.Context, mg xpresource.
 	} else if diffState != nil {
 		diffState.Attributes = nil
 		diffState.ID = ""
+		// We still need to populate a non-nil RawPlan & RawConfig in InstanceState
+		// as the Terraform provider being called with this state may assume that
+		// they are not nil. An example is Terraform AWS provider's
+		// transparent tagging interceptor, which calls
+		// ResourceDiff.GetRawPlan().GetAttr("tags"), which will panic on the
+		// zero cty.Value with "value is not an object".
+		if diffState.RawPlan.IsNull() {
+			diffState.RawPlan = n.rawConfig
+		}
+		if diffState.RawConfig.IsNull() {
+			diffState.RawConfig = n.rawConfig
+		}
 	}
 
 	n.instanceDiff = nil
