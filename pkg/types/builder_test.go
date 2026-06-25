@@ -211,7 +211,8 @@ func TestBuilder_generateTypeName(t *testing.T) {
 
 func TestBuild(t *testing.T) {
 	type args struct {
-		cfg *config.Resource
+		cfg       *config.Resource
+		setupFunc func(*config.Resource)
 	}
 	type want struct {
 		forProvider     string
@@ -422,9 +423,48 @@ func TestBuild(t *testing.T) {
 // +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.__namespace__) || (has(self.initProvider) && has(self.initProvider.__namespace__))",message="spec.forProvider.namespace is a required parameter"`,
 			},
 		},
+		// When a field is both marked as required (via MarkAsRequired) and has a
+		// reference configured, NewReferenceField resets f.Required to false because
+		// the field is satisfiable via *Ref/*Selector. No XValidation should be emitted.
+		"Required_Field_With_Reference_Omits_XValidation": {
+			args: args{
+				cfg: &config.Resource{
+					TerraformResource: &schema.Resource{
+						Schema: map[string]*schema.Schema{
+							"name": {
+								Type:     schema.TypeString,
+								Required: true,
+							},
+							"subnet_id": {
+								Type:     schema.TypeString,
+								Required: true,
+							},
+						},
+					},
+					References: map[string]config.Reference{
+						"subnet_id": {
+							TerraformName: "aws_subnet",
+						},
+					},
+				},
+				setupFunc: func(r *config.Resource) {
+					r.MarkAsRequired("subnet_id")
+				},
+			},
+			want: want{
+				forProvider: `type example.Parameters struct{Name *string "json:\"name,omitempty\" tf:\"name,omitempty\""; SubnetID *string "json:\"subnetId,omitempty\" tf:\"subnet_id,omitempty\""; SubnetIDRef *github.com/crossplane/crossplane-runtime/apis/common/v1.Reference "json:\"subnetIdRef,omitempty\" tf:\"-\""; SubnetIDSelector *github.com/crossplane/crossplane-runtime/apis/common/v1.Selector "json:\"subnetIdSelector,omitempty\" tf:\"-\""}`,
+				atProvider:  `type example.Observation struct{Name *string "json:\"name,omitempty\" tf:\"name,omitempty\""; SubnetID *string "json:\"subnetId,omitempty\" tf:\"subnet_id,omitempty\""}`,
+				// Only "name" should have an XValidation; "subnet_id" is satisfiable via SubnetIDRef/SubnetIDSelector.
+				validationRules: `
+// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.name) || (has(self.initProvider) && has(self.initProvider.name))",message="spec.forProvider.name is a required parameter"`,
+			},
+		},
 	}
 	for n, tc := range cases {
 		t.Run(n, func(t *testing.T) {
+			if tc.args.setupFunc != nil {
+				tc.args.setupFunc(tc.args.cfg)
+			}
 			builder := NewBuilder(types.NewPackage("example", ""))
 			g, err := builder.Build(tc.cfg)
 
