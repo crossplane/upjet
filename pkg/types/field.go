@@ -349,6 +349,7 @@ func NewReferenceField(g *Builder, cfg *config.Resource, r *resource, sch *schem
 
 	f.Comment.Reference = *ref
 	f.Schema.Optional = true
+	f.Required = false // referenced fields are satisfiable via *Ref/*Selector; do not force-require
 
 	return f, nil
 }
