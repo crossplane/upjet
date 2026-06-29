@@ -134,8 +134,6 @@ func zeroValueJSONOmitEmptyFilter(cName string) ValueFilter {
 			return true
 		case (k == reflect.Slice || k == reflect.Map) && v.Len() == 0:
 			return true
-		case k == reflect.Ptr && v.Elem().IsZero():
-			return true
 		default:
 			return false
 		}
