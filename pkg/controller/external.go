@@ -245,9 +245,6 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 	if err := json.JSParser.Unmarshal(res.State.GetAttributes(), &tfstate); err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot unmarshal state attributes")
 	}
-	if err := tr.SetObservation(tfstate); err != nil {
-		return managed.ExternalObservation{}, errors.Wrap(err, "cannot set observation")
-	}
 
 	// NOTE(lsviben) although the annotations were supposed to be set and the
 	// managed resource updated during the Create step, we are checking and
@@ -276,9 +273,23 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot get connection details")
 	}
 
+	// Apply Terraform conversions.
+	tfstate, err = e.config.ApplyTFConversions(tfstate, config.FromTerraform)
+	if err != nil {
+		return managed.ExternalObservation{}, errors.Wrap(err, "cannot apply terraform conversions")
+	}
+	// Set the MR state using any Terraform runtime conversions applied.
+	if err := tr.SetObservation(tfstate); err != nil {
+		return managed.ExternalObservation{}, errors.Wrap(err, "cannot set observation")
+	}
+
 	var lateInitedParams bool
 	if policyHasLateInit {
-		lateInitedParams, err = tr.LateInitialize(res.State.GetAttributes())
+		buff, err := json.JSParser.Marshal(tfstate)
+		if err != nil {
+			return managed.ExternalObservation{}, errors.Wrap(err, "cannot marshal state attributes")
+		}
+		lateInitedParams, err = tr.LateInitialize(buff)
 		if err != nil {
 			return managed.ExternalObservation{}, errors.Wrap(err, "cannot late initialize parameters")
 		}
@@ -382,7 +393,8 @@ func (e *external) Create(ctx context.Context, mg xpresource.Managed) (managed.E
 	}
 	defer e.stopProvider()
 	if e.config.UseAsync {
-		return managed.ExternalCreation{}, errors.Wrap(e.workspace.ApplyAsync(e.callback.Create(name)), errStartAsyncApply)
+		// TODO: check whether we need a requeue or not.
+		return managed.ExternalCreation{}, errors.Wrap(e.workspace.ApplyAsync(e.callback.Create(name, true)), errStartAsyncApply)
 	}
 	tr, ok := mg.(resource.Terraformed)
 	if !ok {
@@ -421,7 +433,8 @@ func (e *external) Update(ctx context.Context, mg xpresource.Managed) (managed.E
 	}
 	defer e.stopProvider()
 	if e.config.UseAsync {
-		return managed.ExternalUpdate{}, errors.Wrap(e.workspace.ApplyAsync(e.callback.Update(name)), errStartAsyncApply)
+		// TODO: check whether we need a requeue or not.
+		return managed.ExternalUpdate{}, errors.Wrap(e.workspace.ApplyAsync(e.callback.Update(name, true)), errStartAsyncApply)
 	}
 	tr, ok := mg.(resource.Terraformed)
 	if !ok {
@@ -431,11 +444,16 @@ func (e *external) Update(ctx context.Context, mg xpresource.Managed) (managed.E
 	if err != nil {
 		return managed.ExternalUpdate{}, errors.Wrap(err, errApply)
 	}
-	attr := map[string]any{}
-	if err := json.JSParser.Unmarshal(res.State.GetAttributes(), &attr); err != nil {
+	tfstate := map[string]any{}
+	if err := json.JSParser.Unmarshal(res.State.GetAttributes(), &tfstate); err != nil {
 		return managed.ExternalUpdate{}, errors.Wrap(err, "cannot unmarshal state attributes")
 	}
-	return managed.ExternalUpdate{}, errors.Wrap(tr.SetObservation(attr), "cannot set observation")
+	// Apply Terraform conversions.
+	tfstate, err = e.config.ApplyTFConversions(tfstate, config.FromTerraform)
+	if err != nil {
+		return managed.ExternalUpdate{}, errors.Wrap(err, "cannot apply terraform conversions")
+	}
+	return managed.ExternalUpdate{}, errors.Wrap(tr.SetObservation(tfstate), "cannot set observation")
 }
 
 func (e *external) Delete(ctx context.Context, mg xpresource.Managed) (managed.ExternalDelete, error) {
@@ -452,7 +470,8 @@ func (e *external) Delete(ctx context.Context, mg xpresource.Managed) (managed.E
 	}
 	defer e.stopProvider()
 	if e.config.UseAsync {
-		return managed.ExternalDelete{}, errors.Wrap(e.workspace.DestroyAsync(e.callback.Destroy(name)), errStartAsyncDestroy)
+		// TODO: check whether we need a requeue or not.
+		return managed.ExternalDelete{}, errors.Wrap(e.workspace.DestroyAsync(e.callback.Destroy(name, true)), errStartAsyncDestroy)
 	}
 	return managed.ExternalDelete{}, errors.Wrap(e.workspace.Destroy(ctx), errDestroy)
 }
@@ -494,12 +513,20 @@ func (e *external) Import(ctx context.Context, tr resource.Terraformed) (managed
 	if err := json.JSParser.Unmarshal(res.State.GetAttributes(), &tfstate); err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot unmarshal state attributes")
 	}
-	if err := tr.SetObservation(tfstate); err != nil {
-		return managed.ExternalObservation{}, errors.Wrap(err, "cannot set observation")
-	}
+
 	conn, err := resource.GetConnectionDetails(tfstate, tr, e.config)
 	if err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot get connection details")
+	}
+
+	// Apply Terraform conversions.
+	tfstate, err = e.config.ApplyTFConversions(tfstate, config.FromTerraform)
+	if err != nil {
+		return managed.ExternalObservation{}, errors.Wrap(err, "cannot apply terraform conversions when importing")
+	}
+	// Set the MR state using any Terraform runtime conversions applied.
+	if err := tr.SetObservation(tfstate); err != nil {
+		return managed.ExternalObservation{}, errors.Wrap(err, "cannot set observation when importing")
 	}
 
 	tr.SetConditions(xpv1.Available())

@@ -210,10 +210,102 @@ func TestBuilder_generateTypeName(t *testing.T) {
 	}
 }
 
+func TestInjectServerSideApplyListMergeKeys(t *testing.T) {
+	type want struct {
+		description string
+		err         error
+	}
+	cases := map[string]struct {
+		cfg  *config.Resource
+		want want
+	}{
+		"DefaultDescription": {
+			cfg: &config.Resource{
+				TerraformResource: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"rule": {
+							Type: schema.TypeList,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"name": {Type: schema.TypeString},
+								},
+							},
+						},
+					},
+				},
+				ServerSideApplyMergeStrategies: map[string]config.MergeStrategy{
+					"rule": {
+						ListMergeStrategy: config.ListMergeStrategy{
+							MergeStrategy: config.ListTypeMap,
+							ListMapKeys: config.ListMapKeys{
+								InjectedKey: config.InjectedKey{
+									Key: "index",
+								},
+							},
+						},
+					},
+				},
+			},
+			want: want{
+				description: descriptionInjectedKey,
+			},
+		},
+		"CustomDescription": {
+			cfg: &config.Resource{
+				TerraformResource: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"rule": {
+							Type: schema.TypeList,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"name": {Type: schema.TypeString},
+								},
+							},
+						},
+					},
+				},
+				ServerSideApplyMergeStrategies: map[string]config.MergeStrategy{
+					"rule": {
+						ListMergeStrategy: config.ListMergeStrategy{
+							MergeStrategy: config.ListTypeMap,
+							ListMapKeys: config.ListMapKeys{
+								InjectedKey: config.InjectedKey{
+									Key:         "index",
+									Description: "Custom description for the injected key.",
+								},
+							},
+						},
+					},
+				},
+			},
+			want: want{
+				description: "Custom description for the injected key.",
+			},
+		},
+	}
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			err := injectServerSideApplyListMergeKeys(tc.cfg)
+			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
+				t.Fatalf("injectServerSideApplyListMergeKeys(...): -want error, +got error: %s", diff)
+			}
+			if err != nil {
+				return
+			}
+			el := tc.cfg.TerraformResource.Schema["rule"].Elem.(*schema.Resource)
+			got := el.Schema["index"].Description
+			if diff := cmp.Diff(tc.want.description, got); diff != "" {
+				t.Errorf("injectServerSideApplyListMergeKeys(...) description: -want, +got: %s", diff)
+			}
+		})
+	}
+}
+
 func TestBuild(t *testing.T) {
 	type args struct {
-		crdScope CRDScope
-		cfg      *config.Resource
+		crdScope  CRDScope
+		cfg       *config.Resource
+		setupFunc func(*config.Resource)
 	}
 	type want struct {
 		forProvider     string
@@ -639,6 +731,43 @@ func TestBuild(t *testing.T) {
 // +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.__namespace__) || (has(self.initProvider) && has(self.initProvider.__namespace__))",message="spec.forProvider.namespace is a required parameter"`,
 			},
 		},
+		// When a field is both marked as required (via MarkAsRequired) and has a
+		// reference configured, NewReferenceField resets f.Required to false because
+		// the field is satisfiable via *Ref/*Selector. No XValidation should be emitted.
+		"Required_Field_With_Reference_Omits_XValidation": {
+			args: args{
+				crdScope: CRDScopeCluster,
+				cfg: &config.Resource{
+					TerraformResource: &schema.Resource{
+						Schema: map[string]*schema.Schema{
+							"name": {
+								Type:     schema.TypeString,
+								Required: true,
+							},
+							"subnet_id": {
+								Type:     schema.TypeString,
+								Required: true,
+							},
+						},
+					},
+					References: map[string]config.Reference{
+						"subnet_id": {
+							TerraformName: "aws_subnet",
+						},
+					},
+				},
+				setupFunc: func(r *config.Resource) {
+					r.MarkAsRequired("subnet_id")
+				},
+			},
+			want: want{
+				forProvider: `type example.Parameters struct{Name *string "json:\"name,omitempty\" tf:\"name,omitempty\""; SubnetID *string "json:\"subnetId,omitempty\" tf:\"subnet_id,omitempty\""; SubnetIDRef *github.com/crossplane/crossplane-runtime/v2/apis/common/v1.Reference "json:\"subnetIdRef,omitempty\" tf:\"-\""; SubnetIDSelector *github.com/crossplane/crossplane-runtime/v2/apis/common/v1.Selector "json:\"subnetIdSelector,omitempty\" tf:\"-\""}`,
+				atProvider:  `type example.Observation struct{Name *string "json:\"name,omitempty\" tf:\"name,omitempty\""; SubnetID *string "json:\"subnetId,omitempty\" tf:\"subnet_id,omitempty\""}`,
+				// Only "name" should have an XValidation; "subnet_id" is satisfiable via SubnetIDRef/SubnetIDSelector.
+				validationRules: `
+// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.name) || (has(self.initProvider) && has(self.initProvider.name))",message="spec.forProvider.name is a required parameter"`,
+			},
+		},
 		"SSA_InjectedKey_Not_In_Observation_Comments": {
 			args: args{
 				crdScope: CRDScopeCluster,
@@ -656,8 +785,7 @@ func TestBuild(t *testing.T) {
 										},
 										"action": {
 											Type:     schema.TypeString,
-											Required: true,
-										},
+											Required: true},
 									},
 								},
 							},
@@ -715,6 +843,9 @@ func TestBuild(t *testing.T) {
 	}
 	for n, tc := range cases {
 		t.Run(n, func(t *testing.T) {
+			if tc.args.setupFunc != nil {
+				tc.args.setupFunc(tc.args.cfg)
+			}
 			builder := NewBuilder(types.NewPackage("example", ""), tc.args.crdScope)
 			g, err := builder.Build(tc.cfg)
 

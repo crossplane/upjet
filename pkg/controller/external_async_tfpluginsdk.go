@@ -143,6 +143,10 @@ func (n *terraformPluginSDKAsyncExternal) Create(_ context.Context, mg xpresourc
 	}
 
 	ctx, cancel := context.WithDeadline(context.Background(), n.opTracker.LastOperation.StartTime().Add(defaultAsyncTimeout))
+	// We deep-copy the managed resource to prevent a data race between the
+	// goroutine we are about to start below and the managed reconciler.
+	// Please see: https://github.com/crossplane/upjet/issues/472
+	mgCopy := mg.DeepCopyObject().(xpresource.Managed)
 	go func() {
 		// The order of deferred functions, executed last-in-first-out, is
 		// significant. The context should be canceled last, because it is
@@ -152,23 +156,28 @@ func (n *terraformPluginSDKAsyncExternal) Create(_ context.Context, mg xpresourc
 		var ph panicHandler
 		defer cancel()
 		defer func() { // Finishing operations
+			currentErr := n.opTracker.LastOperation.Error()
 			err := tferrors.NewAsyncCreateFailed(ph.err)
 			n.opTracker.LastOperation.SetError(err)
 			n.opTracker.logger.Debug("Async create ended.", "error", err, "tfID", n.opTracker.GetTfID())
 
 			n.opTracker.LastOperation.MarkEnd()
 			name := types.NamespacedName{
-				Namespace: mg.GetNamespace(),
-				Name:      mg.GetName(),
+				Namespace: mgCopy.GetNamespace(),
+				Name:      mgCopy.GetName(),
 			}
-			if cErr := n.callback.Create(name)(err, ctx); cErr != nil {
+			// we request an immediate reconcile upon success to set the status, or
+			// in case of failure (err != nil), if there's no cached error.
+			// If there already exists a cached error, managed reconciler
+			// will already requeue.
+			if cErr := n.callback.Create(name, err == nil || currentErr == nil)(err, ctx); cErr != nil {
 				n.opTracker.logger.Info("Async create callback failed", "error", cErr.Error())
 			}
 		}()
 		defer ph.recoverIfPanic(ctx)
 
 		n.opTracker.logger.Debug("Async create starting...", "tfID", n.opTracker.GetTfID())
-		_, ph.err = n.terraformPluginSDKExternal.Create(ctx, mg)
+		_, ph.err = n.terraformPluginSDKExternal.Create(ctx, mgCopy)
 	}()
 
 	return managed.ExternalCreation{}, n.opTracker.LastOperation.Error()
@@ -180,6 +189,10 @@ func (n *terraformPluginSDKAsyncExternal) Update(_ context.Context, mg xpresourc
 	}
 
 	ctx, cancel := context.WithDeadline(context.Background(), n.opTracker.LastOperation.StartTime().Add(defaultAsyncTimeout))
+	// We deep-copy the managed resource to prevent a data race between the
+	// goroutine we are about to start below and the managed reconciler.
+	// Please see: https://github.com/crossplane/upjet/issues/472
+	mgCopy := mg.DeepCopyObject().(xpresource.Managed)
 	go func() {
 		// The order of deferred functions, executed last-in-first-out, is
 		// significant. The context should be canceled last, because it is
@@ -189,23 +202,28 @@ func (n *terraformPluginSDKAsyncExternal) Update(_ context.Context, mg xpresourc
 		var ph panicHandler
 		defer cancel()
 		defer func() { // Finishing operations
+			currentErr := n.opTracker.LastOperation.Error()
 			err := tferrors.NewAsyncUpdateFailed(ph.err)
 			n.opTracker.LastOperation.SetError(err)
 			n.opTracker.logger.Debug("Async update ended.", "error", err, "tfID", n.opTracker.GetTfID())
 
 			n.opTracker.LastOperation.MarkEnd()
 			name := types.NamespacedName{
-				Namespace: mg.GetNamespace(),
-				Name:      mg.GetName(),
+				Namespace: mgCopy.GetNamespace(),
+				Name:      mgCopy.GetName(),
 			}
-			if cErr := n.callback.Update(name)(err, ctx); cErr != nil {
+			// we request an immediate reconcile upon success to set the status, or
+			// in case of failure (err != nil), if there's no cached error.
+			// If there already exists a cached error, managed reconciler
+			// will already requeue.
+			if cErr := n.callback.Update(name, err == nil || currentErr == nil)(err, ctx); cErr != nil {
 				n.opTracker.logger.Info("Async update callback failed", "error", cErr.Error())
 			}
 		}()
 		defer ph.recoverIfPanic(ctx)
 
 		n.opTracker.logger.Debug("Async update starting...", "tfID", n.opTracker.GetTfID())
-		_, ph.err = n.terraformPluginSDKExternal.Update(ctx, mg)
+		_, ph.err = n.terraformPluginSDKExternal.Update(ctx, mgCopy)
 	}()
 
 	return managed.ExternalUpdate{}, n.opTracker.LastOperation.Error()
@@ -230,6 +248,7 @@ func (n *terraformPluginSDKAsyncExternal) Delete(_ context.Context, mg xpresourc
 		var ph panicHandler
 		defer cancel()
 		defer func() { // Finishing operations
+			currentErr := n.opTracker.LastOperation.Error()
 			err := tferrors.NewAsyncDeleteFailed(ph.err)
 			n.opTracker.LastOperation.SetError(err)
 			n.opTracker.logger.Debug("Async delete ended.", "error", err, "tfID", n.opTracker.GetTfID())
@@ -239,7 +258,11 @@ func (n *terraformPluginSDKAsyncExternal) Delete(_ context.Context, mg xpresourc
 				Namespace: mg.GetNamespace(),
 				Name:      mg.GetName(),
 			}
-			if cErr := n.callback.Destroy(name)(err, ctx); cErr != nil {
+			// we request an immediate reconcile upon success to set the status, or
+			// in case of failure (err != nil), if there's no cached error.
+			// If there already exists a cached error, managed reconciler
+			// will already requeue.
+			if cErr := n.callback.Destroy(name, err == nil || currentErr == nil)(err, ctx); cErr != nil {
 				n.opTracker.logger.Info("Async delete callback failed", "error", cErr.Error())
 			}
 		}()

@@ -35,7 +35,7 @@ NPROCS ?= 1
 GO_TEST_PARALLEL := $(shell echo $$(( $(NPROCS) / 2 )))
 
 GO_LDFLAGS += -X $(GO_PROJECT)/pkg/version.Version=$(VERSION)
-GO_SUBDIRS += pkg
+GO_SUBDIRS += pkg apis
 GO111MODULE = on
 -include build/makelib/golang.mk
 
@@ -70,4 +70,14 @@ go.cachedir:
 go.mod.cachedir:
 	@go env GOMODCACHE
 
-.PHONY: reviewable submodules fallthrough go.mod.cachedir go.cachedir
+# test.race runs the unit tests with the Go race detector enabled. The race
+# detector requires cgo, so we enable it here.
+# Do NOT directly use the `go.test.unit` make target of
+# the build submodule here. There's a `pipefail` issue with that target,
+# which will mask any failing tests.
+test.race:
+	@$(INFO) go test race
+	@CGO_ENABLED=1 $(GOHOST) test -race $(GO_STATIC_FLAGS) $(GO_PACKAGES) || $(FAIL)
+	@$(OK) go test race
+
+.PHONY: reviewable submodules fallthrough go.mod.cachedir go.cachedir test.race

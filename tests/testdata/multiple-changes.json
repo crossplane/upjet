@@ -1,0 +1,35 @@
+{
+  "test.example.io/MultiChangeResource": {
+    "versions": {
+      "v1beta1": {
+        "oldVersion": "v1alpha1",
+        "newVersion": "v1beta1",
+        "changes": [
+          {
+            "path": "spec.forProvider.newField",
+            "pathParts": ["spec", "forProvider", "newField"],
+            "changeType": "field_added"
+          },
+          {
+            "path": "spec.forProvider.count",
+            "pathParts": ["spec", "forProvider", "count"],
+            "changeType": "type_changed",
+            "typeChangeDetails": {
+              "deleted": ["string"],
+              "added": ["number"]
+            }
+          },
+          {
+            "path": "spec.forProvider.enabled",
+            "pathParts": ["spec", "forProvider", "enabled"],
+            "changeType": "type_changed",
+            "typeChangeDetails": {
+              "deleted": ["string"],
+              "added": ["boolean"]
+            }
+          }
+        ]
+      }
+    }
+  }
+}

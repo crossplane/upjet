@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/crossplane/crossplane-runtime/v2/pkg/fieldpath"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
@@ -429,28 +430,103 @@ func (o *newlyIntroducedFieldConverter) ConvertPaved(src, target *fieldpath.Pave
 	}
 }
 
-func (o *newlyIntroducedFieldConverter) convertToAnnotation(src, target *fieldpath.Paved) (bool, error) { //nolint:gocyclo // easier to follow as a unit
-	fieldValue, err := src.GetValue(o.fieldPath)
-	if fieldpath.IsNotFound(err) {
-		// Field doesn't exist in source, nothing to convert
+func (o *newlyIntroducedFieldConverter) convertToAnnotation(src, target *fieldpath.Paved) (bool, error) {
+	expandedPaths, err := src.ExpandWildcards(o.fieldPath)
+	if err != nil && !fieldpath.IsNotFound(err) {
+		return false, errors.Wrapf(err, "cannot expand wildcards in the fieldpath expression %s", o.fieldPath)
+	}
+	// Wildcard paths require atomic sync: stale annotation entries for indices
+	// that no longer exist must be removed before writing current values,
+	// otherwise they leak across conversions when list elements are deleted.
+	if strings.Contains(o.fieldPath, "[*]") {
+		return o.syncWildcardAnnotation(src, target, expandedPaths)
+	}
+	if len(expandedPaths) == 0 {
+		// Non-wildcard field absent from source — may have been deleted after
+		// being stored in the annotation; delegate to clean it up.
+		return o.convertExpandedPathToAnnotation(src, target, o.fieldPath)
+	}
+	converted := false
+	for _, ep := range expandedPaths {
+		c, err2 := o.convertExpandedPathToAnnotation(src, target, ep)
+		if err2 != nil {
+			return false, err2
+		}
+		if c {
+			converted = true
+		}
+	}
+	return converted, nil
+}
+
+// syncWildcardAnnotation atomically replaces all annotation entries matching
+// the wildcard pattern o.fieldPath with the current expanded values from src.
+// This prevents stale entries when list elements are removed between conversions.
+func (o *newlyIntroducedFieldConverter) syncWildcardAnnotation(src, target *fieldpath.Paved, expandedPaths []string) (bool, error) { //nolint:gocyclo // easier to follow as a unit
+	annotationPath := fmt.Sprintf("metadata.annotations['%s']", AnnotationKey)
+	existingAnnotationValue, err := target.GetValue(annotationPath)
+	if err != nil && !fieldpath.IsNotFound(err) {
+		return false, errors.Wrapf(err, "failed to get annotation %q", AnnotationKey)
+	}
+	fieldMap := make(map[string]any)
+	if err == nil {
+		if annotationStr, ok := existingAnnotationValue.(string); ok {
+			if err := json.Unmarshal([]byte(annotationStr), &fieldMap); err != nil {
+				return false, errors.Wrapf(err, "failed to unmarshal annotation %q", AnnotationKey)
+			}
+		}
+	}
+	staleRemoved := false
+	for key := range fieldMap {
+		isExp, err := isExpansionOf(key, o.fieldPath)
+		if err != nil {
+			return false, errors.Wrapf(err, "failed to check expansion of %q against %q", key, o.fieldPath)
+		}
+		if isExp {
+			delete(fieldMap, key)
+			staleRemoved = true
+		}
+	}
+	for _, ep := range expandedPaths {
+		fieldValue, err := src.GetValue(ep)
+		if err != nil && !fieldpath.IsNotFound(err) {
+			return false, errors.Wrapf(err, "failed to get field %q from source", ep)
+		}
+		if !fieldpath.IsNotFound(err) {
+			fieldMap[ep] = fieldValue
+		}
+	}
+	if len(expandedPaths) == 0 && !staleRemoved {
 		return false, nil
 	}
+	newAnnotationValue, err := json.Marshal(fieldMap)
 	if err != nil {
-		return false, errors.Wrapf(err, "failed to get field %q from source", o.fieldPath)
+		return false, errors.Wrapf(err, "failed to marshal annotation %q to JSON", AnnotationKey)
+	}
+	if err := target.SetValue(annotationPath, string(newAnnotationValue)); err != nil {
+		return false, errors.Wrapf(err, "failed to set annotation %q", AnnotationKey)
+	}
+	return len(expandedPaths) > 0 || staleRemoved, nil
+}
+
+func (o *newlyIntroducedFieldConverter) convertExpandedPathToAnnotation(src, target *fieldpath.Paved, fieldPath string) (bool, error) { //nolint:gocyclo // easier to follow as a unit
+	fieldValue, err := src.GetValue(fieldPath)
+	if err != nil && !fieldpath.IsNotFound(err) {
+		return false, errors.Wrapf(err, "failed to get field %q from source", fieldPath)
 	}
 
-	// Marshal field value to JSON bytes
-	jsonBytes, err := json.Marshal(fieldValue)
-	if err != nil {
-		return false, errors.Wrapf(err, "failed to marshal field %q to JSON", o.fieldPath)
-	}
+	// the field might have been deleted
+	isFieldRemoval := fieldpath.IsNotFound(err)
 
 	// Optimized approach: Read ONLY our specific annotation key, not all annotations.
 	// This is more efficient and fieldpath.Paved.SetValue() will automatically preserve
 	// all other annotations when we write back.
 	annotationPath := fmt.Sprintf("metadata.annotations['%s']", AnnotationKey)
 	existingAnnotationValue, err := target.GetValue(annotationPath)
-
+	if err != nil && !fieldpath.IsNotFound(err) {
+		// Error other than NotFound
+		return false, errors.Wrapf(err, "failed to get annotation %q", AnnotationKey)
+	}
 	// Parse existing field conversion map or create new one
 	fieldMap := make(map[string]any)
 	if err == nil {
@@ -460,18 +536,18 @@ func (o *newlyIntroducedFieldConverter) convertToAnnotation(src, target *fieldpa
 				return false, errors.Wrapf(err, "failed to unmarshal annotation %q", AnnotationKey)
 			}
 		}
-	} else if !fieldpath.IsNotFound(err) {
-		// Error other than NotFound
-		return false, errors.Wrapf(err, "failed to get annotation %q", AnnotationKey)
 	}
 	// If NotFound, fieldMap remains empty which is correct - we'll create a new annotation
 
-	// Unmarshal the field value to get actual typed value (prevents double-encoding)
-	var value any
-	if err := json.Unmarshal(jsonBytes, &value); err != nil {
-		return false, errors.Wrapf(err, "failed to unmarshal value from JSON")
+	if isFieldRemoval {
+		if _, ok := fieldMap[fieldPath]; !ok {
+			// no-op, nothing to remove from the annotation
+			return false, nil
+		}
+		delete(fieldMap, fieldPath)
+	} else {
+		fieldMap[fieldPath] = fieldValue
 	}
-	fieldMap[o.fieldPath] = value
 
 	// Marshal the updated field map back to JSON
 	newAnnotationValue, err := json.Marshal(fieldMap)
@@ -487,7 +563,7 @@ func (o *newlyIntroducedFieldConverter) convertToAnnotation(src, target *fieldpa
 	return true, nil
 }
 
-func (o *newlyIntroducedFieldConverter) convertFromAnnotation(src, target *fieldpath.Paved) (bool, error) {
+func (o *newlyIntroducedFieldConverter) convertFromAnnotation(src, target *fieldpath.Paved) (bool, error) { //nolint:gocyclo // easier to follow as a unit
 	// Get annotation value from source
 	annotationPath := fmt.Sprintf("metadata.annotations['%s']", AnnotationKey)
 	annotationValue, err := src.GetValue(annotationPath)
@@ -510,20 +586,72 @@ func (o *newlyIntroducedFieldConverter) convertFromAnnotation(src, target *field
 		return false, errors.Wrapf(err, "failed to unmarshal annotation %q from JSON", AnnotationKey)
 	}
 
-	// Extract the specific field value from the map
-	fieldValueRaw, exists := m[o.fieldPath]
-	if !exists {
-		// This specific field is not in the annotation map
-		return false, nil
-	}
-
-	// fieldValueRaw is already the actual value, use it directly
-	if fieldValueRaw != nil {
-		if err := target.SetValue(o.fieldPath, fieldValueRaw); err != nil {
+	// The converter gets registered with a non-expanded path and can contain wildcards.
+	// keys of the annotation map are expanded paths (no wildcards)
+	//
+	// Say a conversion is registered for:
+	//   foo.bar[*].baz
+	// The annotation map can have:
+	//   "foo.bar[0].baz" : "val0"
+	//   "foo.bar[1].baz" : "val1"
+	//   "foo.bar[2].baz" : "val2"
+	// Therefore, we find all expanded paths in annotation map
+	// that corresponds to the registered wildcard path
+	for expFieldPath := range m {
+		isExpansion, err := isExpansionOf(expFieldPath, o.fieldPath)
+		if err != nil {
+			return false, errors.Wrapf(err, "failed to check for expansion %q", o.fieldPath)
+		}
+		if !isExpansion {
+			continue
+		}
+		fieldValueRaw, exists := m[expFieldPath]
+		if !exists || fieldValueRaw == nil {
+			// This specific field is not in the annotation map
+			continue
+		}
+		if err := target.SetValue(expFieldPath, fieldValueRaw); err != nil {
 			return false, errors.Wrapf(err, "failed to set field %q in target", o.fieldPath)
 		}
 	}
 
+	return true, nil
+}
+
+// isExpansionOf returns true if the given expanded fieldpath
+// is an expansion of the given wildcard path
+// example:
+//
+//	"foo.bar[2].baz" IS an expansion of foo.bar[*].baz
+//	foo.bar[2].baz IS NOT an expansion of fizz[*].buzz.bar
+func isExpansionOf(expandedPath, withWildcardPath string) (bool, error) {
+	expanded, err := fieldpath.Parse(expandedPath)
+	if err != nil {
+		return false, errors.Wrapf(err, "failed to parse the expanded path %q", expandedPath)
+	}
+	withWildcard, err := fieldpath.Parse(withWildcardPath)
+	if err != nil {
+		return false, errors.Wrapf(err, "failed to parse the wildcard path %q", withWildcardPath)
+	}
+
+	if len(withWildcard) != len(expanded) {
+		return false, nil
+	}
+	for i, w := range withWildcard {
+		exp := expanded[i]
+		if w.Field == "*" {
+			continue
+		}
+		if w.Type != exp.Type {
+			return false, nil
+		}
+		if w.Field != exp.Field {
+			return false, nil
+		}
+		if w.Index != exp.Index {
+			return false, nil
+		}
+	}
 	return true, nil
 }
 

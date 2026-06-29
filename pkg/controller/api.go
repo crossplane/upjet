@@ -38,6 +38,14 @@ const (
 	rateLimiterCallback = "asyncCallback"
 )
 
+type asyncOperation string
+
+const (
+	opCreate  asyncOperation = "create"
+	opUpdate  asyncOperation = "update"
+	opDestroy asyncOperation = "destroy"
+)
+
 var _ CallbackProvider = &APICallbacks{}
 
 // APISecretClient is a client for getting k8s secrets
@@ -113,7 +121,7 @@ type APICallbacks struct {
 	enableStatusUpdates bool
 }
 
-func (ac *APICallbacks) callbackFn(nn types.NamespacedName, op string) terraform.CallbackFn {
+func (ac *APICallbacks) callbackFn(nn types.NamespacedName, op asyncOperation, requestReconcile bool) terraform.CallbackFn { //nolint:gocyclo // for better readability
 	return func(err error, ctx context.Context) error {
 		tr := ac.newTerraformed()
 		if kErr := ac.kube.Get(ctx, nn, tr); kErr != nil {
@@ -128,11 +136,11 @@ func (ac *APICallbacks) callbackFn(nn types.NamespacedName, op string) terraform
 		if err != nil {
 			wrapMsg := ""
 			switch op {
-			case "create":
+			case opCreate:
 				wrapMsg = errXPReconcileCreate
-			case "update":
+			case opUpdate:
 				wrapMsg = errXPReconcileUpdate
-			case "destroy":
+			case opDestroy:
 				wrapMsg = errXPReconcileDelete
 			}
 			tr.SetConditions(xpv1.ReconcileError(errors.Wrap(err, wrapMsg)))
@@ -143,7 +151,7 @@ func (ac *APICallbacks) callbackFn(nn types.NamespacedName, op string) terraform
 			tr.SetConditions(resource.AsyncOperationFinishedCondition())
 		}
 		uErr := errors.Wrapf(ac.kube.Status().Update(ctx, tr), errUpdateStatusFmt, tr.GetObjectKind().GroupVersionKind().String(), nn, op)
-		if ac.eventHandler != nil {
+		if ac.eventHandler != nil && requestReconcile {
 			rateLimiter := handler.NoRateLimiter
 			switch {
 			case err != nil:
@@ -162,7 +170,7 @@ func (ac *APICallbacks) callbackFn(nn types.NamespacedName, op string) terraform
 }
 
 // Create makes sure the error is saved in async operation condition.
-func (ac *APICallbacks) Create(name types.NamespacedName) terraform.CallbackFn {
+func (ac *APICallbacks) Create(name types.NamespacedName, requestReconcile bool) terraform.CallbackFn {
 	// request will be requeued although the managed reconciler already
 	// requeues with exponential back-off during the creation phase
 	// because the upjet external client returns ResourceExists &
@@ -170,19 +178,19 @@ func (ac *APICallbacks) Create(name types.NamespacedName) terraform.CallbackFn {
 	// in-progress immediately following a Create call. This will
 	// delay a reobservation of the resource (while being created)
 	// for the poll period.
-	return ac.callbackFn(name, "create")
+	return ac.callbackFn(name, opCreate, requestReconcile)
 }
 
 // Update makes sure the error is saved in async operation condition.
-func (ac *APICallbacks) Update(name types.NamespacedName) terraform.CallbackFn {
-	return ac.callbackFn(name, "update")
+func (ac *APICallbacks) Update(name types.NamespacedName, requestReconcile bool) terraform.CallbackFn {
+	return ac.callbackFn(name, opUpdate, requestReconcile)
 }
 
 // Destroy makes sure the error is saved in async operation condition.
-func (ac *APICallbacks) Destroy(name types.NamespacedName) terraform.CallbackFn {
+func (ac *APICallbacks) Destroy(name types.NamespacedName, requestReconcile bool) terraform.CallbackFn {
 	// request will be requeued although the managed reconciler requeues
 	// with exponential back-off during the deletion phase because
 	// during the async deletion operation, external client's
 	// observe just returns success to the managed reconciler.
-	return ac.callbackFn(name, "destroy")
+	return ac.callbackFn(name, opDestroy, requestReconcile)
 }

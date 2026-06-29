@@ -22,11 +22,12 @@ const NoRateLimiter = ""
 // EventHandler handles Kubernetes events by queueing reconcile requests for
 // objects and allows upjet components to queue reconcile requests.
 type EventHandler struct {
-	innerHandler   handler.EventHandler
-	queue          workqueue.TypedRateLimitingInterface[reconcile.Request]
-	rateLimiterMap map[string]workqueue.TypedRateLimiter[reconcile.Request]
-	logger         logging.Logger
-	mu             *sync.RWMutex
+	innerHandler       handler.EventHandler
+	queue              workqueue.TypedRateLimitingInterface[reconcile.Request]
+	rateLimiterMap     map[string]workqueue.TypedRateLimiter[reconcile.Request]
+	defaultRateLimiter workqueue.TypedRateLimiter[reconcile.Request]
+	logger             logging.Logger
+	mu                 *sync.RWMutex
 }
 
 // Option configures an option for the EventHandler.
@@ -36,6 +37,15 @@ type Option func(eventHandler *EventHandler)
 func WithLogger(logger logging.Logger) Option {
 	return func(eventHandler *EventHandler) {
 		eventHandler.logger = logger
+	}
+}
+
+// WithDefaultRateLimiter configures the default rate limiter to be used with
+// the EventHandler. If no default rate limiter is used, the EventHandler uses
+// a workqueue.DefaultTypedControllerRateLimiter.
+func WithDefaultRateLimiter(rl workqueue.TypedRateLimiter[reconcile.Request]) Option {
+	return func(eventHandler *EventHandler) {
+		eventHandler.defaultRateLimiter = rl
 	}
 }
 
@@ -68,7 +78,11 @@ func (e *EventHandler) RequestReconcile(rateLimiterName string, name types.Names
 	if rateLimiterName != NoRateLimiter {
 		rateLimiter := e.rateLimiterMap[rateLimiterName]
 		if rateLimiter == nil {
-			rateLimiter = workqueue.DefaultTypedControllerRateLimiter[reconcile.Request]()
+			if e.defaultRateLimiter == nil {
+				rateLimiter = workqueue.DefaultTypedControllerRateLimiter[reconcile.Request]()
+			} else {
+				rateLimiter = e.defaultRateLimiter
+			}
 			e.rateLimiterMap[rateLimiterName] = rateLimiter
 		}
 		if failureLimit != nil && rateLimiter.NumRequeues(item) > *failureLimit {
