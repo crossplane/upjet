@@ -8,11 +8,11 @@ import (
 	"context"
 	"testing"
 
-	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	xpfake "github.com/crossplane/crossplane-runtime/v2/pkg/resource/fake"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/test"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	"github.com/golang/mock/gomock"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
@@ -72,22 +72,22 @@ var (
 	errBoom = errors.New("boom")
 )
 
-type secretKeySelectorModifier func(s *xpv1.SecretKeySelector)
+type secretKeySelectorModifier func(s *xpv2.SecretKeySelector)
 
 func secretKeySelectorWithKey(v string) secretKeySelectorModifier {
-	return func(s *xpv1.SecretKeySelector) {
+	return func(s *xpv2.SecretKeySelector) {
 		s.Key = v
 	}
 }
 
-func secretKeySelectorWithSecretReference(v xpv1.SecretReference) secretKeySelectorModifier {
-	return func(s *xpv1.SecretKeySelector) {
+func secretKeySelectorWithSecretReference(v xpv2.SecretReference) secretKeySelectorModifier {
+	return func(s *xpv2.SecretKeySelector) {
 		s.SecretReference = v
 	}
 }
 
-func secretKeySelector(sm ...secretKeySelectorModifier) *xpv1.SecretKeySelector {
-	s := &xpv1.SecretKeySelector{}
+func secretKeySelector(sm ...secretKeySelectorModifier) *xpv2.SecretKeySelector {
+	s := &xpv2.SecretKeySelector{}
 	for _, m := range sm {
 		m(s)
 	}
@@ -97,7 +97,7 @@ func secretKeySelector(sm ...secretKeySelectorModifier) *xpv1.SecretKeySelector 
 type fakeManaged struct {
 	*unstructured.Unstructured
 	xpfake.Manageable
-	xpv1.ConditionedStatus
+	xpv2.ConditionedStatus
 }
 
 func TestGetConnectionDetails(t *testing.T) {
@@ -475,8 +475,8 @@ func TestGetSensitiveParameters(t *testing.T) {
 		"SingleNoWildcard": {
 			args: args{
 				clientFn: func(client *mocks.MockSecretClient) {
-					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
-						SecretReference: xpv1.SecretReference{
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv2.SecretKeySelector{
+						SecretReference: xpv2.SecretReference{
 							Name:      "admin-password",
 							Namespace: "crossplane-system",
 						},
@@ -515,8 +515,8 @@ func TestGetSensitiveParameters(t *testing.T) {
 		"SingleNoWildcardWithNoSecret": {
 			args: args{
 				clientFn: func(client *mocks.MockSecretClient) {
-					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
-						SecretReference: xpv1.SecretReference{
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv2.SecretKeySelector{
+						SecretReference: xpv2.SecretReference{
 							Name:      "admin-password",
 							Namespace: "crossplane-system",
 						},
@@ -555,15 +555,15 @@ func TestGetSensitiveParameters(t *testing.T) {
 		"SingleNoWildcardWithSlice": {
 			args: args{
 				clientFn: func(client *mocks.MockSecretClient) {
-					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
-						SecretReference: xpv1.SecretReference{
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv2.SecretKeySelector{
+						SecretReference: xpv2.SecretReference{
 							Name:      "db-passwords",
 							Namespace: "crossplane-system",
 						},
 						Key: "admin",
 					})).Return([]byte("admin_pwd"), nil)
-					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
-						SecretReference: xpv1.SecretReference{
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv2.SecretKeySelector{
+						SecretReference: xpv2.SecretReference{
 							Name:      "db-passwords",
 							Namespace: "crossplane-system",
 						},
@@ -578,14 +578,14 @@ func TestGetSensitiveParameters(t *testing.T) {
 									"passwordsSecretRef": []any{
 										secretKeySelector(
 											secretKeySelectorWithKey("admin"),
-											secretKeySelectorWithSecretReference(xpv1.SecretReference{
+											secretKeySelectorWithSecretReference(xpv2.SecretReference{
 												Name:      "db-passwords",
 												Namespace: "crossplane-system",
 											}),
 										),
 										secretKeySelector(
 											secretKeySelectorWithKey("system"),
-											secretKeySelectorWithSecretReference(xpv1.SecretReference{
+											secretKeySelectorWithSecretReference(xpv2.SecretReference{
 												Name:      "db-passwords",
 												Namespace: "crossplane-system",
 											}),
@@ -616,7 +616,7 @@ func TestGetSensitiveParameters(t *testing.T) {
 		"SingleNoWildcardWithSecretReference": {
 			args: args{
 				clientFn: func(client *mocks.MockSecretClient) {
-					client.EXPECT().GetSecretData(gomock.Any(), gomock.Eq(&xpv1.SecretReference{
+					client.EXPECT().GetSecretData(gomock.Any(), gomock.Eq(&xpv2.SecretReference{
 						Name:      "db-passwords",
 						Namespace: "crossplane-system",
 					})).Return(map[string][]byte{"admin": []byte("admin_pwd"), "system": []byte("system_pwd")}, nil)
@@ -655,8 +655,8 @@ func TestGetSensitiveParameters(t *testing.T) {
 		"MultipleNoWildcard": {
 			args: args{
 				clientFn: func(client *mocks.MockSecretClient) {
-					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
-						SecretReference: xpv1.SecretReference{
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv2.SecretKeySelector{
+						SecretReference: xpv2.SecretReference{
 							Name:      "admin-password",
 							Namespace: "crossplane-system",
 						},
@@ -696,15 +696,15 @@ func TestGetSensitiveParameters(t *testing.T) {
 		"MultipleWithWildcard": {
 			args: args{
 				clientFn: func(client *mocks.MockSecretClient) {
-					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
-						SecretReference: xpv1.SecretReference{
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv2.SecretKeySelector{
+						SecretReference: xpv2.SecretReference{
 							Name:      "admin-password",
 							Namespace: "crossplane-system",
 						},
 						Key: "pass",
 					})).Return([]byte("foo"), nil)
-					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
-						SecretReference: xpv1.SecretReference{
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv2.SecretKeySelector{
+						SecretReference: xpv2.SecretReference{
 							Name:      "maintenance-password",
 							Namespace: "crossplane-system",
 						},
@@ -827,8 +827,8 @@ func TestGetSensitiveParameters(t *testing.T) {
 		"SingleNoWildcardInitProvider": {
 			args: args{
 				clientFn: func(client *mocks.MockSecretClient) {
-					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
-						SecretReference: xpv1.SecretReference{
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv2.SecretKeySelector{
+						SecretReference: xpv2.SecretReference{
 							Name:      "admin-password",
 							Namespace: "crossplane-system",
 						},
@@ -867,8 +867,8 @@ func TestGetSensitiveParameters(t *testing.T) {
 		"SingleNoWildcardWithNoSecretInitProvider": {
 			args: args{
 				clientFn: func(client *mocks.MockSecretClient) {
-					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
-						SecretReference: xpv1.SecretReference{
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv2.SecretKeySelector{
+						SecretReference: xpv2.SecretReference{
 							Name:      "admin-password",
 							Namespace: "crossplane-system",
 						},
@@ -907,15 +907,15 @@ func TestGetSensitiveParameters(t *testing.T) {
 		"SingleNoWildcardWithSliceInitProvider": {
 			args: args{
 				clientFn: func(client *mocks.MockSecretClient) {
-					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
-						SecretReference: xpv1.SecretReference{
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv2.SecretKeySelector{
+						SecretReference: xpv2.SecretReference{
 							Name:      "db-passwords",
 							Namespace: "crossplane-system",
 						},
 						Key: "admin",
 					})).Return([]byte("admin_pwd"), nil)
-					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
-						SecretReference: xpv1.SecretReference{
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv2.SecretKeySelector{
+						SecretReference: xpv2.SecretReference{
 							Name:      "db-passwords",
 							Namespace: "crossplane-system",
 						},
@@ -930,14 +930,14 @@ func TestGetSensitiveParameters(t *testing.T) {
 									"passwordsSecretRef": []any{
 										secretKeySelector(
 											secretKeySelectorWithKey("admin"),
-											secretKeySelectorWithSecretReference(xpv1.SecretReference{
+											secretKeySelectorWithSecretReference(xpv2.SecretReference{
 												Name:      "db-passwords",
 												Namespace: "crossplane-system",
 											}),
 										),
 										secretKeySelector(
 											secretKeySelectorWithKey("system"),
-											secretKeySelectorWithSecretReference(xpv1.SecretReference{
+											secretKeySelectorWithSecretReference(xpv2.SecretReference{
 												Name:      "db-passwords",
 												Namespace: "crossplane-system",
 											}),
@@ -968,7 +968,7 @@ func TestGetSensitiveParameters(t *testing.T) {
 		"SingleNoWildcardWithSecretReferenceInitProvider": {
 			args: args{
 				clientFn: func(client *mocks.MockSecretClient) {
-					client.EXPECT().GetSecretData(gomock.Any(), gomock.Eq(&xpv1.SecretReference{
+					client.EXPECT().GetSecretData(gomock.Any(), gomock.Eq(&xpv2.SecretReference{
 						Name:      "db-passwords",
 						Namespace: "crossplane-system",
 					})).Return(map[string][]byte{"admin": []byte("admin_pwd"), "system": []byte("system_pwd")}, nil)
@@ -1007,8 +1007,8 @@ func TestGetSensitiveParameters(t *testing.T) {
 		"MultipleNoWildcardInitProvider": {
 			args: args{
 				clientFn: func(client *mocks.MockSecretClient) {
-					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
-						SecretReference: xpv1.SecretReference{
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv2.SecretKeySelector{
+						SecretReference: xpv2.SecretReference{
 							Name:      "admin-password",
 							Namespace: "crossplane-system",
 						},
@@ -1048,15 +1048,15 @@ func TestGetSensitiveParameters(t *testing.T) {
 		"MultipleWithWildcardInitProvider": {
 			args: args{
 				clientFn: func(client *mocks.MockSecretClient) {
-					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
-						SecretReference: xpv1.SecretReference{
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv2.SecretKeySelector{
+						SecretReference: xpv2.SecretReference{
 							Name:      "admin-password",
 							Namespace: "crossplane-system",
 						},
 						Key: "pass",
 					})).Return([]byte("foo"), nil)
-					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
-						SecretReference: xpv1.SecretReference{
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv2.SecretKeySelector{
+						SecretReference: xpv2.SecretReference{
 							Name:      "maintenance-password",
 							Namespace: "crossplane-system",
 						},
@@ -1151,15 +1151,15 @@ func TestGetSensitiveParameters(t *testing.T) {
 		"ForProviderRefOverridesInitProviderRef": {
 			args: args{
 				clientFn: func(client *mocks.MockSecretClient) {
-					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
-						SecretReference: xpv1.SecretReference{
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv2.SecretKeySelector{
+						SecretReference: xpv2.SecretReference{
 							Name:      "admin-password",
 							Namespace: "crossplane-system",
 						},
 						Key: "pass-forprovider",
 					})).Return([]byte("sensitive-forprovider"), nil)
-					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
-						SecretReference: xpv1.SecretReference{
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv2.SecretKeySelector{
+						SecretReference: xpv2.SecretReference{
 							Name:      "admin-password",
 							Namespace: "crossplane-system",
 						},
@@ -1237,13 +1237,13 @@ func TestGetSensitiveParameters(t *testing.T) {
 		"SingleNoWildcardWithSecretReference_NamespacedMR": {
 			args: args{
 				clientFn: func(client *mocks.MockSecretClient) {
-					client.EXPECT().GetSecretData(gomock.Any(), gomock.Eq(&xpv1.SecretReference{
+					client.EXPECT().GetSecretData(gomock.Any(), gomock.Eq(&xpv2.SecretReference{
 						Name:      "db-passwords",
 						Namespace: "foo-ns",
 					})).Return(map[string][]byte{"admin": []byte("admin_pwd"), "system": []byte("system_pwd")}, nil)
 					// other namespaces should return not found
-					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Not(gomock.Eq(xpv1.SecretKeySelector{
-						SecretReference: xpv1.SecretReference{
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Not(gomock.Eq(xpv2.SecretKeySelector{
+						SecretReference: xpv2.SecretReference{
 							Name:      "admin-password",
 							Namespace: "crossplane-system",
 						},
@@ -1288,15 +1288,15 @@ func TestGetSensitiveParameters(t *testing.T) {
 		"MultipleWithWildcardNamespacedMR": {
 			args: args{
 				clientFn: func(client *mocks.MockSecretClient) {
-					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
-						SecretReference: xpv1.SecretReference{
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv2.SecretKeySelector{
+						SecretReference: xpv2.SecretReference{
 							Name:      "admin-password",
 							Namespace: "foo-ns",
 						},
 						Key: "pass",
 					})).Return([]byte("foo"), nil)
-					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
-						SecretReference: xpv1.SecretReference{
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv2.SecretKeySelector{
+						SecretReference: xpv2.SecretReference{
 							Name:      "maintenance-password",
 							Namespace: "foo-ns",
 						},
@@ -1393,15 +1393,15 @@ func TestGetSensitiveParameters(t *testing.T) {
 		"SingleNoWildcardWithSliceNamespacedMR": {
 			args: args{
 				clientFn: func(client *mocks.MockSecretClient) {
-					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
-						SecretReference: xpv1.SecretReference{
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv2.SecretKeySelector{
+						SecretReference: xpv2.SecretReference{
 							Name:      "db-passwords",
 							Namespace: "foo-ns",
 						},
 						Key: "admin",
 					})).Return([]byte("admin_pwd"), nil)
-					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv1.SecretKeySelector{
-						SecretReference: xpv1.SecretReference{
+					client.EXPECT().GetSecretValue(gomock.Any(), gomock.Eq(xpv2.SecretKeySelector{
+						SecretReference: xpv2.SecretReference{
 							Name:      "db-passwords",
 							Namespace: "foo-ns",
 						},
@@ -1457,7 +1457,7 @@ func TestGetSensitiveParameters(t *testing.T) {
 		"SecretReferenceWithDottedKeys": {
 			args: args{
 				clientFn: func(client *mocks.MockSecretClient) {
-					client.EXPECT().GetSecretData(gomock.Any(), gomock.Eq(&xpv1.SecretReference{
+					client.EXPECT().GetSecretData(gomock.Any(), gomock.Eq(&xpv2.SecretReference{
 						Name:      "tls-secret",
 						Namespace: "crossplane-system",
 					})).Return(map[string][]byte{
@@ -1496,7 +1496,7 @@ func TestGetSensitiveParameters(t *testing.T) {
 		"SecretReferenceWithDottedKeysInitProvider": {
 			args: args{
 				clientFn: func(client *mocks.MockSecretClient) {
-					client.EXPECT().GetSecretData(gomock.Any(), gomock.Eq(&xpv1.SecretReference{
+					client.EXPECT().GetSecretData(gomock.Any(), gomock.Eq(&xpv2.SecretReference{
 						Name:      "tls-secret",
 						Namespace: "crossplane-system",
 					})).Return(map[string][]byte{
@@ -1535,7 +1535,7 @@ func TestGetSensitiveParameters(t *testing.T) {
 		"SecretReferenceWithDottedKeys_NamespacedMR": {
 			args: args{
 				clientFn: func(client *mocks.MockSecretClient) {
-					client.EXPECT().GetSecretData(gomock.Any(), gomock.Eq(&xpv1.SecretReference{
+					client.EXPECT().GetSecretData(gomock.Any(), gomock.Eq(&xpv2.SecretReference{
 						Name:      "tls-secret",
 						Namespace: "foo-ns",
 					})).Return(map[string][]byte{
@@ -1594,7 +1594,7 @@ func TestGetSensitiveParameters(t *testing.T) {
 }
 
 func TestGetSensitiveObservation(t *testing.T) {
-	connSecretRef := &xpv1.SecretReference{
+	connSecretRef := &xpv2.SecretReference{
 		Name:      "connection-details",
 		Namespace: "crossplane-system",
 	}

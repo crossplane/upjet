@@ -20,54 +20,54 @@ import (
 )
 
 const (
-	// PackagePathXPCommonAPIs is the go path for the Crossplane Runtime package
-	// with common APIs
-	PackagePathXPCommonAPIs = "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
-	// PackagePathXPV2CommonAPIs is the go path for the Crossplane Runtime package
-	// with common v2 APIs
-	PackagePathXPV2CommonAPIs = "github.com/crossplane/crossplane-runtime/v2/apis/common/v2"
+	// PackagePathXPCommonAPIs is the go path for the Crossplane core APIs
+	// package with common APIs (relocated from crossplane-runtime in v2.3.0).
+	PackagePathXPCommonAPIs = "github.com/crossplane/crossplane/apis/v2/core/v2"
+	// PackagePathXPV2CommonAPIs is the go path for the Crossplane core APIs
+	// package with common v2 APIs (consolidated into the same package in v2.3.0).
+	PackagePathXPV2CommonAPIs = "github.com/crossplane/crossplane/apis/v2/core/v2"
 )
 
 // Types to use from by reference generator.
 var (
 	typeReferenceField types.Type = types.NewNamed(
-		types.NewTypeName(token.NoPos, types.NewPackage(PackagePathXPCommonAPIs, "v1"), "Reference", nil),
+		types.NewTypeName(token.NoPos, types.NewPackage(PackagePathXPCommonAPIs, "v2"), "Reference", nil),
 		types.NewStruct(nil, nil),
 		nil,
 	)
 	typeSelectorField types.Type = types.NewNamed(
-		types.NewTypeName(token.NoPos, types.NewPackage(PackagePathXPCommonAPIs, "v1"), "Selector", nil),
+		types.NewTypeName(token.NoPos, types.NewPackage(PackagePathXPCommonAPIs, "v2"), "Selector", nil),
 		types.NewStruct(nil, nil),
 		nil,
 	)
 	typeSecretKeySelector types.Type = types.NewNamed(
-		types.NewTypeName(token.NoPos, types.NewPackage(PackagePathXPCommonAPIs, "v1"), "SecretKeySelector", nil),
+		types.NewTypeName(token.NoPos, types.NewPackage(PackagePathXPCommonAPIs, "v2"), "SecretKeySelector", nil),
 		types.NewStruct(nil, nil),
 		nil,
 	)
 	typeSecretReference types.Type = types.NewNamed(
-		types.NewTypeName(token.NoPos, types.NewPackage(PackagePathXPCommonAPIs, "v1"), "SecretReference", nil),
+		types.NewTypeName(token.NoPos, types.NewPackage(PackagePathXPCommonAPIs, "v2"), "SecretReference", nil),
 		types.NewStruct(nil, nil),
 		nil,
 	)
 	typeLocalSecretReference types.Type = types.NewNamed(
-		types.NewTypeName(token.NoPos, types.NewPackage(PackagePathXPCommonAPIs, "v1"), "LocalSecretReference", nil),
+		types.NewTypeName(token.NoPos, types.NewPackage(PackagePathXPCommonAPIs, "v2"), "LocalSecretReference", nil),
 		types.NewStruct(nil, nil),
 		nil,
 	)
 	typeLocalSecretKeySelector types.Type = types.NewNamed(
-		types.NewTypeName(token.NoPos, types.NewPackage(PackagePathXPCommonAPIs, "v1"), "LocalSecretKeySelector", nil),
+		types.NewTypeName(token.NoPos, types.NewPackage(PackagePathXPCommonAPIs, "v2"), "LocalSecretKeySelector", nil),
 		types.NewStruct(nil, nil),
 		nil,
 	)
 	typeNamespacedReferenceField types.Type = types.NewNamed(
-		types.NewTypeName(token.NoPos, types.NewPackage(PackagePathXPCommonAPIs, "v1"), "NamespacedReference", nil),
+		types.NewTypeName(token.NoPos, types.NewPackage(PackagePathXPCommonAPIs, "v2"), "NamespacedReference", nil),
 		types.NewStruct(nil, nil),
 		nil,
 	)
 
 	typeNamespacedSelectorField types.Type = types.NewNamed(
-		types.NewTypeName(token.NoPos, types.NewPackage(PackagePathXPCommonAPIs, "v1"), "NamespacedSelector", nil),
+		types.NewTypeName(token.NoPos, types.NewPackage(PackagePathXPCommonAPIs, "v2"), "NamespacedSelector", nil),
 		types.NewStruct(nil, nil),
 		nil,
 	)
