@@ -282,6 +282,103 @@ func TestTerraformPluginSDKObserve(t *testing.T) {
 	}
 }
 
+// TestTerraformPluginSDKObserveNotFound is a regression test
+// for the "value is not an object" panic (e.g., in provider-aws).
+// When Observe calls schema.Diff with an InstanceState whose RawPlan is
+// the zero cty.Value, the AWS provider's setTagsAll() interceptor calls
+// diff.GetRawPlan().GetAttr("tags"), and go-cty's Value.GetAttr panics with
+// "value is not an object" on the nil cty.Value.
+// The same applies to RawConfig.
+func TestTerraformPluginSDKObserveNotFound(t *testing.T) {
+	tagsTimeout := timeout
+	cases := map[string]struct {
+		customizeDiff schema.CustomizeDiffFunc
+		description   string
+	}{
+		"RawConfig": {
+			customizeDiff: func(_ context.Context, d *schema.ResourceDiff, _ interface{}) error {
+				// Calling d.GetRawConfig().GetAttr on a zero RawConfig will panic.
+				_ = d.GetRawConfig().GetAttr("name")
+				return nil
+			},
+			description: "Observed a panic when reading from InstanceState.RawConfig",
+		},
+		"RawPlan": {
+			customizeDiff: func(_ context.Context, d *schema.ResourceDiff, _ interface{}) error {
+				// Calling d.GetRawPlan().GetAttr on a zero RawPlan will panic.
+				_ = d.GetRawPlan().GetAttr("tags")
+				return nil
+			},
+			description: "Observed a panic when reading from InstanceState.RawPlan",
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			cfgWithTags := &config.Resource{
+				TerraformResource: &schema.Resource{
+					Timeouts: &schema.ResourceTimeout{
+						Create: &tagsTimeout,
+						Read:   &tagsTimeout,
+						Update: &tagsTimeout,
+						Delete: &tagsTimeout,
+					},
+					Schema: map[string]*schema.Schema{
+						"name": {
+							Type:     schema.TypeString,
+							Required: true,
+						},
+						"id": {
+							Type:     schema.TypeString,
+							Computed: true,
+						},
+						"tags": {
+							Type:     schema.TypeMap,
+							Optional: true,
+							Elem:     &schema.Schema{Type: schema.TypeString},
+						},
+						"tags_all": {
+							Type:     schema.TypeMap,
+							Computed: true,
+							Elem:     &schema.Schema{Type: schema.TypeString},
+						},
+					},
+					CustomizeDiff: tc.customizeDiff,
+				},
+				ExternalName: config.IdentifierFromProvider,
+				Sensitive: config.Sensitive{AdditionalConnectionDetailsFn: func(_ map[string]any) (map[string][]byte, error) {
+					return nil, nil
+				}},
+			}
+
+			notFound := mockResource{
+				RefreshWithoutUpgradeFn: func(_ context.Context, _ *tf.InstanceState, _ interface{}) (*tf.InstanceState, diag.Diagnostics) {
+					// Force into the state where the op tracker cache exists
+					// but resource is not found.
+					return nil, nil
+				},
+			}
+
+			ext := prepareTerraformPluginSDKExternal(notFound, cfgWithTags)
+			ext.opTracker.SetTfState(&tf.InstanceState{
+				ID:         "example-id",
+				Attributes: map[string]string{"name": "example"},
+			})
+
+			defer func() {
+				if r := recover(); r != nil {
+					t.Errorf("%s: %v", tc.description, r)
+				}
+			}()
+
+			_, err := ext.Observe(context.TODO(), &obj)
+			if err != nil {
+				t.Fatalf("Observe(...) returned an unexpected error: %v", err)
+			}
+		})
+	}
+}
+
 func TestTerraformPluginSDKCreate(t *testing.T) {
 	type args struct {
 		r   Resource
