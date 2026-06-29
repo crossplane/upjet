@@ -1272,3 +1272,91 @@ func newMockTPFResourceWithIdentity() *mockTPFResourceWithIdentity {
 		},
 	}
 }
+
+func TestFilteredDiffExists(t *testing.T) {
+	strVal := func(s string) *tftypes.Value {
+		v := tftypes.NewValue(tftypes.String, s)
+		return &v
+	}
+	nullVal := func() *tftypes.Value {
+		v := tftypes.NewValue(tftypes.String, nil)
+		return &v
+	}
+	unknownVal := func() *tftypes.Value {
+		v := tftypes.NewValue(tftypes.String, tftypes.UnknownValue)
+		return &v
+	}
+
+	cases := map[string]struct {
+		rawDiff []tftypes.ValueDiff
+		want    bool
+	}{
+		"EmptyDiff": {
+			rawDiff: []tftypes.ValueDiff{},
+			want:    false,
+		},
+		"PlannedNonNullPriorNull": {
+			rawDiff: []tftypes.ValueDiff{
+				{Value1: strVal("foo"), Value2: nullVal()},
+			},
+			want: true,
+		},
+		"PlannedNonNullPriorNonNull": {
+			rawDiff: []tftypes.ValueDiff{
+				{Value1: strVal("new"), Value2: strVal("old")},
+			},
+			want: true,
+		},
+		// Explicit removal: prior was set, planned is null. The fix ensures
+		// this is not filtered out.
+		"PlannedNullPriorNonNull": {
+			rawDiff: []tftypes.ValueDiff{
+				{Value1: nullVal(), Value2: strVal("foo")},
+			},
+			want: true,
+		},
+		// Field was never specified; both sides are null — no real diff.
+		"PlannedNullPriorNull": {
+			rawDiff: []tftypes.ValueDiff{
+				{Value1: nullVal(), Value2: nullVal()},
+			},
+			want: false,
+		},
+		// Value1 nil means the child attribute has no individual planned value
+		// (e.g. when its parent object is null). Should remain filtered.
+		"PlannedNilPriorNonNull": {
+			rawDiff: []tftypes.ValueDiff{
+				{Value1: nil, Value2: strVal("foo")},
+			},
+			want: false,
+		},
+		// Unknown planned value corresponds to a computed field — filtered.
+		"PlannedUnknownPriorNonNull": {
+			rawDiff: []tftypes.ValueDiff{
+				{Value1: unknownVal(), Value2: strVal("foo")},
+			},
+			want: false,
+		},
+		// Simulates optional nested object removal: child attribute diffs have
+		// nil Value1, but the parent-level diff has null Value1 / non-null
+		// Value2 and must be detected.
+		"NestedObjectRemoval": {
+			rawDiff: []tftypes.ValueDiff{
+				{Value1: nil, Value2: strVal("ClusterIP")}, // child attr, Value1 nil
+				{Value1: nil, Value2: strVal("Cluster")},   // child attr, Value1 nil
+				{Value1: nullVal(), Value2: strVal("3")},   // parent object null → removal
+			},
+			want: true,
+		},
+	}
+
+	client := &terraformPluginFrameworkExternalClient{}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			got := client.filteredDiffExists(tc.rawDiff)
+			if got != tc.want {
+				t.Errorf("filteredDiffExists() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
