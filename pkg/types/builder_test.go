@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"go/token"
 	"go/types"
+	"strings"
 	"testing"
 
 	"github.com/crossplane/crossplane-runtime/v2/pkg/test"
@@ -311,6 +312,7 @@ func TestBuild(t *testing.T) {
 		atProvider      string
 		validationRules string
 		err             error
+		commentChecks   map[string]func(t *testing.T, comments map[string]string)
 	}
 	cases := map[string]struct {
 		args
@@ -766,6 +768,78 @@ func TestBuild(t *testing.T) {
 // +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.name) || (has(self.initProvider) && has(self.initProvider.name))",message="spec.forProvider.name is a required parameter"`,
 			},
 		},
+		"SSA_InjectedKey_Not_In_Observation_Comments": {
+			args: args{
+				crdScope: CRDScopeCluster,
+				cfg: &config.Resource{
+					TerraformResource: &schema.Resource{
+						Schema: map[string]*schema.Schema{
+							"rule": {
+								Type:     schema.TypeList,
+								Optional: true,
+								Elem: &schema.Resource{
+									Schema: map[string]*schema.Schema{
+										"name": {
+											Type:     schema.TypeString,
+											Required: true,
+										},
+										"action": {
+											Type:     schema.TypeString,
+											Required: true},
+									},
+								},
+							},
+						},
+					},
+					ServerSideApplyMergeStrategies: config.ServerSideApplyMergeStrategies{
+						"rule": {
+							ListMergeStrategy: config.ListMergeStrategy{
+								MergeStrategy: config.ListTypeMap,
+								ListMapKeys: config.ListMapKeys{
+									InjectedKey: config.InjectedKey{
+										Key:          "ruleIndex",
+										DefaultValue: "0",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			want: want{
+				forProvider: `type example.Parameters struct{Rule []example.RuleParameters "json:\"rule,omitempty\" tf:\"rule,omitempty\""}`,
+				atProvider:  `type example.Observation struct{Rule []example.RuleObservation "json:\"rule,omitempty\" tf:\"rule,omitempty\""}`,
+				commentChecks: map[string]func(t *testing.T, comments map[string]string){
+					"ParametersRuleHasSSAMarkers": func(t *testing.T, comments map[string]string) {
+						t.Helper()
+						v := comments["example.Parameters:Rule"]
+						if !strings.Contains(v, "+listType=map") {
+							t.Errorf("Parameters Rule comment missing +listType=map: %s", v)
+						}
+						if !strings.Contains(v, "+listMapKey=ruleIndex") {
+							t.Errorf("Parameters Rule comment missing +listMapKey=ruleIndex: %s", v)
+						}
+					},
+					"ObservationRuleNoSSAMarkers": func(t *testing.T, comments map[string]string) {
+						t.Helper()
+						v := comments["example.Observation:Rule"]
+						if strings.Contains(v, "+listType=map") {
+							t.Errorf("Observation Rule comment must not contain +listType=map: %s", v)
+						}
+						if strings.Contains(v, "+listMapKey") {
+							t.Errorf("Observation Rule comment must not contain +listMapKey: %s", v)
+						}
+					},
+					"ObservationInjectedKeyNoDefault": func(t *testing.T, comments map[string]string) {
+						t.Helper()
+						v := comments["example.RuleObservation:RuleIndex"]
+						if strings.Contains(v, "+kubebuilder:default") {
+							t.Errorf("Observation RuleIndex comment must not contain +kubebuilder:default: %s", v)
+						}
+					},
+				},
+			},
+		},
 	}
 	for n, tc := range cases {
 		t.Run(n, func(t *testing.T) {
@@ -790,6 +864,11 @@ func TestBuild(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.want.validationRules, g.ValidationRules); diff != "" {
 				t.Fatalf("Build(...): -want validationRules, +got validationRules: %s", diff)
+			}
+			for checkName, checkFn := range tc.want.commentChecks {
+				t.Run(checkName, func(t *testing.T) {
+					checkFn(t, g.Comments)
+				})
 			}
 		})
 	}
