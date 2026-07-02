@@ -75,8 +75,8 @@ func (tg *TerraformedGenerator) Generate(cfgs []*terraformedInput, apiVersion st
 			"ParametersTypeName": cfg.ParametersTypeName,
 		}
 		vars["Terraform"] = map[string]any{
-			"ResourceType":  cfg.Name,
-			"SchemaVersion": cfg.TerraformResource.SchemaVersion,
+			"ResourceType":   cfg.Name,
+			"ResourceSchema": cfg.TerraformResource,
 		}
 		vars["Sensitive"] = map[string]any{
 			"Fields": cfg.Sensitive.GetFieldPaths(),
