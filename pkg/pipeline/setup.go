@@ -12,21 +12,28 @@ import (
 	"sort"
 	"text/template"
 
+	"github.com/crossplane/crossplane-runtime/pkg/errors"
 	"github.com/muvaf/typewriter/pkg/wrapper"
-	"github.com/pkg/errors"
 
 	"github.com/crossplane/upjet/pkg/config"
 	"github.com/crossplane/upjet/pkg/pipeline/templates"
 )
 
 // NewProviderGenerator returns a new ProviderGenerator.
-func NewProviderGenerator(rootDir, modulePath string) *ProviderGenerator {
-	return &ProviderGenerator{
+func NewProviderGenerator(rootDir, modulePath string, o ...ProviderGeneratorOption) *ProviderGenerator {
+	g := &ProviderGenerator{
 		ProviderPath:       filepath.Join(rootDir, "cmd", "provider"),
 		LocalDirectoryPath: filepath.Join(rootDir, "internal", "controller"),
 		LicenseHeaderPath:  filepath.Join(rootDir, "hack", "boilerplate.go.txt"),
 		ModulePath:         modulePath,
 	}
+
+	// apply the specified configuration options.
+	for _, fn := range o {
+		fn(g)
+	}
+
+	return g
 }
 
 // ProviderGenerator generates controller setup file.
@@ -35,6 +42,19 @@ type ProviderGenerator struct {
 	LocalDirectoryPath string
 	LicenseHeaderPath  string
 	ModulePath         string
+
+	setupAggregatorTemplate string
+}
+
+// A ProviderGeneratorOption configures a ProviderGenerator option.
+type ProviderGeneratorOption func(generator *ProviderGenerator)
+
+// WithSetupAggregatorTemplate configures the setup aggregator template
+// to be used.
+func WithSetupAggregatorTemplate(template string) ProviderGeneratorOption {
+	return func(g *ProviderGenerator) {
+		g.setupAggregatorTemplate = template
+	}
 }
 
 // Generate writes the setup file and the corresponding provider main file
@@ -85,7 +105,9 @@ func generateProviderMain(providerPath, group string, t *template.Template) erro
 }
 
 func (sg *ProviderGenerator) generate(group string, versionPkgList []string) error {
-	setupFile := wrapper.NewFile(filepath.Join(sg.ModulePath, "apis"), "apis", templates.SetupTemplate,
+	setupTemplate := templateOrDefault(sg.setupAggregatorTemplate, templates.SetupTemplate)
+
+	setupFile := wrapper.NewFile(filepath.Join(sg.ModulePath, "apis"), "apis", setupTemplate,
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath(sg.LicenseHeaderPath),
 	)
