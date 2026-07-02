@@ -54,7 +54,7 @@ The following keys are available inside the template via `{{ .<Name> }}`.
 | `CRD.Kind` | `string` | Kubernetes Kind of the managed resource. Used as the receiver type for all generated methods (e.g. `func (tr *{{ .CRD.Kind }}) ...`). |
 | `CRD.ParametersTypeName` | `string` | Name of the generated `ForProvider` parameters struct for the resource. Used by `LateInitialize` to unmarshal Terraform state parameters. |
 | `Terraform.ResourceType` | `string` | Terraform resource type name (e.g. `aws_vpc`), returned by `GetTerraformResourceType`. |
-| `Terraform.SchemaVersion` | `int` | Terraform schema version for the resource, returned by `GetTerraformSchemaVersion`. |
+| `Terraform.ResourceSchema` | `*schema.Resource` | The Terraform Plugin SDK v2 resource schema (`github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema.Resource`) for the resource. The default template reads `{{ .Terraform.ResourceSchema.SchemaVersion }}` to implement `GetTerraformSchemaVersion`; a custom template may read any other exported field of the schema. |
 | `Sensitive.Fields` | `map[string]string` | Mapping from sensitive field paths to their connection-detail keys. When non-empty, `GetConnectionDetailsMapping` returns this map; otherwise it returns `nil`. |
 | `LateInitializer.IgnoredFields` | `[]string` | Canonical field paths to skip unconditionally during late-initialization. The template appends a `resource.WithNameFilter` for each entry. |
 | `LateInitializer.ConditionalIgnoredFields` | `[]string` | Canonical field paths to skip during late-initialization only when already set in `spec.initProvider`. The template appends a `resource.WithConditionalFilter` for each entry. |
