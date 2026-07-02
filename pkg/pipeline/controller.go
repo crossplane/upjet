@@ -55,10 +55,7 @@ func WithControllerTemplate(template string) ControllerGeneratorOption {
 
 // Generate writes controller setup functions.
 func (cg *ControllerGenerator) Generate(cfg *config.Resource, typesPkgPath string, featuresPkgPath string) (pkgPath string, err error) {
-	ctrlTemplate := templates.ControllerTemplate
-	if cg.controllerTemplate != "" {
-		ctrlTemplate = cg.controllerTemplate
-	}
+	ctrlTemplate := templateOrDefault(cg.controllerTemplate, templates.ControllerTemplate)
 
 	controllerPkgPath := filepath.Join(cg.ModulePath, strings.ToLower(strings.Split(cg.Group, ".")[0]), strings.ToLower(cfg.Kind))
 	ctrlFile := wrapper.NewFile(controllerPkgPath, strings.ToLower(cfg.Kind), ctrlTemplate,

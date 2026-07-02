@@ -70,10 +70,7 @@ func (sg *SetupGenerator) Generate(versionPkgMap map[string][]string, monolith b
 }
 
 func (sg *SetupGenerator) generate(group string, versionPkgList []string) error {
-	setupTemplate := templates.SetupTemplate
-	if sg.setupAggregatorTemplate != "" {
-		setupTemplate = sg.setupAggregatorTemplate
-	}
+	setupTemplate := templateOrDefault(sg.setupAggregatorTemplate, templates.SetupTemplate)
 
 	// TODO(negz): Should this really be apis? They're not imported for setup...
 	setupFile := wrapper.NewFile(sg.ModulePath, filepath.Base(sg.ModulePath), setupTemplate,

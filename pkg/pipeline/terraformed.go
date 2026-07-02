@@ -55,10 +55,7 @@ func WithTerraformedTemplate(template string) TerraformedGeneratorOption {
 
 // Generate writes generated Terraformed interface functions
 func (tg *TerraformedGenerator) Generate(cfgs []*terraformedInput, apiVersion string) error {
-	tfTemplate := templates.TerraformedTemplate
-	if tg.terraformedTemplate != "" {
-		tfTemplate = tg.terraformedTemplate
-	}
+	tfTemplate := templateOrDefault(tg.terraformedTemplate, templates.TerraformedTemplate)
 
 	for _, cfg := range cfgs {
 		trFile := wrapper.NewFile(tg.pkg.Path(), tg.pkg.Name(), tfTemplate,
