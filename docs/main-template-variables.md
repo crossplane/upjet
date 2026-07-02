@@ -40,19 +40,23 @@ The following keys are available inside the template via `{{ .<Name> }}`.
 
 | Variable | Type | Description |
 |---|---|---|
-| `Group` | `string` | API group identifier for the subpackage main program being generated (e.g. `ec2`, `rds`). The template is executed once per group, so each rendered `zz_main.go` is specialized for a single group. Use this to construct package imports, controller setup calls, and any group-scoped identifiers in the generated main program. |
+| `Group` | `string` | Identifier of the subpackage main program being generated. This is usually a short API group name (e.g. `ec2`, `rds`), but it also takes two special values: `monolith` — the program that wires up **all** of the provider's resources into a single binary — and `config` — the program for the base/`ProviderConfig` resources. The template is executed once per value, so each rendered `zz_main.go` is specialized for a single group. A custom main template MUST handle the `monolith` value (and, when the provider ships base resources, `config`) in addition to the real API groups. Use this to construct package imports, controller setup calls, and any group-scoped identifiers in the generated main program. |
 
 ## Generated Output
 
-For every group, the rendered file is written to:
+The template is executed once per `Group` value — each real API short group
+plus the special `monolith` and `config` values — and each rendered file is
+written to:
 
 ```
 <provider-cmd-dir>/<Group>/zz_main.go
 ```
 
-A monolithic main program is also generated alongside the per-group main
-programs to preserve backwards compatibility for consumers that build the
-provider as a single binary.
+For example, `cmd/provider/ec2/zz_main.go` for the `ec2` API group and
+`cmd/provider/monolith/zz_main.go` for the monolithic program. The monolithic
+program is generated alongside the per-group programs (via the `monolith`
+`Group` value). The main program is generated only once (from the
+ cluster-scoped pipeline run).
 
 ## Template Engine Notes
 
