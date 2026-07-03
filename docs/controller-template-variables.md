@@ -82,6 +82,29 @@ For every resource the rendered file exposes two functions:
 Both functions assume that `o.Provider.Resources["{{ .ResourceType }}"]` is
 populated at runtime, regardless of which connector is selected.
 
+## Generated Output
+
+For every resource the rendered file is written under the controllers directory
+the pipeline is generating into:
+
+```
+internal/controller/[<scope>/]<group>/<kind>/zz_controller.go
+```
+
+- `<scope>` is present only when the provider generates both cluster-scoped and
+  namespaced managed resources (Upjet v2 namespaced resources). In that case
+  the pipeline runs once per scope and writes into
+  `internal/controller/cluster/...` and `internal/controller/namespaced/...`
+  respectively. A provider that generates only cluster-scoped resources omits
+  this segment and writes directly under `internal/controller/`.
+- `<group>` is the short group name — the first dot-separated segment of the
+  API group, lower-cased (e.g. `ec2` for `ec2.aws.upbound.io`).
+- `<kind>` is the lower-cased resource kind.
+
+`ControllerGenerator` itself only joins `<ctrlDir>/<group>/<kind>`; the
+`<scope>` prefix (when present) comes from the `ctrlDir` that the pipeline
+runner (`pipeline.Run`) selects for each scope.
+
 ## Overriding the Template
 
 To supply a custom controller template (for example, when extending the

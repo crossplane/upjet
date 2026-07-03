@@ -13,6 +13,7 @@ import (
 	"github.com/muvaf/typewriter/pkg/wrapper"
 
 	"github.com/crossplane/upjet/v2/pkg/config"
+	"github.com/crossplane/upjet/v2/pkg/pipeline/templates"
 )
 
 // NewControllerGenerator returns a new ControllerGenerator.
@@ -45,6 +46,7 @@ type ControllerGenerator struct {
 // A ControllerGeneratorOption configures a ControllerGenerator option.
 type ControllerGeneratorOption func(*ControllerGenerator)
 
+// WithControllerTemplate configures the controller template to be used.
 func WithControllerTemplate(template string) ControllerGeneratorOption {
 	return func(g *ControllerGenerator) {
 		g.controllerTemplate = template
@@ -53,8 +55,10 @@ func WithControllerTemplate(template string) ControllerGeneratorOption {
 
 // Generate writes controller setup functions.
 func (cg *ControllerGenerator) Generate(cfg *config.Resource, typesPkgPath string, featuresPkgPath string) (pkgPath string, err error) {
+	ctrlTemplate := templateOrDefault(cg.controllerTemplate, templates.ControllerTemplate)
+
 	controllerPkgPath := filepath.Join(cg.ModulePath, strings.ToLower(strings.Split(cg.Group, ".")[0]), strings.ToLower(cfg.Kind))
-	ctrlFile := wrapper.NewFile(controllerPkgPath, strings.ToLower(cfg.Kind), cg.controllerTemplate,
+	ctrlFile := wrapper.NewFile(controllerPkgPath, strings.ToLower(cfg.Kind), ctrlTemplate,
 		wrapper.WithGenStatement(GenStatement),
 		wrapper.WithHeaderPath(cg.LicenseHeaderPath),
 	)

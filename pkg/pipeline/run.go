@@ -193,15 +193,8 @@ func (r *PipelineRunner) Run(pc *config.Provider) []string { //nolint:gocyclo
 		for version, resources := range versions {
 			versionGen := NewVersionGenerator(r.DirAPIs, r.DirHack, r.ModulePathAPIs, group, version)
 			crdGen := NewCRDGenerator(versionGen.Package(), r.DirAPIs, r.DirHack, pc.ShortName, group, version, r.Scope)
-			tfGen := NewTerraformedGenerator(versionGen.Package(), r.DirAPIs, r.DirHack, group, version)
-
-			// Configure the controller template to be used by
-			// the controller generator.
-			ctrlTemplate := templates.ControllerTemplate
-			if pc.ControllerTemplate != "" {
-				ctrlTemplate = pc.ControllerTemplate
-			}
-			ctrlGen := NewControllerGenerator(r.DirControllers, r.DirHack, r.ModulePathControllers, group, WithControllerTemplate(ctrlTemplate))
+			tfGen := NewTerraformedGenerator(versionGen.Package(), r.DirAPIs, r.DirHack, group, version, WithTerraformedTemplate(pc.TerraformedTemplate))
+			ctrlGen := NewControllerGenerator(r.DirControllers, r.DirHack, r.ModulePathControllers, group, WithControllerTemplate(pc.ControllerTemplate))
 
 			if err := versionGen.InsertPreviousObjects(versions); err != nil {
 				fmt.Println(errors.Wrapf(err, "cannot insert type definitions from the previous versions into the package scope for group %q", group))
@@ -299,7 +292,7 @@ func (r *PipelineRunner) Run(pc *config.Provider) []string { //nolint:gocyclo
 	}
 
 	monolith := len(pc.MainTemplate) == 0
-	if err := NewSetupGenerator(r.DirControllers, r.DirHack, r.ModulePathAPIs).Generate(controllerPkgMap, monolith); err != nil {
+	if err := NewSetupGenerator(r.DirControllers, r.DirHack, r.ModulePathAPIs, WithSetupAggregatorTemplate(pc.SetupAggregatorTemplate)).Generate(controllerPkgMap, monolith); err != nil {
 		panic(errors.Wrap(err, "cannot generate setup file"))
 	}
 
