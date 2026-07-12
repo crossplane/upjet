@@ -43,6 +43,12 @@ func (r *registry) RoundTrip(dst, src resource.Terraformed) error { //nolint:goc
 			src.GetObjectKind().SetGroupVersionKind(gvk)
 		}
 	}
+	// Propagate namespace before any GetConversions call: registry.GetConversions
+	// selects providerCluster vs providerNamespaced based on dst.GetNamespace(),
+	// but dst has an empty ObjectMeta at this point.
+	if src.GetNamespace() != "" {
+		dst.SetNamespace(src.GetNamespace())
+	}
 
 	// first PrioritizedManagedConversions are run in their registration order
 	r.logger.Debug("Running the registered PrioritizedManagedConversions.")
