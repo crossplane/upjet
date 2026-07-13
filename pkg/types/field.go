@@ -349,6 +349,7 @@ func NewReferenceField(g *Builder, cfg *config.Resource, r *resource, sch *schem
 
 	f.Comment.Reference = *ref
 	f.Schema.Optional = true
+	f.Required = false // referenced fields are satisfiable via *Ref/*Selector; do not force-require
 
 	return f, nil
 }
@@ -429,7 +430,16 @@ func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames, opt
 		// fields under status.atProvider. So, we don't want reference comments to
 		// be added, hence we are unsetting reference on the field comment just
 		// before adding it as an observation field.
+		// Strip listType=map and its associated listMapKey markers from observation
+		// fields because map-type lists require an injected key with a default value,
+		// and that default causes conflicts with >1 items sharing a value during
+		// status updates.
 		f.Comment.Reference = config.Reference{}
+		if f.Comment.ServerSideApplyOptions.ListType != nil && *f.Comment.ServerSideApplyOptions.ListType == config.ListTypeMap {
+			f.Comment.ServerSideApplyOptions.ListType = nil
+			f.Comment.ServerSideApplyOptions.ListMapKey = nil
+		}
+		f.Comment.KubebuilderOptions.Default = nil
 		g.comments.AddFieldComment(typeNames.ObservationTypeName, f.FieldNameCamel, f.Comment.Build())
 	}
 }

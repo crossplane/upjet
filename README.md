@@ -151,6 +151,8 @@ Browse the [Upbound Marketplace](https://marketplace.upbound.io/providers) for a
 | [Upgrading to v2](docs/upjet-v2-upgrade.md) | Migration guide from Upjet v1 to v2 |
 | [Managing CRD Versions](docs/managing-crd-versions.md) | Handle Terraform schema changes across versions |
 | [Controller Template Variables](docs/controller-template-variables.md) | Variables available to the managed resource controller setup template |
+| [Setup Aggregator Template Variables](docs/setup-aggregator-template-variables.md) | Variables available to the controller setup aggregator template |
+| [Terraformed Template Variables](docs/terraformed-template-variables.md) | Variables available to the managed resource terraformed template |
 | [Main Template Variables](docs/main-template-variables.md) | Variables available to the provider family main program template |
 
 ## Contributing
