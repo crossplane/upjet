@@ -148,6 +148,12 @@ type ExternalName struct {
 	// from terraformProviderConfig, and others from parameters map if needed.
 	GetIDFn GetIDFn
 
+	// GetImportIDFn optionally returns the ID to pass to "terraform import".
+	// Some providers use a different ID format for import than for the state
+	// "id" field (e.g. plain text vs base64-encoded compound keys). When nil,
+	// GetIDFn is used for both import and state (preserving existing behavior).
+	GetImportIDFn GetIDFn
+
 	// OmittedFields are the ones you'd like to be removed from the schema since
 	// they are specified via external name. For example, if you set
 	// "cluster_identifier" in SetIdentifierArgumentFn, then you need to omit

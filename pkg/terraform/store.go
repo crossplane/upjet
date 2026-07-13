@@ -257,12 +257,25 @@ func (ws *WorkspaceStore) Workspace(ctx context.Context, c resource.SecretClient
 	// NOTE(erhan): some TF plugin framework-style resources do not have the
 	// `id` attribute in their schema. We anyway set it here, in case we use it
 	// as import ID. In TF CRUD operations, we ignore this for id-less resources.
-	w.terraformID, err = fp.Config.ExternalName.GetIDFn(ctx, meta.GetExternalName(fp.Resource), fp.parameters, fp.Setup.Map())
+	externalName := meta.GetExternalName(fp.Resource)
+	tfStateID, err := fp.Config.ExternalName.GetIDFn(ctx, externalName, fp.parameters, fp.Setup.Map())
 	if err != nil {
 		return nil, errors.Wrap(err, errGetID)
 	}
 
-	if err := fp.EnsureTFState(ctx, w.terraformID); err != nil {
+	// Use GetImportIDFn for the import ID when configured, otherwise
+	// fall back to GetIDFn. This allows providers where the TF import
+	// format differs from the state d.Id() format (e.g. plain text vs
+	// base64-encoded compound keys).
+	w.terraformID = tfStateID
+	if fp.Config.ExternalName.GetImportIDFn != nil {
+		w.terraformID, err = fp.Config.ExternalName.GetImportIDFn(ctx, externalName, fp.parameters, fp.Setup.Map())
+		if err != nil {
+			return nil, errors.Wrap(err, errGetID)
+		}
+	}
+
+	if err := fp.EnsureTFState(ctx, tfStateID); err != nil {
 		return nil, errors.Wrap(err, "cannot ensure tfstate file")
 	}
 
