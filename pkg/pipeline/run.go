@@ -95,7 +95,7 @@ func Run(pc *config.Provider, rootDir string) { //nolint:gocyclo
 			var tfResources []*terraformedInput
 			versionGen := NewVersionGenerator(rootDir, pc.ModulePath, group, version)
 			crdGen := NewCRDGenerator(versionGen.Package(), rootDir, pc.ShortName, group, version)
-			tfGen := NewTerraformedGenerator(versionGen.Package(), rootDir, group, version)
+			tfGen := NewTerraformedGenerator(versionGen.Package(), rootDir, group, version, WithTerraformedTemplate(pc.TerraformedTemplate))
 			ctrlGen := NewControllerGenerator(rootDir, pc.ModulePath, group)
 
 			if err := versionGen.InsertPreviousObjects(versions); err != nil {
@@ -193,7 +193,7 @@ func Run(pc *config.Provider, rootDir string) { //nolint:gocyclo
 	}
 	// Generate the provider,
 	// i.e. the setup function and optionally the provider's main program.
-	if err := NewProviderGenerator(rootDir, pc.ModulePath).Generate(controllerPkgMap, pc.MainTemplate); err != nil {
+	if err := NewProviderGenerator(rootDir, pc.ModulePath, WithSetupAggregatorTemplate(pc.SetupAggregatorTemplate)).Generate(controllerPkgMap, pc.MainTemplate); err != nil {
 		panic(errors.Wrap(err, "cannot generate setup file"))
 	}
 

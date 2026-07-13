@@ -35,6 +35,10 @@ Here are some Crossplane providers built using Upjet:
 You can get started by following the guides in the [docs](docs/README.md)
 directory.
 
+## Documentation
+| [Setup Aggregator Template Variables](docs/setup-aggregator-template-variables.md) | Variables available to the controller setup aggregator template |
+| [Terraformed Template Variables](docs/terraformed-template-variables.md) | Variables available to the managed resource terraformed template |
+
 ## Report a Bug
 
 For filing bugs, suggesting improvements, or requesting new features, please
