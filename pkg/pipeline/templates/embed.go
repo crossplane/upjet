@@ -32,7 +32,7 @@ var ControllerTemplate string
 //go:embed register.go.tmpl
 var RegisterTemplate string
 
-// SetupTemplate is populated with controller setup calls.
+// SetupTemplate aggregates provider's controller setup calls.
 //
 //go:embed setup.go.tmpl
 var SetupTemplate string

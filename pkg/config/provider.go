@@ -105,6 +105,24 @@ type Provider struct {
 	// ensure backwards-compatibility.
 	MainTemplate string
 
+	// SetupAggregatorTemplate is the template string to be used to render the
+	// controller setup aggregator code for the provider.
+	// The provider calls the generated aggregated setup code to start
+	// the reconcilers for the managed resources of the provider.
+	// If this is not set, the default
+	// aggregator template in pkg/pipeline/templates/setup.go.tmpl is used
+	// to ensure backwards-compatibility.
+	SetupAggregatorTemplate string
+
+	// TerraformedTemplate is the template string to be used to render the
+	// zz_*_terraformed.go files for the managed resources.
+	// Those modules implement upjet's resource.Terraformed interface for a
+	// specific managed resource.
+	// If this is not set, the default
+	// terraformed template in pkg/pipeline/templates/terraformed.go.tmpl is used
+	// to ensure backwards-compatibility.
+	TerraformedTemplate string
+
 	// skippedResourceNames is a list of Terraform resource names
 	// available in the Terraform provider schema, but
 	// not in the include list or in the skip list, meaning that
@@ -270,6 +288,27 @@ func WithFeaturesPackage(s string) ProviderOption {
 func WithMainTemplate(template string) ProviderOption {
 	return func(p *Provider) {
 		p.MainTemplate = template
+	}
+}
+
+// WithSetupAggregatorTemplate configures the provider's
+// controller setup aggregator template.
+// If a setup aggregator template is not configured for
+// the provider, a default template will be used.
+func WithSetupAggregatorTemplate(template string) ProviderOption {
+	return func(p *Provider) {
+		p.SetupAggregatorTemplate = template
+	}
+}
+
+// WithTerraformedTemplate configures the managed resource terraformed template
+// to be used by the provider for generating the resource.Terraformed
+// implementations.
+// If a terraformed template is not configured for
+// the provider, a default template will be used.
+func WithTerraformedTemplate(template string) ProviderOption {
+	return func(p *Provider) {
+		p.TerraformedTemplate = template
 	}
 }
 
