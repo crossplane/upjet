@@ -217,6 +217,7 @@ func (a *AsyncTracker) ResetReconstructedFrameworkTFState() {
 	defer a.mu.Unlock()
 	if a.stateMark == reconstructedState {
 		a.fwState = nil
+		a.fwIdentity = nil
 		a.stateMark = defaultState
 	}
 }

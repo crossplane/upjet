@@ -618,6 +618,20 @@ func (n *terraformPluginFrameworkExternalClient) Observe(ctx context.Context, mg
 		} else {
 			stateValueMap = conv.(map[string]any)
 		}
+	} else if n.supportsIdentity() {
+		// For FW resources that use stub/placeholder identifiers
+		// in their external name, the initial Observe returns a
+		// "not-found" with nil TF state as expected, however they might
+		// return a non-empty TF identity with the placeholder identifier.
+		// Discard the TF identity for non-existent resource observations
+		// otherwise subsequent reconciles detect a superfluous TF identity
+		// change, failing the Observe.
+		//
+		// This also clears the TF identity for other not-found cases
+		// like resource was fully established but was deleted out-of-band.
+		// This is fine as Upjet in fact does not rely on TF resource
+		// identities and rehydrates them in subsequent reconciles
+		n.opTracker.SetFrameworkIdentity(nil)
 	}
 
 	// TODO(cem): Consider skipping diff calculation to avoid potential config
@@ -742,9 +756,15 @@ func (n *terraformPluginFrameworkExternalClient) Create(ctx context.Context, mg 
 		// In the following reconciles, this helps to track the external
 		// resource, rather than try to recreate that might cause leaking.
 		n.opTracker.SetFrameworkTFState(applyResponse.NewState)
-		if n.supportsIdentity() {
-			n.opTracker.SetFrameworkIdentity(applyResponse.NewIdentity)
-		}
+		// note: do not store returned TF Framework Identity here.
+		// https://github.com/crossplane-contrib/provider-upjet-aws/issues/2135
+		// The returned TF identity might be partial/garbage (missing some fields).
+		// When subsequent observe recovers the resource via state, it detects an
+		// superfluous identity change garbage->valid and errors out.
+		//
+		// Instead, ignore the returned TF identity and let subsequent
+		// reconciliations rehydrate TF identity via state
+
 		return managed.ExternalCreation{}, errors.Wrap(fatalDiags, "resource creation call returned error diags")
 	}
 
