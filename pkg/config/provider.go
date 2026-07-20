@@ -214,7 +214,7 @@ type Provider struct {
 
 	// StorageVersionMigrator handles the migration of CRD resources from old
 	// storage versions to new storage versions when the CRD schema is updated.
-	StorageVersionMigrator *CRDsMigrator
+	StorageVersionMigrator *CRDMigrator
 }
 
 // ReferenceInjector injects cross-resource references across the resources
@@ -374,9 +374,11 @@ func WithExampleManifestConfiguration(emc ExampleManifestConfiguration) Provider
 	}
 }
 
-// WithStorageVersionMigrator configures a CRDsMigrator for handling storage version
-// migrations of CRD resources when their schemas are updated.
-func WithStorageVersionMigrator(migrator *CRDsMigrator) ProviderOption {
+// WithStorageVersionMigrator configures a custom CRDMigrator for handling storage
+// version migrations. Use this when you need a manually constructed migrator.
+// For providers that maintain PreviousVersions on their resources, prefer
+// PrepareCRDMigrator which auto-scans and builds the migrator automatically.
+func WithStorageVersionMigrator(migrator *CRDMigrator) ProviderOption {
 	return func(p *Provider) {
 		p.StorageVersionMigrator = migrator
 	}

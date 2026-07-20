@@ -6,7 +6,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/alecthomas/kingpin/v2"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/errors"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/logging"
 	authv1 "k8s.io/api/authorization/v1"
 	extv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -21,20 +21,21 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/yaml"
 
 	"github.com/crossplane/upjet/v2/pkg/config"
 )
 
 var (
-	app = kingpin.New("crds-migrator", "A CLI tool to manually update CRD storage versions for storage version migration")
+	app = kingpin.New("crd-migrator", "A CLI tool to manually update CRD storage versions for storage version migration")
 
 	// Global flags
 	kubeconfig = app.Flag("kubeconfig", "Path to kubeconfig file. If not specified, uses in-cluster config or default kubeconfig location").String()
 
 	// Update command
 	updateCmd      = app.Command("update", "Update CRD status to reflect the current storage version")
-	updateCRDNames = updateCmd.Flag("crd-names", "Comma-separated list of CRD:version pairs (e.g., 'buckets.s3.aws.upbound.io:v1beta2,users.iam.aws.upbound.io:v1beta1')").String()
+	updateCRDNames = updateCmd.Flag("crd-names", "Comma-separated list of <CRD>:<storage version> pairs (e.g., 'buckets.s3.aws.upbound.io:v1beta2,users.iam.aws.upbound.io:v1beta1')").String()
 	updateCRDFile  = updateCmd.Flag("crd-file", "Path to YAML file containing CRD to storage version mappings").String()
 	updateRetries  = updateCmd.Flag("retries", "Number of retry attempts (must be > 0)").Default("10").Int()
 	updateDuration = updateCmd.Flag("retry-duration", "Initial retry duration in seconds (must be > 0)").Default("1").Int()
@@ -55,6 +56,7 @@ func main() {
 
 func runUpdate() error { //nolint:gocyclo // easier to follow as a unit
 	ctx := context.Background()
+	logger := logging.NewLogrLogger(zap.New(zap.UseDevMode(false)).WithName("crd-migrator"))
 
 	// Parse CRD names and versions from flags
 	crdVersionMap, err := parseCRDMappings(*updateCRDNames, *updateCRDFile)
@@ -98,26 +100,24 @@ func runUpdate() error { //nolint:gocyclo // easier to follow as a unit
 		Steps:    *updateRetries,
 	}
 
-	log.Println("Starting CRD storage version migration", "crd-count", len(crdVersionMap))
+	logger.Info("Starting CRD storage version migration", "crd-count", len(crdVersionMap))
 
 	// Process each CRD
 	var failedCRDs []string
 	for crdName, storageVersion := range crdVersionMap {
-		log.Println("Processing CRD", "crd-name", crdName, "target-storage-version", storageVersion)
+		logger.Info("Processing CRD", "crd-name", crdName, "target-storage-version", storageVersion)
 
 		// Check permissions before attempting the update
 		if !*skipPermCheck {
 			hasPermission, err := config.CheckCRDStatusUpdatePermission(ctx, kube, crdName)
 			if err != nil {
-				log.Println("Permission check failed", "crd-name", crdName, "error", err)
+				logger.Info("Permission check failed", "crd-name", crdName, "error", err)
 				failedCRDs = append(failedCRDs, crdName)
 				continue
 			}
 
 			if !hasPermission {
-				log.Println("WARNING: The current user does not have sufficient permissions to patch CRD status.\n"+
-					"Required permissions: patch verb on customresourcedefinitions/status subresource",
-					"crd-name", crdName)
+				logger.Info("Insufficient permissions to patch CRD status, required: patch verb on customresourcedefinitions/status subresource", "crd-name", crdName)
 				failedCRDs = append(failedCRDs, crdName)
 				continue
 			}
@@ -125,20 +125,20 @@ func runUpdate() error { //nolint:gocyclo // easier to follow as a unit
 
 		// Execute the CRD storage version update
 		if err := config.UpdateCRDStorageVersion(ctx, kube, retryBackoff, crdName, storageVersion); err != nil {
-			log.Println("Failed to update CRD storage version", "crd-name", crdName, "error", err)
+			logger.Info("Failed to update CRD storage version", "crd-name", crdName, "error", err)
 			failedCRDs = append(failedCRDs, crdName)
 			continue
 		}
 
-		log.Println("Successfully updated CRD storage version", "crd-name", crdName, "storage-version", storageVersion)
+		logger.Info("Successfully updated CRD storage version", "crd-name", crdName, "storage-version", storageVersion)
 	}
 
 	// Report results
 	successCount := len(crdVersionMap) - len(failedCRDs)
-	log.Println("CRD storage version migration completed", "total", len(crdVersionMap), "successful", successCount, "failed", len(failedCRDs))
+	logger.Info("CRD storage version migration completed", "total", len(crdVersionMap), "successful", successCount, "failed", len(failedCRDs))
 
 	if len(failedCRDs) > 0 {
-		log.Println("Failed CRDs", "crd-names", failedCRDs)
+		logger.Info("Failed CRDs", "crd-names", failedCRDs)
 		return errors.Errorf("failed to update %d CRD(s): %v", len(failedCRDs), failedCRDs)
 	}
 
@@ -161,7 +161,7 @@ func parseCRDMappings(crdNamesFlag, crdFile string) (map[string]string, error) {
 				continue
 			}
 
-			parts := strings.SplitN(trimmed, ":", 2)
+			parts := strings.Split(trimmed, ":")
 			if len(parts) != 2 {
 				return nil, errors.Errorf("invalid CRD:version format: %q. Expected format: 'crd-name:storage-version'", trimmed)
 			}
