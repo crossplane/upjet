@@ -10,7 +10,7 @@ require (
 	dario.cat/mergo v1.0.2
 	github.com/alecthomas/kingpin/v2 v2.4.0
 	github.com/antchfx/htmlquery v1.2.4
-	github.com/crossplane/crossplane-runtime/v2 v2.2.0
+	github.com/crossplane/crossplane-runtime/v2 v2.2.3
 	github.com/fatih/camelcase v1.0.0
 	github.com/golang/mock v1.6.0
 	github.com/google/go-cmp v0.7.0
