@@ -8,10 +8,10 @@ import (
 	"context"
 	"time"
 
-	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/logging"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -200,7 +200,7 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 		return managed.ExternalObservation{}, errors.New(errUnexpectedObject)
 	}
 
-	policySet := sets.New[xpv1.ManagementAction](tr.GetManagementPolicies()...)
+	policySet := sets.New[xpv2.ManagementAction](tr.GetManagementPolicies()...)
 
 	// Note(turkenh): We don't need to check if the management policies are
 	// enabled or not because the crossplane-runtime's managed reconciler already
@@ -211,7 +211,7 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 	// Note (lsviben) We are only using import instead of refresh if the
 	// management policies do not contain create or update as they need the
 	// required fields to be set, which is not the case for import.
-	if !policySet.HasAny(xpv1.ManagementActionCreate, xpv1.ManagementActionUpdate, xpv1.ManagementActionAll) {
+	if !policySet.HasAny(xpv2.ManagementActionCreate, xpv2.ManagementActionUpdate, xpv2.ManagementActionAll) {
 		return e.Import(ctx, tr)
 	}
 
@@ -261,7 +261,7 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 	if err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot set critical annotations")
 	}
-	policyHasLateInit := policySet.HasAny(xpv1.ManagementActionLateInitialize, xpv1.ManagementActionAll)
+	policyHasLateInit := policySet.HasAny(xpv2.ManagementActionLateInitialize, xpv2.ManagementActionAll)
 	if annotationsUpdated && !policyHasLateInit {
 		if err := e.kube.Update(ctx, mg); err != nil {
 			return managed.ExternalObservation{}, errors.Wrap(err, errUpdateAnnotations)
@@ -294,7 +294,7 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 			return managed.ExternalObservation{}, errors.Wrap(err, "cannot late initialize parameters")
 		}
 	}
-	markedAvailable := tr.GetCondition(xpv1.TypeReady).Equal(xpv1.Available())
+	markedAvailable := tr.GetCondition(xpv2.TypeReady).Equal(xpv2.Available())
 
 	// In the following switch block, before running a relatively costly
 	// Terraform apply and that may fail before critical annotations are
@@ -321,7 +321,7 @@ func (e *external) Observe(ctx context.Context, mg xpresource.Managed) (managed.
 	// we prioritize status updates over late-init'ed spec updates
 	case !markedAvailable:
 		addTTR(tr)
-		tr.SetConditions(xpv1.Available())
+		tr.SetConditions(xpv2.Available())
 		e.logger.Debug("Resource is marked as available.")
 		if e.eventHandler != nil {
 			name := types.NamespacedName{
@@ -529,7 +529,7 @@ func (e *external) Import(ctx context.Context, tr resource.Terraformed) (managed
 		return managed.ExternalObservation{}, errors.Wrap(err, "cannot set observation when importing")
 	}
 
-	tr.SetConditions(xpv1.Available())
+	tr.SetConditions(xpv2.Available())
 	return managed.ExternalObservation{
 		ResourceExists:    true,
 		ResourceUpToDate:  true,
