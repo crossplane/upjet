@@ -229,7 +229,7 @@ func FrameworkResourceWithComputedIdentifier(identifier, placeholder string) Ext
 		WithGetExternalNameFn(func(fn GetExternalNameFn, tfState map[string]any) (string, error) {
 			if id, ok := tfState[identifier]; ok {
 				idStr := fmt.Sprintf("%v", id)
-				if len(idStr) > 0 {
+				if len(idStr) > 0 && idStr != placeholder {
 					return idStr, nil
 				}
 			}

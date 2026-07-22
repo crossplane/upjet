@@ -277,6 +277,82 @@ func TestTemplatedGetIDFn(t *testing.T) {
 	}
 }
 
+func TestFrameworkResourceWithComputedIdentifierGetExternalNameFn(t *testing.T) {
+	const (
+		identifier  = "arn"
+		placeholder = "upjet-placeholder-id"
+	)
+	type args struct {
+		tfstate map[string]any
+	}
+	type want struct {
+		name string
+		err  error
+	}
+	cases := map[string]struct {
+		reason string
+		args   args
+		want   want
+	}{
+		"ComputedIdentifier": {
+			reason: "Should return the identifier attribute when it holds a real value.",
+			args: args{
+				tfstate: map[string]any{
+					identifier: "arn:aws:service:region:account:resource/real-id",
+				},
+			},
+			want: want{
+				name: "arn:aws:service:region:account:resource/real-id",
+			},
+		},
+		"PlaceholderIdentifier": {
+			reason: "Should error out when the identifier attribute still holds the placeholder value, instead of returning the placeholder as external name.",
+			args: args{
+				tfstate: map[string]any{
+					identifier: placeholder,
+				},
+			},
+			want: want{
+				err: errors.Errorf("cannot find attribute %q in tfstate", identifier),
+			},
+		},
+		"MissingIdentifier": {
+			reason: "Should error out when the identifier attribute is not present in the tfstate.",
+			args: args{
+				tfstate: map[string]any{
+					"another": "value",
+				},
+			},
+			want: want{
+				err: errors.Errorf("cannot find attribute %q in tfstate", identifier),
+			},
+		},
+		"EmptyIdentifier": {
+			reason: "Should error out when the identifier attribute is present but empty.",
+			args: args{
+				tfstate: map[string]any{
+					identifier: "",
+				},
+			},
+			want: want{
+				err: errors.Errorf("cannot find attribute %q in tfstate", identifier),
+			},
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			n, err := FrameworkResourceWithComputedIdentifier(identifier, placeholder).
+				GetExternalNameFn(tc.args.tfstate)
+			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
+				t.Fatalf("\n%s\nFrameworkResourceWithComputedIdentifier.GetExternalNameFn(...): -want, +got: %s", tc.reason, diff)
+			}
+			if diff := cmp.Diff(tc.want.name, n); diff != "" {
+				t.Fatalf("\n%s\nFrameworkResourceWithComputedIdentifier.GetExternalNameFn(...): -want, +got: %s", tc.reason, diff)
+			}
+		})
+	}
+}
+
 func TestTemplatedGetExternalNameFn(t *testing.T) {
 	type args struct {
 		tmpl    string

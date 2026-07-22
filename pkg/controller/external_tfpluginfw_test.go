@@ -634,6 +634,45 @@ func TestTPFObserveIdentityPropagation(t *testing.T) {
 			t.Error("Tracker identity should be nil when response has no identity")
 		}
 	})
+
+	t.Run("ObserveClearsIdentityWhenResourceNotFound", func(t *testing.T) {
+		// Regression test for the placeholder-identifier case: on the initial
+		// Observe the resource does not exist (nil state), but the provider may
+		// still return a non-empty identity carrying the placeholder id.
+		// Persisting it caused subsequent reconciles to detect a superfluous
+		// identity change and fail the read. The identity must be discarded for
+		// not-found observations.
+		placeholderIdentity := newTestIdentityData("placeholder-id")
+
+		tc := testConfiguration{
+			r:               newMockTPFResourceWithIdentity(),
+			cfg:             newBaseUpjetConfig(),
+			obj:             obj,
+			currentStateMap: nil,
+			plannedStateMap: map[string]any{
+				"name": "example",
+			},
+			params: map[string]any{
+				"name": "example",
+			},
+			// provider returns an identity even though the resource is absent
+			readNewIdentity: placeholderIdentity,
+		}
+		tpfExternal := prepareTPFExternalWithTestConfig(tc)
+		// Pre-set a stale identity on the tracker as well.
+		tpfExternal.opTracker.SetFrameworkIdentity(placeholderIdentity)
+
+		obs, err := tpfExternal.Observe(context.TODO(), &tc.obj)
+		if err != nil {
+			t.Fatalf("Observe returned unexpected error: %v", err)
+		}
+		if obs.ResourceExists {
+			t.Fatal("resource should not exist for this observation")
+		}
+		if tpfExternal.opTracker.GetFrameworkIdentity() != nil {
+			t.Error("tracker identity should be cleared when the resource is not found")
+		}
+	})
 }
 
 func TestTPFCreateIdentityPropagation(t *testing.T) {
@@ -681,8 +720,15 @@ func TestTPFCreateIdentityPropagation(t *testing.T) {
 		}
 	})
 
-	t.Run("CreateStoresIdentityEvenOnDiagError", func(t *testing.T) {
-		newIdentity := newTestIdentityData("partial-id")
+	t.Run("CreateDoesNotStoreIdentityOnDiagError", func(t *testing.T) {
+		// Regression test for
+		// https://github.com/crossplane-contrib/provider-upjet-aws/issues/2135
+		// On a partial-create error, the returned TF identity might be
+		// partial/garbage. Storing it caused a subsequent Observe (which
+		// recovers a valid identity from state) to detect a superfluous
+		// garbage->valid identity change and fail. The identity must NOT be
+		// stored here; it is rehydrated from state on later reconciles.
+		partialIdentity := newTestIdentityData("partial-id")
 
 		tc := testConfiguration{
 			r:               newMockTPFResourceWithIdentity(),
@@ -703,7 +749,7 @@ func TestTPFCreateIdentityPropagation(t *testing.T) {
 					Detail:   "resource partially created",
 				},
 			},
-			applyNewIdentity: newIdentity,
+			applyNewIdentity: partialIdentity,
 		}
 		tpfExternal := prepareTPFExternalWithTestConfig(tc)
 
@@ -711,10 +757,14 @@ func TestTPFCreateIdentityPropagation(t *testing.T) {
 		if err == nil {
 			t.Fatal("Create should have returned an error on diag error")
 		}
-		// Identity should still be stored even on error (like state is)
-		storedIdentity := tpfExternal.opTracker.GetFrameworkIdentity()
-		if storedIdentity != newIdentity {
-			t.Error("NewIdentity should be stored in tracker even when apply returns error diags")
+		// Identity must NOT be stored on the error path.
+		if storedIdentity := tpfExternal.opTracker.GetFrameworkIdentity(); storedIdentity != nil {
+			t.Error("NewIdentity should not be stored in tracker when apply returns error diags")
+		}
+		// The (partial) state, however, is still preserved so the external
+		// resource can be tracked on subsequent reconciles.
+		if !tpfExternal.opTracker.HasFrameworkTFState() {
+			t.Error("partial framework state should be preserved when apply returns error diags")
 		}
 	})
 }
