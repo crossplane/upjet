@@ -27,45 +27,61 @@ import (
 	"github.com/crossplane/upjet/v2/pkg/config"
 )
 
+const (
+	modeStatic  = "static"
+	modeDynamic = "dynamic"
+)
+
 var (
-	app = kingpin.New("crd-migrator", "A CLI tool to manually update CRD storage versions for storage version migration")
+	app = kingpin.New("crd-migrator", "A CLI tool to migrate CRD storage versions. Use --mode static to provide CRD:version pairs explicitly, or --mode dynamic to discover CRDs from the cluster by group.")
 
 	// Global flags
 	kubeconfig = app.Flag("kubeconfig", "Path to kubeconfig file. If not specified, uses in-cluster config or default kubeconfig location").String()
 
-	// Update command
-	updateCmd      = app.Command("update", "Update CRD status to reflect the current storage version")
-	updateCRDNames = updateCmd.Flag("crd-names", "Comma-separated list of <CRD>:<storage version> pairs (e.g., 'buckets.s3.aws.upbound.io:v1beta2,users.iam.aws.upbound.io:v1beta1')").String()
-	updateCRDFile  = updateCmd.Flag("crd-file", "Path to YAML file containing CRD to storage version mappings").String()
-	updateRetries  = updateCmd.Flag("retries", "Number of retry attempts (must be > 0)").Default("10").Int()
-	updateDuration = updateCmd.Flag("retry-duration", "Initial retry duration in seconds (must be > 0)").Default("1").Int()
-	updateFactor   = updateCmd.Flag("retry-factor", "Retry backoff factor (must be > 1.0 for exponential growth)").Default("2.0").Float64()
-	updateJitter   = updateCmd.Flag("retry-jitter", "Retry jitter between 0.0 and 1.0").Default("0.1").Float64()
-	skipPermCheck  = updateCmd.Flag("skip-permission-check", "Skip permission check before updating CRD").Bool()
+	// Migrate command with static and dynamic modes
+	migrateCmd  = app.Command("migrate", "Migrate CRD storage versions. Use --mode static or --mode dynamic.")
+	migrateMode = migrateCmd.Flag("mode", "Migration mode: 'static' (provide CRD:version pairs explicitly) or 'dynamic' (discover CRDs from the cluster by group)").Required().Enum(modeStatic, modeDynamic)
+
+	// Shared retry flags
+	migrateRetries  = migrateCmd.Flag("retries", "Number of retry attempts (must be > 0)").Default("10").Int()
+	migrateDuration = migrateCmd.Flag("retry-duration", "Initial retry duration in seconds (must be > 0)").Default("1").Int()
+	migrateFactor   = migrateCmd.Flag("retry-factor", "Retry backoff factor (must be > 1.0 for exponential growth)").Default("2.0").Float64()
+	migrateJitter   = migrateCmd.Flag("retry-jitter", "Retry jitter between 0.0 and 1.0").Default("0.1").Float64()
+
+	// Static mode flags
+	migrateCRDNames = migrateCmd.Flag("crd-names", "[static] Comma-separated list of <CRD>:<storage version> pairs (e.g., 'buckets.s3.aws.upbound.io:v1beta2,users.iam.aws.upbound.io:v1beta1')").String()
+	migrateCRDFile  = migrateCmd.Flag("crd-file", "[static] Path to YAML file containing CRD to storage version mappings").String()
+	skipPermCheck   = migrateCmd.Flag("skip-permission-check", "[static] Skip permission check before updating CRD status").Bool()
+
+	// Dynamic mode flags
+	migrateRootGroup  = migrateCmd.Flag("root-group", "[dynamic] Root API group of the provider, e.g. 'aws.upbound.io'").String()
+	migrateShortGroup = migrateCmd.Flag("short-group", "[dynamic] Optional single service short group, e.g. 'ec2'. When set, only CRDs in '<short-group>.<root-group>' are migrated. When omitted, all CRDs under the root group are migrated.").String()
 )
 
 func main() {
 	command := kingpin.MustParse(app.Parse(os.Args[1:]))
 
-	if command == updateCmd.FullCommand() {
-		if err := runUpdate(); err != nil {
-			kingpin.FatalIfError(err, "Failed to update CRD storage")
+	if command == migrateCmd.FullCommand() {
+		if err := runMigrate(); err != nil {
+			kingpin.FatalIfError(err, "Failed to migrate CRD storage")
 		}
 	}
 }
 
-func runUpdate() error { //nolint:gocyclo // easier to follow as a unit
+func runMigrate() error {
 	ctx := context.Background()
 	logger := logging.NewLogrLogger(zap.New(zap.UseDevMode(false)).WithName("crd-migrator"))
 
-	// Parse CRD names and versions from flags
-	crdVersionMap, err := parseCRDMappings(*updateCRDNames, *updateCRDFile)
-	if err != nil {
-		return errors.Wrap(err, "failed to parse CRD mappings")
+	// Validate and configure retry backoff
+	if err := validateRetryConfig(*migrateRetries, *migrateDuration, *migrateFactor, *migrateJitter); err != nil {
+		return errors.Wrap(err, "invalid retry configuration")
 	}
 
-	if len(crdVersionMap) == 0 {
-		return errors.New("no CRD mappings provided. Use --crd-names or --crd-file")
+	retryBackoff := wait.Backoff{
+		Duration: time.Duration(*migrateDuration) * time.Second,
+		Factor:   *migrateFactor,
+		Jitter:   *migrateJitter,
+		Steps:    *migrateRetries,
 	}
 
 	// Build Kubernetes client configuration
@@ -88,16 +104,24 @@ func runUpdate() error { //nolint:gocyclo // easier to follow as a unit
 		return errors.Wrap(err, "failed to create kube client")
 	}
 
-	// Validate and configure retry backoff
-	if err := validateRetryConfig(*updateRetries, *updateDuration, *updateFactor, *updateJitter); err != nil {
-		return errors.Wrap(err, "invalid retry configuration")
+	switch *migrateMode {
+	case modeStatic:
+		return runStaticMigration(ctx, logger, kube, retryBackoff)
+	case modeDynamic:
+		return runDynamicMigration(ctx, logger, kube, retryBackoff)
+	}
+	return nil
+}
+
+func runStaticMigration(ctx context.Context, logger logging.Logger, kube client.Client, retryBackoff wait.Backoff) error {
+	// Parse CRD names and versions from flags
+	crdVersionMap, err := parseCRDMappings(*migrateCRDNames, *migrateCRDFile)
+	if err != nil {
+		return errors.Wrap(err, "failed to parse CRD mappings")
 	}
 
-	retryBackoff := wait.Backoff{
-		Duration: time.Duration(*updateDuration) * time.Second,
-		Factor:   *updateFactor,
-		Jitter:   *updateJitter,
-		Steps:    *updateRetries,
+	if len(crdVersionMap) == 0 {
+		return errors.New("no CRD mappings provided for static mode. Use --crd-names or --crd-file")
 	}
 
 	logger.Info("Starting CRD storage version migration", "crd-count", len(crdVersionMap))
@@ -142,6 +166,29 @@ func runUpdate() error { //nolint:gocyclo // easier to follow as a unit
 		return errors.Errorf("failed to update %d CRD(s): %v", len(failedCRDs), failedCRDs)
 	}
 
+	return nil
+}
+
+func runDynamicMigration(ctx context.Context, logger logging.Logger, kube client.Client, retryBackoff wait.Backoff) error {
+	if *migrateRootGroup == "" {
+		return errors.New("--root-group is required for dynamic mode")
+	}
+
+	// Build migrator options; short group is optional
+	opts := []config.CRDMigratorOption{config.WithRetryBackoff(retryBackoff)}
+	if *migrateShortGroup != "" {
+		opts = append(opts, config.WithShortGroup(*migrateShortGroup))
+	}
+
+	migrator := config.NewCRDMigrator(*migrateRootGroup, opts...)
+
+	logger.Info("Starting dynamic CRD storage version migration", "root-group", *migrateRootGroup, "short-group", *migrateShortGroup)
+
+	if err := migrator.Run(ctx, logger, kube); err != nil {
+		return errors.Wrap(err, "dynamic CRD migration failed")
+	}
+
+	logger.Info("Dynamic CRD storage version migration completed successfully")
 	return nil
 }
 
