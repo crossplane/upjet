@@ -14,7 +14,10 @@ import (
 	"github.com/crossplane/crossplane-runtime/v2/pkg/test"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrl "sigs.k8s.io/controller-runtime/pkg/manager"
 
@@ -548,6 +551,78 @@ func TestAPICallbacksDestroyNamespaced(t *testing.T) {
 
 // okManager returns a manager whose client successfully handles Get and
 // Status().Update so that the callback reaches the requestReconcile gate.
+func TestAPICallbacksStatusUpdateConflict(t *testing.T) {
+	conflict := kerrors.NewConflict(schema.GroupResource{Resource: "terraformeds"}, "name", errBoom)
+
+	cases := map[string]struct {
+		reason           string
+		statusUpdateErrs []error
+		getErr           error
+		wantGetCalls     int
+		wantErr          error
+	}{
+		"RetriesAndSucceeds": {
+			reason:           "A conflicting status write must be retried against a re-read object and report success.",
+			statusUpdateErrs: []error{conflict, nil},
+			wantGetCalls:     2,
+		},
+		"RetriesUntilExhausted": {
+			reason:           "A status write that keeps conflicting must surface the conflict once the retries are exhausted.",
+			statusUpdateErrs: []error{conflict, conflict, conflict, conflict, conflict, conflict},
+			wantGetCalls:     retry.DefaultRetry.Steps,
+			wantErr:          errors.Wrapf(conflict, errUpdateStatusFmt, "", ", Kind=//name", opDestroy),
+		},
+		"DoesNotRetryOtherErrors": {
+			reason:           "A non-conflict status write error must not be retried.",
+			statusUpdateErrs: []error{errBoom},
+			wantGetCalls:     1,
+			wantErr:          errors.Wrapf(errBoom, errUpdateStatusFmt, "", ", Kind=//name", opDestroy),
+		},
+		"ReReadFailureSurfaces": {
+			reason:           "When the object cannot be re-read after a conflict, that error must surface.",
+			statusUpdateErrs: []error{conflict, nil},
+			getErr:           errBoom,
+			wantGetCalls:     2,
+			wantErr:          errors.Wrapf(errBoom, errUpdateStatusFmt, "", ", Kind=//name", opDestroy),
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			getCalls := 0
+			updateCalls := 0
+			mgr := &xpfake.Manager{
+				Client: &test.MockClient{
+					MockGet: func(_ context.Context, _ client.ObjectKey, _ client.Object) error {
+						getCalls++
+						// The first Get is the callback's initial read, which must
+						// keep succeeding; getErr models a failure to re-read.
+						if getCalls > 1 {
+							return tc.getErr
+						}
+						return nil
+					},
+					MockStatusUpdate: func(_ context.Context, _ client.Object, _ ...client.SubResourceUpdateOption) error {
+						err := tc.statusUpdateErrs[updateCalls]
+						updateCalls++
+						return err
+					},
+				},
+				Scheme: xpfake.SchemeWith(&fake.Terraformed{}),
+			}
+
+			e := NewAPICallbacks(mgr, xpresource.ManagedKind(xpfake.GVK(&fake.Terraformed{})))
+			err := e.Destroy(types.NamespacedName{Name: "name"}, false)(nil, context.TODO())
+			if diff := cmp.Diff(tc.wantErr, err, test.EquateErrors()); diff != "" {
+				t.Errorf("\n%s\nDestroy(...): -want error, +got error:\n%s", tc.reason, diff)
+			}
+			if getCalls != tc.wantGetCalls {
+				t.Errorf("\n%s\nDestroy(...): want %d Get calls, got %d", tc.reason, tc.wantGetCalls, getCalls)
+			}
+		})
+	}
+}
+
 func okManager() ctrl.Manager {
 	return &xpfake.Manager{
 		Client: &test.MockClient{

@@ -13,6 +13,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrl "sigs.k8s.io/controller-runtime/pkg/manager"
 
@@ -127,30 +128,50 @@ func (ac *APICallbacks) callbackFn(nn types.NamespacedName, op asyncOperation, r
 		if kErr := ac.kube.Get(ctx, nn, tr); kErr != nil {
 			return errors.Wrapf(kErr, errGetFmt, tr.GetObjectKind().GroupVersionKind().String(), nn, op)
 		}
-		// For the no-fork architecture, we will need to be able to report
-		// reconciliation errors. The proper place is the `Synced`
-		// status condition but we need changes in the managed reconciler
-		// to do so. So we keep the `LastAsyncOperation` condition.
-		// TODO: move this to the `Synced` condition.
-		tr.SetConditions(resource.LastAsyncOperationCondition(err))
-		if err != nil {
-			wrapMsg := ""
-			switch op {
-			case opCreate:
-				wrapMsg = errXPReconcileCreate
-			case opUpdate:
-				wrapMsg = errXPReconcileUpdate
-			case opDestroy:
-				wrapMsg = errXPReconcileDelete
+		setConditions := func(tr resource.Terraformed) {
+			// For the no-fork architecture, we will need to be able to report
+			// reconciliation errors. The proper place is the `Synced`
+			// status condition but we need changes in the managed reconciler
+			// to do so. So we keep the `LastAsyncOperation` condition.
+			// TODO: move this to the `Synced` condition.
+			tr.SetConditions(resource.LastAsyncOperationCondition(err))
+			if err != nil {
+				wrapMsg := ""
+				switch op {
+				case opCreate:
+					wrapMsg = errXPReconcileCreate
+				case opUpdate:
+					wrapMsg = errXPReconcileUpdate
+				case opDestroy:
+					wrapMsg = errXPReconcileDelete
+				}
+				tr.SetConditions(xpv1.ReconcileError(errors.Wrap(err, wrapMsg)))
+			} else {
+				tr.SetConditions(xpv1.ReconcileSuccess())
 			}
-			tr.SetConditions(xpv1.ReconcileError(errors.Wrap(err, wrapMsg)))
-		} else {
-			tr.SetConditions(xpv1.ReconcileSuccess())
+			if ac.enableStatusUpdates {
+				tr.SetConditions(resource.AsyncOperationFinishedCondition())
+			}
 		}
-		if ac.enableStatusUpdates {
-			tr.SetConditions(resource.AsyncOperationFinishedCondition())
-		}
-		uErr := errors.Wrapf(ac.kube.Status().Update(ctx, tr), errUpdateStatusFmt, tr.GetObjectKind().GroupVersionKind().String(), nn, op)
+		setConditions(tr)
+		// The managed reconciler writes to this object while the async operation is
+		// still in flight -- most visibly removing the finalizer once a delete
+		// completes -- so this status write races it and loses on conflict. These
+		// conditions derive only from the operation result, so re-reading the object
+		// and re-applying them is idempotent.
+		reread := false
+		uErr := errors.Wrapf(retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			if reread {
+				fresh := ac.newTerraformed()
+				if kErr := ac.kube.Get(ctx, nn, fresh); kErr != nil {
+					return kErr
+				}
+				setConditions(fresh)
+				tr = fresh
+			}
+			reread = true
+			return ac.kube.Status().Update(ctx, tr)
+		}), errUpdateStatusFmt, tr.GetObjectKind().GroupVersionKind().String(), nn, op)
 		if ac.eventHandler != nil && requestReconcile {
 			rateLimiter := handler.NoRateLimiter
 			switch {
