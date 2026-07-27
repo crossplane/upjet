@@ -2,8 +2,18 @@
 #
 # SPDX-License-Identifier: CC0-1.0
 
+# Static mode: provide explicit CRD-to-storage-version mappings.
+# Used with: crd-migrator migrate --mode static --crd-file example.yaml
 {
   "locations.conditionalaccess.azuread.upbound.io":"v1beta2",
   "invitations.invitations.azuread.upbound.io":"v1beta2",
   "principals.serviceprincipals.azuread.upbound.io":"v1beta2"
 }
+
+# Dynamic mode examples (run directly, no file needed):
+#
+#   Migrate all CRDs under a root group:
+#     crd-migrator migrate --mode dynamic --root-group azuread.upbound.io
+#
+#   Migrate only a specific service group:
+#     crd-migrator migrate --mode dynamic --root-group azuread.upbound.io --short-group conditionalaccess

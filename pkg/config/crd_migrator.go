@@ -6,7 +6,6 @@ package config
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -15,13 +14,10 @@ import (
 	authv1 "k8s.io/api/authorization/v1"
 	extv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/discovery"
-	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -32,8 +28,11 @@ import (
 // public package, we can remove the duplication here.
 
 // CRDMigrator makes sure the CRDs are using the latest storage version.
+// It discovers CRDs dynamically at runtime by listing all CRDs in the cluster
+// and filtering them by the configured root group and optional short group.
 type CRDMigrator struct {
-	gvkList      []schema.GroupVersionKind
+	rootGroup    string
+	shortGroup   string
 	retryBackoff wait.Backoff
 }
 
@@ -47,10 +46,23 @@ func WithRetryBackoff(backoff wait.Backoff) CRDMigratorOption {
 	}
 }
 
-// NewCRDMigrator returns a new *CRDMigrator with default retry configuration.
-func NewCRDMigrator(gvkList []schema.GroupVersionKind, opts ...CRDMigratorOption) *CRDMigrator {
+// WithShortGroup restricts migration to CRDs whose API group is exactly
+// shortGroup+"."+rootGroup (e.g. short group "ec2" with root group
+// "aws.upbound.io" matches only "ec2.aws.upbound.io"). When no short group is
+// set, all CRDs whose group equals or ends with the root group are considered.
+func WithShortGroup(shortGroup string) CRDMigratorOption {
+	return func(c *CRDMigrator) {
+		c.shortGroup = shortGroup
+	}
+}
+
+// NewCRDMigrator returns a new *CRDMigrator that dynamically discovers CRDs
+// belonging to rootGroup (e.g. "aws.upbound.io") with default retry
+// configuration. Use WithShortGroup to narrow the scope to a single service
+// group (e.g. "ec2" → only "ec2.aws.upbound.io" CRDs).
+func NewCRDMigrator(rootGroup string, opts ...CRDMigratorOption) *CRDMigrator {
 	c := &CRDMigrator{
-		gvkList: gvkList,
+		rootGroup: rootGroup,
 		retryBackoff: wait.Backoff{
 			Duration: 1 * time.Second,
 			Factor:   2.0,
@@ -66,39 +78,41 @@ func NewCRDMigrator(gvkList []schema.GroupVersionKind, opts ...CRDMigratorOption
 	return c
 }
 
-// Run migrates CRDs to use the latest storage version by listing all resources
-// of the old storage version, patching them to trigger conversion to the new
-// storage version, and updating the CRD status to reflect only the new storage version.
-func (c *CRDMigrator) Run(ctx context.Context, logr logging.Logger, discoveryClient discovery.DiscoveryInterface, kube client.Client) error {
-	// Perform API discovery once before the loop to avoid expensive repeated discovery calls
-	groupResources, err := restmapper.GetAPIGroupResources(discoveryClient)
-	if err != nil {
-		return errors.Wrap(err, "failed to get API group resources")
+// matchesGroup returns true if the given CRD API group falls within the
+// migrator's configured root/short group scope.
+func (c *CRDMigrator) matchesGroup(group string) bool {
+	if c.shortGroup == "" {
+		return group == c.rootGroup || strings.HasSuffix(group, "."+c.rootGroup)
 	}
-	mapper := restmapper.NewDiscoveryRESTMapper(groupResources)
+	return group == c.shortGroup+"."+c.rootGroup
+}
+
+// Run migrates CRDs to use the latest storage version by dynamically
+// discovering all CRDs that belong to the configured group scope, then for
+// each CRD: listing all resources of the old storage version, patching them to
+// trigger conversion to the new storage version, and updating the CRD status
+// to reflect only the new storage version.
+func (c *CRDMigrator) Run(ctx context.Context, logr logging.Logger, kube client.Client) error {
+	var crdList extv1.CustomResourceDefinitionList
+	if err := kube.List(ctx, &crdList); err != nil {
+		return errors.Wrap(err, "failed to list CRDs")
+	}
 
 	var errs []error
-	for _, gvk := range c.gvkList {
-		if err := c.migrateCRD(ctx, logr, kube, mapper, gvk); err != nil {
+	for i := range crdList.Items {
+		crd := crdList.Items[i]
+		if !c.matchesGroup(crd.Spec.Group) {
+			continue
+		}
+		if err := c.migrateCRD(ctx, logr, kube, crd); err != nil {
 			errs = append(errs, err)
 		}
 	}
 	return errors.Join(errs...)
 }
 
-func (c *CRDMigrator) migrateCRD(ctx context.Context, logr logging.Logger, kube client.Client, mapper meta.RESTMapper, gvk schema.GroupVersionKind) error { //nolint:gocyclo // easier to follow as a unit
-	crdName, err := GetCRDNameFromGVK(mapper, gvk)
-	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("failed to get CRD name from GVK %s", gvk.Kind))
-	}
-
-	var crd extv1.CustomResourceDefinition
-	if err := kube.Get(ctx, client.ObjectKey{Name: crdName}, &crd); err != nil {
-		if kerrors.IsNotFound(err) {
-			return nil
-		}
-		return errors.Wrapf(err, "cannot get %s crd", crdName)
-	}
+func (c *CRDMigrator) migrateCRD(ctx context.Context, logr logging.Logger, kube client.Client, crd extv1.CustomResourceDefinition) error { //nolint:gocyclo // easier to follow as a unit
+	crdName := crd.Name
 
 	// Find the current storage version (the version marked as storage in the spec)
 	var storageVersion string
@@ -122,7 +136,7 @@ func (c *CRDMigrator) migrateCRD(ctx context.Context, logr logging.Logger, kube 
 	}
 
 	if !needMigration {
-		logr.Debug("Skipping CRD migration for CRD because it has already been migrated", "crd", crdName)
+		logr.Debug("Skipping CRD migration, storedVersions already matches the current storage version", "crd", crdName)
 		return nil
 	}
 
@@ -178,7 +192,7 @@ func (c *CRDMigrator) migrateCRD(ctx context.Context, logr logging.Logger, kube 
 	}
 
 	if !hasPermission {
-		logr.Info(fmt.Sprintf("This client does not have permission to patch the status of the CRD %s", crdName))
+		logr.Info("This client does not have permission to patch the CRD status", "crd", crdName)
 		return nil
 	}
 
@@ -202,17 +216,6 @@ func isRetryable(err error) bool {
 		kerrors.IsConflict(err)
 }
 
-// GetCRDNameFromGVK returns the CRD name (e.g., "resources.group.example.com") for a given GroupVersionKind
-// by using the provided REST mapper to find the REST mapping.
-func GetCRDNameFromGVK(mapper meta.RESTMapper, gvk schema.GroupVersionKind) (string, error) {
-	mapping, err := mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
-	if err != nil {
-		return "", errors.Wrap(err, "cannot get REST mapping")
-	}
-
-	return mapping.Resource.Resource + "." + mapping.Resource.Group, nil
-}
-
 // UpdateCRDStorageVersion updates the CRD status to reflect only the specified storage version.
 // It retries the update with exponential backoff and verifies the update was successful.
 func UpdateCRDStorageVersion(ctx context.Context, kube client.Client, retryBackoff wait.Backoff, crdName, storageVersion string) error {
@@ -229,7 +232,7 @@ func UpdateCRDStorageVersion(ctx context.Context, kube client.Client, retryBacko
 		return kube.Status().Patch(ctx, &crd, client.MergeFrom(origCrd))
 	})
 	if statusUpdateErr != nil {
-		return errors.Wrapf(statusUpdateErr, "couldn't update %s crd", crd.Name)
+		return errors.Wrapf(statusUpdateErr, "couldn't update %s crd", crdName)
 	}
 	return nil
 }
@@ -237,7 +240,7 @@ func UpdateCRDStorageVersion(ctx context.Context, kube client.Client, retryBacko
 // CheckCRDStatusUpdatePermission checks if the current client has permission to update/patch
 // the status subresource of the specified CRD using SelfSubjectAccessReview.
 func CheckCRDStatusUpdatePermission(ctx context.Context, kube client.Client, crdName string) (bool, error) {
-	// Check for both 'patch' verb on the status subresource
+	// Check for 'patch' verb on the status subresource
 	ssar := &authv1.SelfSubjectAccessReview{
 		Spec: authv1.SelfSubjectAccessReviewSpec{
 			ResourceAttributes: &authv1.ResourceAttributes{
@@ -258,21 +261,4 @@ func CheckCRDStatusUpdatePermission(ctx context.Context, kube client.Client, crd
 	}
 
 	return ssar.Status.Allowed, nil
-}
-
-// PrepareCRDMigrator scans the provider's resources for any that have previous versions
-// and creates a CRDMigrator to handle storage version migration for those resources.
-// It sets the StorageVersionMigrator field on the Provider with the configured migrator.
-func PrepareCRDMigrator(pc *Provider) {
-	var gvkList []schema.GroupVersionKind
-	for _, r := range pc.Resources {
-		if len(r.PreviousVersions) != 0 {
-			gvkList = append(gvkList, schema.GroupVersionKind{
-				Group:   strings.ToLower(r.ShortGroup + "." + pc.RootGroup),
-				Version: r.CRDStorageVersion(),
-				Kind:    r.Kind,
-			})
-		}
-	}
-	pc.StorageVersionMigrator = NewCRDMigrator(gvkList)
 }
