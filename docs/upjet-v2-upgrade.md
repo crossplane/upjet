@@ -113,6 +113,41 @@ github.com/crossplane/crossplane-runtime/ => github.com/crossplane/crossplane-ru
 github.com/crossplane/upjet/ => github.com/crossplane/upjet/v2/ 
 ```
 
+> **Adopting `crossplane-runtime` v2.3.x or newer?**
+>
+> `crossplane-runtime` v2.3.0 relocated the common APIs out of
+> `crossplane-runtime/v2/apis/common/{v1,v2}` (and the unversioned
+> `apis/common` sub-package used by mock surfaces) into a single
+> consolidated package at
+> `github.com/crossplane/crossplane/apis/v2/core/v2`. Two type embeds were
+> also renamed:
+>
+> - `xpv1.ResourceSpec`   → `xpv2.ClusterManagedResourceSpec` (cluster-scoped MRs)
+> - `xpv1.ResourceStatus` → `xpv2.ManagedResourceStatus`
+>
+> The other public symbols (`Reference`, `Selector`, `SecretReference`,
+> `SecretKeySelector`, `LocalSecretReference`, `LocalSecretKeySelector`,
+> `NamespacedReference`, `NamespacedSelector`, `Condition*`,
+> `ManagementAction*`, `ManagementPolicies`, `DeletionPolicy`) kept their
+> names — only the import path changes.
+>
+> For a provider already on Upjet v2, the upgrade is two steps:
+>
+> 1. In `go.mod` bump `github.com/crossplane/crossplane-runtime/v2` to
+>    `v2.3.x` and add a direct require on
+>    `github.com/crossplane/crossplane/apis/v2 v2.3.x`. Run `go mod tidy`
+>    and confirm it succeeds before proceeding — the build will not compile
+>    without the new direct dependency in place.
+> 2. Run `make generate`. Upjet's code generator emits the new package
+>    path and type names automatically for all your generated `zz_*.go`
+>    files. Any hand-written code that imports
+>    `crossplane-runtime/v2/apis/common/{v1,v2}` needs its import path
+>    updated to the consolidated package.
+>
+> If you have generated `zz_*.go` files committed and you're not ready to
+> regenerate yet, you can also bulk-rewrite the import paths and the two
+> renamed embeds with `sed`.
+
 ### Remove External Secret Store (ESS)-related APIs
 
 - in `apis/v1alpha1` remove `StoreConfig` api types and registration
@@ -147,6 +182,11 @@ type ProviderConfig struct {
 ```
 
 ### `apis` directory
+
+> **Note:** The import paths in the examples below are for the base
+> Upjet v1 → v2 migration (crossplane-runtime v1 module). If you are
+> already on Upjet v2 and only bumping to crossplane-runtime v2.3.x, see
+> the callout above instead.
 
 - In `apis/namespaced/v1beta1/types.go`, make sure that `ProviderConfigUsage` type inlines `xpv2.TypedProviderConfigUsage`
 
