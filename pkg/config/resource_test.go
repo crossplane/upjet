@@ -15,6 +15,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource/fake"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/test"
 	"github.com/google/go-cmp/cmp"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -40,7 +41,7 @@ func TestTaggerInitialize(t *testing.T) {
 	}{
 		"Successful": {
 			args: args{
-				mg:   &fake.Managed{},
+				mg:   &fake.Managed{ObjectMeta: metav1.ObjectMeta{Name: "name"}},
 				kube: &test.MockClient{MockUpdate: test.NewMockUpdateFn(nil)},
 			},
 			want: want{
@@ -49,7 +50,7 @@ func TestTaggerInitialize(t *testing.T) {
 		},
 		"Failure": {
 			args: args{
-				mg:   &fake.Managed{},
+				mg:   &fake.Managed{ObjectMeta: metav1.ObjectMeta{Name: "name"}},
 				kube: &test.MockClient{MockUpdate: test.NewMockUpdateFn(errBoom)},
 			},
 			want: want{
@@ -62,7 +63,7 @@ func TestTaggerInitialize(t *testing.T) {
 			tagger := NewTagger(tc.kube, "tags")
 			gotErr := tagger.Initialize(context.TODO(), tc.mg)
 			if diff := cmp.Diff(tc.want.err, gotErr, test.EquateErrors()); diff != "" {
-				t.Fatalf("generateTypeName(...): -want error, +got error: %s", diff)
+				t.Fatalf("tagger.Initialize(...): -want error, +got error: %s", diff)
 			}
 		})
 	}
@@ -76,13 +77,14 @@ func TestSetExternalTagsWithPaved(t *testing.T) {
 	}
 	type want struct {
 		pavedString string
+		changed     bool
 		err         error
 	}
 	cases := map[string]struct {
 		args
 		want
 	}{
-		"Successful": {
+		"SuccessfulNew": {
 			args: args{
 				externalTags: map[string]string{
 					xpresource.ExternalResourceTagKeyKind:     kind,
@@ -93,21 +95,77 @@ func TestSetExternalTagsWithPaved(t *testing.T) {
 				fieldName: "tags",
 			},
 			want: want{
+				changed: true,
 				pavedString: fmt.Sprintf(`{"spec":{"forProvider":{"tags":{"%s":"%s","%s":"%s","%s":"%s"}}}}`,
 					xpresource.ExternalResourceTagKeyKind, kind,
 					xpresource.ExternalResourceTagKeyName, name,
 					xpresource.ExternalResourceTagKeyProvider, provider),
 			},
 		},
+		"SuccessfulChange": {
+			args: args{
+				paved: fieldpath.Pave(map[string]any{
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"tags": map[string]any{
+								xpresource.ExternalResourceTagKeyKind:     "WrongKind",
+								xpresource.ExternalResourceTagKeyName:     name,
+								xpresource.ExternalResourceTagKeyProvider: provider,
+							},
+						},
+					},
+				}),
+				externalTags: map[string]string{
+					xpresource.ExternalResourceTagKeyKind:     kind,
+					xpresource.ExternalResourceTagKeyName:     name,
+					xpresource.ExternalResourceTagKeyProvider: provider,
+				},
+				fieldName: "tags",
+			},
+			want: want{
+				changed: true,
+				pavedString: fmt.Sprintf(`{"spec":{"forProvider":{"tags":{"%s":"%s","%s":"%s","%s":"%s"}}}}`,
+					xpresource.ExternalResourceTagKeyKind, kind,
+					xpresource.ExternalResourceTagKeyName, name,
+					xpresource.ExternalResourceTagKeyProvider, provider),
+			},
+		},
+		"SuccessfulNoChange": {
+			args: args{
+				paved: fieldpath.Pave(map[string]any{
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"tags": map[string]any{
+								xpresource.ExternalResourceTagKeyKind:     kind,
+								xpresource.ExternalResourceTagKeyName:     name,
+								xpresource.ExternalResourceTagKeyProvider: provider,
+							},
+						},
+					},
+				}),
+				externalTags: map[string]string{
+					xpresource.ExternalResourceTagKeyKind:     kind,
+					xpresource.ExternalResourceTagKeyName:     name,
+					xpresource.ExternalResourceTagKeyProvider: provider,
+				},
+				fieldName: "tags",
+			},
+			want: want{
+				changed: false,
+			},
+		},
 	}
 	for n, tc := range cases {
 		t.Run(n, func(t *testing.T) {
-			gotByte, gotErr := setExternalTagsWithPaved(tc.externalTags, tc.paved, tc.fieldName)
+			gotByte, gotChanged, gotErr := setExternalTagsWithPaved(tc.externalTags, tc.paved, tc.fieldName)
 			if diff := cmp.Diff(tc.want.err, gotErr, test.EquateErrors()); diff != "" {
-				t.Fatalf("generateTypeName(...): -want error, +got error: %s", diff)
+				t.Fatalf("setExternalTagsWithPaved(...): -want error, +got error: %s", diff)
+			}
+			if tc.want.changed != gotChanged {
+				t.Fatalf("setExternalTagsWithPaved(...): want changed %t, got changed: %t", tc.want.changed, gotChanged)
 			}
 			if diff := cmp.Diff(tc.want.pavedString, string(gotByte), test.EquateErrors()); diff != "" {
-				t.Fatalf("generateTypeName(...): -want gotByte, +got gotByte: %s", diff)
+				t.Fatalf("setExternalTagsWithPaved(...): -want gotByte, +got gotByte: %s", diff)
 			}
 		})
 	}
