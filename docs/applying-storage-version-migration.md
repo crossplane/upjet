@@ -174,11 +174,29 @@ common cause.
 
 The migration only needs to run once for a given storage version change.
 
-After the provider is healthy and the migration has been verified, the
-`DeploymentRuntimeConfig` and the temporary RBAC resources are no longer needed
-and can be removed.
+After the migration has completed successfully, the provider should first stop
+referencing the temporary migration DeploymentRuntimeConfig. Depending on the
+provider’s previous configuration, this can be done in one of two ways.
 
-Crossplane restarts the provider one final time without the init container.
+If the provider did not use another DeploymentRuntimeConfig before the
+migration, the temporary reference can be removed:
+
+```shell
+kubectl patch provider provider-gcp-storage --type=merge \
+-p '{"spec":{"runtimeConfigRef":null}}'
+```
+
+If the provider normally uses another DeploymentRuntimeConfig, update the
+reference to point back to it:
+
+```shell
+kubectl patch provider provider-gcp-storage --type=merge \
+  -p '{"spec":{"runtimeConfigRef":{"name":"default"}}}'
+```
+
+Either change causes Crossplane to restart the provider without the migration
+init container. It is recommended to wait until the new provider revision is
+healthy before removing the temporary migration resources.
 
 ---
 
