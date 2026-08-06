@@ -5,47 +5,39 @@
 package types
 
 import (
-	"encoding/json"
-	"fmt"
+	"go/token"
+	"go/types"
 
-	"github.com/pkg/errors"
+	"github.com/crossplane/upjet/v2/pkg/types/internal"
 )
 
 const (
-	errInvalidValue = "value must be a JSON string or %T, got %s"
+	packageName = "types"
+	packagePath = "github.com/crossplane/upjet/v2/pkg/" + packageName
 )
 
-// Primitive is a type constraint that represents the supported primitive types
-// for StringOrPrimitive.
-type Primitive interface {
-	~bool |
-		~int | ~int8 | ~int16 | ~int32 | ~int64 |
-		~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64
+// StringOrBool is stored canonically as a string, but can also decode
+// from bools.
+type StringOrBool string
+
+func (b *StringOrBool) UnmarshalJSON(data []byte) error {
+	g := internal.StringOrPrimitive[bool](*b)
+	if err := g.UnmarshalJSON(data); err != nil {
+		return err
+	}
+	*b = StringOrBool(g)
+	return nil
 }
 
-// StringOrPrimitive is stored canonically as a string, but can decode
-// from other primitive values such as ints, floats, bools, etc.
-type StringOrPrimitive[T Primitive] string
-
-func (b *StringOrPrimitive[T]) UnmarshalJSON(data []byte) error {
-	// first try as a string value.
-	var s string
-	if err := json.Unmarshal(data, &s); err == nil {
-		*b = StringOrPrimitive[T](s)
-		return nil
-	}
-
-	// if not a string value, try as a value of the specified type parameter.
-	var v T
-	if err := json.Unmarshal(data, &v); err == nil {
-		*b = StringOrPrimitive[T](fmt.Sprint(v))
-		return nil
-	}
-
-	return errors.Errorf(errInvalidValue, v, string(data))
+func (b *StringOrBool) MarshalJSON() ([]byte, error) {
+	g := internal.StringOrPrimitive[bool](*b)
+	return g.MarshalJSON()
 }
 
-func (b *StringOrPrimitive[T]) MarshalJSON() ([]byte, error) {
-	// Always write back as string in the new canonical format.
-	return json.Marshal(*b)
+// NewStringOrBoolType returns a types.Type representing the StringOrBool type.
+// The returned type is a pointer type.
+func NewStringOrBoolType() types.Type {
+	tn := types.NewTypeName(token.NoPos, types.NewPackage(packagePath, packageName), "StringOrBool", nil)
+	t := types.NewNamed(tn, types.Universe.Lookup("string").Type(), nil)
+	return types.NewPointer(t)
 }
