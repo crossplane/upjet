@@ -7,6 +7,7 @@ package config
 import (
 	"context"
 	"fmt"
+	"go/types"
 	"testing"
 
 	"github.com/crossplane/crossplane-runtime/v2/pkg/errors"
@@ -292,6 +293,83 @@ func TestRemoveSingletonListConversion(t *testing.T) {
 
 			if diff := cmp.Diff(tc.want.r().listConversionPaths, r.listConversionPaths); diff != "" {
 				t.Errorf("%s\nRemoveSingletonListConversion(tfPath): -wantConversionPaths, +gotConversionPaths: \n%s", tc.reason, diff)
+			}
+		})
+	}
+}
+
+func TestFieldTypeOverride(t *testing.T) {
+	strType := types.Typ[types.String]
+	type args struct {
+		r    func() *Resource
+		path string
+	}
+	type want struct {
+		// parameterType is the expected ParameterTypeOverride.String(), or the
+		// empty string when no usable override is expected for the path.
+		parameterType string
+	}
+	cases := map[string]struct {
+		reason string
+		args
+		want
+	}{
+		"OverrideConfigured": {
+			reason: "A scalar type override set for a path is returned for that path.",
+			args: args{
+				path: "x.y",
+				r: func() *Resource {
+					r := DefaultResource("test_resource", nil, nil, nil)
+					r.OverrideScalarFieldType("x.y", strType)
+					return r
+				},
+			},
+			want: want{parameterType: "string"},
+		},
+		"DifferentPath": {
+			reason: "A path without a configured override has no parameter type override.",
+			args: args{
+				path: "a.b",
+				r: func() *Resource {
+					r := DefaultResource("test_resource", nil, nil, nil)
+					r.OverrideScalarFieldType("x.y", strType)
+					return r
+				},
+			},
+			want: want{parameterType: ""},
+		},
+		"NoOverrides": {
+			reason: "A resource with no configured overrides has no parameter type override for any path.",
+			args: args{
+				path: "x.y",
+				r: func() *Resource {
+					return DefaultResource("test_resource", nil, nil, nil)
+				},
+			},
+			want: want{parameterType: ""},
+		},
+		"NilOverrideIgnored": {
+			reason: "A nil type override is indistinguishable from no override for the path.",
+			args: args{
+				path: "x.y",
+				r: func() *Resource {
+					r := DefaultResource("test_resource", nil, nil, nil)
+					r.OverrideScalarFieldType("x.y", nil)
+					return r
+				},
+			},
+			want: want{parameterType: ""},
+		},
+	}
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			got := tc.args.r().FieldTypeOverride(tc.args.path).ParameterTypeOverride
+			gotStr := ""
+			if got != nil {
+				gotStr = got.String()
+			}
+			if diff := cmp.Diff(tc.want.parameterType, gotStr); diff != "" {
+				t.Errorf("%s\nFieldTypeOverride(%q): -want, +got:\n%s", tc.reason, tc.args.path, diff)
 			}
 		})
 	}
