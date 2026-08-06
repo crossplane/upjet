@@ -6,219 +6,259 @@ package types
 
 import (
 	"encoding/json"
+	"go/types"
 	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 )
 
-// stringOrPrimitiveIO captures the primitive-specific inputs/outputs for a
-// single StringOrPrimitive type parameter. The type-independent behaviour
-// (decoding a JSON string, error handling, ...) is asserted by
-// runStringOrPrimitiveSuite for every T.
-type stringOrPrimitiveIO struct {
-	// fromPrimitive is the JSON encoding of a native value of the primitive
-	// type parameter, e.g. "true", "42" or "0.5".
-	fromPrimitive string
-	// canonical is the canonical string form StringOrPrimitive stores for
-	// fromPrimitive, i.e. fmt.Sprint(v).
-	canonical string
-}
-
-// runStringOrPrimitiveSuite exercises UnmarshalJSON and MarshalJSON for a
-// single primitive type parameter T, in both directions.
-func runStringOrPrimitiveSuite[T Primitive](t *testing.T, io stringOrPrimitiveIO) {
-	t.Helper()
-
-	// Unmarshalling a JSON string is type-independent: the raw string is
-	// stored verbatim as the canonical value regardless of T.
-	t.Run("UnmarshalJSONString", func(t *testing.T) {
-		const in = `"already-a-string"`
-		var got StringOrPrimitive[T]
-		if err := got.UnmarshalJSON([]byte(in)); err != nil {
-			t.Fatalf("UnmarshalJSON(%s): unexpected error: %v", in, err)
-		}
-		if diff := cmp.Diff("already-a-string", string(got)); diff != "" {
-			t.Errorf("UnmarshalJSON(%s): -want, +got:\n%s", in, diff)
-		}
-	})
-
-	// Unmarshalling the native primitive encoding coerces it into its
-	// canonical string form.
-	t.Run("UnmarshalJSONPrimitive", func(t *testing.T) {
-		var got StringOrPrimitive[T]
-		if err := got.UnmarshalJSON([]byte(io.fromPrimitive)); err != nil {
-			t.Fatalf("UnmarshalJSON(%s): unexpected error: %v", io.fromPrimitive, err)
-		}
-		if diff := cmp.Diff(io.canonical, string(got)); diff != "" {
-			t.Errorf("UnmarshalJSON(%s): -want, +got:\n%s", io.fromPrimitive, diff)
-		}
-	})
-
-	// Marshalling always emits the canonical string form, never the original
-	// primitive encoding.
-	t.Run("MarshalJSON", func(t *testing.T) {
-		b := StringOrPrimitive[T](io.canonical)
-		got, err := b.MarshalJSON()
-		if err != nil {
-			t.Fatalf("MarshalJSON(): unexpected error: %v", err)
-		}
-		want, err := json.Marshal(io.canonical)
-		if err != nil {
-			t.Fatalf("json.Marshal(%q): unexpected error: %v", io.canonical, err)
-		}
-		if diff := cmp.Diff(string(want), string(got)); diff != "" {
-			t.Errorf("MarshalJSON(): -want, +got:\n%s", diff)
-		}
-	})
-
-	// A canonical value survives a marshal -> unmarshal round-trip unchanged.
-	t.Run("RoundTrip", func(t *testing.T) {
-		want := StringOrPrimitive[T](io.canonical)
-		data, err := want.MarshalJSON()
-		if err != nil {
-			t.Fatalf("MarshalJSON(): unexpected error: %v", err)
-		}
-		var got StringOrPrimitive[T]
-		if err := got.UnmarshalJSON(data); err != nil {
-			t.Fatalf("UnmarshalJSON(%s): unexpected error: %v", data, err)
-		}
-		if diff := cmp.Diff(string(want), string(got)); diff != "" {
-			t.Errorf("round-trip: -want, +got:\n%s", diff)
-		}
-	})
-}
-
-// TestStringOrPrimitive covers every primitive type in the Primitive
-// constraint (plus a named ~float64 type) in both directions.
-func TestStringOrPrimitive(t *testing.T) {
-	cases := map[string]func(t *testing.T){
-		"Bool": func(t *testing.T) {
-			runStringOrPrimitiveSuite[bool](t, stringOrPrimitiveIO{fromPrimitive: "true", canonical: "true"})
-		},
-		"Int": func(t *testing.T) {
-			runStringOrPrimitiveSuite[int](t, stringOrPrimitiveIO{fromPrimitive: "-1", canonical: "-1"})
-		},
-		"Int8": func(t *testing.T) {
-			runStringOrPrimitiveSuite[int8](t, stringOrPrimitiveIO{fromPrimitive: "-128", canonical: "-128"})
-		},
-		"Int16": func(t *testing.T) {
-			runStringOrPrimitiveSuite[int16](t, stringOrPrimitiveIO{fromPrimitive: "32767", canonical: "32767"})
-		},
-		"Int32": func(t *testing.T) {
-			runStringOrPrimitiveSuite[int32](t, stringOrPrimitiveIO{fromPrimitive: "-2147483648", canonical: "-2147483648"})
-		},
-		"Int64": func(t *testing.T) {
-			runStringOrPrimitiveSuite[int64](t, stringOrPrimitiveIO{fromPrimitive: "9223372036854775807", canonical: "9223372036854775807"})
-		},
-		"Uint": func(t *testing.T) {
-			runStringOrPrimitiveSuite[uint](t, stringOrPrimitiveIO{fromPrimitive: "1", canonical: "1"})
-		},
-		"Uint8": func(t *testing.T) {
-			runStringOrPrimitiveSuite[uint8](t, stringOrPrimitiveIO{fromPrimitive: "255", canonical: "255"})
-		},
-		"Uint16": func(t *testing.T) {
-			runStringOrPrimitiveSuite[uint16](t, stringOrPrimitiveIO{fromPrimitive: "65535", canonical: "65535"})
-		},
-		"Uint32": func(t *testing.T) {
-			runStringOrPrimitiveSuite[uint32](t, stringOrPrimitiveIO{fromPrimitive: "4294967295", canonical: "4294967295"})
-		},
-		"Uint64": func(t *testing.T) {
-			runStringOrPrimitiveSuite[uint64](t, stringOrPrimitiveIO{fromPrimitive: "18446744073709551615", canonical: "18446744073709551615"})
-		},
+// TestStringOrBoolUnmarshalJSON covers decoding into StringOrBool, which accepts
+// either a JSON string (stored verbatim) or a JSON boolean (coerced to its
+// canonical string form), and errors on anything else.
+func TestStringOrBoolUnmarshalJSON(t *testing.T) {
+	type want struct {
+		val StringOrBool
+		err bool
 	}
-	for name, run := range cases {
-		t.Run(name, run)
-	}
-}
-
-// TestStringOrPrimitiveUnmarshalJSONEdgeCases covers UnmarshalJSON inputs whose
-// handling does not depend on the primitive type parameter; int is used as a
-// representative T.
-func TestStringOrPrimitiveUnmarshalJSONEdgeCases(t *testing.T) {
 	cases := map[string]struct {
 		reason string
 		data   string
-		want   string
+		want   want
 	}{
+		"StringTrue": {
+			reason: "A JSON string is stored verbatim, even when its content looks like a boolean.",
+			data:   `"true"`,
+			want:   want{val: "true"},
+		},
+		"StringFalse": {
+			reason: "A JSON string is stored verbatim, even when its content looks like a boolean.",
+			data:   `"false"`,
+			want:   want{val: "false"},
+		},
+		"StringArbitrary": {
+			reason: "Any JSON string content is stored verbatim.",
+			data:   `"hello world"`,
+			want:   want{val: "hello world"},
+		},
 		"EmptyString": {
 			reason: "An empty JSON string decodes to an empty canonical value.",
 			data:   `""`,
-			want:   "",
+			want:   want{val: ""},
+		},
+		"BoolTrue": {
+			reason: "A JSON boolean true is coerced to its canonical string form.",
+			data:   `true`,
+			want:   want{val: "true"},
+		},
+		"BoolFalse": {
+			reason: "A JSON boolean false is coerced to its canonical string form.",
+			data:   `false`,
+			want:   want{val: "false"},
 		},
 		"Null": {
 			reason: "A JSON null is a no-op for the string decode path and yields an empty canonical value.",
 			data:   `null`,
-			want:   "",
+			want:   want{val: ""},
 		},
-		"EscapedString": {
-			reason: "Escape sequences in a JSON string are decoded before being stored.",
-			data:   `"a\"b\tc"`,
-			want:   "a\"b\tc",
+		"Number": {
+			reason: "A JSON number is neither a string nor a boolean.",
+			data:   `42`,
+			want:   want{err: true},
 		},
-		"WhitespacePreserved": {
-			reason: "Surrounding whitespace within a JSON string is preserved.",
-			data:   `"  spaced  "`,
-			want:   "  spaced  ",
+		"Float": {
+			reason: "A JSON floating-point number is neither a string nor a boolean.",
+			data:   `1.5`,
+			want:   want{err: true},
 		},
-		"NumericString": {
-			reason: "A quoted number is treated as a string and stored verbatim.",
-			data:   `"42"`,
-			want:   "42",
+		"Array": {
+			reason: "A JSON array is neither a string nor a boolean.",
+			data:   `[true]`,
+			want:   want{err: true},
+		},
+		"Object": {
+			reason: "A JSON object is neither a string nor a boolean.",
+			data:   `{"a":true}`,
+			want:   want{err: true},
+		},
+		"Malformed": {
+			reason: "Malformed JSON fails both the string and the boolean decode attempts.",
+			data:   `{`,
+			want:   want{err: true},
 		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			var got StringOrPrimitive[int]
-			if err := got.UnmarshalJSON([]byte(tc.data)); err != nil {
+			var got StringOrBool
+			err := got.UnmarshalJSON([]byte(tc.data))
+			if tc.want.err {
+				if err == nil {
+					t.Fatalf("UnmarshalJSON(%s): expected an error, got nil\nreason: %s", tc.data, tc.reason)
+				}
+				// The error originates from the delegated generic decoder and
+				// must identify the accepted boolean type parameter.
+				if wantSub := "value must be a JSON string or bool"; !strings.Contains(err.Error(), wantSub) {
+					t.Errorf("UnmarshalJSON(%s): error %q does not contain %q\nreason: %s", tc.data, err.Error(), wantSub, tc.reason)
+				}
+				return
+			}
+			if err != nil {
 				t.Fatalf("UnmarshalJSON(%s): unexpected error: %v\nreason: %s", tc.data, err, tc.reason)
 			}
-			if diff := cmp.Diff(tc.want, string(got)); diff != "" {
+			if diff := cmp.Diff(tc.want.val, got); diff != "" {
 				t.Errorf("UnmarshalJSON(%s): -want, +got:\n%s\nreason: %s", tc.data, diff, tc.reason)
 			}
 		})
 	}
 }
 
-// TestStringOrPrimitiveUnmarshalJSONErrors covers inputs that are neither a
-// JSON string nor a valid value of the type parameter; int is used as a
-// representative T.
-func TestStringOrPrimitiveUnmarshalJSONErrors(t *testing.T) {
+// TestStringOrBoolUnmarshalJSONOverwrite verifies that decoding always replaces
+// any pre-existing value, including the null case which clears it.
+func TestStringOrBoolUnmarshalJSONOverwrite(t *testing.T) {
 	cases := map[string]struct {
 		reason string
 		data   string
+		want   StringOrBool
 	}{
-		"JSONArray": {
-			reason: "A JSON array is neither a string nor an int.",
-			data:   `[1,2,3]`,
+		"BoolOverwrites": {
+			reason: "Decoding a boolean overwrites the previous value.",
+			data:   `false`,
+			want:   "false",
 		},
-		"JSONObject": {
-			reason: "A JSON object is neither a string nor an int.",
-			data:   `{"a":1}`,
-		},
-		"TypeMismatch": {
-			reason: "A JSON boolean cannot be decoded into an int type parameter.",
-			data:   `true`,
-		},
-		"FloatIntoInt": {
-			reason: "A JSON floating-point number cannot be decoded into an int type parameter.",
-			data:   `1.5`,
-		},
-		"MalformedJSON": {
-			reason: "Malformed JSON fails both the string and the primitive decode attempts.",
-			data:   `{`,
+		"NullClears": {
+			reason: "Decoding a JSON null clears the previous value to empty.",
+			data:   `null`,
+			want:   "",
 		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			var got StringOrPrimitive[int]
-			err := got.UnmarshalJSON([]byte(tc.data))
-			if err == nil {
-				t.Fatalf("UnmarshalJSON(%s): expected an error, got nil\nreason: %s", tc.data, tc.reason)
+			got := StringOrBool("preset")
+			if err := got.UnmarshalJSON([]byte(tc.data)); err != nil {
+				t.Fatalf("UnmarshalJSON(%s): unexpected error: %v\nreason: %s", tc.data, err, tc.reason)
 			}
-			if want := "value must be a JSON string"; !strings.Contains(err.Error(), want) {
-				t.Errorf("UnmarshalJSON(%s): error %q does not contain %q\nreason: %s", tc.data, err.Error(), want, tc.reason)
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("UnmarshalJSON(%s): -want, +got:\n%s\nreason: %s", tc.data, diff, tc.reason)
 			}
 		})
+	}
+}
+
+// TestStringOrBoolMarshalJSON covers encoding, which always emits the canonical
+// string form regardless of the stored content.
+func TestStringOrBoolMarshalJSON(t *testing.T) {
+	cases := map[string]struct {
+		reason string
+		val    StringOrBool
+		want   string
+	}{
+		"True": {
+			reason: "The canonical boolean value is emitted as a JSON string.",
+			val:    "true",
+			want:   `"true"`,
+		},
+		"False": {
+			reason: "The canonical boolean value is emitted as a JSON string.",
+			val:    "false",
+			want:   `"false"`,
+		},
+		"Empty": {
+			reason: "An empty value is emitted as an empty JSON string.",
+			val:    "",
+			want:   `""`,
+		},
+		"Arbitrary": {
+			reason: "Arbitrary content is emitted verbatim as a JSON string.",
+			val:    "custom",
+			want:   `"custom"`,
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			got, err := tc.val.MarshalJSON()
+			if err != nil {
+				t.Fatalf("MarshalJSON(): unexpected error: %v\nreason: %s", err, tc.reason)
+			}
+			if diff := cmp.Diff(tc.want, string(got)); diff != "" {
+				t.Errorf("MarshalJSON(): -want, +got:\n%s\nreason: %s", diff, tc.reason)
+			}
+		})
+	}
+}
+
+// TestStringOrBoolJSONRoundTrip exercises the type through the standard encoding/json
+// package via a pointer struct field, mirroring how the generated CRD types use it.
+// It confirms that a JSON boolean is canonicalized to a JSON string on the way back out.
+func TestStringOrBoolJSONRoundTrip(t *testing.T) {
+	type holder struct {
+		V *StringOrBool `json:"v"`
+	}
+	cases := map[string]struct {
+		reason string
+		in     string
+		want   string
+	}{
+		"BoolTrueBecomesString": {
+			reason: "A JSON boolean true is canonicalized to a JSON string on re-marshal.",
+			in:     `{"v":true}`,
+			want:   `{"v":"true"}`,
+		},
+		"BoolFalseBecomesString": {
+			reason: "A JSON boolean false is canonicalized to a JSON string on re-marshal.",
+			in:     `{"v":false}`,
+			want:   `{"v":"false"}`,
+		},
+		"StringPreserved": {
+			reason: "A JSON string round-trips unchanged.",
+			in:     `{"v":"custom"}`,
+			want:   `{"v":"custom"}`,
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			var h holder
+			if err := json.Unmarshal([]byte(tc.in), &h); err != nil {
+				t.Fatalf("json.Unmarshal(%s): unexpected error: %v\nreason: %s", tc.in, err, tc.reason)
+			}
+			got, err := json.Marshal(h)
+			if err != nil {
+				t.Fatalf("json.Marshal(): unexpected error: %v\nreason: %s", err, tc.reason)
+			}
+			if diff := cmp.Diff(tc.want, string(got)); diff != "" {
+				t.Errorf("round-trip(%s): -want, +got:\n%s\nreason: %s", tc.in, diff, tc.reason)
+			}
+		})
+	}
+}
+
+// TestNewStringOrBoolType verifies the go/types.Type emitted for overridden
+// fields: a pointer to a named "StringOrBool" type, declared in this package,
+// whose underlying type is string.
+func TestNewStringOrBoolType(t *testing.T) {
+	got := NewStringOrBoolType()
+
+	if diff := cmp.Diff("*"+packagePath+".StringOrBool", got.String()); diff != "" {
+		t.Errorf("NewStringOrBoolType(): string representation: -want, +got:\n%s", diff)
+	}
+
+	ptr, ok := got.(*types.Pointer)
+	if !ok {
+		t.Fatalf("NewStringOrBoolType(): want *types.Pointer, got %T", got)
+	}
+	named, ok := ptr.Elem().(*types.Named)
+	if !ok {
+		t.Fatalf("NewStringOrBoolType(): pointer element: want *types.Named, got %T", ptr.Elem())
+	}
+	if diff := cmp.Diff("StringOrBool", named.Obj().Name()); diff != "" {
+		t.Errorf("NewStringOrBoolType(): type name: -want, +got:\n%s", diff)
+	}
+	if diff := cmp.Diff(packagePath, named.Obj().Pkg().Path()); diff != "" {
+		t.Errorf("NewStringOrBoolType(): package path: -want, +got:\n%s", diff)
+	}
+	if diff := cmp.Diff(packageName, named.Obj().Pkg().Name()); diff != "" {
+		t.Errorf("NewStringOrBoolType(): package name: -want, +got:\n%s", diff)
+	}
+	if diff := cmp.Diff("string", named.Underlying().String()); diff != "" {
+		t.Errorf("NewStringOrBoolType(): underlying type: -want, +got:\n%s", diff)
 	}
 }
