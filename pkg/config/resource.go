@@ -7,6 +7,7 @@ package config
 import (
 	"context"
 	"fmt"
+	"go/types"
 	"strings"
 	"time"
 
@@ -707,6 +708,11 @@ type Resource struct {
 	// the Terraform Plugin SDKv2 client.
 	useTerraformPluginFrameworkClient bool
 
+	// overrideGeneratedFieldType allows to manually override the type for the
+	// generated field of a Resource at the specified Terraform path.
+	// We only support type overrides for scalar fields currently.
+	overrideGeneratedFieldType map[string]types.Type
+
 	// OverrideFieldNames allows to manually override the relevant field name to
 	// avoid possible Go struct name conflicts that may occur after Multiversion
 	// CRDs support. During field generation, there may be fields with the same
@@ -1178,6 +1184,33 @@ func (r *Resource) RemoveSingletonListConversion(tfPath string) bool {
 		}
 	}
 	return false
+}
+
+// OverrideScalarFieldType allows to manually override the type for the
+// generated scalar field of a Resource at the specified Terraform path.
+// The path is a Terraform field path without the wildcard segments, e.g.,
+// "x.y", even if "x" is a collection type.
+// We only support overriding types for scalar fields as of now.
+// Trying to override the type generated for a non-scalar path will result in
+// a generation-time error.
+func (r *Resource) OverrideScalarFieldType(path string, t types.Type) {
+	r.overrideGeneratedFieldType[path] = t
+}
+
+// FieldTypeOverrideConfiguration represents a configuration for a set of type
+// overrides at a specific Terraform path.
+type FieldTypeOverrideConfiguration struct {
+	ParameterTypeOverride types.Type
+}
+
+// FieldTypeOverride returns the type override configuration for the specified
+// path. The path is a Terraform field path without the wildcard segments,
+// e.g., "x.y", even if "x" is a collection type.
+// Note: This accessor is meant to be only used by the code generator.
+func (r *Resource) FieldTypeOverride(path string) FieldTypeOverrideConfiguration {
+	return FieldTypeOverrideConfiguration{
+		ParameterTypeOverride: r.overrideGeneratedFieldType[path],
+	}
 }
 
 // SetEmbeddedObject sets the EmbeddedObject for the specified key.

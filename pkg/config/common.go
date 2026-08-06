@@ -5,6 +5,7 @@
 package config
 
 import (
+	"go/types"
 	"strings"
 
 	fwresource "github.com/hashicorp/terraform-plugin-framework/resource"
@@ -95,6 +96,7 @@ func DefaultResource(name string, terraformSchema *schema.Resource, terraformPlu
 		Conversions:                      []conversion.Conversion{conversion.NewIdentityConversionExpandPaths(conversion.AllVersions, conversion.AllVersions, nil)},
 		OverrideFieldNames:               map[string]string{},
 		listConversionPaths:              make(map[string]string),
+		overrideGeneratedFieldType:       map[string]types.Type{},
 	}
 	for _, f := range opts {
 		f(r)
