@@ -225,7 +225,7 @@ func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, cp
 			return o.ParameterTypeOverride, nil, nil
 		default:
 			return nil, nil, errors.Errorf(
-				"OverrideScalarFieldType at %q is only supported for scalar fields, got Terraform type %s",
+				"field at path %q with Terraform type %s specified for OverrideScalarFieldType is not scalar, only scalar field types can be overridden",
 				cpath, f.Schema.Type.String())
 		}
 	}
