@@ -11,10 +11,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/crossplane/crossplane-runtime/v2/pkg/errors"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/test"
 	"github.com/google/go-cmp/cmp"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/pkg/errors"
 
 	"github.com/crossplane/upjet/v2/pkg/config"
 )
@@ -869,6 +869,98 @@ func TestBuild(t *testing.T) {
 				t.Run(checkName, func(t *testing.T) {
 					checkFn(t, g.Comments)
 				})
+			}
+		})
+	}
+}
+
+func TestBuildFieldTypeOverride(t *testing.T) {
+	type want struct {
+		forProvider  string
+		initProvider string
+		observation  string
+		errContains  string
+	}
+	cases := map[string]struct {
+		reason string
+		cfg    func() *config.Resource
+		want   want
+	}{
+		"ScalarOverrideAppliesToAllAPIs": {
+			reason: "Overriding a scalar field's type replaces it across forProvider, initProvider and observation.",
+			cfg: func() *config.Resource {
+				r := config.DefaultResource("test_resource", &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"enabled": {
+							Type:     schema.TypeBool,
+							Optional: true,
+						},
+					},
+				}, nil, nil)
+				r.Kind = ""
+				r.OverrideScalarFieldType("enabled", NewStringOrBoolType())
+				return r
+			},
+			want: want{
+				forProvider:  `type example.Parameters struct{Enabled *github.com/crossplane/upjet/v2/pkg/types.StringOrBool "json:\"enabled,omitempty\" tf:\"enabled,omitempty\""}`,
+				initProvider: `type example.InitParameters struct{Enabled *github.com/crossplane/upjet/v2/pkg/types.StringOrBool "json:\"enabled,omitempty\" tf:\"enabled,omitempty\""}`,
+				observation:  `type example.Observation struct{Enabled *github.com/crossplane/upjet/v2/pkg/types.StringOrBool "json:\"enabled,omitempty\" tf:\"enabled,omitempty\""}`,
+			},
+		},
+		"NonScalarOverrideErrors": {
+			reason: "Overriding a non-scalar (collection) field's type is a generation-time error.",
+			cfg: func() *config.Resource {
+				r := config.DefaultResource("test_resource", &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"settings": {
+							Type:     schema.TypeList,
+							Optional: true,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"size": {
+										Type:     schema.TypeInt,
+										Optional: true,
+									},
+								},
+							},
+						},
+					},
+				}, nil, nil)
+				r.Kind = ""
+				r.OverrideScalarFieldType("settings", NewStringOrBoolType())
+				return r
+			},
+			want: want{
+				errContains: `OverrideScalarFieldType at "settings" is only supported for scalar fields, got Terraform type TypeList`,
+			},
+		},
+	}
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			builder := NewBuilder(types.NewPackage("example", ""), CRDScopeCluster)
+			g, err := builder.Build(tc.cfg())
+
+			if tc.want.errContains != "" {
+				if err == nil {
+					t.Fatalf("%s\nBuild(...): expected an error containing %q, got nil", tc.reason, tc.want.errContains)
+				}
+				if !strings.Contains(err.Error(), tc.want.errContains) {
+					t.Errorf("%s\nBuild(...): error %q does not contain %q", tc.reason, err.Error(), tc.want.errContains)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("%s\nBuild(...): unexpected error: %v", tc.reason, err)
+			}
+			if diff := cmp.Diff(tc.want.forProvider, g.ForProviderType.Obj().String()); diff != "" {
+				t.Errorf("%s\nBuild(...): -want forProvider, +got forProvider:\n%s", tc.reason, diff)
+			}
+			if diff := cmp.Diff(tc.want.initProvider, g.InitProviderType.Obj().String()); diff != "" {
+				t.Errorf("%s\nBuild(...): -want initProvider, +got initProvider:\n%s", tc.reason, diff)
+			}
+			if diff := cmp.Diff(tc.want.observation, g.AtProviderType.Obj().String()); diff != "" {
+				t.Errorf("%s\nBuild(...): -want observation, +got observation:\n%s", tc.reason, diff)
 			}
 		})
 	}
