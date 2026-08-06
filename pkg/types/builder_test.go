@@ -546,7 +546,7 @@ func TestBuildFieldTypeOverride(t *testing.T) {
 				return r
 			},
 			want: want{
-				errContains: `OverrideScalarFieldType at "settings" is only supported for scalar fields, got Terraform type TypeList`,
+				errContains: `field at path "settings" with Terraform type TypeList specified for OverrideScalarFieldType is not scalar, only scalar field types can be overridden`,
 			},
 		},
 	}
