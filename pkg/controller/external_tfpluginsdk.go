@@ -328,7 +328,7 @@ func (c *TerraformPluginSDKConnector) Connect(ctx context.Context, mg xpresource
 	}, nil
 }
 
-func filterInitExclusiveDiffs(tr resource.Terraformed, instanceDiff *tf.InstanceDiff) error { //nolint:gocyclo
+func filterInitExclusiveDiffs(tr resource.Terraformed, instanceDiff *tf.InstanceDiff, cfg *config.Resource) error { //nolint:gocyclo
 	if instanceDiff == nil || instanceDiff.Empty() {
 		return nil
 	}
@@ -337,9 +337,17 @@ func filterInitExclusiveDiffs(tr resource.Terraformed, instanceDiff *tf.Instance
 	if err != nil {
 		return errors.Wrap(err, "cannot get spec.forProvider parameters")
 	}
+	paramsForProvider, err = cfg.ApplyTFConversions(paramsForProvider, config.ToTerraform)
+	if err != nil {
+		return errors.Wrap(err, "cannot apply tf conversions to spec.forProvider parameters")
+	}
 	paramsInitProvider, err := tr.GetInitParameters()
 	if err != nil {
 		return errors.Wrap(err, "cannot get spec.initProvider parameters")
+	}
+	paramsInitProvider, err = cfg.ApplyTFConversions(paramsInitProvider, config.ToTerraform)
+	if err != nil {
+		return errors.Wrap(err, "cannot apply tf conversions to spec.initProvider parameters")
 	}
 
 	initProviderExclusiveParamKeys := getTerraformIgnoreChanges(paramsForProvider, paramsInitProvider)
@@ -456,7 +464,7 @@ func (n *terraformPluginSDKExternal) getResourceDataDiff(tr resource.Terraformed
 	}
 
 	if resourceExists {
-		if err := filterInitExclusiveDiffs(tr, instanceDiff); err != nil {
+		if err := filterInitExclusiveDiffs(tr, instanceDiff, n.config); err != nil {
 			return nil, errors.Wrap(err, "failed to filter the diffs exclusive to spec.initProvider in the terraform.InstanceDiff")
 		}
 	}
