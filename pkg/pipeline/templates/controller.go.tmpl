@@ -117,6 +117,7 @@ func Setup(mgr ctrl.Manager, o tjcontroller.Options) error {
     {{- end }}
 		managed.WithTimeout(3*time.Minute),
 		managed.WithInitializers(initializers),
+		managed.WithDeterministicExternalName({{ not .DisableNameInitializer }}),
 		managed.WithPollInterval(o.PollInterval),
 	}
 	if o.PollJitter != 0 {
