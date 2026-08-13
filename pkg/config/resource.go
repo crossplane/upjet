@@ -12,6 +12,7 @@ import (
 	"time"
 
 	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/errors"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/fieldpath"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
@@ -21,7 +22,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
-	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/ptr"
@@ -1192,9 +1192,22 @@ func (r *Resource) RemoveSingletonListConversion(tfPath string) bool {
 // "x.y", even if "x" is a collection type.
 // We only support overriding types for scalar fields as of now.
 // Trying to override the type generated for a non-scalar path will result in
-// a generation-time error.
-func (r *Resource) OverrideScalarFieldType(path string, t types.Type) {
-	r.overrideGeneratedFieldType[path] = t
+// an error.
+func (r *Resource) OverrideScalarFieldType(path string, t types.Type) error {
+	if r.TerraformResource == nil {
+		return errors.Errorf("resource %q does not have a valid Terraform resource schema", r.Name)
+	}
+	s := GetSchema(r.TerraformResource, path)
+	if s == nil {
+		return errors.Errorf("path %s is not valid for the Terraform resource schema of %q", path, r.Name)
+	}
+	switch s.Type { //nolint:exhaustive // The default case handles the error cases (non-scalar paths) already.
+	case schema.TypeBool, schema.TypeFloat, schema.TypeInt, schema.TypeString:
+		r.overrideGeneratedFieldType[path] = t
+	default:
+		return errors.Errorf("field at path %q with Terraform type %s is not scalar, only scalar field types can be overridden", path, s.Type.String())
+	}
+	return nil
 }
 
 // FieldTypeOverrideConfiguration represents a configuration for a set of type

@@ -883,12 +883,12 @@ func TestBuildFieldTypeOverride(t *testing.T) {
 	}
 	cases := map[string]struct {
 		reason string
-		cfg    func() *config.Resource
+		cfg    func(t *testing.T) *config.Resource
 		want   want
 	}{
 		"ScalarOverrideAppliesToAllAPIs": {
 			reason: "Overriding a scalar field's type replaces it across forProvider, initProvider and observation.",
-			cfg: func() *config.Resource {
+			cfg: func(t *testing.T) *config.Resource {
 				r := config.DefaultResource("test_resource", &schema.Resource{
 					Schema: map[string]*schema.Schema{
 						"enabled": {
@@ -898,7 +898,9 @@ func TestBuildFieldTypeOverride(t *testing.T) {
 					},
 				}, nil, nil)
 				r.Kind = ""
-				r.OverrideScalarFieldType("enabled", NewStringOrBoolType())
+				if err := r.OverrideScalarFieldType("enabled", NewStringOrBoolType()); err != nil {
+					t.Fatalf("cannot override the type of the scalar field at path %q: %v", "enabled", err)
+				}
 				return r
 			},
 			want: want{
@@ -909,25 +911,37 @@ func TestBuildFieldTypeOverride(t *testing.T) {
 		},
 		"NonScalarOverrideErrors": {
 			reason: "Overriding a non-scalar (collection) field's type is a generation-time error.",
-			cfg: func() *config.Resource {
-				r := config.DefaultResource("test_resource", &schema.Resource{
+			cfg: func(t *testing.T) *config.Resource {
+				sch := &schema.Resource{
 					Schema: map[string]*schema.Schema{
 						"settings": {
-							Type:     schema.TypeList,
+							Type:     schema.TypeString,
 							Optional: true,
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"size": {
-										Type:     schema.TypeInt,
-										Optional: true,
-									},
-								},
+						},
+					},
+				}
+				r := config.DefaultResource("test_resource", sch, nil, nil)
+				r.Kind = ""
+				if err := r.OverrideScalarFieldType("settings", NewStringOrBoolType()); err != nil {
+					t.Fatalf("cannot override the type of the field at path %q: %v", "settings", err)
+				}
+				// config.Resource.OverrideScalarFieldType rejects the
+				// non-scalar paths, so the field is turned into a collection
+				// only after the override has been configured to exercise the
+				// generation-time check. This could happen due to a schema traverser
+				// or due to other Terraform schema mutators.
+				sch.Schema["settings"] = &schema.Schema{
+					Type:     schema.TypeList,
+					Optional: true,
+					Elem: &schema.Resource{
+						Schema: map[string]*schema.Schema{
+							"size": {
+								Type:     schema.TypeInt,
+								Optional: true,
 							},
 						},
 					},
-				}, nil, nil)
-				r.Kind = ""
-				r.OverrideScalarFieldType("settings", NewStringOrBoolType())
+				}
 				return r
 			},
 			want: want{
@@ -938,7 +952,7 @@ func TestBuildFieldTypeOverride(t *testing.T) {
 	for n, tc := range cases {
 		t.Run(n, func(t *testing.T) {
 			builder := NewBuilder(types.NewPackage("example", ""), CRDScopeCluster)
-			g, err := builder.Build(tc.cfg())
+			g, err := builder.Build(tc.cfg(t))
 
 			if tc.want.errContains != "" {
 				if err == nil {
