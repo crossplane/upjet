@@ -152,8 +152,12 @@ func MarkAsRequired(sch *schema.Resource, fieldpaths ...string) {
 }
 
 // GetSchema returns the schema of the field whose fieldpath is given.
-// Returns nil if Schema is not found at the specified path.
+// Returns nil if the given resource schema is nil or if a Schema is
+// not found at the specified path or subpath.
 func GetSchema(sch *schema.Resource, fieldpath string) *schema.Schema {
+	if sch == nil {
+		return nil
+	}
 	current := sch
 	fields := strings.Split(fieldpath, ".")
 	final := fields[len(fields)-1]
@@ -167,7 +171,7 @@ func GetSchema(sch *schema.Resource, fieldpath string) *schema.Schema {
 			return nil
 		}
 		res, rok := s.Elem.(*schema.Resource)
-		if !rok {
+		if !rok || res == nil {
 			return nil
 		}
 		current = res
