@@ -346,11 +346,20 @@ func (fp *FileProducer) isStateEmpty() (bool, error) {
 	if !ok {
 		return true, nil
 	}
-	sid, ok := id.(string)
-	if !ok {
+	switch v := id.(type) {
+	case string:
+		return v == "", nil
+	case float64:
+		// Terraform's plugin-SDK always stores `id` as a string, but
+		// plugin-framework providers may declare it as a number and Terraform
+		// then writes it back into the state with that type (bunnynet, for
+		// instance, does so for 16 of its 24 resources). Zero is treated as
+		// the numeric counterpart of the empty string: no real resource is
+		// addressed by id 0, so the state is still considered empty.
+		return v == 0, nil
+	default:
 		return false, errors.Errorf(errFmtNonString, fmt.Sprint(id))
 	}
-	return sid == "", nil
 }
 
 type MainConfiguration struct {

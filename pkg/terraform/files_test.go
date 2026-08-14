@@ -297,7 +297,55 @@ func TestIsStateEmpty(t *testing.T) {
 				},
 			},
 			want: want{
-				err: errors.Errorf(errFmtNonString, fmt.Sprint(0)),
+				empty: true,
+			},
+		},
+		"NumericID": {
+			reason: "A non-zero numeric ID identifies a real resource, so the state is workable. Plugin-framework providers may type `id` as a number.",
+			args: args{
+				fs: func() afero.Afero {
+					f := afero.Afero{Fs: afero.NewMemMapFs()}
+					s := json.NewStateV4()
+					s.Resources = []json.ResourceStateV4{
+						{
+							Instances: []json.InstanceObjectStateV4{
+								{
+									AttributesRaw: []byte(`{"id": 577654}`),
+								},
+							},
+						},
+					}
+					d, _ := json.JSParser.Marshal(s)
+					_ = f.WriteFile(filepath.Join(dir, "terraform.tfstate"), d, 0600)
+					return f
+				},
+			},
+			want: want{
+				empty: false,
+			},
+		},
+		"BoolID": {
+			reason: "An ID that is neither a string nor a number is still a hard error.",
+			args: args{
+				fs: func() afero.Afero {
+					f := afero.Afero{Fs: afero.NewMemMapFs()}
+					s := json.NewStateV4()
+					s.Resources = []json.ResourceStateV4{
+						{
+							Instances: []json.InstanceObjectStateV4{
+								{
+									AttributesRaw: []byte(`{"id": true}`),
+								},
+							},
+						},
+					}
+					d, _ := json.JSParser.Marshal(s)
+					_ = f.WriteFile(filepath.Join(dir, "terraform.tfstate"), d, 0600)
+					return f
+				},
+			},
+			want: want{
+				err: errors.Errorf(errFmtNonString, fmt.Sprint(true)),
 			},
 		},
 		"NotEmpty": {
