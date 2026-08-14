@@ -7,10 +7,12 @@ package config
 import (
 	"context"
 	"fmt"
+	"go/types"
 	"strings"
 	"time"
 
 	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/errors"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/fieldpath"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
@@ -20,7 +22,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
-	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/ptr"
@@ -707,6 +708,11 @@ type Resource struct {
 	// the Terraform Plugin SDKv2 client.
 	useTerraformPluginFrameworkClient bool
 
+	// overrideGeneratedFieldType allows to manually override the type for the
+	// generated field of a Resource at the specified Terraform path.
+	// We only support type overrides for scalar fields currently.
+	overrideGeneratedFieldType map[string]types.Type
+
 	// OverrideFieldNames allows to manually override the relevant field name to
 	// avoid possible Go struct name conflicts that may occur after Multiversion
 	// CRDs support. During field generation, there may be fields with the same
@@ -1178,6 +1184,46 @@ func (r *Resource) RemoveSingletonListConversion(tfPath string) bool {
 		}
 	}
 	return false
+}
+
+// OverrideScalarFieldType allows to manually override the type for the
+// generated scalar field of a Resource at the specified Terraform path.
+// The path is a Terraform field path without the wildcard segments, e.g.,
+// "x.y", even if "x" is a collection type.
+// We only support overriding types for scalar fields as of now.
+// Trying to override the type generated for a non-scalar path will result in
+// an error.
+func (r *Resource) OverrideScalarFieldType(path string, t types.Type) error {
+	if r.TerraformResource == nil {
+		return errors.Errorf("resource %q does not have a valid Terraform resource schema", r.Name)
+	}
+	s := GetSchema(r.TerraformResource, path)
+	if s == nil {
+		return errors.Errorf("path %s is not valid for the Terraform resource schema of %q", path, r.Name)
+	}
+	switch s.Type { //nolint:exhaustive // The default case handles the error cases (non-scalar paths) already.
+	case schema.TypeBool, schema.TypeFloat, schema.TypeInt, schema.TypeString:
+		r.overrideGeneratedFieldType[path] = t
+	default:
+		return errors.Errorf("field at path %q with Terraform type %s is not scalar, only scalar field types can be overridden", path, s.Type.String())
+	}
+	return nil
+}
+
+// FieldTypeOverrideConfiguration represents a configuration for a set of type
+// overrides at a specific Terraform path.
+type FieldTypeOverrideConfiguration struct {
+	ParameterTypeOverride types.Type
+}
+
+// FieldTypeOverride returns the type override configuration for the specified
+// path. The path is a Terraform field path without the wildcard segments,
+// e.g., "x.y", even if "x" is a collection type.
+// Note: This accessor is meant to be only used by the code generator.
+func (r *Resource) FieldTypeOverride(path string) FieldTypeOverrideConfiguration {
+	return FieldTypeOverrideConfiguration{
+		ParameterTypeOverride: r.overrideGeneratedFieldType[path],
+	}
 }
 
 // SetEmbeddedObject sets the EmbeddedObject for the specified key.
