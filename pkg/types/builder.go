@@ -10,9 +10,9 @@ import (
 	"go/types"
 	"sort"
 
+	"github.com/crossplane/crossplane-runtime/pkg/errors"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	twtypes "github.com/muvaf/typewriter/pkg/types"
-	"github.com/pkg/errors"
 	"k8s.io/utils/ptr"
 
 	"github.com/crossplane/upjet/pkg/config"
@@ -206,6 +206,17 @@ func (g *Builder) AddToBuilder(typeNames *TypeNames, r *resource) (*types.Named,
 }
 
 func (g *Builder) buildSchema(f *Field, cfg *config.Resource, names []string, cpath string, r *resource) (types.Type, types.Type, error) { //nolint:gocyclo
+	if o := cfg.FieldTypeOverride(cpath); o.ParameterTypeOverride != nil {
+		switch f.Schema.Type { //nolint:exhaustive // The default case handles the error cases (non-scalar paths) already.
+		case schema.TypeBool, schema.TypeFloat, schema.TypeInt, schema.TypeString:
+			return o.ParameterTypeOverride, nil, nil
+		default:
+			return nil, nil, errors.Errorf(
+				"field at path %q with Terraform type %s specified for OverrideScalarFieldType is not scalar, only scalar field types can be overridden",
+				cpath, f.Schema.Type.String())
+		}
+	}
+
 	switch f.Schema.Type {
 	case schema.TypeBool:
 		return types.NewPointer(types.Universe.Lookup("bool").Type()), nil, nil

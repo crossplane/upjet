@@ -8,12 +8,13 @@ import (
 	"fmt"
 	"go/token"
 	"go/types"
+	"strings"
 	"testing"
 
+	"github.com/crossplane/crossplane-runtime/pkg/errors"
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	"github.com/google/go-cmp/cmp"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/pkg/errors"
 
 	"github.com/crossplane/upjet/pkg/config"
 )
@@ -483,6 +484,112 @@ func TestBuild(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.want.validationRules, g.ValidationRules); diff != "" {
 				t.Fatalf("Build(...): -want validationRules, +got validationRules: %s", diff)
+			}
+		})
+	}
+}
+
+func TestBuildFieldTypeOverride(t *testing.T) {
+	type want struct {
+		forProvider  string
+		initProvider string
+		observation  string
+		errContains  string
+	}
+	cases := map[string]struct {
+		reason string
+		cfg    func(t *testing.T) *config.Resource
+		want   want
+	}{
+		"ScalarOverrideAppliesToAllAPIs": {
+			reason: "Overriding a scalar field's type replaces it across forProvider, initProvider and observation.",
+			cfg: func(t *testing.T) *config.Resource {
+				r := config.DefaultResource("test_resource", &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"enabled": {
+							Type:     schema.TypeBool,
+							Optional: true,
+						},
+					},
+				}, nil, nil)
+				r.Kind = ""
+				if err := r.OverrideScalarFieldType("enabled", NewStringOrBoolType()); err != nil {
+					t.Fatalf("cannot override the type of the scalar field at path %q: %v", "enabled", err)
+				}
+				return r
+			},
+			want: want{
+				forProvider:  `type example.Parameters struct{Enabled *github.com/crossplane/upjet/pkg/types.StringOrBool "json:\"enabled,omitempty\" tf:\"enabled,omitempty\""}`,
+				initProvider: `type example.InitParameters struct{Enabled *github.com/crossplane/upjet/pkg/types.StringOrBool "json:\"enabled,omitempty\" tf:\"enabled,omitempty\""}`,
+				observation:  `type example.Observation struct{Enabled *github.com/crossplane/upjet/pkg/types.StringOrBool "json:\"enabled,omitempty\" tf:\"enabled,omitempty\""}`,
+			},
+		},
+		"NonScalarOverrideErrors": {
+			reason: "Overriding a non-scalar (collection) field's type is a generation-time error.",
+			cfg: func(t *testing.T) *config.Resource {
+				sch := &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"settings": {
+							Type:     schema.TypeString,
+							Optional: true,
+						},
+					},
+				}
+				r := config.DefaultResource("test_resource", sch, nil, nil)
+				r.Kind = ""
+				if err := r.OverrideScalarFieldType("settings", NewStringOrBoolType()); err != nil {
+					t.Fatalf("cannot override the type of the field at path %q: %v", "settings", err)
+				}
+				// config.Resource.OverrideScalarFieldType rejects the
+				// non-scalar paths, so the field is turned into a collection
+				// only after the override has been configured to exercise the
+				// generation-time check. This could happen due to a schema traverser
+				// or due to other Terraform schema mutators.
+				sch.Schema["settings"] = &schema.Schema{
+					Type:     schema.TypeList,
+					Optional: true,
+					Elem: &schema.Resource{
+						Schema: map[string]*schema.Schema{
+							"size": {
+								Type:     schema.TypeInt,
+								Optional: true,
+							},
+						},
+					},
+				}
+				return r
+			},
+			want: want{
+				errContains: `field at path "settings" with Terraform type TypeList specified for OverrideScalarFieldType is not scalar, only scalar field types can be overridden`,
+			},
+		},
+	}
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			builder := NewBuilder(types.NewPackage("example", ""))
+			g, err := builder.Build(tc.cfg(t))
+
+			if tc.want.errContains != "" {
+				if err == nil {
+					t.Fatalf("%s\nBuild(...): expected an error containing %q, got nil", tc.reason, tc.want.errContains)
+				}
+				if !strings.Contains(err.Error(), tc.want.errContains) {
+					t.Errorf("%s\nBuild(...): error %q does not contain %q", tc.reason, err.Error(), tc.want.errContains)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("%s\nBuild(...): unexpected error: %v", tc.reason, err)
+			}
+			if diff := cmp.Diff(tc.want.forProvider, g.ForProviderType.Obj().String()); diff != "" {
+				t.Errorf("%s\nBuild(...): -want forProvider, +got forProvider:\n%s", tc.reason, diff)
+			}
+			if diff := cmp.Diff(tc.want.initProvider, g.InitProviderType.Obj().String()); diff != "" {
+				t.Errorf("%s\nBuild(...): -want initProvider, +got initProvider:\n%s", tc.reason, diff)
+			}
+			if diff := cmp.Diff(tc.want.observation, g.AtProviderType.Obj().String()); diff != "" {
+				t.Errorf("%s\nBuild(...): -want observation, +got observation:\n%s", tc.reason, diff)
 			}
 		})
 	}

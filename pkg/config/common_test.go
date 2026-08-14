@@ -533,6 +533,38 @@ func TestGetSchema(t *testing.T) {
 				sch: nil,
 			},
 		},
+		"MiddleFieldIsNilResource": {
+			reason: "A nil element resource in the middle of the path is reported as not found instead of panicking.",
+			args: args{
+				fieldpath: "topA.topB.topC",
+				sch: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"topA": {
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"topB": {
+										Elem: (*schema.Resource)(nil),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			want: want{
+				sch: nil,
+			},
+		},
+		"NilResourceSchema": {
+			reason: "A nil Terraform resource schema is reported as not found instead of panicking.",
+			args: args{
+				fieldpath: "topA",
+				sch:       nil,
+			},
+			want: want{
+				sch: nil,
+			},
+		},
 	}
 
 	for name, tc := range cases {
