@@ -238,10 +238,13 @@ func (c *TerraformPluginFrameworkConnector) configureProvider(ctx context.Contex
 // when only computed attributes or not-specified argument diffs
 // exist in the raw diff and no actual diff exists in the
 // parametrizable attributes.
-// Exception: a diff where the prior value (Value2) is non-null and the
-// planned value (Value1) is null represents an explicit removal of a
-// previously-set optional attribute and must not be filtered.
-func (n *terraformPluginFrameworkExternalClient) filteredDiffExists(rawDiff []tftypes.ValueDiff) bool {
+// Exceptions:
+//   - A diff where the prior value (Value2) is non-null and the
+//     planned value (Value1) is null, and the diff does not belong to
+//     an attribute which is computed-only or one of its ancestors is
+//     computed-only. Such a case is taken as a previously set value being
+//     unset and is thus, not filtered.
+func (n *terraformPluginFrameworkExternalClient) filteredDiffExists(ctx context.Context, rawDiff []tftypes.ValueDiff) bool {
 	filteredDiff := make([]tftypes.ValueDiff, 0)
 	for _, diff := range rawDiff {
 		// Keep diffs where the planned value is non-null and known.
@@ -249,13 +252,37 @@ func (n *terraformPluginFrameworkExternalClient) filteredDiffExists(rawDiff []tf
 			filteredDiff = append(filteredDiff, diff)
 			continue
 		}
-		// Keep diffs where the prior value was non-null and the planned value
-		// is null — this is an explicit removal of a previously-set attribute.
-		if diff.Value1 != nil && diff.Value1.IsNull() && diff.Value2 != nil && !diff.Value2.IsNull() {
-			filteredDiff = append(filteredDiff, diff)
+		// Check if a previously set value is now unset. If not,
+		// then it will be filtered out at this stage.
+		if diff.Value1 == nil || !diff.Value1.IsNull() || diff.Value2 == nil || diff.Value2.IsNull() {
+			continue
 		}
+		// Check if the attribute at diff path is computed-only, or
+		// if one of its ancestors is computed-only. If so, the diff
+		// will be filtered out at this stage.
+		if n.isUnderComputedOnlyAttribute(ctx, diff.Path) {
+			continue
+		}
+		filteredDiff = append(filteredDiff, diff)
 	}
 	return len(filteredDiff) > 0
+}
+
+// isUnderComputedOnlyAttribute returns true if the attribute itself or
+// one of its ancestors is computed-only.
+func (n *terraformPluginFrameworkExternalClient) isUnderComputedOnlyAttribute(ctx context.Context, p *tftypes.AttributePath) bool {
+	for cur := p; cur != nil && len(cur.Steps()) > 0; cur = cur.WithoutLastStep() {
+		attr, err := n.resourceSchema.AttributeAtTerraformPath(ctx, cur)
+		if err != nil || attr == nil {
+			// Not an attribute, a block or an attribute without a schema, etc.
+			// Continue with its parent.
+			continue
+		}
+		if attr.IsComputed() && !attr.IsOptional() {
+			return true
+		}
+	}
+	return false
 }
 
 // getDiffPlanResponse calls the underlying native TF provider's PlanResourceChange RPC,
@@ -305,7 +332,7 @@ func (n *terraformPluginFrameworkExternalClient) getDiffPlanResponse(ctx context
 		return nil, false, errors.Wrap(err, "cannot compare prior state and plan")
 	}
 
-	return planResponse, n.filteredDiffExists(rawDiff), nil
+	return planResponse, n.filteredDiffExists(ctx, rawDiff), nil
 }
 
 func (n *terraformPluginFrameworkExternalClient) Observe(ctx context.Context, mg xpresource.Managed) (managed.ExternalObservation, error) { //nolint:gocyclo
