@@ -1403,9 +1403,252 @@ func TestFilteredDiffExists(t *testing.T) {
 	client := &terraformPluginFrameworkExternalClient{}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			got := client.filteredDiffExists(tc.rawDiff)
+			got := client.filteredDiffExists(context.TODO(), tc.rawDiff)
 			if got != tc.want {
 				t.Errorf("filteredDiffExists() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// diffGatingSchema is a Terraform Plugin Framework resource schema that covers
+// the schema node kinds a reported diff path can point at: the computed-only
+// attributes and their descendants, the atomic collection attributes and their
+// elements, the nested attributes, the blocks and the dynamic attributes.
+func diffGatingSchema() rschema.Schema {
+	nested := map[string]rschema.Attribute{"x": rschema.StringAttribute{Optional: true}}
+	return rschema.Schema{
+		Attributes: map[string]rschema.Attribute{
+			"opt":              rschema.StringAttribute{Optional: true},
+			"opt_computed":     rschema.StringAttribute{Optional: true, Computed: true},
+			"computed_only":    rschema.StringAttribute{Computed: true},
+			"tags":             rschema.MapAttribute{Optional: true, ElementType: types.StringType},
+			"computed_tags":    rschema.MapAttribute{Computed: true, ElementType: types.StringType},
+			"opt_parent":       rschema.SingleNestedAttribute{Optional: true, Attributes: nested},
+			"computed_parent":  rschema.SingleNestedAttribute{Computed: true, Attributes: nested},
+			"opt_dynamic":      rschema.DynamicAttribute{Optional: true},
+			"computed_dynamic": rschema.DynamicAttribute{Computed: true},
+			// the add-on shape of the reported issue: an optional root with the
+			// computed children, so that the removal of the root is detectable
+			"add_ons": rschema.SingleNestedAttribute{
+				Optional: true,
+				Attributes: map[string]rschema.Attribute{
+					"emissary": rschema.SingleNestedAttribute{
+						Optional: true,
+						Attributes: map[string]rschema.Attribute{
+							"replicas": rschema.Int64Attribute{Optional: true, Computed: true},
+						},
+					},
+				},
+			},
+		},
+		Blocks: map[string]rschema.Block{
+			"settings": rschema.SingleNestedBlock{Attributes: nested},
+			"rules":    rschema.ListNestedBlock{NestedObject: rschema.NestedBlockObject{Attributes: nested}},
+		},
+	}
+}
+
+func TestFilteredDiffExistsComputedOnly(t *testing.T) {
+	strVal := func(s string) *tftypes.Value {
+		v := tftypes.NewValue(tftypes.String, s)
+		return &v
+	}
+	nullVal := func() *tftypes.Value {
+		v := tftypes.NewValue(tftypes.String, nil)
+		return &v
+	}
+	unknownVal := func() *tftypes.Value {
+		v := tftypes.NewValue(tftypes.String, tftypes.UnknownValue)
+		return &v
+	}
+	// removal reports a diff where the previously set value at the given path
+	// is now unset, i.e., the planned value is null and the prior value is not.
+	removal := func(p *tftypes.AttributePath) tftypes.ValueDiff {
+		return tftypes.ValueDiff{Path: p, Value1: nullVal(), Value2: strVal("prior")}
+	}
+	path := tftypes.NewAttributePath
+
+	cases := map[string]struct {
+		reason string
+		diff   tftypes.ValueDiff
+		want   bool
+	}{
+		"OptionalAttributeUnset": {
+			reason: "Unsetting an optional attribute is a diff.",
+			diff:   removal(path().WithAttributeName("opt")),
+			want:   true,
+		},
+		"OptionalComputedAttributeUnset": {
+			reason: "Unsetting an optional+computed attribute is a diff because it can be configured.",
+			diff:   removal(path().WithAttributeName("opt_computed")),
+			want:   true,
+		},
+		"ComputedOnlyAttributeUnset": {
+			reason: "A computed-only attribute cannot be unset via the MR spec, so a null planned value is not a diff.",
+			diff:   removal(path().WithAttributeName("computed_only")),
+			want:   false,
+		},
+		"ComputedOnlyAttributeChanged": {
+			reason: "A known and non-null planned value is a diff even for a computed-only attribute.",
+			diff:   tftypes.ValueDiff{Path: path().WithAttributeName("computed_only"), Value1: strVal("planned"), Value2: strVal("prior")},
+			want:   true,
+		},
+		"UnknownPlannedValue": {
+			reason: "An unknown planned value corresponds to a computed field and is not a diff.",
+			diff:   tftypes.ValueDiff{Path: path().WithAttributeName("opt"), Value1: unknownVal(), Value2: strVal("prior")},
+			want:   false,
+		},
+		"OptionalMapElementUnset": {
+			reason: "The elements of an atomic collection attribute are resolved to the enclosing attribute, which is configurable here.",
+			diff:   removal(path().WithAttributeName("tags").WithElementKeyString("env")),
+			want:   true,
+		},
+		"ComputedOnlyMapElementUnset": {
+			reason: "The elements of an atomic collection attribute are resolved to the enclosing attribute, which is computed-only here.",
+			diff:   removal(path().WithAttributeName("computed_tags").WithElementKeyString("env")),
+			want:   false,
+		},
+		"AttributeUnderOptionalParentUnset": {
+			reason: "A configurable attribute under a configurable parent can be unset.",
+			diff:   removal(path().WithAttributeName("opt_parent").WithAttributeName("x")),
+			want:   true,
+		},
+		"AttributeUnderComputedOnlyParentUnset": {
+			reason: "Terraform does not allow a computed-only attribute to be configured, so its descendants cannot be unset either.",
+			diff:   removal(path().WithAttributeName("computed_parent").WithAttributeName("x")),
+			want:   false,
+		},
+		"OptionalNestedAttributeUnset": {
+			reason: "Unsetting an optional nested attribute is a diff, which is the case reported for the add-ons.",
+			diff:   removal(path().WithAttributeName("add_ons").WithAttributeName("emissary")),
+			want:   true,
+		},
+		"ComputedChildOfOptionalNestedAttributeUnset": {
+			reason: "An optional+computed child of a configurable nested attribute can be configured, so unsetting it is a diff.",
+			diff:   removal(path().WithAttributeName("add_ons").WithAttributeName("emissary").WithAttributeName("replicas")),
+			want:   true,
+		},
+		"DynamicSubPathUnderOptionalUnset": {
+			reason: "A path under a dynamic attribute is resolved to the dynamic attribute itself, which is configurable here.",
+			diff:   removal(path().WithAttributeName("opt_dynamic").WithAttributeName("foo")),
+			want:   true,
+		},
+		"DynamicSubPathUnderComputedOnlyUnset": {
+			reason: "A path under a dynamic attribute is resolved to the dynamic attribute itself, which is computed-only here.",
+			diff:   removal(path().WithAttributeName("computed_dynamic").WithAttributeName("foo")),
+			want:   false,
+		},
+		"BlockUnset": {
+			reason: "A block is always configurable, so unsetting it is a diff.",
+			diff:   removal(path().WithAttributeName("settings")),
+			want:   true,
+		},
+		"BlockElementUnset": {
+			reason: "A block element does not resolve to an attribute and the diff is preserved.",
+			diff:   removal(path().WithAttributeName("rules").WithElementKeyInt(0)),
+			want:   true,
+		},
+		"RootPathUnset": {
+			reason: "The root path does not resolve to an attribute and the diff is preserved.",
+			diff:   removal(path()),
+			want:   true,
+		},
+	}
+
+	n := &terraformPluginFrameworkExternalClient{resourceSchema: diffGatingSchema()}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			got := n.filteredDiffExists(context.TODO(), []tftypes.ValueDiff{tc.diff})
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("%s\nfilteredDiffExists(...): -want, +got:\n%s", tc.reason, diff)
+			}
+		})
+	}
+}
+
+// TestFilteredDiffExistsNestedAttributeRemoval reproduces the reported
+// scenario, where an optional nested attribute with the computed children is
+// removed from the MR spec, on the raw diff computed by Terraform itself. The
+// child attributes of the removed object have no planned values at all, so only
+// the diff reported for the removed object carries the null planned value.
+func TestFilteredDiffExistsNestedAttributeRemoval(t *testing.T) {
+	ctx := context.TODO()
+	// addOnsSchema returns a resource schema with an "add_ons.emissary" nested
+	// attribute whose children are computed. The emissary attribute itself is
+	// either configurable or computed-only.
+	addOnsSchema := func(emissaryComputedOnly bool) rschema.Schema {
+		emissary := rschema.SingleNestedAttribute{
+			Optional: true,
+			Attributes: map[string]rschema.Attribute{
+				"replicas":     rschema.Int64Attribute{Optional: true, Computed: true},
+				"service_type": rschema.StringAttribute{Optional: true, Computed: true},
+			},
+		}
+		if emissaryComputedOnly {
+			emissary.Optional = false
+			emissary.Computed = true
+		}
+		return rschema.Schema{
+			Attributes: map[string]rschema.Attribute{
+				"add_ons": rschema.SingleNestedAttribute{
+					Optional:   true,
+					Attributes: map[string]rschema.Attribute{"emissary": emissary},
+				},
+			},
+		}
+	}
+
+	cases := map[string]struct {
+		reason string
+		sch    rschema.Schema
+		want   bool
+	}{
+		"ConfigurableAddOnRemoved": {
+			reason: "Removing a configurable nested attribute must be reported as a diff so that an update is issued.",
+			sch:    addOnsSchema(false),
+			want:   true,
+		},
+		"ComputedOnlyAddOnRemoved": {
+			reason: "A computed-only nested attribute cannot be removed via the MR spec, so the raw diff of the provider is filtered.",
+			sch:    addOnsSchema(true),
+			want:   false,
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			resourceType, ok := tc.sch.Type().TerraformType(ctx).(tftypes.Object)
+			if !ok {
+				t.Fatalf("%s\nresource schema type is not a tftypes.Object", tc.reason)
+			}
+			addOnsType := resourceType.AttributeTypes["add_ons"].(tftypes.Object)  //nolint:forcetypeassert // the type is known from the schema above
+			emissaryType := addOnsType.AttributeTypes["emissary"].(tftypes.Object) //nolint:forcetypeassert // the type is known from the schema above
+			addOns := func(emissary tftypes.Value) tftypes.Value {
+				return tftypes.NewValue(resourceType, map[string]tftypes.Value{
+					"add_ons": tftypes.NewValue(addOnsType, map[string]tftypes.Value{"emissary": emissary}),
+				})
+			}
+			// the external resource has the add-on configured
+			prior := addOns(tftypes.NewValue(emissaryType, map[string]tftypes.Value{
+				"replicas":     tftypes.NewValue(tftypes.Number, 3),
+				"service_type": tftypes.NewValue(tftypes.String, "ClusterIP"),
+			}))
+			// the add-on has been removed from the MR spec
+			planned := addOns(tftypes.NewValue(emissaryType, nil))
+
+			rawDiff, err := planned.Diff(prior)
+			if err != nil {
+				t.Fatalf("%s\ncannot diff the planned and the prior values: %v", tc.reason, err)
+			}
+			if len(rawDiff) == 0 {
+				t.Fatalf("%s\nexpected a non-empty raw diff for the removed add-on", tc.reason)
+			}
+
+			n := &terraformPluginFrameworkExternalClient{resourceSchema: tc.sch}
+			got := n.filteredDiffExists(ctx, rawDiff)
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("%s\nfilteredDiffExists(...): -want, +got:\n%s", tc.reason, diff)
 			}
 		})
 	}
