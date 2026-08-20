@@ -331,10 +331,15 @@ func NewSensitiveField(g *Builder, cfg *config.Resource, r *resource, sch *schem
 	}
 	f.TransformedName = name.NewFromCamel(f.FieldNameCamel).LowerCamelComputed
 	f.JSONTag = structtag.NewJSON(structtag.WithName(f.TransformedName))
-	if f.Schema.Optional {
-		f.FieldType = types.NewPointer(f.FieldType)
-		f.JSONTag.SetOmit(structtag.OmitEmpty)
-	}
+	// Note: Secret reference fields must always be optional (pointer type with
+	// omitempty), regardless of whether the underlying Terraform field is
+	// required. initProvider fields are always optional (see addInitField),
+	// and this Field's type and JSON tag are shared between the forProvider
+	// and initProvider structs, so making this conditional on
+	// f.Schema.Optional would incorrectly mark the initProvider secret
+	// reference as required whenever the source field is required upstream.
+	f.FieldType = types.NewPointer(f.FieldType)
+	f.JSONTag.SetOmit(structtag.OmitEmpty)
 
 	return f, false, nil
 }

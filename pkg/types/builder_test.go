@@ -309,6 +309,7 @@ func TestBuild(t *testing.T) {
 	}
 	type want struct {
 		forProvider     string
+		initProvider    string
 		atProvider      string
 		validationRules string
 		err             error
@@ -420,8 +421,12 @@ func TestBuild(t *testing.T) {
 				},
 			},
 			want: want{
-				forProvider: `type example.Parameters struct{Key1SecretRef *github.com/crossplane/crossplane/apis/v2/core/v2.SecretKeySelector "json:\"key1SecretRef,omitempty\" tf:\"-\""; Key2SecretRef github.com/crossplane/crossplane/apis/v2/core/v2.SecretKeySelector "json:\"key2SecretRef\" tf:\"-\""; Key3SecretRef []github.com/crossplane/crossplane/apis/v2/core/v2.SecretKeySelector "json:\"key3SecretRef\" tf:\"-\""}`,
-				atProvider:  `type example.Observation struct{}`,
+				forProvider: `type example.Parameters struct{Key1SecretRef *github.com/crossplane/crossplane/apis/v2/core/v2.SecretKeySelector "json:\"key1SecretRef,omitempty\" tf:\"-\""; Key2SecretRef *github.com/crossplane/crossplane/apis/v2/core/v2.SecretKeySelector "json:\"key2SecretRef,omitempty\" tf:\"-\""; Key3SecretRef *[]github.com/crossplane/crossplane/apis/v2/core/v2.SecretKeySelector "json:\"key3SecretRef,omitempty\" tf:\"-\""}`,
+				// initProvider fields must always be optional, even for secret
+				// reference fields backed by a required Terraform field (Key2):
+				// https://github.com/crossplane/upjet/issues/456
+				initProvider: `type example.InitParameters struct{Key1SecretRef *github.com/crossplane/crossplane/apis/v2/core/v2.SecretKeySelector "json:\"key1SecretRef,omitempty\" tf:\"-\""; Key2SecretRef *github.com/crossplane/crossplane/apis/v2/core/v2.SecretKeySelector "json:\"key2SecretRef,omitempty\" tf:\"-\""; Key3 []string "json:\"key3SecretRef,omitempty\" tf:\"-\""}`,
+				atProvider:   `type example.Observation struct{}`,
 				validationRules: `
 // +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.key2SecretRef)",message="spec.forProvider.key2SecretRef is a required parameter"
 // +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.key3SecretRef)",message="spec.forProvider.key3SecretRef is a required parameter"`,
@@ -627,8 +632,9 @@ func TestBuild(t *testing.T) {
 				},
 			},
 			want: want{
-				forProvider: `type example.Parameters struct{Key1SecretRef *github.com/crossplane/crossplane/apis/v2/core/v2.LocalSecretKeySelector "json:\"key1SecretRef,omitempty\" tf:\"-\""; Key2SecretRef github.com/crossplane/crossplane/apis/v2/core/v2.LocalSecretKeySelector "json:\"key2SecretRef\" tf:\"-\""; Key3SecretRef []github.com/crossplane/crossplane/apis/v2/core/v2.LocalSecretKeySelector "json:\"key3SecretRef\" tf:\"-\""}`,
-				atProvider:  `type example.Observation struct{}`,
+				forProvider:  `type example.Parameters struct{Key1SecretRef *github.com/crossplane/crossplane/apis/v2/core/v2.LocalSecretKeySelector "json:\"key1SecretRef,omitempty\" tf:\"-\""; Key2SecretRef *github.com/crossplane/crossplane/apis/v2/core/v2.LocalSecretKeySelector "json:\"key2SecretRef,omitempty\" tf:\"-\""; Key3SecretRef *[]github.com/crossplane/crossplane/apis/v2/core/v2.LocalSecretKeySelector "json:\"key3SecretRef,omitempty\" tf:\"-\""}`,
+				initProvider: `type example.InitParameters struct{Key1SecretRef *github.com/crossplane/crossplane/apis/v2/core/v2.LocalSecretKeySelector "json:\"key1SecretRef,omitempty\" tf:\"-\""; Key2SecretRef *github.com/crossplane/crossplane/apis/v2/core/v2.LocalSecretKeySelector "json:\"key2SecretRef,omitempty\" tf:\"-\""; Key3 []string "json:\"key3SecretRef,omitempty\" tf:\"-\""}`,
+				atProvider:   `type example.Observation struct{}`,
 				validationRules: `
 // +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.key2SecretRef)",message="spec.forProvider.key2SecretRef is a required parameter"
 // +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.key3SecretRef)",message="spec.forProvider.key3SecretRef is a required parameter"`,
@@ -860,6 +866,11 @@ func TestBuild(t *testing.T) {
 			if g.AtProviderType != nil {
 				if diff := cmp.Diff(tc.want.atProvider, g.AtProviderType.Obj().String()); diff != "" {
 					t.Fatalf("Build(...): -want atProvider, +got atProvider: %s", diff)
+				}
+			}
+			if tc.want.initProvider != "" && g.InitProviderType != nil {
+				if diff := cmp.Diff(tc.want.initProvider, g.InitProviderType.Obj().String()); diff != "" {
+					t.Fatalf("Build(...): -want initProvider, +got initProvider: %s", diff)
 				}
 			}
 			if diff := cmp.Diff(tc.want.validationRules, g.ValidationRules); diff != "" {
