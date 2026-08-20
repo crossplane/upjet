@@ -809,11 +809,24 @@ func (n *terraformPluginSDKExternal) Update(ctx context.Context, mg xpresource.M
 
 func (n *terraformPluginSDKExternal) Delete(ctx context.Context, _ xpresource.Managed) (managed.ExternalDelete, error) {
 	n.logger.Debug("Deleting the external resource")
-	if n.instanceDiff == nil {
-		n.instanceDiff = tf.NewInstanceDiff()
+	// Terraform destroys an instance with a destroy-only diff carrying no
+	// attribute changes (see the destroy handling in the plugin SDK's
+	// helper/schema gRPC provider server). Reusing the diff computed during
+	// Observe is unsafe here: the SDK overlays its attribute changes on the
+	// state handed to the resource's delete function, so a pending change
+	// makes the deletion target the desired values instead of the actual
+	// ones, and if any of those changes is ForceNew, Resource.Apply proceeds
+	// from the destroy to a re-create with a stateless ResourceData in which
+	// every unchanged argument reads as its zero value. Only the operation
+	// timeouts are carried over from the computed diff.
+	deleteDiff := tf.NewInstanceDiff()
+	deleteDiff.Destroy = true
+	if n.instanceDiff != nil && n.instanceDiff.Meta != nil {
+		if timeouts, ok := n.instanceDiff.Meta[schema.TimeoutKey]; ok {
+			deleteDiff.Meta = map[string]any{schema.TimeoutKey: timeouts}
+		}
 	}
-
-	n.instanceDiff.Destroy = true
+	n.instanceDiff = deleteDiff
 	start := time.Now()
 	newState, diag := n.resourceSchema.Apply(ctx, n.opTracker.GetTfState(), n.instanceDiff, n.ts.Meta)
 	metrics.ExternalAPITime.WithLabelValues("delete").Observe(time.Since(start).Seconds())

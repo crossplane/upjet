@@ -14,6 +14,7 @@ import (
 	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/test"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	tf "github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
@@ -466,13 +467,22 @@ func TestTerraformPluginSDKUpdate(t *testing.T) {
 }
 
 func TestTerraformPluginSDKDelete(t *testing.T) {
+	var appliedDiff *tf.InstanceDiff
+	applyRecorder := mockResource{
+		ApplyFn: func(ctx context.Context, s *tf.InstanceState, d *tf.InstanceDiff, meta interface{}) (*tf.InstanceState, diag.Diagnostics) {
+			appliedDiff = d
+			return &tf.InstanceState{ID: "example-id"}, nil
+		},
+	}
 	type args struct {
-		r   Resource
-		cfg *config.Resource
-		obj fake.Terraformed
+		r            Resource
+		cfg          *config.Resource
+		obj          fake.Terraformed
+		instanceDiff *tf.InstanceDiff
 	}
 	type want struct {
-		err error
+		err         error
+		appliedDiff *tf.InstanceDiff
 	}
 	cases := map[string]struct {
 		args
@@ -480,22 +490,55 @@ func TestTerraformPluginSDKDelete(t *testing.T) {
 	}{
 		"Successful": {
 			args: args{
-				r: mockResource{
-					ApplyFn: func(ctx context.Context, s *tf.InstanceState, d *tf.InstanceDiff, meta interface{}) (*tf.InstanceState, diag.Diagnostics) {
-						return &tf.InstanceState{ID: "example-id"}, nil
-					},
-				},
+				r:   applyRecorder,
 				cfg: cfg,
 				obj: obj,
+			},
+			want: want{
+				appliedDiff: &tf.InstanceDiff{
+					Attributes: map[string]*tf.ResourceAttrDiff{},
+					Destroy:    true,
+				},
+			},
+		},
+		// A diff computed during Observe may carry pending attribute changes,
+		// e.g. for a ForceNew argument whose desired value changed. The
+		// destroy call must not carry them into Resource.Apply, which would
+		// otherwise overlay them on the state handed to the resource's delete
+		// function and proceed from the destroy to a re-create with a
+		// stateless ResourceData. Only the operation timeouts must be kept.
+		"PendingForceNewDiffNotCarriedIntoDestroy": {
+			args: args{
+				r:   applyRecorder,
+				cfg: cfg,
+				obj: obj,
+				instanceDiff: &tf.InstanceDiff{
+					Attributes: map[string]*tf.ResourceAttrDiff{
+						"name": {Old: "example", New: "example-new", RequiresNew: true},
+					},
+					Meta: map[string]any{schema.TimeoutKey: map[string]any{"delete": timeout.Nanoseconds()}},
+				},
+			},
+			want: want{
+				appliedDiff: &tf.InstanceDiff{
+					Attributes: map[string]*tf.ResourceAttrDiff{},
+					Destroy:    true,
+					Meta:       map[string]any{schema.TimeoutKey: map[string]any{"delete": timeout.Nanoseconds()}},
+				},
 			},
 		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
+			appliedDiff = nil
 			terraformPluginSDKExternal := prepareTerraformPluginSDKExternal(tc.args.r, tc.args.cfg)
+			terraformPluginSDKExternal.instanceDiff = tc.args.instanceDiff
 			_, err := terraformPluginSDKExternal.Delete(t.Context(), &tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
-				t.Errorf("\n%s\nConnect(...): -want error, +got error:\n", diff)
+				t.Errorf("\n%s\nDelete(...): -want error, +got error:\n", diff)
+			}
+			if diff := cmp.Diff(tc.want.appliedDiff, appliedDiff, cmpopts.IgnoreUnexported(tf.InstanceDiff{}), cmpopts.IgnoreFields(tf.InstanceDiff{}, "RawConfig", "RawState", "RawPlan")); diff != "" {
+				t.Errorf("\n%s\nDelete(...): -want applied instance diff, +got applied instance diff:\n", diff)
 			}
 		})
 	}
