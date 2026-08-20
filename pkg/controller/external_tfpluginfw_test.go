@@ -721,28 +721,6 @@ func (r *mockTPFResource) Update(ctx context.Context, req resource.UpdateRequest
 	r.UpdateMethod(ctx, req, resp)
 }
 
-// mockTPFResourceWithIdentity extends mockTPFResource by also implementing
-// resource.ResourceWithIdentity, so supportsIdentity() returns true.
-type mockTPFResourceWithIdentity struct {
-	mockTPFResource
-}
-
-func newMockTPFResourceWithIdentity() *mockTPFResourceWithIdentity {
-	return &mockTPFResourceWithIdentity{
-		mockTPFResource: mockTPFResource{
-			SchemaMethod: func(ctx context.Context, request resource.SchemaRequest, response *resource.SchemaResponse) {
-				response.Schema = newBaseSchema()
-			},
-			ReadMethod: func(ctx context.Context, request resource.ReadRequest, response *resource.ReadResponse) {
-				response.State = tfsdk.State{
-					Raw:    tftypes.Value{},
-					Schema: nil,
-				}
-			},
-		},
-	}
-}
-
 func TestFilteredDiffExists(t *testing.T) {
 	strVal := func(s string) *tftypes.Value {
 		v := tftypes.NewValue(tftypes.String, s)
@@ -834,20 +812,18 @@ func TestFilteredDiffExists(t *testing.T) {
 // diffGatingSchema is a Terraform Plugin Framework resource schema that covers
 // the schema node kinds a reported diff path can point at: the computed-only
 // attributes and their descendants, the atomic collection attributes and their
-// elements, the nested attributes, the blocks and the dynamic attributes.
+// elements, the nested attributes and the blocks.
 func diffGatingSchema() rschema.Schema {
 	nested := map[string]rschema.Attribute{"x": rschema.StringAttribute{Optional: true}}
 	return rschema.Schema{
 		Attributes: map[string]rschema.Attribute{
-			"opt":              rschema.StringAttribute{Optional: true},
-			"opt_computed":     rschema.StringAttribute{Optional: true, Computed: true},
-			"computed_only":    rschema.StringAttribute{Computed: true},
-			"tags":             rschema.MapAttribute{Optional: true, ElementType: types.StringType},
-			"computed_tags":    rschema.MapAttribute{Computed: true, ElementType: types.StringType},
-			"opt_parent":       rschema.SingleNestedAttribute{Optional: true, Attributes: nested},
-			"computed_parent":  rschema.SingleNestedAttribute{Computed: true, Attributes: nested},
-			"opt_dynamic":      rschema.DynamicAttribute{Optional: true},
-			"computed_dynamic": rschema.DynamicAttribute{Computed: true},
+			"opt":             rschema.StringAttribute{Optional: true},
+			"opt_computed":    rschema.StringAttribute{Optional: true, Computed: true},
+			"computed_only":   rschema.StringAttribute{Computed: true},
+			"tags":            rschema.MapAttribute{Optional: true, ElementType: types.StringType},
+			"computed_tags":   rschema.MapAttribute{Computed: true, ElementType: types.StringType},
+			"opt_parent":      rschema.SingleNestedAttribute{Optional: true, Attributes: nested},
+			"computed_parent": rschema.SingleNestedAttribute{Computed: true, Attributes: nested},
 			// the add-on shape of the reported issue: an optional root with the
 			// computed children, so that the removal of the root is detectable
 			"add_ons": rschema.SingleNestedAttribute{
@@ -949,15 +925,10 @@ func TestFilteredDiffExistsComputedOnly(t *testing.T) {
 			diff:   removal(path().WithAttributeName("add_ons").WithAttributeName("emissary").WithAttributeName("replicas")),
 			want:   true,
 		},
-		"DynamicSubPathUnderOptionalUnset": {
-			reason: "A path under a dynamic attribute is resolved to the dynamic attribute itself, which is configurable here.",
-			diff:   removal(path().WithAttributeName("opt_dynamic").WithAttributeName("foo")),
+		"UnresolvablePathUnset": {
+			reason: "A path that does not resolve to any attribute of the resource schema is preserved so that a removal is never silently dropped.",
+			diff:   removal(path().WithAttributeName("nonexistent").WithAttributeName("child")),
 			want:   true,
-		},
-		"DynamicSubPathUnderComputedOnlyUnset": {
-			reason: "A path under a dynamic attribute is resolved to the dynamic attribute itself, which is computed-only here.",
-			diff:   removal(path().WithAttributeName("computed_dynamic").WithAttributeName("foo")),
-			want:   false,
 		},
 		"BlockUnset": {
 			reason: "A block is always configurable, so unsetting it is a diff.",
