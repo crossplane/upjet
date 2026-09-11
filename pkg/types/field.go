@@ -468,10 +468,15 @@ func getDescription(s string) string {
 	// Remove dash
 	s = strings.TrimSpace(s)[strings.Index(s, "-")+1:]
 
-	// Remove 'Reqiured' || 'Optional' information
+	// Remove plain '(Required)' || '(Optional)' markers, but keep
+	// parenthesized content that further qualifies the specification
+	// requirement, e.g. "(Required unless a snapshot_identifier or
+	// replicate_source_db is provided)", since that information is not
+	// otherwise conveyed to the user.
 	matches := parentheses.FindAllString(s, -1)
 	for _, m := range matches {
-		if strings.HasPrefix(strings.ToLower(m), "(optional") || strings.HasPrefix(strings.ToLower(m), "(required") {
+		inner := strings.ToLower(strings.TrimSpace(strings.Trim(m, "()")))
+		if inner == "optional" || inner == "required" {
 			s = strings.ReplaceAll(s, m, "")
 		}
 	}
