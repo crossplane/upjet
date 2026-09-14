@@ -204,7 +204,27 @@ func (eg *Generator) writeManifest(writer io.Writer, pm *reference.PavedWithMani
 	if err := pm.Paved.SetValue("metadata.name", pm.ExampleName); err != nil {
 		return errors.Wrapf(err, `cannot set "metadata.name" for resource %q:%s`, pm.Config.Name, pm.ExampleName)
 	}
-	u := pm.Paved.UnstructuredContent()
+
+	// Keep the shared manifest array-shaped for references resolved while other
+	// examples are written, and flatten only the copy serialized to YAML.
+	raw, err := json.JSParser.Marshal(pm.Paved.UnstructuredContent())
+	if err != nil {
+		return errors.Wrap(err, "cannot copy example resource manifest")
+	}
+	var u map[string]any
+	if err := json.JSParser.Unmarshal(raw, &u); err != nil {
+		return errors.Wrap(err, "cannot copy example resource manifest")
+	}
+	params, err := fieldpath.Pave(u).GetValue(strings.Join(pm.ParamsPrefix, "."))
+	if err != nil {
+		return errors.Wrap(err, "cannot get parameters from paved")
+	}
+	pmParams, ok := params.(map[string]any)
+	if !ok {
+		return errors.New("paved parameters are not an object")
+	}
+	flattenSchemaTypeObjects(pmParams, pm.Config.TerraformResource)
+
 	buff, err := yaml.Marshal(u)
 	if err != nil {
 		return errors.Wrap(err, "cannot marshal example resource manifest")
@@ -309,14 +329,40 @@ func transformFields(r *config.Resource, params map[string]any, omittedFields []
 				sel := name.SelectorFieldName(fn, r.References[fieldPath].SelectorFieldName)
 				params[sel.LowerCamelComputed] = getSelectorField(v)
 			}
-		case sch.Type == tfjson.SchemaTypeObject:
-			values, ok := v.([]any)
-			if ok && len(values) == 1 {
-				v = values[0]
-			}
-			params[fn.LowerCamelComputed] = v
 		default:
 			params[fn.LowerCamelComputed] = v
+		}
+	}
+}
+
+func flattenSchemaTypeObjects(params map[string]any, resource *schema.Resource) {
+	fields := resource.Schema
+	if fields == nil && resource.SchemaFunc != nil {
+		fields = resource.SchemaFunc()
+	}
+	for tfName, sch := range fields {
+		crdName := name.NewFromSnake(tfName).LowerCamelComputed
+		value, ok := params[crdName]
+		if !ok {
+			continue
+		}
+
+		nested, ok := sch.Elem.(*schema.Resource)
+		if !ok {
+			continue
+		}
+		switch v := value.(type) {
+		case map[string]any:
+			flattenSchemaTypeObjects(v, nested)
+		case []any:
+			for _, element := range v {
+				if m, ok := element.(map[string]any); ok {
+					flattenSchemaTypeObjects(m, nested)
+				}
+			}
+			if sch.Type == tfjson.SchemaTypeObject && len(v) == 1 {
+				params[crdName] = v[0]
+			}
 		}
 	}
 }

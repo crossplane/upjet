@@ -5,16 +5,20 @@
 package examples
 
 import (
+	"bytes"
 	"testing"
 
+	"github.com/crossplane/crossplane-runtime/v2/pkg/fieldpath"
 	"github.com/google/go-cmp/cmp"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"sigs.k8s.io/yaml"
 
 	"github.com/crossplane/upjet/v2/pkg/config"
+	"github.com/crossplane/upjet/v2/pkg/registry/reference"
 	"github.com/crossplane/upjet/v2/pkg/types/conversion/tfjson"
 )
 
-func TestTransformFieldsFlattensSchemaTypeObjects(t *testing.T) {
+func TestFlattenSchemaTypeObjects(t *testing.T) {
 	objectSchema := func(fields map[string]*schema.Schema) *schema.Schema {
 		return &schema.Schema{
 			Type:     tfjson.SchemaTypeObject,
@@ -44,8 +48,8 @@ func TestTransformFieldsFlattensSchemaTypeObjects(t *testing.T) {
 	}{
 		"NestedObjects": {
 			params: map[string]any{
-				"object_block": []any{map[string]any{
-					"inner_object": []any{map[string]any{"value_field": "value"}},
+				"objectBlock": []any{map[string]any{
+					"innerObject": []any{map[string]any{"valueField": "value"}},
 				}},
 			},
 			want: map[string]any{
@@ -56,9 +60,9 @@ func TestTransformFieldsFlattensSchemaTypeObjects(t *testing.T) {
 		},
 		"ObjectInsideList": {
 			params: map[string]any{
-				"parent_list": []any{
-					map[string]any{"object_block": []any{map[string]any{"value_field": "one"}}},
-					map[string]any{"object_block": []any{map[string]any{"value_field": "two"}}},
+				"parentList": []any{
+					map[string]any{"objectBlock": []any{map[string]any{"valueField": "one"}}},
+					map[string]any{"objectBlock": []any{map[string]any{"valueField": "two"}}},
 				},
 			},
 			want: map[string]any{
@@ -70,8 +74,8 @@ func TestTransformFieldsFlattensSchemaTypeObjects(t *testing.T) {
 		},
 		"AlreadyObject": {
 			params: map[string]any{
-				"object_block": map[string]any{
-					"inner_object": map[string]any{"value_field": "value"},
+				"objectBlock": map[string]any{
+					"innerObject": map[string]any{"valueField": "value"},
 				},
 			},
 			want: map[string]any{
@@ -83,10 +87,51 @@ func TestTransformFieldsFlattensSchemaTypeObjects(t *testing.T) {
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			transformFields(r, tt.params, nil, "", false, "")
+			flattenSchemaTypeObjects(tt.params, r.TerraformResource)
 			if diff := cmp.Diff(tt.want, tt.params); diff != "" {
-				t.Errorf("transformFields(...): -want, +got:\n%s", diff)
+				t.Errorf("flattenSchemaTypeObjects(...): -want, +got:\n%s", diff)
 			}
 		})
+	}
+}
+
+func TestWriteManifestPreservesReferenceShape(t *testing.T) {
+	r := config.DefaultResource("test_resource", &schema.Resource{Schema: map[string]*schema.Schema{
+		"metadata": {
+			Type: tfjson.SchemaTypeObject,
+			Elem: &schema.Resource{Schema: map[string]*schema.Schema{
+				"uid": {Type: schema.TypeString},
+			}},
+		},
+	}}, nil, nil)
+	pm := &reference.PavedWithManifest{
+		Paved: fieldpath.Pave(map[string]any{
+			"metadata": map[string]any{
+				"labels": map[string]string{labelExampleName: "example"},
+			},
+			"spec": map[string]any{
+				"forProvider": map[string]any{
+					"metadata": []any{map[string]any{"uid": "test-uid"}},
+				},
+			},
+		}),
+		ParamsPrefix: []string{"spec", "forProvider"},
+		Config:       r,
+	}
+
+	var output bytes.Buffer
+	eg := &Generator{}
+	if err := eg.writeManifest(&output, pm, &reference.ResolutionContext{}); err != nil {
+		t.Fatalf("writeManifest(...): %v", err)
+	}
+	if _, err := pm.Paved.GetString("spec.forProvider.metadata[0].uid"); err != nil {
+		t.Errorf("writeManifest(...) mutated the reference source shape: %v", err)
+	}
+	var manifest map[string]any
+	if err := yaml.Unmarshal(output.Bytes(), &manifest); err != nil {
+		t.Fatalf("cannot unmarshal generated manifest: %v", err)
+	}
+	if _, err := fieldpath.Pave(manifest).GetString("spec.forProvider.metadata.uid"); err != nil {
+		t.Errorf("writeManifest(...) did not flatten output: %v\n%s", err, output.String())
 	}
 }
