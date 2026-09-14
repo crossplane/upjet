@@ -351,17 +351,25 @@ func flattenSchemaTypeObjects(params map[string]any, resource *schema.Resource) 
 		if !ok {
 			continue
 		}
-		switch v := value.(type) {
-		case map[string]any:
-			flattenSchemaTypeObjects(v, nested)
-		case []any:
-			for _, element := range v {
-				if m, ok := element.(map[string]any); ok {
-					flattenSchemaTypeObjects(m, nested)
-				}
-			}
-			if sch.Type == tfjson.SchemaTypeObject && len(v) == 1 {
-				params[crdName] = v[0]
+		flattenNestedSchemaTypeObjects(value, nested)
+		if sch.Type != tfjson.SchemaTypeObject {
+			continue
+		}
+		values, ok := value.([]any)
+		if ok && len(values) == 1 {
+			params[crdName] = values[0]
+		}
+	}
+}
+
+func flattenNestedSchemaTypeObjects(value any, resource *schema.Resource) {
+	switch v := value.(type) {
+	case map[string]any:
+		flattenSchemaTypeObjects(v, resource)
+	case []any:
+		for _, element := range v {
+			if m, ok := element.(map[string]any); ok {
+				flattenSchemaTypeObjects(m, resource)
 			}
 		}
 	}
