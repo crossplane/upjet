@@ -24,6 +24,7 @@ import (
 	"github.com/crossplane/upjet/v2/pkg/registry/reference"
 	"github.com/crossplane/upjet/v2/pkg/resource/json"
 	tjtypes "github.com/crossplane/upjet/v2/pkg/types"
+	"github.com/crossplane/upjet/v2/pkg/types/conversion/tfjson"
 	"github.com/crossplane/upjet/v2/pkg/types/name"
 )
 
@@ -308,6 +309,12 @@ func transformFields(r *config.Resource, params map[string]any, omittedFields []
 				sel := name.SelectorFieldName(fn, r.References[fieldPath].SelectorFieldName)
 				params[sel.LowerCamelComputed] = getSelectorField(v)
 			}
+		case sch.Type == tfjson.SchemaTypeObject:
+			values, ok := v.([]any)
+			if ok && len(values) == 1 {
+				v = values[0]
+			}
+			params[fn.LowerCamelComputed] = v
 		default:
 			params[fn.LowerCamelComputed] = v
 		}
