@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2025 The Crossplane Authors <https://crossplane.io>
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # A Plan Service for Upjet Providers
 
 * Owner: Christopher Haar (@haarchri)
