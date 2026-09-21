@@ -53,9 +53,9 @@ provider, the resource schemas, and upjet's conversion machinery between CRD
 shape and Terraform shape. What is missing is an entrypoint that serves diffs
 over gRPC instead of reconciling, and a protocol to ask for them.
 
-A companion one-pager in crossplane/cli proposes the client side: a `crossplane
-project simulate` command that resolves a project's provider dependencies, runs
-each provider image as a local plan server, and drives this protocol. This
+An accepted companion one-pager in crossplane/cli covers the client side:
+`crossplane resource simulate` and `crossplane project simulate` commands
+that run provider images as local plan servers and drive this protocol. This
 document proposes the provider side in upjet.
 
 ## Goals
@@ -98,16 +98,23 @@ service PlanService {
 
 message PlanRequest {
   // The desired managed resource, as full JSON (apiVersion, kind, metadata,
-  // spec).
+  // spec). Always set; the protocol does not express deletion (see below).
   google.protobuf.Struct desired_resource = 1;
 
-  // The live resource, with status.atProvider populated. Empty for a
-  // resource that does not exist yet.
+  // The live resource, with status.atProvider populated. Must carry the
+  // same apiVersion as the desired resource. Unset for a resource that
+  // does not exist yet, which plans as a create.
   google.protobuf.Struct live_resource = 2;
+
+  // The ProviderConfig the desired resource references, if the caller can
+  // supply it. Optional. The server reads non-credential fields only (a
+  // project ID, a subscription ID, custom endpoints); credential
+  // references are never resolved.
+  google.protobuf.Struct provider_config = 3;
 }
 
 message PlanResponse {
-  string action = 1;                  // no-op | create | update | replace | delete
+  string action = 1;                  // no-op | create | update | replace
   repeated FieldChange changes = 2;
   bool requires_replace = 3;
   repeated string replace_fields = 4; // CRD paths, e.g. spec.forProvider.region
@@ -117,13 +124,67 @@ message PlanResponse {
 }
 
 message FieldChange {
-  string field = 1;          // CRD path, e.g. spec.forProvider.deletionWindowInDays
-  string current_value = 2;  // Empty on create or when unknown.
-  string desired_value = 3;  // Empty when known only after apply.
+  // CRD path in the schema of the request's apiVersion,
+  // e.g. spec.forProvider.deletionWindowInDays.
+  string field = 1;
+
+  FieldValue current = 2; // Unset when the field does not exist yet.
+  FieldValue desired = 3; // Unset when the change removes the field.
   bool requires_replace = 4;
-  bool sensitive = 5;        // Values are redacted when true.
+}
+
+// The value on one side of a change. Unset, concrete (including explicit
+// null), unknown, sensitive, and unresolved are five distinct states.
+message FieldValue {
+  oneof kind {
+    // The concrete value. google.protobuf.Value carries strings, numbers,
+    // booleans, lists, objects, and explicit nulls, so null and "" differ.
+    google.protobuf.Value value = 1;
+
+    // The value is known only after apply.
+    bool unknown = 2;
+
+    // The value is sensitive and was redacted by the server.
+    bool sensitive = 3;
+
+    // The value comes from a reference (a Secret, or another resource via
+    // a ref field) the server cannot resolve, so this plan could not
+    // evaluate it. The reconciler will resolve it and may find a real
+    // change here.
+    bool unresolved = 4;
+  }
 }
 ```
+
+Field values are typed, not stringified, because every state Terraform's
+diff distinguishes must stay distinguishable on the wire. A concrete value
+travels as `google.protobuf.Value`, which keeps explicit `null` distinct
+from `""` and `false` distinct from unset. A value known only after apply is
+its own state, not an empty string. A `FieldValue` left unset means the
+field does not exist on that side at all, which is how adding a field
+differs from setting one to null. Collapsing these into strings would make
+transitions like null to empty string, or empty string to known-after-apply,
+unrenderable for clients, and fixing that after the protocol settles would
+be a breaking change. Sensitivity lives inside the value for the same
+reason: Terraform marks each side independently, and a field whose current
+value is public but whose desired value is sensitive is a real transition a
+single flag on the change could not express.
+
+A provider can serve a kind at more than one API version, and field paths
+can differ between versions: v1beta1 may hold an object in a singleton list
+where v1beta2 embeds it, so the same change is
+`spec.forProvider.encryptionInfo[0].clientBroker` in one and
+`spec.forProvider.encryptionInfo.clientBroker` in the other. The contract is
+simple: field paths follow the apiVersion the caller sent, so the diff
+always matches the YAML the user wrote. Desired and live resource must have
+the same apiVersion. The version handling behind that is the server's job,
+not the client's, and the binary already has everything for it: upjet
+generates each resource's Terraform mappings against one version (the
+conversion hub, usually the newest), and generates conversion functions
+between the hub and every older served version, the same functions the
+provider's conversion webhook uses in-cluster. The plan server converts an
+incoming resource to the hub, plans there, and translates the field paths
+back to the version the caller sent (see The Engine).
 
 The request carries everything the server needs. Desired state is the MR the
 user wants to apply. Prior state is reconstructed from the live resource's
@@ -131,9 +192,9 @@ user wants to apply. Prior state is reconstructed from the live resource's
 its last observation. Nothing else is consulted: no cluster reads, no cloud
 reads. That one decision buys most of the properties I care about:
 
-* **Credential-free.** The server needs no cloud credentials, no
-  `ProviderConfig`, no kubeconfig. Anyone who can pull the provider image can
-  compute a plan.
+* **Credential-free.** The server needs no cloud credentials and no
+  kubeconfig, and never resolves the credentials a `ProviderConfig`
+  references. Anyone who can pull the provider image can compute a plan.
 * **Read-only by construction.** There is no code path that could mutate an
   external system, because there is no code path that reaches one. The safety
   property is structural, not enforced by care.
@@ -147,6 +208,15 @@ Live MRs are freshly observed on every poll interval anyway, and the client
 knows how stale `status.atProvider` is. A refresh mode could be added to the
 protocol later without breaking it (see Alternatives).
 
+`Plan` takes one resource per call. The companion CLI one-pager leaves the
+request granularity to this document, so deciding it here: a project preview
+is many independent plans, and the CLI already fans out concurrent gRPC
+calls the way `crossplane composition render` does for functions. A batch
+RPC would only move that loop server-side while muddying per-resource
+failure semantics. Instead, a resource that cannot be planned reports the
+failure in its own response (see The Engine), and every other resource plans
+on.
+
 One value in the `action` enum needs Crossplane words. `replace` is
 Terraform's answer, destroy and recreate, but a Crossplane provider never
 destroys an external resource to update it. When a reconcile computes a diff
@@ -158,15 +228,39 @@ change cannot be applied as written, which is exactly the surprise a preview
 exists to catch, and why `requires_replace` and `replace_fields` are
 first-class in the response rather than derivable details.
 
+How a client shows a replace is deliberately not the protocol's business: a
+CI bot, a CLI, and a UI will render the same response differently, and a
+wire contract that prescribes presentation ages badly. What is contract is
+the meaning, and it is the one thing a renderer must not lose: replace warns
+that the change cannot be applied as written, so a client must not book it
+the Terraform way, as one destroy plus one add that will not happen. The
+companion CLI one-pager shows one concrete rendering, a `[-/+]` marker,
+replaces counted on their own in the plan summary, and a closing warning
+that the MR would wedge unsynced; other clients can copy that, but only the
+meaning binds them.
+
+There is no `delete` action, and the request cannot ask for one. A diff of
+desired against live state can only produce no-op, create, update, or
+replace. A delete happens when the caller already knows the desired state is
+absence, and then there is nothing left for the provider to compute: the
+fields that go away are the live state the caller already has, and whether
+the external resource is destroyed or orphaned is written on the MR itself,
+in its deletion policy and management policies. So deletes are the client's
+job. The companion CLI one-pager already handles them that way: a live
+composed resource with no rendered counterpart is reported as a delete,
+without calling a plan server. This also keeps the contract simple:
+`desired_resource` is always required, and a request without one fails as
+`INVALID_ARGUMENT`.
+
 `GetInfo` exists so clients route by fact instead of by convention. A client
 with a fleet of plan servers asks each which API groups it serves
 (`s3.aws.upbound.io`, `kms.aws.upbound.io`, ...) and routes each resource to
-the right one. The obvious alternative. inspecting each provider package's
-CRDs to derive its groups and it assumes every
-client has package-inspection machinery and a package to inspect. Asking the running
+the right one. The obvious alternative, inspecting each
+provider package's CRDs to derive its groups, assumes every client has
+package-inspection machinery and a package to inspect. Asking the running
 server is one RPC, doubles as the readiness check after startup, and
-`GetInfoResponse` can grow fields later, capability flags
-without breaking existing clients.
+`GetInfoResponse` can grow fields later, capability flags say, without
+breaking existing clients.
 
 ### The Engine
 
@@ -178,9 +272,19 @@ without breaking existing clients.
   controllers are built from. It resolves an incoming resource's GVK to its
   Terraform resource type (handling both cluster-scoped and namespaced v2 API
   groups), looks up the resource's configuration, and hands off to the
-  executor. Plan failures are reported in `PlanResponse.error` rather than as
-  gRPC errors, so one bad resource in a batch does not look like a broken
-  server.
+  executor. When the request arrives at an older served version, the server
+  first converts it to the resource's hub version. The machinery for that is
+  already in the binary: upjet generates `ConvertTo`/`ConvertFrom` on every
+  older version's types, both thin wrappers around upjet's
+  `conversion.RoundTrip`, which applies the conversions declared in the
+  resource's configuration. In-cluster the conversion webhook calls these
+  same functions; the plan server calls them directly, after registering the
+  provider's conversions at startup the way the provider's `main` does. A
+  version the binary does not serve at all fails that plan in
+  `PlanResponse.error`; in a provider-upgrade preview that is a finding by
+  itself, the new provider no longer serves the version the resource uses. Plan failures are reported in `PlanResponse.error` rather than as
+  gRPC errors, so one resource that cannot be planned does not look like a
+  broken server to a client fanning out calls.
 * An **`Executor`** computes the diff, choosing the path from the resource's
   configuration, the same flags (`ShouldUseTerraformPluginSDKClient`,
   `ShouldUseTerraformPluginFrameworkClient`) that select the controller
@@ -201,8 +305,8 @@ without breaking existing clients.
     pieces. Upjet synthesizes `main.tf.json` from the desired parameters and
     `terraform.tfstate` from the live observation, and runs `terraform plan`
     on every `Observe` today. The executor reuses that synthesis, runs
-    `terraform plan -refresh=false` to a plan file, and reads it back with
-    `terraform show -json`. The JSON plan's `resource_changes` carry the
+    `terraform plan -refresh=false -out=tfplan`, and reads the plan file
+    back with `terraform show -json tfplan`. The JSON plan's `resource_changes` carry the
     same information the in-process paths extract, actions, before and
     after values, `replace_paths`, and feed the same conversion and the
     same response. It costs a process start and file I/O per plan instead of
@@ -213,25 +317,102 @@ without breaking existing clients.
   derives the action, walks the resource schema to translate Terraform
   attribute paths into CRD paths (snake_case to lowerCamel, singleton blocks,
   list indices, map keys, for both SDKv2 and Framework schemas), redacts
-  sensitive values, and marks computed values as known-after-apply. It also
+  sensitive values, and marks computed values as known-after-apply. Those
+  paths come out in the hub version, so for a request that arrived at an
+  older version the converter maps each path back. Nobody has to invert the
+  conversion code for that: the conversions are declared as data in the
+  resource's configuration, each one names the field paths it touches, and
+  putting a named path back is mechanical. A kafka `Cluster` whose v1beta1
+  wraps in singleton lists what the v1beta2 hub embeds declares the list
+  paths `encryptionInfo` and `encryptionInfo[*].encryptionInTransit`, and a
+  v1beta1 request walks through like this:
+
+  ```
+  caller sends (v1beta1): spec.forProvider.encryptionInfo[0].encryptionInTransit[0].clientBroker
+  converted to hub:       spec.forProvider.encryptionInfo.encryptionInTransit.clientBroker
+  terraform diffs:        encryption_info.0.encryption_in_transit.0.client_broker
+  hub CRD path:           spec.forProvider.encryptionInfo.encryptionInTransit.clientBroker
+  response (v1beta1):     spec.forProvider.encryptionInfo[0].encryptionInTransit[0].clientBroker
+  ```
+
+  The last step re-inserts the `[0]` at the two declared paths, so the field
+  in the response is the exact line in the caller's YAML. One conversion
+  kind declares no paths, the hand-written custom converter; a resource that
+  needs one between the request's version and the hub fails the plan with an
+  error naming the hub version to plan at, rather than answering with paths
+  the caller's YAML does not have. It also
   filters changes the user did not author: fields injected by the provider's
   configuration injector and Crossplane's own system tags (`crossplane-kind`,
   `crossplane-name`, `crossplane-providerconfig`). Without that filter every
   plan for a fresh resource reports noise the user cannot act on.
 
 The executor needs a `terraform.Setup` to get provider metadata (and, for
-Framework resources, a configured provider). Because the server never reaches
-the cloud, this setup is minimal: the provider's singleton metadata plus
-whatever configuration the schema requires (a region, say, taken from the
-resource itself). It deliberately does not run the provider's normal
-credential resolution.
+Framework resources, a configured provider). It deliberately skips the
+provider's normal credential resolution, but credential-free is not
+configuration-free: some providers need a few provider-level values before
+their schemas behave correctly. Those values come from three places, tried
+in order:
+
+* **The resource itself.** An AWS resource carries its region in
+  `spec.forProvider.region`, so the setup reads it from the resource being
+  planned. This is the common case and needs nothing from the caller.
+* **The referenced ProviderConfig, sent by the caller.** Some values exist
+  only in provider configuration: a GCP project ID, an Azure subscription
+  and tenant, a custom endpoint for S3-compatible storage. Two resources can
+  reference two ProviderConfigs with two different projects, so this is
+  per-request data, not server configuration. That is what the optional
+  `provider_config` request field is for: the caller fetches the
+  ProviderConfig the resource references, with its own RBAC, and includes
+  it. The server reads only non-credential fields from it and never resolves
+  the credential references inside.
+* **Defaults.** What is safe to default is a per-provider decision, made in
+  the same `runPlanServer` wiring that constructs the server (see Serving
+  It).
+
+Initialization failures surface at two points, and the split matters. The
+embedded Terraform provider initializes once at startup; if that fails, the
+subcommand exits nonzero before serving, and clients see it as `GetInfo`
+never answering, the readiness check doing its job. Per-resource setup
+failures, a GCP resource planned without its project ID say, fail only that
+plan, in `PlanResponse.error`, with a message naming the missing input so
+the caller knows to include the ProviderConfig.
 
 Sensitive *inputs* deserve a note. A desired spec can reference sensitive
-parameters stored in Secrets. The executor treats Secret resolution as
-optional: with no Kubernetes client, the normal case for a local plan server,
-referenced sensitive parameters are simply absent from the diff inputs, and
-the corresponding changes surface as sensitive/unknown rather than failing
-the plan.
+parameters stored in Secrets, and the server has no Kubernetes client to
+resolve them. It would be easy to let those fields silently drop out of the
+diff, and wrong: a plan that reports no-op because it could not see a
+password reads as "nothing changes", while the reconciler, which can resolve
+the Secret, may find a real change there. So unresolved inputs are
+first-class in the response. The server knows from the spec which parameters
+are secret-referenced, and reports every one it could not evaluate as a
+`FieldChange` whose desired value is `unresolved`, a state of its own in
+`FieldValue`, distinct from known-after-apply. Clients present it as a
+caveat next to the plan and count it apart from no-ops: "2 fields could not
+be evaluated without their Secrets" instead of pretended certainty. If a
+real need shows up, the request can later gain an explicit way for callers
+that can read the Secrets to supply the resolved values; that is additive.
+
+How close is a plan to the reconcile that follows? A reconcile does more
+than the Terraform diff: it resolves references to other resources, loads
+sensitive parameters from Secrets, and the API server fills in schema
+defaults at admission. Each of these has a home:
+
+* Everything that needs no cluster runs the reconcile's own code: parameter
+  merging, Terraform conversions, external-name functions, the schema diff
+  with `CustomizeDiff`. These cannot diverge.
+* The client has the cluster, so it closes these gaps upfront. Resolved
+  references are already persisted in a live resource's spec, so the client
+  merges them into the desired resource before sending, the same way it
+  already merges the live external-name and status. Schema defaults come
+  from a server-side dry-run of the desired resource, the same trick the
+  companion CLI proposal uses for its cluster diff.
+* Whatever nobody resolved, a reference on a resource that does not exist
+  yet, or a Secret value, is reported as `unresolved`, never silently
+  skipped.
+
+So a plan never quietly diverges from a reconcile. Every field is either
+computed by the same code the reconcile runs, resolved upfront by the
+client, or marked as one the plan could not see.
 
 ### Serving It
 
@@ -245,7 +426,12 @@ $ docker run <provider-image> internal plan-server --port 50051
 
 The subcommand constructs the `Server` from the provider's existing wiring,
 scheme, resource configuration map, provider metadata and serves plaintext
-gRPC on the given port until signalled. It starts in single-digit seconds
+gRPC on the given port until signalled. The companion CLI one-pager leaves
+the transport choice to this protocol, so fixing it here: gRPC over a
+localhost TCP port, the transport function runtimes already use, rather than
+a protobuf exchange over the container's stdin and stdout. A port lets one
+long-lived server answer many concurrent plans, and lets the CLI reuse the
+container-and-port machinery it already has for functions. It starts in single-digit seconds
 because it skips everything a reconciling provider needs: no manager, no
 informers, no leader election, no credential resolution.
 
@@ -278,11 +464,15 @@ of it; `RunServer` can grow TLS options when that use case is real.
 The flow for the Crossplane CLI (detailed in the companion crossplane/cli
 one-pager):
 
-1. Resolve the project's provider dependencies to images.
+1. Determine the provider images: the project's dependencies for `project
+   simulate`, the providers installed on the target cluster for `resource
+   simulate`, or an explicit override, which is how an upgrade is previewed
+   with a provider version nothing runs yet.
 2. `docker run` each image's `plan-server`, wait for `GetInfo`, and build a
    routing table from supported API groups.
-3. For each resource to preview: fetch its live MR (if any) from the target
-   cluster, send desired + live to the routed server, collect the response.
+3. For each resource to preview: fetch its live MR (if any) and the
+   ProviderConfig it references from the target cluster, send them with the
+   desired resource to the routed server, collect the response.
 4. Render a `terraform plan`-style diff and summary.
 
 Everything the protocol needs from a cluster (the live MR with its
