@@ -1,0 +1,80 @@
+// SPDX-FileCopyrightText: 2026 The Crossplane Authors <https://crossplane.io>
+//
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+// This package defines the provider diff protocol & the associated gRPC services.
+
+//buf:lint:ignore PACKAGE_DIRECTORY_MATCH
+package upjet.diff.v1alpha1;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/crossplane/upjet/v2/proto/diff/v1alpha1";
+
+
+service PlanService {
+  // Plan computes a diff between the desired resource and the live resource.
+  rpc Plan(PlanRequest) returns (PlanResponse);
+}
+
+message PlanRequest {
+  // The desired managed resource, as full JSON (apiVersion, kind, metadata,
+  // spec). Always set; the protocol does not express deletion (see below).
+  google.protobuf.Struct desired_resource = 1;
+
+  // The live resource, with status.atProvider populated. Must carry the
+  // same apiVersion as the desired resource. Unset for a resource that
+  // does not exist yet, which plans as a create.
+  google.protobuf.Struct live_resource = 2;
+
+  // The ProviderConfig the desired resource references, if the caller can
+  // supply it. Optional. The server reads non-credential fields only (a
+  // project ID, a subscription ID, custom endpoints); credential
+  // references are never resolved.
+  google.protobuf.Struct provider_config = 3;
+}
+
+message PlanResponse {
+  string action = 1;                  // no-op | create | update | replace
+  repeated FieldChange changes = 2;
+  bool requires_replace = 3;
+  repeated string replace_fields = 4; // CRD paths, e.g. spec.forProvider.region
+  // repeated Diagnostic diagnostics = 5;
+  string error = 6;
+  google.protobuf.Timestamp computed_at = 7;
+}
+
+message FieldChange {
+  // CRD path in the schema of the request's apiVersion,
+  // e.g. spec.forProvider.deletionWindowInDays.
+  string field = 1;
+
+  FieldValue current = 2; // Unset when the field does not exist yet.
+  FieldValue desired = 3; // Unset when the change removes the field.
+  bool requires_replace = 4;
+}
+
+// The value on one side of a change. Unset, concrete (including explicit
+// null), unknown, sensitive, and unresolved are five distinct states.
+message FieldValue {
+  oneof kind {
+    // The concrete value. google.protobuf.Value carries strings, numbers,
+    // booleans, lists, objects, and explicit nulls, so null and "" differ.
+    google.protobuf.Value value = 1;
+
+    // The value is known only after apply.
+    bool unknown = 2;
+
+    // The value is sensitive and was redacted by the server.
+    bool sensitive = 3;
+
+    // The value comes from a reference (a Secret, or another resource via
+    // a ref field) the server cannot resolve, so this plan could not
+    // evaluate it. The reconciler will resolve it and may find a real
+    // change here.
+    bool unresolved = 4;
+  }
+}

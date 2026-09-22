@@ -37,6 +37,8 @@ require (
 	golang.org/x/net v0.58.0
 	golang.org/x/tools v0.49.0
 	golang.org/x/tools/go/packages/packagestest v0.1.1-deprecated
+	google.golang.org/grpc v1.83.2
+	google.golang.org/protobuf v1.36.11
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.35.3
@@ -148,8 +150,6 @@ require (
 	gomodules.xyz/jsonpatch/v2 v2.5.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa // indirect
-	google.golang.org/grpc v1.83.2 // indirect
-	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	k8s.io/code-generator v0.35.0 // indirect

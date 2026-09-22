@@ -1,0 +1,13 @@
+version: v2
+name: buf.build/crossplane/upjet
+lint:
+  use:
+    - STANDARD
+  except:
+    - FIELD_NOT_REQUIRED
+    - PACKAGE_NO_IMPORT_CYCLE
+breaking:
+  use:
+    - WIRE_JSON
+  except:
+    - FIELD_SAME_DEFAULT
