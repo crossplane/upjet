@@ -18,6 +18,7 @@ import (
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -33,8 +34,10 @@ const (
 	errMarshalStruct     = "cannot marshal the resource as JSON"
 	errDecode            = "cannot decode the resource into a registered API type"
 	errNotManaged        = "the API type %q registered for the resource is not a managed resource"
+	errNotObject         = "the API type %q registered for the resource is not a metav1 Object"
 	errDesiredResource   = "cannot read the desired resource"
 	errLiveResource      = "cannot read the live resource"
+	errProviderConfig    = "cannot read the ProviderConfig"
 )
 
 // PlanService implements the upjet.diff.v1alpha1.PlanService gRPC service.
@@ -72,17 +75,34 @@ func (s *PlanService) Plan(_ context.Context, req *diffv1alpha1.PlanRequest) (*d
 		return nil, status.Error(codes.InvalidArgument, errors.Wrap(err, errLiveResource).Error())
 	}
 
+	pc, pcGVK, err := s.object(req.GetProviderConfig())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, errors.Wrap(err, errProviderConfig).Error())
+	}
+
 	s.log.Debug("Received a plan request", "desired-gvk", desiredGVK.String(),
 		"desired-name", desired.GetName(), "live-gvk", liveGVK.String(),
+		"provider-config-name", pc.GetName(), "provider-config-gvk", pcGVK.String(),
 		"exists", live != nil)
 	return &diffv1alpha1.PlanResponse{}, nil
 }
 
-// managed deserializes the given resource into the managed resource type
-// registered for its apiVersion and kind, also returning the GVK it was
-// deserialized as. Both the returned managed resource and the GVK are zero if
-// the resource is unset.
+// managed deserializes the given resource into an MR type
+// registered for its apiVersion and kind, also returning its GVK.
+// Both the returned MR and the GVK are zero if the resource is unset.
 func (s *PlanService) managed(st *structpb.Struct) (resource.Managed, schema.GroupVersionKind, error) {
+	o, gvk, err := s.object(st)
+	if err != nil {
+		return nil, schema.GroupVersionKind{}, err
+	}
+	mg, ok := o.(resource.Managed)
+	if !ok {
+		return nil, schema.GroupVersionKind{}, errors.Errorf(errNotManaged, gvk.String())
+	}
+	return mg, gvk, nil
+}
+
+func (s *PlanService) object(st *structpb.Struct) (metav1.Object, schema.GroupVersionKind, error) {
 	if st == nil {
 		return nil, schema.GroupVersionKind{}, nil
 	}
@@ -96,11 +116,11 @@ func (s *PlanService) managed(st *structpb.Struct) (resource.Managed, schema.Gro
 	if err != nil {
 		return nil, schema.GroupVersionKind{}, errors.Wrap(err, errDecode)
 	}
-	mg, ok := o.(resource.Managed)
+	mo, ok := o.(metav1.Object)
 	if !ok {
-		return nil, schema.GroupVersionKind{}, errors.Errorf(errNotManaged, gvk.String())
+		return nil, schema.GroupVersionKind{}, errors.Errorf(errNotObject, gvk.String())
 	}
-	return mg, *gvk, nil
+	return mo, *gvk, nil
 }
 
 // Serve starts a gRPC server serving the diff services on the given network
