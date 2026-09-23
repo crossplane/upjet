@@ -543,17 +543,16 @@ func (n *terraformPluginSDKExternal) Observe(ctx context.Context, mg xpresource.
 		// provider's transparent tagging interceptor, which calls
 		// ResourceDiff.GetRawPlan().GetAttr("tags"), which will panic on the
 		// zero cty.Value with "value is not an object". The resource does not
-		// exist yet, so its raw state is a typed null of the resource schema,
-		// which is what the SDK itself falls back to when no state is set.
+		// exist, so its raw state is always a typed null of the resource
+		// schema, which is what the SDK itself falls back to when no state is
+		// set. A raw state cached by a previous Observe is stale by now.
 		if diffState.RawPlan.IsNull() {
 			diffState.RawPlan = n.rawConfig
 		}
 		if diffState.RawConfig.IsNull() {
 			diffState.RawConfig = n.rawConfig
 		}
-		if diffState.RawState.IsNull() {
-			diffState.RawState = cty.NullVal(n.config.TerraformResource.CoreConfigSchema().ImpliedType())
-		}
+		diffState.RawState = cty.NullVal(n.config.TerraformResource.CoreConfigSchema().ImpliedType())
 	}
 
 	n.instanceDiff = nil

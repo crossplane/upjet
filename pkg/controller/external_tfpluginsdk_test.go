@@ -376,10 +376,18 @@ func TestTerraformPluginSDKObserveNotFound(t *testing.T) {
 			}
 
 			ext := prepareTerraformPluginSDKExternal(notFound, cfgWithTags)
-			ext.opTracker.SetTfState(&tf.InstanceState{
+			cachedState := &tf.InstanceState{
 				ID:         "example-id",
 				Attributes: map[string]string{"name": "example"},
-			})
+			}
+			// A previous Observe of the then existing resource leaves its
+			// raw state in the op tracker cache.
+			rawState, err := cachedState.AttrsAsObjectValue(cfgWithTags.TerraformResource.CoreConfigSchema().ImpliedType())
+			if err != nil {
+				t.Fatalf("AttrsAsObjectValue(...) returned an unexpected error: %v", err)
+			}
+			cachedState.RawState = rawState
+			ext.opTracker.SetTfState(cachedState)
 
 			defer func() {
 				if r := recover(); r != nil {
@@ -387,8 +395,7 @@ func TestTerraformPluginSDKObserveNotFound(t *testing.T) {
 				}
 			}()
 
-			_, err := ext.Observe(t.Context(), &obj)
-			if err != nil {
+			if _, err := ext.Observe(t.Context(), &obj); err != nil {
 				t.Fatalf("Observe(...) returned an unexpected error: %v", err)
 			}
 		})
