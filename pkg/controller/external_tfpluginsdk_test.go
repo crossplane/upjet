@@ -14,6 +14,7 @@ import (
 	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/test"
 	"github.com/google/go-cmp/cmp"
+	"github.com/hashicorp/go-cty/cty"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	tf "github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
@@ -288,7 +289,7 @@ func TestTerraformPluginSDKObserve(t *testing.T) {
 // the zero cty.Value, the AWS provider's setTagsAll() interceptor calls
 // diff.GetRawPlan().GetAttr("tags"), and go-cty's Value.GetAttr panics with
 // "value is not an object" on the nil cty.Value.
-// The same applies to RawConfig.
+// The same applies to RawConfig and RawState.
 func TestTerraformPluginSDKObserveNotFound(t *testing.T) {
 	tagsTimeout := timeout
 	cases := map[string]struct {
@@ -310,6 +311,21 @@ func TestTerraformPluginSDKObserveNotFound(t *testing.T) {
 				return nil
 			},
 			description: "Observed a panic when reading from InstanceState.RawPlan",
+		},
+		"RawState": {
+			customizeDiff: func(_ context.Context, d *schema.ResourceDiff, _ interface{}) error {
+				// Terraform core hands providers a typed null prior state while
+				// the resource does not exist, and providers guard their
+				// GetRawState().GetAttr calls with IsNull or Id() == "". The
+				// zero cty.Value has no type at all, so the guards do not help
+				// and GetAttr panics with "value is not an object".
+				rs := d.GetRawState()
+				if !rs.Type().IsObjectType() || !rs.IsNull() {
+					return errors.Errorf("RawState is %#v, want a null value of the resource object type", rs)
+				}
+				return nil
+			},
+			description: "RawState of a resource that does not exist is not a typed null object",
 		},
 	}
 
@@ -374,6 +390,85 @@ func TestTerraformPluginSDKObserveNotFound(t *testing.T) {
 			_, err := ext.Observe(t.Context(), &obj)
 			if err != nil {
 				t.Fatalf("Observe(...) returned an unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+// TestTerraformPluginSDKObserveExistingRawValues is a regression test for
+// the "value is not an object" panic on an existing resource (e.g.,
+// google_compute_subnetwork in provider-upjet-gcp, crossplane-contrib/provider-upjet-gcp#1002).
+// Its CustomizeDiff calls diff.GetRawState().GetAttr("secondary_ip_range")
+// on every diff computed after the resource has been created, so Observe
+// must populate RawState, RawPlan and RawConfig from the refreshed state
+// before computing the diff. The test also checks that the raw state carries
+// the refreshed attribute values, not just an object of the right type.
+func TestTerraformPluginSDKObserveExistingRawValues(t *testing.T) {
+	type args struct {
+		rawValue func(d *schema.ResourceDiff) cty.Value
+	}
+	type want struct {
+		name string
+	}
+	cases := map[string]struct {
+		args
+		want
+	}{
+		"RawState": {
+			args: args{rawValue: func(d *schema.ResourceDiff) cty.Value { return d.GetRawState() }},
+			want: want{name: "example-refreshed"},
+		},
+		"RawPlan": {
+			args: args{rawValue: func(d *schema.ResourceDiff) cty.Value { return d.GetRawPlan() }},
+			want: want{name: "example-refreshed"},
+		},
+		"RawConfig": {
+			args: args{rawValue: func(d *schema.ResourceDiff) cty.Value { return d.GetRawConfig() }},
+			want: want{name: "example"},
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			var observedName cty.Value
+			cfgWithCustomizeDiff := &config.Resource{
+				TerraformResource: &schema.Resource{
+					Timeouts: cfg.TerraformResource.Timeouts,
+					Schema:   cfg.TerraformResource.Schema,
+					CustomizeDiff: func(_ context.Context, d *schema.ResourceDiff, _ interface{}) error {
+						// Panics with "value is not an object" when the raw
+						// value is the zero cty.Value.
+						observedName = tc.args.rawValue(d).GetAttr("name")
+						return nil
+					},
+				},
+				ExternalName: config.IdentifierFromProvider,
+				Sensitive: config.Sensitive{AdditionalConnectionDetailsFn: func(_ map[string]any) (map[string][]byte, error) {
+					return nil, nil
+				}},
+			}
+			existing := mockResource{
+				RefreshWithoutUpgradeFn: func(_ context.Context, _ *tf.InstanceState, _ interface{}) (*tf.InstanceState, diag.Diagnostics) {
+					return &tf.InstanceState{ID: "example-id", Attributes: map[string]string{"name": "example-refreshed"}}, nil
+				},
+			}
+			ext := prepareTerraformPluginSDKExternal(existing, cfgWithCustomizeDiff)
+
+			defer func() {
+				if r := recover(); r != nil {
+					t.Errorf("Observed a panic when reading the raw values of an existing resource: %v", r)
+				}
+			}()
+
+			observation, err := ext.Observe(t.Context(), &obj)
+			if err != nil {
+				t.Fatalf("Observe(...) returned an unexpected error: %v", err)
+			}
+			if !observation.ResourceExists {
+				t.Errorf("Observe(...): expected ResourceExists to be true")
+			}
+			if diff := cmp.Diff(cty.StringVal(tc.want.name), observedName, cmp.Comparer(func(a, b cty.Value) bool { return a.RawEquals(b) })); diff != "" {
+				t.Errorf("\n%s\nObserve(...): -want raw name, +got raw name:\n", diff)
 			}
 		})
 	}

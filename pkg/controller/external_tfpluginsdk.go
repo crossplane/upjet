@@ -523,23 +523,36 @@ func (n *terraformPluginSDKExternal) Observe(ctx context.Context, mg xpresource.
 			return managed.ExternalObservation{}, errors.Wrap(err, "cannot convert instance state to JSON map")
 		}
 		stateValueMap = jsonMap
+		// The Terraform provider's CustomizeDiff functions may read the raw
+		// state, plan and config of the resource (for example,
+		// google_compute_subnetwork calls
+		// ResourceDiff.GetRawState().GetAttr("secondary_ip_range") on every
+		// diff of an existing resource). go-cty's Value.GetAttr panics with
+		// "value is not an object" on the zero cty.Value, so all three must be
+		// populated before the diff is computed.
+		newState.RawState = stateValue
 		newState.RawPlan = stateValue
 		newState.RawConfig = n.rawConfig
 		diffState = newState
 	} else if diffState != nil {
 		diffState.Attributes = nil
 		diffState.ID = ""
-		// We still need to populate a non-nil RawPlan & RawConfig in InstanceState
-		// as the Terraform provider being called with this state may assume that
-		// they are not nil. An example is Terraform AWS provider's
-		// transparent tagging interceptor, which calls
+		// We still need to populate a non-nil RawPlan, RawConfig & RawState in
+		// InstanceState as the Terraform provider being called with this state
+		// may assume that they are not nil. An example is Terraform AWS
+		// provider's transparent tagging interceptor, which calls
 		// ResourceDiff.GetRawPlan().GetAttr("tags"), which will panic on the
-		// zero cty.Value with "value is not an object".
+		// zero cty.Value with "value is not an object". The resource does not
+		// exist yet, so its raw state is a typed null of the resource schema,
+		// which is what the SDK itself falls back to when no state is set.
 		if diffState.RawPlan.IsNull() {
 			diffState.RawPlan = n.rawConfig
 		}
 		if diffState.RawConfig.IsNull() {
 			diffState.RawConfig = n.rawConfig
+		}
+		if diffState.RawState.IsNull() {
+			diffState.RawState = cty.NullVal(n.config.TerraformResource.CoreConfigSchema().ImpliedType())
 		}
 	}
 
