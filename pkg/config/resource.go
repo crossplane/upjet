@@ -22,6 +22,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/ptr"
@@ -362,8 +363,20 @@ func (t *Tagger) Initialize(ctx context.Context, mg xpresource.Managed) error {
 	if err != nil {
 		return err
 	}
+	// Note that the unmarshal below merges the external tags into the
+	// existing tags map instead of replacing it, so the user's own tags are
+	// preserved. This also means we cannot compare the paved bytes to decide
+	// whether anything changed; we have to compare the managed resource
+	// itself, before and after the merge.
+	before := mg.DeepCopyObject()
 	if err := json.Unmarshal(pavedByte, mg); err != nil {
 		return err
+	}
+	if equality.Semantic.DeepEqual(before, mg) {
+		// The external tags are already in the spec. Initialize is called on
+		// every reconcile, so without this check we would issue a no-op update
+		// request for every managed resource on every poll.
+		return nil
 	}
 	if err := t.kube.Update(ctx, mg); err != nil {
 		return err
