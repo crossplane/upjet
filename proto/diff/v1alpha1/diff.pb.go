@@ -40,13 +40,11 @@ type PlanRequest struct {
 	// same apiVersion as the desired resource. Unset for a resource that
 	// does not exist yet, which plans as a create.
 	LiveResource *structpb.Struct `protobuf:"bytes,2,opt,name=live_resource,json=liveResource,proto3" json:"live_resource,omitempty"`
-	// The ProviderConfig the desired resource references, if the caller can
-	// supply it. Optional. The server reads non-credential fields only (a
-	// project ID, a subscription ID, custom endpoints); credential
-	// references are never resolved.
-	ProviderConfig *structpb.Struct `protobuf:"bytes,3,opt,name=provider_config,json=providerConfig,proto3" json:"provider_config,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// The Kubernetes object store that will be used to initialize an
+	// in-memory Kubernetes API client.
+	KubernetesObjectStore []*structpb.Struct `protobuf:"bytes,3,rep,name=kubernetes_object_store,json=kubernetesObjectStore,proto3" json:"kubernetes_object_store,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *PlanRequest) Reset() {
@@ -93,9 +91,9 @@ func (x *PlanRequest) GetLiveResource() *structpb.Struct {
 	return nil
 }
 
-func (x *PlanRequest) GetProviderConfig() *structpb.Struct {
+func (x *PlanRequest) GetKubernetesObjectStore() []*structpb.Struct {
 	if x != nil {
-		return x.ProviderConfig
+		return x.KubernetesObjectStore
 	}
 	return nil
 }
@@ -383,11 +381,11 @@ var File_diff_v1alpha1_diff_proto protoreflect.FileDescriptor
 
 const file_diff_v1alpha1_diff_proto_rawDesc = "" +
 	"\n" +
-	"\x18diff/v1alpha1/diff.proto\x12\x13upjet.diff.v1alpha1\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xd1\x01\n" +
+	"\x18diff/v1alpha1/diff.proto\x12\x13upjet.diff.v1alpha1\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xe0\x01\n" +
 	"\vPlanRequest\x12B\n" +
 	"\x10desired_resource\x18\x01 \x01(\v2\x17.google.protobuf.StructR\x0fdesiredResource\x12<\n" +
-	"\rlive_resource\x18\x02 \x01(\v2\x17.google.protobuf.StructR\fliveResource\x12@\n" +
-	"\x0fprovider_config\x18\x03 \x01(\v2\x17.google.protobuf.StructR\x0eproviderConfig\"\x87\x02\n" +
+	"\rlive_resource\x18\x02 \x01(\v2\x17.google.protobuf.StructR\fliveResource\x12O\n" +
+	"\x17kubernetes_object_store\x18\x03 \x03(\v2\x17.google.protobuf.StructR\x15kubernetesObjectStore\"\x87\x02\n" +
 	"\fPlanResponse\x12\x16\n" +
 	"\x06action\x18\x01 \x01(\tR\x06action\x12:\n" +
 	"\achanges\x18\x02 \x03(\v2 .upjet.diff.v1alpha1.FieldChangeR\achanges\x12)\n" +
@@ -438,7 +436,7 @@ var file_diff_v1alpha1_diff_proto_goTypes = []any{
 var file_diff_v1alpha1_diff_proto_depIdxs = []int32{
 	4, // 0: upjet.diff.v1alpha1.PlanRequest.desired_resource:type_name -> google.protobuf.Struct
 	4, // 1: upjet.diff.v1alpha1.PlanRequest.live_resource:type_name -> google.protobuf.Struct
-	4, // 2: upjet.diff.v1alpha1.PlanRequest.provider_config:type_name -> google.protobuf.Struct
+	4, // 2: upjet.diff.v1alpha1.PlanRequest.kubernetes_object_store:type_name -> google.protobuf.Struct
 	2, // 3: upjet.diff.v1alpha1.PlanResponse.changes:type_name -> upjet.diff.v1alpha1.FieldChange
 	5, // 4: upjet.diff.v1alpha1.PlanResponse.computed_at:type_name -> google.protobuf.Timestamp
 	3, // 5: upjet.diff.v1alpha1.FieldChange.current:type_name -> upjet.diff.v1alpha1.FieldValue

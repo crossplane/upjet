@@ -30,11 +30,9 @@ message PlanRequest {
   // does not exist yet, which plans as a create.
   google.protobuf.Struct live_resource = 2;
 
-  // The ProviderConfig the desired resource references, if the caller can
-  // supply it. Optional. The server reads non-credential fields only (a
-  // project ID, a subscription ID, custom endpoints); credential
-  // references are never resolved.
-  google.protobuf.Struct provider_config = 3;
+  // The Kubernetes object store that will be used to initialize an
+  // in-memory Kubernetes API client.
+  repeated google.protobuf.Struct kubernetes_object_store = 3;
 }
 
 message PlanResponse {
