@@ -52,9 +52,9 @@ func TestDeleteNestedParam(t *testing.T) {
 func TestRemoveInitProviderExclusiveParams(t *testing.T) {
 	tests := map[string]struct {
 		forProvider map[string]any
-		initParams map[string]any
-		params     map[string]any
-		want       map[string]any
+		initParams  map[string]any
+		params      map[string]any
+		want        map[string]any
 	}{
 		"InitExclusiveFieldRemovedSharedPreserved": {
 			forProvider: map[string]any{"name": "my-resource"},
