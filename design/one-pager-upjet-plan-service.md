@@ -1,12 +1,12 @@
 <!--
-SPDX-FileCopyrightText: 2025 The Crossplane Authors <https://crossplane.io>
+SPDX-FileCopyrightText: 2026 The Crossplane Authors <https://crossplane.io>
 
 SPDX-License-Identifier: Apache-2.0
 -->
 
 # A Plan Service for Upjet Providers
 
-* Owner: Christopher Haar (@haarchri)
+* Owner: Christopher Haar (@haarchri), Alper Ulucinar (@ulucinar), Sergen Yalcin (@sergenyalcin)
 * Reviewers: Upjet Maintainers, Upjet Community
 * Status: Draft
 
@@ -90,16 +90,12 @@ a `plan-server` subcommand that clients like the Crossplane CLI run locally.
 
 ### The Protocol
 
-A `PlanService` with two RPCs:
+A `PlanService` with one RPC:
 
 ```protobuf
 service PlanService {
   // Plan computes a diff between the desired resource and the live resource.
   rpc Plan(PlanRequest) returns (PlanResponse);
-
-  // GetInfo returns metadata about this plan server, including which API
-  // groups it supports, so clients can route resources to the right server.
-  rpc GetInfo(GetInfoRequest) returns (GetInfoResponse);
 }
 
 message PlanRequest {
@@ -258,15 +254,70 @@ without calling a plan server. This also keeps the contract simple:
 `desired_resource` is always required, and a request without one fails as
 `INVALID_ARGUMENT`.
 
-`GetInfo` exists so clients route by fact instead of by convention. A client
-with a fleet of plan servers asks each which API groups it serves
-(`s3.aws.upbound.io`, `kms.aws.upbound.io`, ...) and routes each resource to
-the right one. The obvious alternative, inspecting each
-provider package's CRDs to derive its groups, assumes every client has
-package-inspection machinery and a package to inspect. Asking the running
-server is one RPC, doubles as the readiness check after startup, and
-`GetInfoResponse` can grow fields later, capability flags say, without
-breaking existing clients.
+Provider discovery is deliberately kept out of the protocol. A client needs to
+know which provider serves a resource before it knows which plan server to
+start or call, and that information is already part of the provider package.
+
+### Provider Discovery
+
+A client builds a group/kind-to-provider routing table from the CRDs shipped in
+each provider's `package.yaml`. An xpkg stores `package.yaml` in its OCI base
+layer, annotated `io.crossplane.xpkg: base`, so discovery does not require
+pulling or starting the full provider image. The client resolves the image,
+fetches only that layer, walks the CRD documents, and extracts `spec.group` and
+`spec.names.kind`. The result is cached by immutable image digest, so a given
+provider version only needs to be inspected once.
+
+Both package extraction and parsing are existing machinery, not a new image
+format, OCI client, or YAML parser. `crossplane-runtime` already provides
+`xpkg.ExtractPackageYAML`, which locates and extracts the package layer using
+the xpkg annotation and its existing fallbacks, as well as the package parser in
+`pkg/xpkg/parser` for decoding `package.yaml`. The plan client can reuse both;
+the discovery-specific work is extracting `spec.group` and `spec.names.kind`
+from the parsed CRDs and building the routing table. If the full image has
+already been pulled to run the plan server, the same package can instead be read
+locally from `/package.yaml`.
+
+The cost is small compared with pulling and starting providers. In measurements
+against provider-family-aws, extracting group/kind information took about 180 ms
+for a 208-CRD service package and 3.9 s for the 2,045-CRD monolith. So the
+`package.yaml` processing isn't the performance bottleneck.  The main factor
+affecting performance will be on the network side when the images are captured.
+However, this is a step that must be carried out in any case.
+More importantly, `provider-family-aws-ec2:v2.0.0` carries `package.yaml` in a
+0.91 MB compressed layer while the full image is 242 MB. Across 30 AWS service
+packages, the package layers total roughly 10--27 MB; pulling the full images
+for discovery is about 7.2 GB because the ~236--237 MB provider binary layers
+do not deduplicate across service packages.
+
+The discovery flow is therefore independent of the plan-server lifecycle:
+
+```text
+provider image reference
+        |
+        v
+resolve manifest and config
+        |
+        v
+fetch xpkg base layer (or read local /package.yaml)
+        |
+        v
+extract CRD group/kind
+        |
+        v
+cache by image digest
+        |
+        v
+group/kind -> provider routing table
+        |
+        v
+start or reuse the matching plan server -> Plan
+```
+
+This treats the CRDs shipped in the package as the routing source of truth. The
+running server is still authoritative about whether it can plan a request, so
+a package whose CRDs and runtime wiring have drifted can route successfully and
+still reject the plan.
 
 ### The Engine
 
@@ -377,8 +428,7 @@ in order:
 
 Initialization failures surface at two points, and the split matters. The
 embedded Terraform provider initializes once at startup; if that fails, the
-subcommand exits nonzero before serving, and clients see it as `GetInfo`
-never answering, the readiness check doing its job. Per-resource setup
+subcommand exits nonzero before serving. Per-resource setup
 failures, a GCP resource planned without its project ID say, fail only that
 plan, in `PlanResponse.error`, with a message naming the missing input so
 the caller knows to include the ProviderConfig.
@@ -455,9 +505,9 @@ template, and running `make generate`, the monolith binary and every family
 One detail matters for family providers. The provider configuration returns
 the full resource set regardless of which scoped binary is running, so each
 family binary filters the resource configuration map to its own service
-before constructing the server. That way a binary's `GetInfo` advertises
-exactly the groups it can plan, which is what makes client-side routing
-across a family of plan servers work.
+before constructing the server, so the runtime only accepts resources shipped
+by that package. Client-side routing is derived independently from the package
+CRDs.
 
 Transport security is deliberately out of scope for v1alpha1: the intended
 deployment is a client-managed container listening on localhost, the same
@@ -474,12 +524,14 @@ one-pager):
    simulate`, the providers installed on the target cluster for `resource
    simulate`, or an explicit override, which is how an upgrade is previewed
    with a provider version nothing runs yet.
-2. `docker run` each image's `plan-server`, wait for `GetInfo`, and build a
-   routing table from supported API groups.
-3. For each resource to preview: fetch its live MR (if any) and the
+2. Inspect each provider package's CRDs and build a group/kind-to-provider
+   routing table, reusing cached results for image digests already seen.
+3. Start plan servers as needed. Discovery does not require them to be running,
+   so a client may start them eagerly or on first use.
+4. For each resource to preview: fetch its live MR (if any) and the
    ProviderConfig it references from the target cluster, send them with the
    desired resource to the routed server, collect the response.
-4. Render a `terraform plan`-style diff and summary.
+5. Render a `terraform plan`-style diff and summary.
 
 Everything the protocol needs from a cluster (the live MR with its
 `status.atProvider` and external-name annotation) is fetched by the client
@@ -504,6 +556,52 @@ compute plans for a whole project's resources in seconds, in parallel, and be
 torn down.
 
 ## Alternatives Considered
+
+### Discovering Resources From the Running Plan Server
+
+The original design included a `GetInfo` RPC that reported the API groups a
+running plan server supports. This keeps discovery simple for the client and
+lets the server describe its own capabilities. The trade-off is that discovery
+depends on provider startup: the client needs to pull and start each candidate
+provider before it can build the routing table. This is more noticeable for
+family providers, where each service package carries its own large provider
+binary layer. Reading the package CRDs instead allows the same routing decision
+to be made from the much smaller package metadata, before starting the
+provider.
+
+### Publishing Routing Metadata at Build Time
+
+Providers could write their supported group/kind set into the package meta
+object or OCI annotations at build time. Reading that metadata would be
+cheaper than walking the CRDs, but it would only exist in packages built after
+the change and in provider repositories that adopt it. Clients would still
+need CRD inspection for existing, third-party, and community packages, leaving
+two discovery paths to maintain for a small latency improvement.
+
+### Kubernetes Discovery
+
+An in-cluster client could derive routing from established CRDs and their
+`ProviderRevision` ownership. That does not cover the workflows this design
+needs to support without a cluster, in particular local and CI previews and
+previewing a provider version that is not installed yet, so cluster state
+cannot be the routing source.
+
+### Discovering Resources From the Runtime Scheme
+
+Another option is to expose the resources registered in the provider’s runtime
+Scheme through a discovery RPC. Unlike maintaining a separate static
+capability list, this derives the response from runtime state the provider
+already has and reflects the GVKs actually registered by that binary. It could
+also provide a natural foundation for exposing additional runtime capabilities
+in the future.
+
+This has a similar lifecycle trade-off to GetInfo: the provider must be
+pulled and started before its scheme can be queried, so it does not help the
+client decide which provider to start in the first place. For the routing
+information needed here, the same group/kind information is already available
+from the CRDs in package.yaml without initializing the runtime. A
+scheme-backed discovery RPC could still be useful later if clients need
+runtime information that cannot be represented by the package metadata.
 
 ### A `Plan` CRD Reconciled In-Cluster
 
