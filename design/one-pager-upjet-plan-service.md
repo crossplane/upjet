@@ -254,11 +254,38 @@ without calling a plan server. This also keeps the contract simple:
 `desired_resource` is always required, and a request without one fails as
 `INVALID_ARGUMENT`.
 
-Provider discovery is deliberately kept out of the protocol. A client needs to
+Provider API Groups discovery is deliberately kept out of the protocol. A client needs to
 know which provider serves a resource before it knows which plan server to
 start or call, and that information is already part of the provider package.
 
-### Provider Discovery
+### Provider API Groups Discovery
+
+Not every provider package is expected to support the plan service. Providers
+that include the plan-server feature communicate this explicitly through the
+existing package capability mechanism:
+
+```yaml
+apiVersion: meta.pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-aws-s3
+spec:
+  capabilities:
+  - SafeStart
+  - DiffServer
+```
+
+The client checks this capability before attempting to start a plan server. A
+package without `DiffServer` is treated as not supporting provider-side
+planning, allowing clients to fall back or report that limitation without
+probing the provider runtime. Because the package metadata is the first
+document in the same `package.yaml` used for API group discovery, this check
+does not require another artifact or registry operation.
+
+The capability answers whether a package supports the plan protocol; the CRDs
+answer which resources that package serves. Keeping these separate avoids
+encoding resource routing into the capability itself and lets the existing
+`spec.capabilities` mechanism remain the package-level feature notice.
 
 A client builds a group/kind-to-provider routing table from the CRDs shipped in
 each provider's `package.yaml`. An xpkg stores `package.yaml` in its OCI base
