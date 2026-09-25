@@ -97,6 +97,69 @@ func (Action) EnumDescriptor() ([]byte, []int) {
 	return file_diff_v1alpha1_diff_proto_rawDescGZIP(), []int{0}
 }
 
+// Where a planned value came from. This is about provenance, not about
+// whether the value changed: a field the desired resource declares has
+// ORIGIN_DESIRED_STATE whether or not its value differs from the actual one.
+type Origin int32
+
+const (
+	// The server did not say where the planned value came from. A client must
+	// treat this as unknown provenance rather than assuming either case,
+	// because it is also what an older client sees for an origin added after
+	// it was built.
+	Origin_ORIGIN_UNSPECIFIED Origin = 0
+	// The desired resource declares this field, so the planned value follows
+	// from what the user wrote.
+	Origin_ORIGIN_DESIRED_STATE Origin = 1
+	// The provider planned this value for a field the desired resource does not
+	// declare, for example from a schema default or a custom diff. For a
+	// parameter, late initialization writes the value back into the managed
+	// resource's spec.forProvider once the change is applied, so the user's own
+	// object changes too.
+	Origin_ORIGIN_PROVIDER Origin = 2
+)
+
+// Enum value maps for Origin.
+var (
+	Origin_name = map[int32]string{
+		0: "ORIGIN_UNSPECIFIED",
+		1: "ORIGIN_DESIRED_STATE",
+		2: "ORIGIN_PROVIDER",
+	}
+	Origin_value = map[string]int32{
+		"ORIGIN_UNSPECIFIED":   0,
+		"ORIGIN_DESIRED_STATE": 1,
+		"ORIGIN_PROVIDER":      2,
+	}
+)
+
+func (x Origin) Enum() *Origin {
+	p := new(Origin)
+	*p = x
+	return p
+}
+
+func (x Origin) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (Origin) Descriptor() protoreflect.EnumDescriptor {
+	return file_diff_v1alpha1_diff_proto_enumTypes[1].Descriptor()
+}
+
+func (Origin) Type() protoreflect.EnumType {
+	return &file_diff_v1alpha1_diff_proto_enumTypes[1]
+}
+
+func (x Origin) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use Origin.Descriptor instead.
+func (Origin) EnumDescriptor() ([]byte, []int) {
+	return file_diff_v1alpha1_diff_proto_rawDescGZIP(), []int{1}
+}
+
 // Why a FieldValue carries no concrete value. A value that is present is
 // carried in FieldValue.value instead, so there is no "present" member here.
 type Absence int32
@@ -143,11 +206,11 @@ func (x Absence) String() string {
 }
 
 func (Absence) Descriptor() protoreflect.EnumDescriptor {
-	return file_diff_v1alpha1_diff_proto_enumTypes[1].Descriptor()
+	return file_diff_v1alpha1_diff_proto_enumTypes[2].Descriptor()
 }
 
 func (Absence) Type() protoreflect.EnumType {
-	return &file_diff_v1alpha1_diff_proto_enumTypes[1]
+	return &file_diff_v1alpha1_diff_proto_enumTypes[2]
 }
 
 func (x Absence) Number() protoreflect.EnumNumber {
@@ -156,7 +219,7 @@ func (x Absence) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use Absence.Descriptor instead.
 func (Absence) EnumDescriptor() ([]byte, []int) {
-	return file_diff_v1alpha1_diff_proto_rawDescGZIP(), []int{1}
+	return file_diff_v1alpha1_diff_proto_rawDescGZIP(), []int{2}
 }
 
 type PlanRequest struct {
@@ -315,12 +378,20 @@ type FieldChange struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// CRD path in the schema of the request's apiVersion,
 	// e.g. spec.forProvider.deletionWindowInDays.
-	Field           string      `protobuf:"bytes,1,opt,name=field,proto3" json:"field,omitempty"`
-	Current         *FieldValue `protobuf:"bytes,2,opt,name=current,proto3" json:"current,omitempty"` // Unset when the field does not exist yet.
-	Desired         *FieldValue `protobuf:"bytes,3,opt,name=desired,proto3" json:"desired,omitempty"` // Unset when the change removes the field.
+	Field string `protobuf:"bytes,1,opt,name=field,proto3" json:"field,omitempty"`
+	// The value the external resource has now. Unset when the field does not
+	// exist yet.
+	Actual *FieldValue `protobuf:"bytes,2,opt,name=actual,proto3" json:"actual,omitempty"`
+	// The value the external resource will have once the change is applied.
+	// This is not simply the value from PlanRequest.desired_resource: a
+	// provider can plan a value the desired resource never declared, such as a
+	// schema default. Unset when the change removes the field.
+	Planned         *FieldValue `protobuf:"bytes,3,opt,name=planned,proto3" json:"planned,omitempty"`
 	RequiresReplace bool        `protobuf:"varint,4,opt,name=requires_replace,json=requiresReplace,proto3" json:"requires_replace,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// Where the planned value came from.
+	Origin        Origin `protobuf:"varint,5,opt,name=origin,proto3,enum=upjet.diff.v1alpha1.Origin" json:"origin,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *FieldChange) Reset() {
@@ -360,16 +431,16 @@ func (x *FieldChange) GetField() string {
 	return ""
 }
 
-func (x *FieldChange) GetCurrent() *FieldValue {
+func (x *FieldChange) GetActual() *FieldValue {
 	if x != nil {
-		return x.Current
+		return x.Actual
 	}
 	return nil
 }
 
-func (x *FieldChange) GetDesired() *FieldValue {
+func (x *FieldChange) GetPlanned() *FieldValue {
 	if x != nil {
-		return x.Desired
+		return x.Planned
 	}
 	return nil
 }
@@ -379,6 +450,13 @@ func (x *FieldChange) GetRequiresReplace() bool {
 		return x.RequiresReplace
 	}
 	return false
+}
+
+func (x *FieldChange) GetOrigin() Origin {
+	if x != nil {
+		return x.Origin
+	}
+	return Origin_ORIGIN_UNSPECIFIED
 }
 
 // The value on one side of a change. Unset, concrete (including explicit
@@ -486,12 +564,13 @@ const file_diff_v1alpha1_diff_proto_rawDesc = "" +
 	"\x0ereplace_fields\x18\x04 \x03(\tR\rreplaceFields\x12\x14\n" +
 	"\x05error\x18\x06 \x01(\tR\x05error\x12;\n" +
 	"\vcomputed_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"computedAt\"\xc4\x01\n" +
+	"computedAt\"\xf7\x01\n" +
 	"\vFieldChange\x12\x14\n" +
-	"\x05field\x18\x01 \x01(\tR\x05field\x129\n" +
-	"\acurrent\x18\x02 \x01(\v2\x1f.upjet.diff.v1alpha1.FieldValueR\acurrent\x129\n" +
-	"\adesired\x18\x03 \x01(\v2\x1f.upjet.diff.v1alpha1.FieldValueR\adesired\x12)\n" +
-	"\x10requires_replace\x18\x04 \x01(\bR\x0frequiresReplace\"~\n" +
+	"\x05field\x18\x01 \x01(\tR\x05field\x127\n" +
+	"\x06actual\x18\x02 \x01(\v2\x1f.upjet.diff.v1alpha1.FieldValueR\x06actual\x129\n" +
+	"\aplanned\x18\x03 \x01(\v2\x1f.upjet.diff.v1alpha1.FieldValueR\aplanned\x12)\n" +
+	"\x10requires_replace\x18\x04 \x01(\bR\x0frequiresReplace\x123\n" +
+	"\x06origin\x18\x05 \x01(\x0e2\x1b.upjet.diff.v1alpha1.OriginR\x06origin\"~\n" +
 	"\n" +
 	"FieldValue\x12.\n" +
 	"\x05value\x18\x01 \x01(\v2\x16.google.protobuf.ValueH\x00R\x05value\x128\n" +
@@ -502,7 +581,11 @@ const file_diff_v1alpha1_diff_proto_rawDesc = "" +
 	"\fACTION_NO_OP\x10\x01\x12\x11\n" +
 	"\rACTION_CREATE\x10\x02\x12\x11\n" +
 	"\rACTION_UPDATE\x10\x03\x12\x12\n" +
-	"\x0eACTION_REPLACE\x10\x04*f\n" +
+	"\x0eACTION_REPLACE\x10\x04*O\n" +
+	"\x06Origin\x12\x16\n" +
+	"\x12ORIGIN_UNSPECIFIED\x10\x00\x12\x18\n" +
+	"\x14ORIGIN_DESIRED_STATE\x10\x01\x12\x13\n" +
+	"\x0fORIGIN_PROVIDER\x10\x02*f\n" +
 	"\aAbsence\x12\x17\n" +
 	"\x13ABSENCE_UNSPECIFIED\x10\x00\x12\x13\n" +
 	"\x0fABSENCE_UNKNOWN\x10\x01\x12\x15\n" +
@@ -523,37 +606,39 @@ func file_diff_v1alpha1_diff_proto_rawDescGZIP() []byte {
 	return file_diff_v1alpha1_diff_proto_rawDescData
 }
 
-var file_diff_v1alpha1_diff_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_diff_v1alpha1_diff_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
 var file_diff_v1alpha1_diff_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_diff_v1alpha1_diff_proto_goTypes = []any{
 	(Action)(0),                   // 0: upjet.diff.v1alpha1.Action
-	(Absence)(0),                  // 1: upjet.diff.v1alpha1.Absence
-	(*PlanRequest)(nil),           // 2: upjet.diff.v1alpha1.PlanRequest
-	(*PlanResponse)(nil),          // 3: upjet.diff.v1alpha1.PlanResponse
-	(*FieldChange)(nil),           // 4: upjet.diff.v1alpha1.FieldChange
-	(*FieldValue)(nil),            // 5: upjet.diff.v1alpha1.FieldValue
-	(*structpb.Struct)(nil),       // 6: google.protobuf.Struct
-	(*timestamppb.Timestamp)(nil), // 7: google.protobuf.Timestamp
-	(*structpb.Value)(nil),        // 8: google.protobuf.Value
+	(Origin)(0),                   // 1: upjet.diff.v1alpha1.Origin
+	(Absence)(0),                  // 2: upjet.diff.v1alpha1.Absence
+	(*PlanRequest)(nil),           // 3: upjet.diff.v1alpha1.PlanRequest
+	(*PlanResponse)(nil),          // 4: upjet.diff.v1alpha1.PlanResponse
+	(*FieldChange)(nil),           // 5: upjet.diff.v1alpha1.FieldChange
+	(*FieldValue)(nil),            // 6: upjet.diff.v1alpha1.FieldValue
+	(*structpb.Struct)(nil),       // 7: google.protobuf.Struct
+	(*timestamppb.Timestamp)(nil), // 8: google.protobuf.Timestamp
+	(*structpb.Value)(nil),        // 9: google.protobuf.Value
 }
 var file_diff_v1alpha1_diff_proto_depIdxs = []int32{
-	6,  // 0: upjet.diff.v1alpha1.PlanRequest.desired_resource:type_name -> google.protobuf.Struct
-	6,  // 1: upjet.diff.v1alpha1.PlanRequest.actual_resource:type_name -> google.protobuf.Struct
-	6,  // 2: upjet.diff.v1alpha1.PlanRequest.kubernetes_object_store:type_name -> google.protobuf.Struct
+	7,  // 0: upjet.diff.v1alpha1.PlanRequest.desired_resource:type_name -> google.protobuf.Struct
+	7,  // 1: upjet.diff.v1alpha1.PlanRequest.actual_resource:type_name -> google.protobuf.Struct
+	7,  // 2: upjet.diff.v1alpha1.PlanRequest.kubernetes_object_store:type_name -> google.protobuf.Struct
 	0,  // 3: upjet.diff.v1alpha1.PlanResponse.action:type_name -> upjet.diff.v1alpha1.Action
-	4,  // 4: upjet.diff.v1alpha1.PlanResponse.changes:type_name -> upjet.diff.v1alpha1.FieldChange
-	7,  // 5: upjet.diff.v1alpha1.PlanResponse.computed_at:type_name -> google.protobuf.Timestamp
-	5,  // 6: upjet.diff.v1alpha1.FieldChange.current:type_name -> upjet.diff.v1alpha1.FieldValue
-	5,  // 7: upjet.diff.v1alpha1.FieldChange.desired:type_name -> upjet.diff.v1alpha1.FieldValue
-	8,  // 8: upjet.diff.v1alpha1.FieldValue.value:type_name -> google.protobuf.Value
-	1,  // 9: upjet.diff.v1alpha1.FieldValue.absence:type_name -> upjet.diff.v1alpha1.Absence
-	2,  // 10: upjet.diff.v1alpha1.PlanService.Plan:input_type -> upjet.diff.v1alpha1.PlanRequest
-	3,  // 11: upjet.diff.v1alpha1.PlanService.Plan:output_type -> upjet.diff.v1alpha1.PlanResponse
-	11, // [11:12] is the sub-list for method output_type
-	10, // [10:11] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	5,  // 4: upjet.diff.v1alpha1.PlanResponse.changes:type_name -> upjet.diff.v1alpha1.FieldChange
+	8,  // 5: upjet.diff.v1alpha1.PlanResponse.computed_at:type_name -> google.protobuf.Timestamp
+	6,  // 6: upjet.diff.v1alpha1.FieldChange.actual:type_name -> upjet.diff.v1alpha1.FieldValue
+	6,  // 7: upjet.diff.v1alpha1.FieldChange.planned:type_name -> upjet.diff.v1alpha1.FieldValue
+	1,  // 8: upjet.diff.v1alpha1.FieldChange.origin:type_name -> upjet.diff.v1alpha1.Origin
+	9,  // 9: upjet.diff.v1alpha1.FieldValue.value:type_name -> google.protobuf.Value
+	2,  // 10: upjet.diff.v1alpha1.FieldValue.absence:type_name -> upjet.diff.v1alpha1.Absence
+	3,  // 11: upjet.diff.v1alpha1.PlanService.Plan:input_type -> upjet.diff.v1alpha1.PlanRequest
+	4,  // 12: upjet.diff.v1alpha1.PlanService.Plan:output_type -> upjet.diff.v1alpha1.PlanResponse
+	12, // [12:13] is the sub-list for method output_type
+	11, // [11:12] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_diff_v1alpha1_diff_proto_init() }
@@ -570,7 +655,7 @@ func file_diff_v1alpha1_diff_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_diff_v1alpha1_diff_proto_rawDesc), len(file_diff_v1alpha1_diff_proto_rawDesc)),
-			NumEnums:      2,
+			NumEnums:      3,
 			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   1,

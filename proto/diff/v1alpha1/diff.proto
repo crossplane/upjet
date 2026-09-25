@@ -68,14 +68,47 @@ message PlanResponse {
   google.protobuf.Timestamp computed_at = 7;
 }
 
+// Where a planned value came from. This is about provenance, not about
+// whether the value changed: a field the desired resource declares has
+// ORIGIN_DESIRED_STATE whether or not its value differs from the actual one.
+enum Origin {
+  // The server did not say where the planned value came from. A client must
+  // treat this as unknown provenance rather than assuming either case,
+  // because it is also what an older client sees for an origin added after
+  // it was built.
+  ORIGIN_UNSPECIFIED = 0;
+
+  // The desired resource declares this field, so the planned value follows
+  // from what the user wrote.
+  ORIGIN_DESIRED_STATE = 1;
+
+  // The provider planned this value for a field the desired resource does not
+  // declare, for example from a schema default or a custom diff. For a
+  // parameter, late initialization writes the value back into the managed
+  // resource's spec.forProvider once the change is applied, so the user's own
+  // object changes too.
+  ORIGIN_PROVIDER = 2;
+}
+
 message FieldChange {
   // CRD path in the schema of the request's apiVersion,
   // e.g. spec.forProvider.deletionWindowInDays.
   string field = 1;
 
-  FieldValue current = 2; // Unset when the field does not exist yet.
-  FieldValue desired = 3; // Unset when the change removes the field.
+  // The value the external resource has now. Unset when the field does not
+  // exist yet.
+  FieldValue actual = 2;
+
+  // The value the external resource will have once the change is applied.
+  // This is not simply the value from PlanRequest.desired_resource: a
+  // provider can plan a value the desired resource never declared, such as a
+  // schema default. Unset when the change removes the field.
+  FieldValue planned = 3;
+
   bool requires_replace = 4;
+
+  // Where the planned value came from.
+  Origin origin = 5;
 }
 
 // Why a FieldValue carries no concrete value. A value that is present is

@@ -92,6 +92,7 @@ func (s *PlanService) Plan(ctx context.Context, req *diffv1alpha1.PlanRequest) (
 	}
 
 	var errorMsg string
+	var rsp *diffv1alpha1.PlanResponse
 	switch t {
 	case config.ResourceTypeTerraformCLI:
 		return nil, s.preconditionFailure(nil, errCLIDiffNotImplemented, desiredGVK)
@@ -101,7 +102,7 @@ func (s *PlanService) Plan(ctx context.Context, req *diffv1alpha1.PlanRequest) (
 
 	case config.ResourceTypeTerraformSDK:
 		errorMsg = errDiffPluginSDKv2
-		err = s.diffTerraformPluginSDK(ctx, kc, cfg, desired, actual)
+		rsp, err = s.diffTerraformPluginSDK(ctx, kc, cfg, desired, actual)
 
 	case config.ResourceTypeUnknown:
 		fallthrough
@@ -116,7 +117,7 @@ func (s *PlanService) Plan(ctx context.Context, req *diffv1alpha1.PlanRequest) (
 		}
 		return nil, status.Error(codes.Internal, errors.Wrap(err, errorMsg).Error())
 	}
-	return &diffv1alpha1.PlanResponse{}, nil
+	return rsp, nil
 }
 
 func (s *PlanService) preconditionFailure(err error, msg string, desiredGVK schema.GroupVersionKind) error {

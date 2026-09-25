@@ -34,9 +34,9 @@ const (
 	errInMemoryClient         = "cannot initialize the in-memory Kubernetes API client"
 	errResourceConfigNotFound = "cannot find the resource configuration"
 
-	fmtErrNotManaged             = "the API type %q registered for the resource is not a managed resource"
-	fmtErrNotObject              = "the API type %q registered for the resource is not a metav1.Object"
-	fmtErrConvertProtoBuf        = "cannot convert %s unstructured object from protobuf"
+	fmtErrNotManaged      = "the API type %q registered for the resource is not a managed resource"
+	fmtErrNotObject       = "the API type %q registered for the resource is not a metav1.Object"
+	fmtErrConvertProtoBuf = "cannot convert %s unstructured object from protobuf"
 
 	violationDiffComputationNotSupported = "DIFF_COMPUTATION_NOT_SUPPORTED"
 )
