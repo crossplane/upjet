@@ -142,7 +142,7 @@ func (s *PlanService) preconditionFailure(err error, msg string, desiredGVK sche
 			{
 				Type:        violationDiffComputationNotSupported,
 				Subject:     desiredGVK.String(),
-				Description: err.Error(),
+				Description: sErr.Error(),
 			},
 		},
 	})
