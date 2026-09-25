@@ -37,9 +37,6 @@ const (
 	fmtErrNotManaged             = "the API type %q registered for the resource is not a managed resource"
 	fmtErrNotObject              = "the API type %q registered for the resource is not a metav1.Object"
 	fmtErrConvertProtoBuf        = "cannot convert %s unstructured object from protobuf"
-	fmtErrEmptyGroupName         = "empty API group name for GVK %q"
-	fmtErrNotTerraformed         = "the API type %q is not a Terraformed resource"
-	fmtErrResourceConfigNotFound = "no resource configuration for the API type %q is registered in provider configurations"
 
 	violationDiffComputationNotSupported = "DIFF_COMPUTATION_NOT_SUPPORTED"
 )

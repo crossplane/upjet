@@ -28,6 +28,14 @@ import (
 	diffv1alpha1 "github.com/crossplane/upjet/v2/proto/diff/v1alpha1"
 )
 
+const (
+	fmtErrEmptyGroupName         = "empty API group name for GVK %q"
+	fmtErrNotTerraformed         = "the API type %q is not a Terraformed resource"
+	fmtErrResourceConfigNotFound = "no resource configuration for the API type %q is registered in provider configurations"
+
+	fmtErrGVKMismatch = "the GVKs of both the desired and the actual resources must match, desired has %q, actual has %q"
+)
+
 // PlanService implements the upjet.diff.v1alpha1.PlanService gRPC service.
 type PlanService struct {
 	diffv1alpha1.UnimplementedPlanServiceServer
@@ -60,6 +68,14 @@ func (s *PlanService) Plan(ctx context.Context, req *diffv1alpha1.PlanRequest) (
 	s.log.Debug("Received a plan request",
 		"desired-gvk", desiredGVK.String(), "desired-name", desired.GetName(),
 		"actual-gvk", actualGVK.String())
+
+	// We currently require that the whole GVKs of desired and actual states
+	// match. Version skews are not allowed.
+	// TODO: Relax this constraint by incorporating CRD API conversion chains
+	// in the in-memory client.
+	if actualGVK != desiredGVK {
+		return nil, status.Error(codes.InvalidArgument, errors.Errorf(fmtErrGVKMismatch, desiredGVK.String(), actualGVK.String()).Error())
+	}
 
 	kc, err := s.inMemoryClient(req)
 	if err != nil {
