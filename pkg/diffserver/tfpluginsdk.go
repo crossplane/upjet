@@ -7,10 +7,12 @@ package diffserver
 import (
 	"context"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/crossplane/crossplane-runtime/v2/pkg/errors"
 	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	tf "github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -31,6 +33,7 @@ const (
 	errDiffPluginSDKv2           = "cannot compute diff for a Terraform plugin SDKv2 resource"
 	errConvertValue              = "cannot convert the attribute value to a protobuf value"
 	errGetDesiredParameters      = "cannot get the parameters of the desired resource"
+	errConvertDesiredParameters  = "cannot convert the parameters of the desired resource to their Terraform shape"
 
 	fmtErrConvertAttribute = "cannot convert the diff of the attribute %q"
 
@@ -80,7 +83,13 @@ func (s *PlanService) diffTerraformPluginSDK(ctx context.Context, kc kclient.Cli
 	if err != nil {
 		return nil, errors.Wrap(err, errGetDesiredParameters)
 	}
-	return s.planResponse(diff, obs.ResourceExists, declared)
+	// The flatmap keys are in Terraform shape, so the parameters must be too:
+	// this turns the CRD's embedded objects back into singleton lists.
+	declared, err = cfg.ApplyTFConversions(declared, config.ToTerraform)
+	if err != nil {
+		return nil, errors.Wrap(err, errConvertDesiredParameters)
+	}
+	return s.planResponse(diff, obs.ResourceExists, declared, cfg)
 }
 
 // planResponse converts a filtered Terraform instance diff into a plan
@@ -93,7 +102,7 @@ func (s *PlanService) diffTerraformPluginSDK(ctx context.Context, kc kclient.Cli
 // against the resource schema, which means a number reads as "30" and a
 // boolean as "true". Clients should not infer a type from the JSON shape of
 // a plugin SDKv2 plan.
-func (s *PlanService) planResponse(d *tf.InstanceDiff, exists bool, declared map[string]any) (*diffv1alpha1.PlanResponse, error) {
+func (s *PlanService) planResponse(d *tf.InstanceDiff, exists bool, declared map[string]any, cfg *config.Resource) (*diffv1alpha1.PlanResponse, error) {
 	r := &diffv1alpha1.PlanResponse{
 		Action:     diffv1alpha1.Action_ACTION_NO_OP,
 		ComputedAt: timestamppb.Now(),
@@ -123,7 +132,7 @@ func (s *PlanService) planResponse(d *tf.InstanceDiff, exists bool, declared map
 			// changes that accompany them are reported on their own.
 			continue
 		}
-		c, err := fieldChange(k, a, declared, exists)
+		c, err := fieldChange(k, a, declared, exists, cfg)
 		if err != nil {
 			return nil, errors.Wrapf(err, fmtErrConvertAttribute, k)
 		}
@@ -154,11 +163,11 @@ func (s *PlanService) planResponse(d *tf.InstanceDiff, exists bool, declared map
 // fieldChange converts a single attribute diff, keyed by its flatmap key,
 // into a field change. exists reports whether the external resource already
 // exists, because forcing a replacement is only meaningful for one that does.
-func fieldChange(key string, a *tf.ResourceAttrDiff, declared map[string]any, exists bool) (*diffv1alpha1.FieldChange, error) {
+func fieldChange(key string, a *tf.ResourceAttrDiff, declared map[string]any, exists bool, cfg *config.Resource) (*diffv1alpha1.FieldChange, error) {
 	c := &diffv1alpha1.FieldChange{
-		Field:           fieldPath(key),
+		Field:           fieldPath(key, cfg),
 		RequiresReplace: exists && a.RequiresNew,
-		Origin:          origin(key, declared),
+		Origin:          origin(key, declared, cfg),
 	}
 
 	// A sensitive attribute is redacted on both sides: the plan reports that
@@ -196,40 +205,169 @@ func fieldChange(key string, a *tf.ResourceAttrDiff, declared map[string]any, ex
 	return c, nil
 }
 
-// fieldPath maps a Terraform flatmap key onto the CRD path of the field it
-// came from, e.g. "deletion_window_in_days" to
-// "spec.forProvider.deletionWindowInDays".
+// stepKind distinguishes what a resolved segment of a flatmap key selects.
+type stepKind int
+
+const (
+	// stepField selects a field declared by the resource schema.
+	stepField stepKind = iota
+	// stepIndex selects an element of a list or a set.
+	stepIndex
+	// stepMapKey selects an entry of a map by a user supplied key.
+	stepMapKey
+	// stepUnresolved is a segment the schema could not account for. It is
+	// carried through verbatim so that nothing is silently dropped.
+	stepUnresolved
+)
+
+// step is one resolved segment of a Terraform flatmap key.
+type step struct {
+	kind stepKind
+	// tf is the segment as it appears in the flatmap key.
+	tf string
+	// crd is how the CRD spells the segment. It is empty for an index that
+	// the CRD does not have, which is the case for a singleton list the
+	// resource converts into an embedded object.
+	crd string
+}
+
+// walkKey resolves a Terraform flatmap key against the resource schema.
 //
-// The segment is lower camel cased the way the generated CRD serializes it,
+// Resolution is what makes the difference between a field name, which the CRD
+// camel cases, and a user supplied map key or a list index, which it must not
+// touch: "logging_config.0.target_bucket" and "tags.Team" are indistinguishable
+// without the schema. Once a segment cannot be resolved the remainder is
+// carried through verbatim rather than guessed at.
+func walkKey(key string, cfg *config.Resource) []step { //nolint:gocyclo // the flatmap cases are easier to follow as one walk
+	segments := strings.Split(key, ".")
+	steps := make([]step, 0, len(segments))
+
+	var schemas map[string]*schema.Schema
+	if cfg.TerraformResource != nil {
+		schemas = cfg.TerraformResource.Schema
+	}
+	// tfPath accumulates the field names seen so far, which is the key
+	// SchemaElementOptions uses to record singleton list conversions.
+	var tfPath []string
+
+	for i := 0; i < len(segments); i++ {
+		sch := schemas[segments[i]]
+		if sch == nil {
+			for _, r := range segments[i:] {
+				steps = append(steps, step{kind: stepUnresolved, tf: r, crd: r})
+			}
+			return steps
+		}
+		tfPath = append(tfPath, segments[i])
+		steps = append(steps, step{
+			kind: stepField,
+			tf:   segments[i],
+			crd:  name.NewFromSnake(segments[i]).LowerCamelComputed,
+		})
+		if i+1 == len(segments) {
+			return steps
+		}
+
+		switch sch.Type { //nolint:exhaustive // only the collection types continue the walk
+		case schema.TypeMap:
+			// Everything left is the map key, which may itself contain dots.
+			k := strings.Join(segments[i+1:], ".")
+			return append(steps, step{kind: stepMapKey, tf: k, crd: k})
+
+		case schema.TypeList, schema.TypeSet:
+			i++
+			crd := segments[i]
+			if cfg.SchemaElementOptions.EmbeddedObject(strings.Join(tfPath, ".")) {
+				// The CRD models this singleton list as an embedded object,
+				// so it has no index to address.
+				crd = ""
+			}
+			steps = append(steps, step{kind: stepIndex, tf: segments[i], crd: crd})
+
+			elem, ok := sch.Elem.(*schema.Resource)
+			if !ok {
+				// A collection of primitives ends the walk at its element.
+				for _, r := range segments[i+1:] {
+					steps = append(steps, step{kind: stepUnresolved, tf: r, crd: r})
+				}
+				return steps
+			}
+			schemas = elem.Schema
+
+		default:
+			for _, r := range segments[i+1:] {
+				steps = append(steps, step{kind: stepUnresolved, tf: r, crd: r})
+			}
+			return steps
+		}
+	}
+	return steps
+}
+
+// fieldPath maps a Terraform flatmap key onto the CRD path of the field it
+// came from, e.g. "logging_config.0.target_bucket" to
+// "spec.forProvider.loggingConfig[0].targetBucket".
+//
+// A segment is lower camel cased the way the generated CRD serializes it,
 // which is Name.LowerCamelComputed rather than Name.LowerCamel: the latter
 // spells acronyms the way the Go field does, so "template_id" would become
 // "templateID" where the manifest has "templateId".
 //
-// Only the leading segment is translated. A flatmap key's later segments are
-// ambiguous without the resource schema: "logging_config.0.target_bucket" has
-// a nested field name that should be camel cased, whereas "tags.Team" has a
-// user-supplied map key that must be left exactly as it is. Translating both
-// would corrupt map keys, so the remainder is reported in its Terraform form
-// until this walks the schema.
-func fieldPath(key string) string {
-	head, rest, found := strings.Cut(key, ".")
-	p := crdParametersPath + "." + name.NewFromSnake(head).LowerCamelComputed
-	if found {
-		p += "." + rest
+// The index of a set element is Terraform's hash of that element rather than
+// a position, so the path it produces locates the field but not the element.
+func fieldPath(key string, cfg *config.Resource) string {
+	p := crdParametersPath
+	for _, s := range walkKey(key, cfg) {
+		switch {
+		case s.kind == stepIndex && s.crd == "":
+			// A singleton list the CRD models as an embedded object.
+		case s.kind == stepIndex:
+			p += "[" + s.crd + "]"
+		default:
+			p += "." + s.crd
+		}
 	}
 	return p
 }
 
-// origin reports where the planned value of the attribute came from, by
-// looking for its attribute in the parameters the desired resource declares.
-//
-// Only the leading segment is looked up, for the same reason fieldPath only
-// translates that one: resolving a nested segment needs the resource schema.
-// A leaf that a provider defaulted inside a block the desired resource does
-// declare therefore reports ORIGIN_DESIRED_STATE.
-func origin(key string, declared map[string]any) diffv1alpha1.Origin {
-	head, _, _ := strings.Cut(key, ".")
-	if _, ok := declared[head]; ok {
+// isDeclared reports whether the desired resource declares the attribute the
+// flatmap key addresses, by walking the declared parameters alongside the
+// schema. The parameters are in Terraform shape, so a singleton list is still
+// a list here even where the CRD models it as an embedded object.
+func isDeclared(key string, declared map[string]any, cfg *config.Resource) bool {
+	var current any = declared
+	for _, s := range walkKey(key, cfg) {
+		switch s.kind {
+		case stepField, stepMapKey, stepUnresolved:
+			m, ok := current.(map[string]any)
+			if !ok {
+				return false
+			}
+			if current, ok = m[s.tf]; !ok {
+				return false
+			}
+		case stepIndex:
+			l, ok := current.([]any)
+			if !ok {
+				return false
+			}
+			i, err := strconv.Atoi(s.tf)
+			if err != nil || i < 0 || i >= len(l) {
+				// A set element is addressed by its hash rather than by a
+				// position, so it cannot be located in the declared list. The
+				// collection itself was declared, which is as much as can be
+				// established here.
+				return true
+			}
+			current = l[i]
+		}
+	}
+	return true
+}
+
+// origin reports where the planned value of the attribute came from.
+func origin(key string, declared map[string]any, cfg *config.Resource) diffv1alpha1.Origin {
+	if isDeclared(key, declared, cfg) {
 		return diffv1alpha1.Origin_ORIGIN_DESIRED_STATE
 	}
 	return diffv1alpha1.Origin_ORIGIN_PROVIDER

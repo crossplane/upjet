@@ -8,10 +8,12 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	tf "github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/structpb"
 
+	"github.com/crossplane/upjet/v2/pkg/config"
 	diffv1alpha1 "github.com/crossplane/upjet/v2/proto/diff/v1alpha1"
 )
 
@@ -30,6 +32,46 @@ func absent(a diffv1alpha1.Absence) *diffv1alpha1.FieldValue {
 // ignoreComputedAt drops the timestamp, which is wall-clock and therefore not
 // comparable against a fixture.
 var ignoreComputedAt = protocmp.IgnoreFields(&diffv1alpha1.PlanResponse{}, "computed_at")
+
+// testResource is a schema covering each shape walkKey has to resolve: plain
+// fields, an acronym, a map with user supplied keys, a list of primitives, a
+// list of objects, a set of objects, and a singleton list the CRD models as an
+// embedded object.
+func testResource() *config.Resource {
+	r := &config.Resource{
+		TerraformResource: &schema.Resource{
+			Schema: map[string]*schema.Schema{
+				"display_name":            {Type: schema.TypeString},
+				"description":             {Type: schema.TypeString},
+				"alpha":                   {Type: schema.TypeString},
+				"zone":                    {Type: schema.TypeString},
+				"region":                  {Type: schema.TypeString},
+				"policy":                  {Type: schema.TypeString},
+				"master_password":         {Type: schema.TypeString, Sensitive: true},
+				"sign_in_audience":        {Type: schema.TypeString},
+				"deletion_window_in_days": {Type: schema.TypeInt},
+				"enable_key_rotation":     {Type: schema.TypeBool},
+				"template_id":             {Type: schema.TypeString},
+				"vpc_id":                  {Type: schema.TypeString},
+				"tags":                    {Type: schema.TypeMap, Elem: &schema.Schema{Type: schema.TypeString}},
+				"subnet_ids":              {Type: schema.TypeList, Elem: &schema.Schema{Type: schema.TypeString}},
+				"logging_config": {Type: schema.TypeList, Elem: &schema.Resource{Schema: map[string]*schema.Schema{
+					"target_bucket": {Type: schema.TypeString},
+					"target_prefix": {Type: schema.TypeString},
+				}}},
+				"ingress_rule": {Type: schema.TypeSet, Elem: &schema.Resource{Schema: map[string]*schema.Schema{
+					"from_port": {Type: schema.TypeInt},
+				}}},
+				"encryption_config": {Type: schema.TypeList, MaxItems: 1, Elem: &schema.Resource{Schema: map[string]*schema.Schema{
+					"kms_key_id": {Type: schema.TypeString},
+				}}},
+			},
+		},
+		SchemaElementOptions: config.SchemaElementOptions{},
+	}
+	r.SchemaElementOptions.SetEmbeddedObject("encryption_config")
+	return r
+}
 
 func TestPlanResponseAction(t *testing.T) {
 	changed := map[string]*tf.ResourceAttrDiff{
@@ -103,7 +145,7 @@ func TestPlanResponseAction(t *testing.T) {
 	s := &PlanService{}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			r, err := s.planResponse(tc.d, tc.exists, tc.declared)
+			r, err := s.planResponse(tc.d, tc.exists, tc.declared, testResource())
 			if err != nil {
 				t.Fatalf("\n%s\nplanResponse(...): unexpected error: %v", tc.reason, err)
 			}
@@ -236,7 +278,7 @@ func TestPlanResponseChanges(t *testing.T) {
 			want: &diffv1alpha1.PlanResponse{
 				Action: diffv1alpha1.Action_ACTION_UPDATE,
 				Changes: []*diffv1alpha1.FieldChange{
-					{Field: "spec.forProvider.subnetIds.1", Origin: diffv1alpha1.Origin_ORIGIN_DESIRED_STATE, Planned: str("subnet-b")},
+					{Field: "spec.forProvider.subnetIds[1]", Origin: diffv1alpha1.Origin_ORIGIN_DESIRED_STATE, Planned: str("subnet-b")},
 					{Field: "spec.forProvider.tags.Env", Origin: diffv1alpha1.Origin_ORIGIN_DESIRED_STATE, Planned: str("prod")},
 				},
 			},
@@ -252,7 +294,7 @@ func TestPlanResponseChanges(t *testing.T) {
 			want: &diffv1alpha1.PlanResponse{
 				Action: diffv1alpha1.Action_ACTION_REPLACE,
 				Changes: []*diffv1alpha1.FieldChange{{
-					Field:   "spec.forProvider.subnetIds.1",
+					Field:   "spec.forProvider.subnetIds[1]",
 					Origin:  diffv1alpha1.Origin_ORIGIN_DESIRED_STATE,
 					Planned: str("subnet-b"),
 				}},
@@ -316,7 +358,7 @@ func TestPlanResponseChanges(t *testing.T) {
 			want: &diffv1alpha1.PlanResponse{
 				Action: diffv1alpha1.Action_ACTION_UPDATE,
 				Changes: []*diffv1alpha1.FieldChange{
-					{Field: "spec.forProvider.loggingConfig.0.target_bucket", Origin: diffv1alpha1.Origin_ORIGIN_DESIRED_STATE, Actual: str("old"), Planned: str("new")},
+					{Field: "spec.forProvider.loggingConfig[0].targetBucket", Origin: diffv1alpha1.Origin_ORIGIN_DESIRED_STATE, Actual: str("old"), Planned: str("new")},
 					{Field: "spec.forProvider.tags.Env", Origin: diffv1alpha1.Origin_ORIGIN_DESIRED_STATE, Actual: str("dev"), Planned: str("prod")},
 				},
 			},
@@ -362,7 +404,7 @@ func TestPlanResponseChanges(t *testing.T) {
 	s := &PlanService{}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			got, err := s.planResponse(tc.d, tc.exists, tc.declared)
+			got, err := s.planResponse(tc.d, tc.exists, tc.declared, testResource())
 			if err != nil {
 				t.Fatalf("\n%s\nplanResponse(...): unexpected error: %v", tc.reason, err)
 			}
@@ -387,12 +429,12 @@ func TestPlanResponseIsDeterministic(t *testing.T) {
 	}}
 
 	s := &PlanService{}
-	first, err := s.planResponse(d, true, nil)
+	first, err := s.planResponse(d, true, nil, testResource())
 	if err != nil {
 		t.Fatalf("planResponse(...): unexpected error: %v", err)
 	}
 	for i := 0; i < 50; i++ {
-		got, err := s.planResponse(d, true, nil)
+		got, err := s.planResponse(d, true, nil, testResource())
 		if err != nil {
 			t.Fatalf("planResponse(...): unexpected error on run %d: %v", i, err)
 		}
@@ -404,7 +446,7 @@ func TestPlanResponseIsDeterministic(t *testing.T) {
 
 func TestPlanResponseSetsComputedAt(t *testing.T) {
 	s := &PlanService{}
-	r, err := s.planResponse(nil, true, nil)
+	r, err := s.planResponse(nil, true, nil, testResource())
 	if err != nil {
 		t.Fatalf("planResponse(...): unexpected error: %v", err)
 	}
@@ -469,16 +511,79 @@ func TestPlanResponseOrigin(t *testing.T) {
 				Planned: str("AzureADMyOrg"),
 			}},
 		},
-		"NestedFieldUnderDeclaredBlock": {
-			reason: "Only the leading segment is looked up, so a leaf the provider defaulted inside a declared block reports ORIGIN_DESIRED_STATE. Revisit this expectation if the lookup ever walks the schema.",
+		"NestedLeafDeclared": {
+			reason: "A nested leaf the desired resource declares follows from what the user wrote, which needs the walk to descend into the block rather than stopping at its head.",
 			d: &tf.InstanceDiff{Attributes: map[string]*tf.ResourceAttrDiff{
-				"logging_config.0.target_bucket": {Old: "", New: "defaulted"},
+				"logging_config.0.target_bucket": {Old: "old", New: "new"},
 			}},
-			declared: map[string]any{"logging_config": []any{map[string]any{}}},
+			declared: map[string]any{"logging_config": []any{map[string]any{"target_bucket": "new"}}},
 			want: []*diffv1alpha1.FieldChange{{
-				Field:   "spec.forProvider.loggingConfig.0.target_bucket",
+				Field:   "spec.forProvider.loggingConfig[0].targetBucket",
 				Origin:  diffv1alpha1.Origin_ORIGIN_DESIRED_STATE,
+				Actual:  str("old"),
+				Planned: str("new"),
+			}},
+		},
+		"NestedLeafDefaultedInsideDeclaredBlock": {
+			reason: "A leaf the provider defaulted inside a block the desired resource declares is still provider-injected, which only the schema walk can tell apart from a declared leaf.",
+			d: &tf.InstanceDiff{Attributes: map[string]*tf.ResourceAttrDiff{
+				"logging_config.0.target_prefix": {Old: "", New: "defaulted"},
+			}},
+			declared: map[string]any{"logging_config": []any{map[string]any{"target_bucket": "b"}}},
+			want: []*diffv1alpha1.FieldChange{{
+				Field:   "spec.forProvider.loggingConfig[0].targetPrefix",
+				Origin:  diffv1alpha1.Origin_ORIGIN_PROVIDER,
 				Planned: str("defaulted"),
+			}},
+		},
+		"EmbeddedObjectDropsTheIndex": {
+			reason: "A singleton list the CRD models as an embedded object has no index to address, and the declared parameters are in Terraform shape so the list is still there to walk.",
+			d: &tf.InstanceDiff{Attributes: map[string]*tf.ResourceAttrDiff{
+				"encryption_config.0.kms_key_id": {Old: "old", New: "new"},
+			}},
+			declared: map[string]any{"encryption_config": []any{map[string]any{"kms_key_id": "new"}}},
+			want: []*diffv1alpha1.FieldChange{{
+				Field:   "spec.forProvider.encryptionConfig.kmsKeyId",
+				Origin:  diffv1alpha1.Origin_ORIGIN_DESIRED_STATE,
+				Actual:  str("old"),
+				Planned: str("new"),
+			}},
+		},
+		"MapKeyLeftVerbatim": {
+			reason: "A map key is user data, so it must not be camel cased however it is spelled.",
+			d: &tf.InstanceDiff{Attributes: map[string]*tf.ResourceAttrDiff{
+				"tags.Env_Name": {Old: "", New: "prod"},
+			}},
+			declared: map[string]any{"tags": map[string]any{"Env_Name": "prod"}},
+			want: []*diffv1alpha1.FieldChange{{
+				Field:   "spec.forProvider.tags.Env_Name",
+				Origin:  diffv1alpha1.Origin_ORIGIN_DESIRED_STATE,
+				Planned: str("prod"),
+			}},
+		},
+		"SetElementAddressedByHash": {
+			reason: "A set element is addressed by Terraform's hash rather than by a position, so it cannot be located in the declared list and the declared collection is as much as can be established.",
+			d: &tf.InstanceDiff{Attributes: map[string]*tf.ResourceAttrDiff{
+				"ingress_rule.2857883304.from_port": {Old: "80", New: "443"},
+			}},
+			declared: map[string]any{"ingress_rule": []any{map[string]any{"from_port": "443"}}},
+			want: []*diffv1alpha1.FieldChange{{
+				Field:   "spec.forProvider.ingressRule[2857883304].fromPort",
+				Origin:  diffv1alpha1.Origin_ORIGIN_DESIRED_STATE,
+				Actual:  str("80"),
+				Planned: str("443"),
+			}},
+		},
+		"UnknownAttributeCarriedThrough": {
+			reason: "An attribute the schema does not account for is reported verbatim rather than guessed at, and cannot be attributed to the desired state.",
+			d: &tf.InstanceDiff{Attributes: map[string]*tf.ResourceAttrDiff{
+				"not_in_schema": {Old: "", New: "x"},
+			}},
+			declared: map[string]any{"display_name": "name2"},
+			want: []*diffv1alpha1.FieldChange{{
+				Field:   "spec.forProvider.not_in_schema",
+				Origin:  diffv1alpha1.Origin_ORIGIN_PROVIDER,
+				Planned: str("x"),
 			}},
 		},
 		"NestedFieldUnderUndeclaredBlock": {
@@ -488,7 +593,7 @@ func TestPlanResponseOrigin(t *testing.T) {
 			}},
 			declared: map[string]any{"display_name": "name2"},
 			want: []*diffv1alpha1.FieldChange{{
-				Field:   "spec.forProvider.loggingConfig.0.target_bucket",
+				Field:   "spec.forProvider.loggingConfig[0].targetBucket",
 				Origin:  diffv1alpha1.Origin_ORIGIN_PROVIDER,
 				Planned: str("defaulted"),
 			}},
@@ -498,7 +603,7 @@ func TestPlanResponseOrigin(t *testing.T) {
 	s := &PlanService{}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			got, err := s.planResponse(tc.d, true, tc.declared)
+			got, err := s.planResponse(tc.d, true, tc.declared, testResource())
 			if err != nil {
 				t.Fatalf("\n%s\nplanResponse(...): unexpected error: %v", tc.reason, err)
 			}
