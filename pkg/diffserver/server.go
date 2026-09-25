@@ -22,6 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 
 	"github.com/crossplane/upjet/v2/pkg/config"
+	"github.com/crossplane/upjet/v2/pkg/diffserver/internal/plan"
 	"github.com/crossplane/upjet/v2/pkg/terraform"
 	diffv1alpha1 "github.com/crossplane/upjet/v2/proto/diff/v1alpha1"
 )
@@ -30,20 +31,7 @@ const (
 	errListen = "cannot listen on %s address %q"
 	errServe  = "cannot serve the diff gRPC services"
 
-	errNoDesiredResource      = "the desired resource is not set in the plan request"
-	errMarshalStruct          = "cannot marshal the resource as JSON"
-	errDecode                 = "cannot decode the resource into a registered API type"
-	errDesiredResource        = "cannot read the desired resource"
-	errActualResource         = "cannot read the actual resource"
-	errInMemoryClient         = "cannot initialize the in-memory Kubernetes API client"
-	errResourceConfigNotFound = "cannot find the resource configuration"
-
-	fmtErrPanic           = "the diff gRPC server recovered from a panic: %v"
-	fmtErrNotManaged      = "the API type %q registered for the resource is not a managed resource"
-	fmtErrNotObject       = "the API type %q registered for the resource is not a metav1.Object"
-	fmtErrConvertProtoBuf = "cannot convert %s unstructured object from protobuf"
-
-	violationDiffComputationNotSupported = "DIFF_COMPUTATION_NOT_SUPPORTED"
+	fmtErrPanic = "the diff gRPC server recovered from a panic: %v"
 )
 
 // Server represents gRPC Server that supports unix and TCP networks for
@@ -117,13 +105,13 @@ func (s *Server) Serve(ctx context.Context, network, address string, scheme *run
 		grpc.ChainStreamInterceptor(recoverStream(s.log)),
 	)
 	diffv1alpha1.RegisterPlanServiceServer(grpcServer,
-		&PlanService{
-			scheme:                 scheme,
-			decoder:                serializer.NewCodecFactory(scheme).UniversalDeserializer(),
-			log:                    s.log,
-			setupFn:                s.setupFn,
-			providerConfigurations: s.providerConfigurations,
-		},
+		plan.NewPlanService(
+			scheme,
+			serializer.NewCodecFactory(scheme).UniversalDeserializer(),
+			s.log,
+			s.setupFn,
+			s.providerConfigurations...,
+		),
 	)
 	// Reflection lets gRPC clients to discover the available services.
 	reflection.Register(grpcServer)

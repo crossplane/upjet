@@ -5,64 +5,27 @@
 package diffserver
 
 import (
-	"fmt"
-	"strings"
-
-	"github.com/crossplane/crossplane-runtime/v2/pkg/errors"
+	"github.com/crossplane/upjet/v2/pkg/diffserver/internal/plan"
 )
 
-// ErrDiffComputationNotSupported contains a sentinel error message that's used
-// to check, in IsDiffComputationNotSupportedError, whether a target error is
-// a diff computation error. In certain error stacks, we've observed that
-// the type information can be lost because the original diff computation not
-// supported error is not properly wrapped.
-// ErrDiffComputationNotSupported is also used as the sentinel error
-// in the implementation of diffComputationNotSupportedError.Is.
-var ErrDiffComputationNotSupported = errors.New("diff computation is not supported")
+// ErrDiffComputationNotSupported is the sentinel every error returned by
+// NewDiffComputationNotSupportedError matches, so that a caller can test for
+// the condition with errors.Is.
+var ErrDiffComputationNotSupported = plan.ErrDiffComputationNotSupported
 
-type diffComputationNotSupportedError struct {
-	cause error
-}
-
-// NewDiffComputationNotSupportedError returns a new error representing
-// a case when diff computation is not supported.
-// The client needs to handle this case gracefully, e.g., by raw-diffing
-// the managed resource manifests.
+// NewDiffComputationNotSupportedError returns a new error representing a case
+// when diff computation is not supported. A provider returns it from the hooks
+// the diff server calls, such as a Terraform setup function that refuses to
+// reach the network. The client needs to handle this case gracefully, e.g., by
+// raw-diffing the managed resource manifests.
 func NewDiffComputationNotSupportedError(cause error) error {
-	return &diffComputationNotSupportedError{
-		cause: cause,
-	}
+	return plan.NewDiffComputationNotSupportedError(cause)
 }
 
-func (d *diffComputationNotSupportedError) Error() string {
-	if d.cause == nil {
-		return ErrDiffComputationNotSupported.Error()
-	}
-	return fmt.Sprintf("%s: %v", ErrDiffComputationNotSupported.Error(), d.cause)
-}
-
-func (d *diffComputationNotSupportedError) Unwrap() error {
-	return d.cause
-}
-
-func (d *diffComputationNotSupportedError) Is(target error) bool {
-	return target == ErrDiffComputationNotSupported
-}
-
-// IsDiffComputationNotSupportedError checks whether a given error denotes
-// that diff computation is not supported.
+// IsDiffComputationNotSupportedError checks whether a given error denotes that
+// diff computation is not supported. Unlike errors.Is against
+// ErrDiffComputationNotSupported, it only matches errors this package
+// produced.
 func IsDiffComputationNotSupportedError(target error) bool {
-	if target == nil {
-		return false
-	}
-
-	var e *diffComputationNotSupportedError
-	ok := errors.As(target, &e)
-	if ok {
-		return true
-	}
-
-	// sometimes the original diffComputationNotSupportedError is not wrapped.
-	// For such cases we also make a sentinel error message check.
-	return strings.Contains(target.Error(), ErrDiffComputationNotSupported.Error())
+	return plan.IsDiffComputationNotSupportedError(target)
 }
