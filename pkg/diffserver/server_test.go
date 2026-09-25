@@ -11,11 +11,16 @@ import (
 
 	"github.com/crossplane/crossplane-runtime/v2/pkg/errors"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/logging"
+	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/google/go-cmp/cmp"
 	tf "github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	kclient "sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/crossplane/upjet/v2/pkg/config"
+	"github.com/crossplane/upjet/v2/pkg/terraform"
 )
 
 func TestFilterInstanceDiff(t *testing.T) {
@@ -216,4 +221,45 @@ func TestRecoverStream(t *testing.T) {
 	if diff := cmp.Diff(codes.Internal, st.Code()); diff != "" {
 		t.Errorf("recoverStream(...): -want code, +got code:\n%s", diff)
 	}
+}
+
+func TestNewServer(t *testing.T) {
+	pc := []*config.Provider{{RootGroup: "aws.upbound.io"}}
+	setupFn := func(context.Context, kclient.Client, xpresource.Managed) (terraform.Setup, error) {
+		return terraform.Setup{Version: "1.2.3"}, nil
+	}
+
+	t.Run("Defaults", func(t *testing.T) {
+		s := NewServer()
+		if s.log == nil {
+			t.Error("NewServer(): want a non-nil logger so that an unconfigured server does not panic when it logs")
+		}
+		if s.providerConfigurations != nil {
+			t.Errorf("NewServer(): want no provider configurations, got %v", s.providerConfigurations)
+		}
+		if s.setupFn != nil {
+			t.Error("NewServer(): want no Terraform setup function")
+		}
+	})
+
+	t.Run("Options", func(t *testing.T) {
+		s := NewServer(
+			WithLogger(logging.NewNopLogger()),
+			WithProviderConfigurations(pc...),
+			WithTerraformSetupFn(setupFn),
+		)
+		if len(s.providerConfigurations) != 1 || s.providerConfigurations[0] != pc[0] {
+			t.Errorf("NewServer(): want the configured provider configurations, got %v", s.providerConfigurations)
+		}
+		if s.setupFn == nil {
+			t.Fatal("NewServer(): want the Terraform setup function to be set")
+		}
+		ts, err := s.setupFn(context.Background(), nil, nil)
+		if err != nil {
+			t.Fatalf("NewServer(): the configured setup function returned an error: %v", err)
+		}
+		if diff := cmp.Diff("1.2.3", ts.Version); diff != "" {
+			t.Errorf("NewServer(): -want the configured setup function, +got:\n%s", diff)
+		}
+	})
 }
