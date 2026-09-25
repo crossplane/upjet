@@ -82,6 +82,14 @@ func TestPlanResponseAction(t *testing.T) {
 			exists: false,
 			want:   diffv1alpha1.Action_ACTION_CREATE,
 		},
+		"ForceNewCountKeyOnly": {
+			reason: "A count key is not reported as a field change, but it must still force a replacement rather than being dropped along with the attribute.",
+			d: &tf.InstanceDiff{Attributes: map[string]*tf.ResourceAttrDiff{
+				"subnet_ids.#": {Old: "1", New: "2", RequiresNew: true},
+			}},
+			exists: true,
+			want:   diffv1alpha1.Action_ACTION_REPLACE,
+		},
 		"OnlyCountKeysChanged": {
 			reason: "A diff that reports only a collection size is not empty, so it must not be reported as a no-op even though no field change can be attributed to it.",
 			d: &tf.InstanceDiff{Attributes: map[string]*tf.ResourceAttrDiff{
@@ -205,9 +213,7 @@ func TestPlanResponseChanges(t *testing.T) {
 			exists:   true,
 			declared: map[string]any{"master_password": "hunter3"},
 			want: &diffv1alpha1.PlanResponse{
-				Action:          diffv1alpha1.Action_ACTION_REPLACE,
-				RequiresReplace: true,
-				ReplaceFields:   []string{"spec.forProvider.masterPassword"},
+				Action: diffv1alpha1.Action_ACTION_REPLACE,
 				Changes: []*diffv1alpha1.FieldChange{{
 					Field:           "spec.forProvider.masterPassword",
 					Origin:          diffv1alpha1.Origin_ORIGIN_DESIRED_STATE,
@@ -233,6 +239,23 @@ func TestPlanResponseChanges(t *testing.T) {
 					{Field: "spec.forProvider.subnetIds.1", Origin: diffv1alpha1.Origin_ORIGIN_DESIRED_STATE, Planned: str("subnet-b")},
 					{Field: "spec.forProvider.tags.Env", Origin: diffv1alpha1.Origin_ORIGIN_DESIRED_STATE, Planned: str("prod")},
 				},
+			},
+		},
+		"ForceNewCountKeyForcesReplaceWithoutAField": {
+			reason: "The replacement is reported through the action even though no reported change can be attributed to it, which is better than silently downgrading the plan to an update.",
+			d: &tf.InstanceDiff{Attributes: map[string]*tf.ResourceAttrDiff{
+				"subnet_ids.#": {Old: "1", New: "2", RequiresNew: true},
+				"subnet_ids.1": {Old: "", New: "subnet-b"},
+			}},
+			exists:   true,
+			declared: map[string]any{"subnet_ids": []any{"subnet-a", "subnet-b"}},
+			want: &diffv1alpha1.PlanResponse{
+				Action: diffv1alpha1.Action_ACTION_REPLACE,
+				Changes: []*diffv1alpha1.FieldChange{{
+					Field:   "spec.forProvider.subnetIds.1",
+					Origin:  diffv1alpha1.Origin_ORIGIN_DESIRED_STATE,
+					Planned: str("subnet-b"),
+				}},
 			},
 		},
 		"NilAttributeDropped": {
@@ -266,7 +289,7 @@ func TestPlanResponseChanges(t *testing.T) {
 				},
 			},
 		},
-		"ChangesAndReplaceFieldsSorted": {
+		"ChangesSorted": {
 			reason: "Map iteration is unordered, so a plan must be sorted to stay stable across calls.",
 			d: &tf.InstanceDiff{Attributes: map[string]*tf.ResourceAttrDiff{
 				"zone":        {Old: "a", New: "b", RequiresNew: true},
@@ -277,12 +300,7 @@ func TestPlanResponseChanges(t *testing.T) {
 			exists:   true,
 			declared: map[string]any{"zone": "b", "alpha": "b", "region": "b", "description": "b"},
 			want: &diffv1alpha1.PlanResponse{
-				Action:          diffv1alpha1.Action_ACTION_REPLACE,
-				RequiresReplace: true,
-				ReplaceFields: []string{
-					"spec.forProvider.region",
-					"spec.forProvider.zone",
-				},
+				Action: diffv1alpha1.Action_ACTION_REPLACE,
 				Changes: []*diffv1alpha1.FieldChange{
 					{Field: "spec.forProvider.alpha", Origin: diffv1alpha1.Origin_ORIGIN_DESIRED_STATE, Actual: str("a"), Planned: str("b")},
 					{Field: "spec.forProvider.description", Origin: diffv1alpha1.Origin_ORIGIN_DESIRED_STATE, Actual: str("a"), Planned: str("b")},
@@ -300,9 +318,7 @@ func TestPlanResponseChanges(t *testing.T) {
 			exists:   false,
 			declared: map[string]any{"description": "new key", "region": "eu-central-1"},
 			want: &diffv1alpha1.PlanResponse{
-				Action:          diffv1alpha1.Action_ACTION_CREATE,
-				RequiresReplace: true,
-				ReplaceFields:   []string{"spec.forProvider.region"},
+				Action: diffv1alpha1.Action_ACTION_CREATE,
 				Changes: []*diffv1alpha1.FieldChange{
 					{Field: "spec.forProvider.description", Origin: diffv1alpha1.Origin_ORIGIN_DESIRED_STATE, Planned: str("new key")},
 					{Field: "spec.forProvider.region", Origin: diffv1alpha1.Origin_ORIGIN_DESIRED_STATE, Planned: str("eu-central-1"), RequiresReplace: true},

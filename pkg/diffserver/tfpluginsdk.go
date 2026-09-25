@@ -99,6 +99,8 @@ func (s *PlanService) planResponse(d *tf.InstanceDiff, exists bool, declared map
 		ComputedAt: timestamppb.Now(),
 	}
 
+	var requiresReplace bool
+
 	// A nil diff carries no attributes. Ranging over the nil map below is
 	// safe, and InstanceDiff.Empty reports true for a nil receiver.
 	var attributes map[string]*tf.ResourceAttrDiff
@@ -107,7 +109,15 @@ func (s *PlanService) planResponse(d *tf.InstanceDiff, exists bool, declared map
 	}
 
 	for k, a := range attributes {
-		if a == nil || isCountKey(k) {
+		if a == nil {
+			continue
+		}
+		// Every attribute contributes to the replacement decision, including
+		// the ones that are not reported below, so that a forced replacement
+		// is never dropped along with the attribute that forces it.
+		requiresReplace = requiresReplace || a.RequiresNew
+
+		if isCountKey(k) {
 			// Count keys, such as "tags.%" and "subnet_ids.#", carry the size
 			// of a collection rather than a field the user wrote. The element
 			// changes that accompany them are reported on their own.
@@ -118,18 +128,13 @@ func (s *PlanService) planResponse(d *tf.InstanceDiff, exists bool, declared map
 			return nil, errors.Wrapf(err, fmtErrConvertAttribute, k)
 		}
 		r.Changes = append(r.GetChanges(), c)
-		if a.RequiresNew {
-			r.RequiresReplace = true
-			r.ReplaceFields = append(r.GetReplaceFields(), c.GetField())
-		}
 	}
 
 	// Map iteration is unordered, so sort to keep a plan stable across calls.
-	// Both slices are sorted in place, through the same backing arrays the
+	// The slice is sorted in place, through the same backing array the
 	// response holds.
 	changes := r.GetChanges()
 	sort.Slice(changes, func(i, j int) bool { return changes[i].GetField() < changes[j].GetField() })
-	sort.Strings(r.GetReplaceFields())
 
 	switch {
 	case !exists:
@@ -138,7 +143,7 @@ func (s *PlanService) planResponse(d *tf.InstanceDiff, exists bool, declared map
 		r.Action = diffv1alpha1.Action_ACTION_CREATE
 	case d.Empty():
 		r.Action = diffv1alpha1.Action_ACTION_NO_OP
-	case r.GetRequiresReplace():
+	case requiresReplace:
 		r.Action = diffv1alpha1.Action_ACTION_REPLACE
 	default:
 		r.Action = diffv1alpha1.Action_ACTION_UPDATE

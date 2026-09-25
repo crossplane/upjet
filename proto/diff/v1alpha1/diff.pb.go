@@ -290,11 +290,9 @@ func (x *PlanRequest) GetKubernetesObjectStore() []*structpb.Struct {
 }
 
 type PlanResponse struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	Action          Action                 `protobuf:"varint,1,opt,name=action,proto3,enum=upjet.diff.v1alpha1.Action" json:"action,omitempty"`
-	Changes         []*FieldChange         `protobuf:"bytes,2,rep,name=changes,proto3" json:"changes,omitempty"`
-	RequiresReplace bool                   `protobuf:"varint,3,opt,name=requires_replace,json=requiresReplace,proto3" json:"requires_replace,omitempty"`
-	ReplaceFields   []string               `protobuf:"bytes,4,rep,name=replace_fields,json=replaceFields,proto3" json:"replace_fields,omitempty"` // CRD paths, e.g. spec.forProvider.region
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Action  Action                 `protobuf:"varint,1,opt,name=action,proto3,enum=upjet.diff.v1alpha1.Action" json:"action,omitempty"`
+	Changes []*FieldChange         `protobuf:"bytes,2,rep,name=changes,proto3" json:"changes,omitempty"`
 	// repeated Diagnostic diagnostics = 5;
 	Error         string                 `protobuf:"bytes,6,opt,name=error,proto3" json:"error,omitempty"`
 	ComputedAt    *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=computed_at,json=computedAt,proto3" json:"computed_at,omitempty"`
@@ -342,20 +340,6 @@ func (x *PlanResponse) GetAction() Action {
 func (x *PlanResponse) GetChanges() []*FieldChange {
 	if x != nil {
 		return x.Changes
-	}
-	return nil
-}
-
-func (x *PlanResponse) GetRequiresReplace() bool {
-	if x != nil {
-		return x.RequiresReplace
-	}
-	return false
-}
-
-func (x *PlanResponse) GetReplaceFields() []string {
-	if x != nil {
-		return x.ReplaceFields
 	}
 	return nil
 }
@@ -556,12 +540,10 @@ const file_diff_v1alpha1_diff_proto_rawDesc = "" +
 	"\vPlanRequest\x12B\n" +
 	"\x10desired_resource\x18\x01 \x01(\v2\x17.google.protobuf.StructR\x0fdesiredResource\x12@\n" +
 	"\x0factual_resource\x18\x02 \x01(\v2\x17.google.protobuf.StructR\x0eactualResource\x12O\n" +
-	"\x17kubernetes_object_store\x18\x03 \x03(\v2\x17.google.protobuf.StructR\x15kubernetesObjectStore\"\xa4\x02\n" +
+	"\x17kubernetes_object_store\x18\x03 \x03(\v2\x17.google.protobuf.StructR\x15kubernetesObjectStore\"\xd2\x01\n" +
 	"\fPlanResponse\x123\n" +
 	"\x06action\x18\x01 \x01(\x0e2\x1b.upjet.diff.v1alpha1.ActionR\x06action\x12:\n" +
-	"\achanges\x18\x02 \x03(\v2 .upjet.diff.v1alpha1.FieldChangeR\achanges\x12)\n" +
-	"\x10requires_replace\x18\x03 \x01(\bR\x0frequiresReplace\x12%\n" +
-	"\x0ereplace_fields\x18\x04 \x03(\tR\rreplaceFields\x12\x14\n" +
+	"\achanges\x18\x02 \x03(\v2 .upjet.diff.v1alpha1.FieldChangeR\achanges\x12\x14\n" +
 	"\x05error\x18\x06 \x01(\tR\x05error\x12;\n" +
 	"\vcomputed_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\n" +
 	"computedAt\"\xf7\x01\n" +

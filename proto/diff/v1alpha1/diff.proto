@@ -61,8 +61,6 @@ enum Action {
 message PlanResponse {
   Action action = 1;
   repeated FieldChange changes = 2;
-  bool requires_replace = 3;
-  repeated string replace_fields = 4; // CRD paths, e.g. spec.forProvider.region
   // repeated Diagnostic diagnostics = 5;
   string error = 6;
   google.protobuf.Timestamp computed_at = 7;
