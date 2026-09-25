@@ -15,7 +15,7 @@ import (
 // to check, in IsDiffComputationNotSupportedError, whether a target error is
 // a diff computation error. In certain error stacks, we've observed that
 // the type information can be lost because the original diff computation not
-// support error is not wrapped.
+// supported error is not properly wrapped.
 // ErrDiffComputationNotSupported is also used as the sentinel error
 // in the implementation of diffComputationNotSupportedError.Is.
 var ErrDiffComputationNotSupported = errors.New("diff computation is not supported")
