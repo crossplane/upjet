@@ -64,7 +64,7 @@ func (s *PlanService) Plan(ctx context.Context, req *diffv1alpha1.PlanRequest) (
 
 	// The actual resource is unset for a resource that does not exist yet,
 	// which plans as a create.
-	actual, actualGVK, err := s.managed(req.GetLiveResource())
+	actual, actualGVK, err := s.managed(req.GetActualResource())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, errors.Wrap(err, errActualResource).Error())
 	}

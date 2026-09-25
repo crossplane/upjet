@@ -34,7 +34,7 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type PlanServiceClient interface {
-	// Plan computes a diff between the desired resource and the live resource.
+	// Plan computes a diff between the desired resource and the actual resource.
 	Plan(ctx context.Context, in *PlanRequest, opts ...grpc.CallOption) (*PlanResponse, error)
 }
 
@@ -60,7 +60,7 @@ func (c *planServiceClient) Plan(ctx context.Context, in *PlanRequest, opts ...g
 // All implementations must embed UnimplementedPlanServiceServer
 // for forward compatibility.
 type PlanServiceServer interface {
-	// Plan computes a diff between the desired resource and the live resource.
+	// Plan computes a diff between the desired resource and the actual resource.
 	Plan(context.Context, *PlanRequest) (*PlanResponse, error)
 	mustEmbedUnimplementedPlanServiceServer()
 }

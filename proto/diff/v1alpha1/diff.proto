@@ -16,7 +16,7 @@ option go_package = "github.com/crossplane/upjet/v2/proto/diff/v1alpha1";
 
 
 service PlanService {
-  // Plan computes a diff between the desired resource and the live resource.
+  // Plan computes a diff between the desired resource and the actual resource.
   rpc Plan(PlanRequest) returns (PlanResponse);
 }
 
@@ -25,18 +25,41 @@ message PlanRequest {
   // spec). Always set; the protocol does not express deletion (see below).
   google.protobuf.Struct desired_resource = 1;
 
-  // The live resource, with status.atProvider populated. Must carry the
+  // The actual resource, with status.atProvider populated. Must carry the
   // same apiVersion as the desired resource. Unset for a resource that
   // does not exist yet, which plans as a create.
-  google.protobuf.Struct live_resource = 2;
+  google.protobuf.Struct actual_resource = 2;
 
   // The Kubernetes object store that will be used to initialize an
   // in-memory Kubernetes API client.
   repeated google.protobuf.Struct kubernetes_object_store = 3;
 }
 
+// The kind of change the plan implies for the resource. The protocol does not
+// express deletion, so there is no delete action.
+enum Action {
+  // The server did not determine an action. A client must treat this as an
+  // unusable plan rather than as "nothing to do", because it is also what an
+  // older client sees for an action added after it was built.
+  ACTION_UNSPECIFIED = 0;
+
+  // The desired resource matches the actual one: nothing meaningful changed.
+  ACTION_NO_OP = 1;
+
+  // The external resource does not exist yet and would be created.
+  ACTION_CREATE = 2;
+
+  // The external resource exists and would be updated in place.
+  ACTION_UPDATE = 3;
+
+  // The external resource exists but the change cannot be applied in place,
+  // so it would be destroyed and recreated. See PlanResponse.replace_fields
+  // for the fields that force the replacement.
+  ACTION_REPLACE = 4;
+}
+
 message PlanResponse {
-  string action = 1;                  // no-op | create | update | replace
+  Action action = 1;
   repeated FieldChange changes = 2;
   bool requires_replace = 3;
   repeated string replace_fields = 4; // CRD paths, e.g. spec.forProvider.region
@@ -55,24 +78,37 @@ message FieldChange {
   bool requires_replace = 4;
 }
 
+// Why a FieldValue carries no concrete value. A value that is present is
+// carried in FieldValue.value instead, so there is no "present" member here.
+enum Absence {
+  // The server did not say why the value is absent. A client must treat this
+  // as an unusable value rather than as any particular reason, because it is
+  // also what an older client sees for a reason added after it was built.
+  ABSENCE_UNSPECIFIED = 0;
+
+  // The value is known only after apply.
+  ABSENCE_UNKNOWN = 1;
+
+  // The value is sensitive and was redacted by the server.
+  ABSENCE_SENSITIVE = 2;
+
+  // The value comes from a reference (a Secret, or another resource via a
+  // ref field) the server cannot resolve, so this plan could not evaluate
+  // it. The reconciler will resolve it and may find a real change here.
+  ABSENCE_UNRESOLVED = 3;
+}
+
 // The value on one side of a change. Unset, concrete (including explicit
-// null), unknown, sensitive, and unresolved are five distinct states.
+// null), and each Absence reason are distinct states: an unset kind means
+// there is no value on this side at all, whereas an absence means there is
+// one but the server cannot put it in the plan.
 message FieldValue {
   oneof kind {
     // The concrete value. google.protobuf.Value carries strings, numbers,
     // booleans, lists, objects, and explicit nulls, so null and "" differ.
     google.protobuf.Value value = 1;
 
-    // The value is known only after apply.
-    bool unknown = 2;
-
-    // The value is sensitive and was redacted by the server.
-    bool sensitive = 3;
-
-    // The value comes from a reference (a Secret, or another resource via
-    // a ref field) the server cannot resolve, so this plan could not
-    // evaluate it. The reconciler will resolve it and may find a real
-    // change here.
-    bool unresolved = 4;
+    // Set when the server has a value for this side but cannot report it.
+    Absence absence = 2;
   }
 }

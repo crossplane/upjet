@@ -31,15 +31,143 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// The kind of change the plan implies for the resource. The protocol does not
+// express deletion, so there is no delete action.
+type Action int32
+
+const (
+	// The server did not determine an action. A client must treat this as an
+	// unusable plan rather than as "nothing to do", because it is also what an
+	// older client sees for an action added after it was built.
+	Action_ACTION_UNSPECIFIED Action = 0
+	// The desired resource matches the actual one: nothing meaningful changed.
+	Action_ACTION_NO_OP Action = 1
+	// The external resource does not exist yet and would be created.
+	Action_ACTION_CREATE Action = 2
+	// The external resource exists and would be updated in place.
+	Action_ACTION_UPDATE Action = 3
+	// The external resource exists but the change cannot be applied in place,
+	// so it would be destroyed and recreated. See PlanResponse.replace_fields
+	// for the fields that force the replacement.
+	Action_ACTION_REPLACE Action = 4
+)
+
+// Enum value maps for Action.
+var (
+	Action_name = map[int32]string{
+		0: "ACTION_UNSPECIFIED",
+		1: "ACTION_NO_OP",
+		2: "ACTION_CREATE",
+		3: "ACTION_UPDATE",
+		4: "ACTION_REPLACE",
+	}
+	Action_value = map[string]int32{
+		"ACTION_UNSPECIFIED": 0,
+		"ACTION_NO_OP":       1,
+		"ACTION_CREATE":      2,
+		"ACTION_UPDATE":      3,
+		"ACTION_REPLACE":     4,
+	}
+)
+
+func (x Action) Enum() *Action {
+	p := new(Action)
+	*p = x
+	return p
+}
+
+func (x Action) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (Action) Descriptor() protoreflect.EnumDescriptor {
+	return file_diff_v1alpha1_diff_proto_enumTypes[0].Descriptor()
+}
+
+func (Action) Type() protoreflect.EnumType {
+	return &file_diff_v1alpha1_diff_proto_enumTypes[0]
+}
+
+func (x Action) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use Action.Descriptor instead.
+func (Action) EnumDescriptor() ([]byte, []int) {
+	return file_diff_v1alpha1_diff_proto_rawDescGZIP(), []int{0}
+}
+
+// Why a FieldValue carries no concrete value. A value that is present is
+// carried in FieldValue.value instead, so there is no "present" member here.
+type Absence int32
+
+const (
+	// The server did not say why the value is absent. A client must treat this
+	// as an unusable value rather than as any particular reason, because it is
+	// also what an older client sees for a reason added after it was built.
+	Absence_ABSENCE_UNSPECIFIED Absence = 0
+	// The value is known only after apply.
+	Absence_ABSENCE_UNKNOWN Absence = 1
+	// The value is sensitive and was redacted by the server.
+	Absence_ABSENCE_SENSITIVE Absence = 2
+	// The value comes from a reference (a Secret, or another resource via a
+	// ref field) the server cannot resolve, so this plan could not evaluate
+	// it. The reconciler will resolve it and may find a real change here.
+	Absence_ABSENCE_UNRESOLVED Absence = 3
+)
+
+// Enum value maps for Absence.
+var (
+	Absence_name = map[int32]string{
+		0: "ABSENCE_UNSPECIFIED",
+		1: "ABSENCE_UNKNOWN",
+		2: "ABSENCE_SENSITIVE",
+		3: "ABSENCE_UNRESOLVED",
+	}
+	Absence_value = map[string]int32{
+		"ABSENCE_UNSPECIFIED": 0,
+		"ABSENCE_UNKNOWN":     1,
+		"ABSENCE_SENSITIVE":   2,
+		"ABSENCE_UNRESOLVED":  3,
+	}
+)
+
+func (x Absence) Enum() *Absence {
+	p := new(Absence)
+	*p = x
+	return p
+}
+
+func (x Absence) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (Absence) Descriptor() protoreflect.EnumDescriptor {
+	return file_diff_v1alpha1_diff_proto_enumTypes[1].Descriptor()
+}
+
+func (Absence) Type() protoreflect.EnumType {
+	return &file_diff_v1alpha1_diff_proto_enumTypes[1]
+}
+
+func (x Absence) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use Absence.Descriptor instead.
+func (Absence) EnumDescriptor() ([]byte, []int) {
+	return file_diff_v1alpha1_diff_proto_rawDescGZIP(), []int{1}
+}
+
 type PlanRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The desired managed resource, as full JSON (apiVersion, kind, metadata,
 	// spec). Always set; the protocol does not express deletion (see below).
 	DesiredResource *structpb.Struct `protobuf:"bytes,1,opt,name=desired_resource,json=desiredResource,proto3" json:"desired_resource,omitempty"`
-	// The live resource, with status.atProvider populated. Must carry the
+	// The actual resource, with status.atProvider populated. Must carry the
 	// same apiVersion as the desired resource. Unset for a resource that
 	// does not exist yet, which plans as a create.
-	LiveResource *structpb.Struct `protobuf:"bytes,2,opt,name=live_resource,json=liveResource,proto3" json:"live_resource,omitempty"`
+	ActualResource *structpb.Struct `protobuf:"bytes,2,opt,name=actual_resource,json=actualResource,proto3" json:"actual_resource,omitempty"`
 	// The Kubernetes object store that will be used to initialize an
 	// in-memory Kubernetes API client.
 	KubernetesObjectStore []*structpb.Struct `protobuf:"bytes,3,rep,name=kubernetes_object_store,json=kubernetesObjectStore,proto3" json:"kubernetes_object_store,omitempty"`
@@ -84,9 +212,9 @@ func (x *PlanRequest) GetDesiredResource() *structpb.Struct {
 	return nil
 }
 
-func (x *PlanRequest) GetLiveResource() *structpb.Struct {
+func (x *PlanRequest) GetActualResource() *structpb.Struct {
 	if x != nil {
-		return x.LiveResource
+		return x.ActualResource
 	}
 	return nil
 }
@@ -100,7 +228,7 @@ func (x *PlanRequest) GetKubernetesObjectStore() []*structpb.Struct {
 
 type PlanResponse struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
-	Action          string                 `protobuf:"bytes,1,opt,name=action,proto3" json:"action,omitempty"` // no-op | create | update | replace
+	Action          Action                 `protobuf:"varint,1,opt,name=action,proto3,enum=upjet.diff.v1alpha1.Action" json:"action,omitempty"`
 	Changes         []*FieldChange         `protobuf:"bytes,2,rep,name=changes,proto3" json:"changes,omitempty"`
 	RequiresReplace bool                   `protobuf:"varint,3,opt,name=requires_replace,json=requiresReplace,proto3" json:"requires_replace,omitempty"`
 	ReplaceFields   []string               `protobuf:"bytes,4,rep,name=replace_fields,json=replaceFields,proto3" json:"replace_fields,omitempty"` // CRD paths, e.g. spec.forProvider.region
@@ -141,11 +269,11 @@ func (*PlanResponse) Descriptor() ([]byte, []int) {
 	return file_diff_v1alpha1_diff_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *PlanResponse) GetAction() string {
+func (x *PlanResponse) GetAction() Action {
 	if x != nil {
 		return x.Action
 	}
-	return ""
+	return Action_ACTION_UNSPECIFIED
 }
 
 func (x *PlanResponse) GetChanges() []*FieldChange {
@@ -254,15 +382,15 @@ func (x *FieldChange) GetRequiresReplace() bool {
 }
 
 // The value on one side of a change. Unset, concrete (including explicit
-// null), unknown, sensitive, and unresolved are five distinct states.
+// null), and each Absence reason are distinct states: an unset kind means
+// there is no value on this side at all, whereas an absence means there is
+// one but the server cannot put it in the plan.
 type FieldValue struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Kind:
 	//
 	//	*FieldValue_Value
-	//	*FieldValue_Unknown
-	//	*FieldValue_Sensitive
-	//	*FieldValue_Unresolved
+	//	*FieldValue_Absence
 	Kind          isFieldValue_Kind `protobuf_oneof:"kind"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -314,31 +442,13 @@ func (x *FieldValue) GetValue() *structpb.Value {
 	return nil
 }
 
-func (x *FieldValue) GetUnknown() bool {
+func (x *FieldValue) GetAbsence() Absence {
 	if x != nil {
-		if x, ok := x.Kind.(*FieldValue_Unknown); ok {
-			return x.Unknown
+		if x, ok := x.Kind.(*FieldValue_Absence); ok {
+			return x.Absence
 		}
 	}
-	return false
-}
-
-func (x *FieldValue) GetSensitive() bool {
-	if x != nil {
-		if x, ok := x.Kind.(*FieldValue_Sensitive); ok {
-			return x.Sensitive
-		}
-	}
-	return false
-}
-
-func (x *FieldValue) GetUnresolved() bool {
-	if x != nil {
-		if x, ok := x.Kind.(*FieldValue_Unresolved); ok {
-			return x.Unresolved
-		}
-	}
-	return false
+	return Absence_ABSENCE_UNSPECIFIED
 }
 
 type isFieldValue_Kind interface {
@@ -351,43 +461,26 @@ type FieldValue_Value struct {
 	Value *structpb.Value `protobuf:"bytes,1,opt,name=value,proto3,oneof"`
 }
 
-type FieldValue_Unknown struct {
-	// The value is known only after apply.
-	Unknown bool `protobuf:"varint,2,opt,name=unknown,proto3,oneof"`
-}
-
-type FieldValue_Sensitive struct {
-	// The value is sensitive and was redacted by the server.
-	Sensitive bool `protobuf:"varint,3,opt,name=sensitive,proto3,oneof"`
-}
-
-type FieldValue_Unresolved struct {
-	// The value comes from a reference (a Secret, or another resource via
-	// a ref field) the server cannot resolve, so this plan could not
-	// evaluate it. The reconciler will resolve it and may find a real
-	// change here.
-	Unresolved bool `protobuf:"varint,4,opt,name=unresolved,proto3,oneof"`
+type FieldValue_Absence struct {
+	// Set when the server has a value for this side but cannot report it.
+	Absence Absence `protobuf:"varint,2,opt,name=absence,proto3,enum=upjet.diff.v1alpha1.Absence,oneof"`
 }
 
 func (*FieldValue_Value) isFieldValue_Kind() {}
 
-func (*FieldValue_Unknown) isFieldValue_Kind() {}
-
-func (*FieldValue_Sensitive) isFieldValue_Kind() {}
-
-func (*FieldValue_Unresolved) isFieldValue_Kind() {}
+func (*FieldValue_Absence) isFieldValue_Kind() {}
 
 var File_diff_v1alpha1_diff_proto protoreflect.FileDescriptor
 
 const file_diff_v1alpha1_diff_proto_rawDesc = "" +
 	"\n" +
-	"\x18diff/v1alpha1/diff.proto\x12\x13upjet.diff.v1alpha1\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xe0\x01\n" +
+	"\x18diff/v1alpha1/diff.proto\x12\x13upjet.diff.v1alpha1\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xe4\x01\n" +
 	"\vPlanRequest\x12B\n" +
-	"\x10desired_resource\x18\x01 \x01(\v2\x17.google.protobuf.StructR\x0fdesiredResource\x12<\n" +
-	"\rlive_resource\x18\x02 \x01(\v2\x17.google.protobuf.StructR\fliveResource\x12O\n" +
-	"\x17kubernetes_object_store\x18\x03 \x03(\v2\x17.google.protobuf.StructR\x15kubernetesObjectStore\"\x87\x02\n" +
-	"\fPlanResponse\x12\x16\n" +
-	"\x06action\x18\x01 \x01(\tR\x06action\x12:\n" +
+	"\x10desired_resource\x18\x01 \x01(\v2\x17.google.protobuf.StructR\x0fdesiredResource\x12@\n" +
+	"\x0factual_resource\x18\x02 \x01(\v2\x17.google.protobuf.StructR\x0eactualResource\x12O\n" +
+	"\x17kubernetes_object_store\x18\x03 \x03(\v2\x17.google.protobuf.StructR\x15kubernetesObjectStore\"\xa4\x02\n" +
+	"\fPlanResponse\x123\n" +
+	"\x06action\x18\x01 \x01(\x0e2\x1b.upjet.diff.v1alpha1.ActionR\x06action\x12:\n" +
 	"\achanges\x18\x02 \x03(\v2 .upjet.diff.v1alpha1.FieldChangeR\achanges\x12)\n" +
 	"\x10requires_replace\x18\x03 \x01(\bR\x0frequiresReplace\x12%\n" +
 	"\x0ereplace_fields\x18\x04 \x03(\tR\rreplaceFields\x12\x14\n" +
@@ -398,16 +491,23 @@ const file_diff_v1alpha1_diff_proto_rawDesc = "" +
 	"\x05field\x18\x01 \x01(\tR\x05field\x129\n" +
 	"\acurrent\x18\x02 \x01(\v2\x1f.upjet.diff.v1alpha1.FieldValueR\acurrent\x129\n" +
 	"\adesired\x18\x03 \x01(\v2\x1f.upjet.diff.v1alpha1.FieldValueR\adesired\x12)\n" +
-	"\x10requires_replace\x18\x04 \x01(\bR\x0frequiresReplace\"\xa2\x01\n" +
+	"\x10requires_replace\x18\x04 \x01(\bR\x0frequiresReplace\"~\n" +
 	"\n" +
 	"FieldValue\x12.\n" +
-	"\x05value\x18\x01 \x01(\v2\x16.google.protobuf.ValueH\x00R\x05value\x12\x1a\n" +
-	"\aunknown\x18\x02 \x01(\bH\x00R\aunknown\x12\x1e\n" +
-	"\tsensitive\x18\x03 \x01(\bH\x00R\tsensitive\x12 \n" +
-	"\n" +
-	"unresolved\x18\x04 \x01(\bH\x00R\n" +
-	"unresolvedB\x06\n" +
-	"\x04kind2Z\n" +
+	"\x05value\x18\x01 \x01(\v2\x16.google.protobuf.ValueH\x00R\x05value\x128\n" +
+	"\aabsence\x18\x02 \x01(\x0e2\x1c.upjet.diff.v1alpha1.AbsenceH\x00R\aabsenceB\x06\n" +
+	"\x04kind*l\n" +
+	"\x06Action\x12\x16\n" +
+	"\x12ACTION_UNSPECIFIED\x10\x00\x12\x10\n" +
+	"\fACTION_NO_OP\x10\x01\x12\x11\n" +
+	"\rACTION_CREATE\x10\x02\x12\x11\n" +
+	"\rACTION_UPDATE\x10\x03\x12\x12\n" +
+	"\x0eACTION_REPLACE\x10\x04*f\n" +
+	"\aAbsence\x12\x17\n" +
+	"\x13ABSENCE_UNSPECIFIED\x10\x00\x12\x13\n" +
+	"\x0fABSENCE_UNKNOWN\x10\x01\x12\x15\n" +
+	"\x11ABSENCE_SENSITIVE\x10\x02\x12\x16\n" +
+	"\x12ABSENCE_UNRESOLVED\x10\x032Z\n" +
 	"\vPlanService\x12K\n" +
 	"\x04Plan\x12 .upjet.diff.v1alpha1.PlanRequest\x1a!.upjet.diff.v1alpha1.PlanResponseB4Z2github.com/crossplane/upjet/v2/proto/diff/v1alpha1b\x06proto3"
 
@@ -423,32 +523,37 @@ func file_diff_v1alpha1_diff_proto_rawDescGZIP() []byte {
 	return file_diff_v1alpha1_diff_proto_rawDescData
 }
 
+var file_diff_v1alpha1_diff_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
 var file_diff_v1alpha1_diff_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_diff_v1alpha1_diff_proto_goTypes = []any{
-	(*PlanRequest)(nil),           // 0: upjet.diff.v1alpha1.PlanRequest
-	(*PlanResponse)(nil),          // 1: upjet.diff.v1alpha1.PlanResponse
-	(*FieldChange)(nil),           // 2: upjet.diff.v1alpha1.FieldChange
-	(*FieldValue)(nil),            // 3: upjet.diff.v1alpha1.FieldValue
-	(*structpb.Struct)(nil),       // 4: google.protobuf.Struct
-	(*timestamppb.Timestamp)(nil), // 5: google.protobuf.Timestamp
-	(*structpb.Value)(nil),        // 6: google.protobuf.Value
+	(Action)(0),                   // 0: upjet.diff.v1alpha1.Action
+	(Absence)(0),                  // 1: upjet.diff.v1alpha1.Absence
+	(*PlanRequest)(nil),           // 2: upjet.diff.v1alpha1.PlanRequest
+	(*PlanResponse)(nil),          // 3: upjet.diff.v1alpha1.PlanResponse
+	(*FieldChange)(nil),           // 4: upjet.diff.v1alpha1.FieldChange
+	(*FieldValue)(nil),            // 5: upjet.diff.v1alpha1.FieldValue
+	(*structpb.Struct)(nil),       // 6: google.protobuf.Struct
+	(*timestamppb.Timestamp)(nil), // 7: google.protobuf.Timestamp
+	(*structpb.Value)(nil),        // 8: google.protobuf.Value
 }
 var file_diff_v1alpha1_diff_proto_depIdxs = []int32{
-	4, // 0: upjet.diff.v1alpha1.PlanRequest.desired_resource:type_name -> google.protobuf.Struct
-	4, // 1: upjet.diff.v1alpha1.PlanRequest.live_resource:type_name -> google.protobuf.Struct
-	4, // 2: upjet.diff.v1alpha1.PlanRequest.kubernetes_object_store:type_name -> google.protobuf.Struct
-	2, // 3: upjet.diff.v1alpha1.PlanResponse.changes:type_name -> upjet.diff.v1alpha1.FieldChange
-	5, // 4: upjet.diff.v1alpha1.PlanResponse.computed_at:type_name -> google.protobuf.Timestamp
-	3, // 5: upjet.diff.v1alpha1.FieldChange.current:type_name -> upjet.diff.v1alpha1.FieldValue
-	3, // 6: upjet.diff.v1alpha1.FieldChange.desired:type_name -> upjet.diff.v1alpha1.FieldValue
-	6, // 7: upjet.diff.v1alpha1.FieldValue.value:type_name -> google.protobuf.Value
-	0, // 8: upjet.diff.v1alpha1.PlanService.Plan:input_type -> upjet.diff.v1alpha1.PlanRequest
-	1, // 9: upjet.diff.v1alpha1.PlanService.Plan:output_type -> upjet.diff.v1alpha1.PlanResponse
-	9, // [9:10] is the sub-list for method output_type
-	8, // [8:9] is the sub-list for method input_type
-	8, // [8:8] is the sub-list for extension type_name
-	8, // [8:8] is the sub-list for extension extendee
-	0, // [0:8] is the sub-list for field type_name
+	6,  // 0: upjet.diff.v1alpha1.PlanRequest.desired_resource:type_name -> google.protobuf.Struct
+	6,  // 1: upjet.diff.v1alpha1.PlanRequest.actual_resource:type_name -> google.protobuf.Struct
+	6,  // 2: upjet.diff.v1alpha1.PlanRequest.kubernetes_object_store:type_name -> google.protobuf.Struct
+	0,  // 3: upjet.diff.v1alpha1.PlanResponse.action:type_name -> upjet.diff.v1alpha1.Action
+	4,  // 4: upjet.diff.v1alpha1.PlanResponse.changes:type_name -> upjet.diff.v1alpha1.FieldChange
+	7,  // 5: upjet.diff.v1alpha1.PlanResponse.computed_at:type_name -> google.protobuf.Timestamp
+	5,  // 6: upjet.diff.v1alpha1.FieldChange.current:type_name -> upjet.diff.v1alpha1.FieldValue
+	5,  // 7: upjet.diff.v1alpha1.FieldChange.desired:type_name -> upjet.diff.v1alpha1.FieldValue
+	8,  // 8: upjet.diff.v1alpha1.FieldValue.value:type_name -> google.protobuf.Value
+	1,  // 9: upjet.diff.v1alpha1.FieldValue.absence:type_name -> upjet.diff.v1alpha1.Absence
+	2,  // 10: upjet.diff.v1alpha1.PlanService.Plan:input_type -> upjet.diff.v1alpha1.PlanRequest
+	3,  // 11: upjet.diff.v1alpha1.PlanService.Plan:output_type -> upjet.diff.v1alpha1.PlanResponse
+	11, // [11:12] is the sub-list for method output_type
+	10, // [10:11] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_diff_v1alpha1_diff_proto_init() }
@@ -458,22 +563,21 @@ func file_diff_v1alpha1_diff_proto_init() {
 	}
 	file_diff_v1alpha1_diff_proto_msgTypes[3].OneofWrappers = []any{
 		(*FieldValue_Value)(nil),
-		(*FieldValue_Unknown)(nil),
-		(*FieldValue_Sensitive)(nil),
-		(*FieldValue_Unresolved)(nil),
+		(*FieldValue_Absence)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_diff_v1alpha1_diff_proto_rawDesc), len(file_diff_v1alpha1_diff_proto_rawDesc)),
-			NumEnums:      0,
+			NumEnums:      2,
 			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
 		GoTypes:           file_diff_v1alpha1_diff_proto_goTypes,
 		DependencyIndexes: file_diff_v1alpha1_diff_proto_depIdxs,
+		EnumInfos:         file_diff_v1alpha1_diff_proto_enumTypes,
 		MessageInfos:      file_diff_v1alpha1_diff_proto_msgTypes,
 	}.Build()
 	File_diff_v1alpha1_diff_proto = out.File
