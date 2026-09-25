@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Crossplane Authors <https://crossplane.io>
+//
+// SPDX-License-Identifier: CC0-1.0
+
 module github.com/crossplane/upjet/v2/proto/tools
 
 go 1.26.8
