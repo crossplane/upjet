@@ -7,13 +7,17 @@ package diffserver
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"os"
+	"runtime/debug"
 
 	"github.com/crossplane/crossplane-runtime/v2/pkg/errors"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/logging"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/reflection"
+	"google.golang.org/grpc/status"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 
@@ -34,6 +38,7 @@ const (
 	errInMemoryClient         = "cannot initialize the in-memory Kubernetes API client"
 	errResourceConfigNotFound = "cannot find the resource configuration"
 
+	fmtErrPanic           = "the diff gRPC server recovered from a panic: %v"
 	fmtErrNotManaged      = "the API type %q registered for the resource is not a managed resource"
 	fmtErrNotObject       = "the API type %q registered for the resource is not a metav1.Object"
 	fmtErrConvertProtoBuf = "cannot convert %s unstructured object from protobuf"
@@ -107,7 +112,10 @@ func (s *Server) Serve(ctx context.Context, network, address string, scheme *run
 		return errors.Wrapf(err, errListen, network, address)
 	}
 
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(
+		grpc.ChainUnaryInterceptor(recoverUnary(s.log)),
+		grpc.ChainStreamInterceptor(recoverStream(s.log)),
+	)
 	diffv1alpha1.RegisterPlanServiceServer(grpcServer,
 		&PlanService{
 			scheme:                 scheme,
@@ -130,4 +138,33 @@ func (s *Server) Serve(ctx context.Context, network, address string, scheme *run
 
 	s.log.Info("Starting the diff gRPC server", "network", network, "address", address)
 	return errors.Wrap(grpcServer.Serve(l), errServe)
+}
+
+func recoverUnary(log logging.Logger) grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (rsp any, err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				logPanic(log, info.FullMethod, r)
+				err = status.Errorf(codes.Internal, fmtErrPanic, r)
+			}
+		}()
+		return handler(ctx, req)
+	}
+}
+
+func recoverStream(log logging.Logger) grpc.StreamServerInterceptor {
+	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) (err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				logPanic(log, info.FullMethod, r)
+				err = status.Errorf(codes.Internal, fmtErrPanic, r)
+			}
+		}()
+		return handler(srv, ss)
+	}
+}
+
+func logPanic(log logging.Logger, method string, r any) {
+	log.Info("Recovered from a panic while serving an RPC",
+		"method", method, "panic", fmt.Sprintf("%v", r), "stack", string(debug.Stack()))
 }

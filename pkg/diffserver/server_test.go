@@ -5,10 +5,17 @@
 package diffserver
 
 import (
+	"context"
+	"strings"
 	"testing"
 
+	"github.com/crossplane/crossplane-runtime/v2/pkg/errors"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/logging"
 	"github.com/google/go-cmp/cmp"
 	tf "github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestFilterInstanceDiff(t *testing.T) {
@@ -133,5 +140,80 @@ func TestFilterInstanceDiff(t *testing.T) {
 				t.Errorf("\n%s\nfilterInstanceDiff(...): -want Empty(), +got Empty():\n%s", tc.reason, diff)
 			}
 		})
+	}
+}
+
+func TestRecoverUnary(t *testing.T) {
+	cases := map[string]struct {
+		reason  string
+		handler grpc.UnaryHandler
+		wantErr bool
+		wantRsp any
+	}{
+		"PanickingHandler": {
+			reason:  "A panicking handler must be turned into an Internal status rather than taking the process down.",
+			handler: func(context.Context, any) (any, error) { panic("boom") },
+			wantErr: true,
+		},
+		"PanickingHandlerWithNilPanic": {
+			reason:  "A panic with a nil value is still a panic and must be recovered.",
+			handler: func(context.Context, any) (any, error) { panic(error(nil)) },
+			wantErr: true,
+		},
+		"HealthyHandler": {
+			reason:  "A handler that does not panic must be passed through untouched.",
+			handler: func(context.Context, any) (any, error) { return "ok", nil },
+			wantRsp: "ok",
+		},
+		"FailingHandler": {
+			reason:  "A handler that returns an error must have it passed through rather than replaced.",
+			handler: func(context.Context, any) (any, error) { return nil, errors.New("boom") },
+			wantErr: true,
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			i := recoverUnary(logging.NewNopLogger())
+			rsp, err := i(context.Background(), nil, &grpc.UnaryServerInfo{FullMethod: "/upjet.diff.v1alpha1.PlanService/Plan"}, tc.handler)
+			if tc.wantErr && err == nil {
+				t.Fatalf("\n%s\nrecoverUnary(...): want an error, got none", tc.reason)
+			}
+			if !tc.wantErr && err != nil {
+				t.Fatalf("\n%s\nrecoverUnary(...): want no error, got %v", tc.reason, err)
+			}
+			if diff := cmp.Diff(tc.wantRsp, rsp); diff != "" {
+				t.Errorf("\n%s\nrecoverUnary(...): -want response, +got response:\n%s", tc.reason, diff)
+			}
+		})
+	}
+}
+
+func TestRecoverUnaryStatusCode(t *testing.T) {
+	i := recoverUnary(logging.NewNopLogger())
+	_, err := i(context.Background(), nil, &grpc.UnaryServerInfo{FullMethod: "/m"}, func(context.Context, any) (any, error) { panic("boom") })
+
+	st, ok := status.FromError(err)
+	if !ok {
+		t.Fatalf("recoverUnary(...): want a gRPC status, got %v", err)
+	}
+	if diff := cmp.Diff(codes.Internal, st.Code()); diff != "" {
+		t.Errorf("recoverUnary(...): -want code, +got code:\n%s", diff)
+	}
+	if !strings.Contains(st.Message(), "boom") {
+		t.Errorf("recoverUnary(...): want the panic value in the message, got %q", st.Message())
+	}
+}
+
+func TestRecoverStream(t *testing.T) {
+	i := recoverStream(logging.NewNopLogger())
+	err := i(nil, nil, &grpc.StreamServerInfo{FullMethod: "/m"}, func(any, grpc.ServerStream) error { panic("boom") })
+
+	st, ok := status.FromError(err)
+	if !ok {
+		t.Fatalf("recoverStream(...): want a gRPC status, got %v", err)
+	}
+	if diff := cmp.Diff(codes.Internal, st.Code()); diff != "" {
+		t.Errorf("recoverStream(...): -want code, +got code:\n%s", diff)
 	}
 }
