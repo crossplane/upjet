@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2024 The Crossplane Authors <https://crossplane.io>
+// SPDX-FileCopyrightText: 2026 The Crossplane Authors <https://crossplane.io>
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -99,6 +99,9 @@ func (s *PlanService) Plan(ctx context.Context, req *diffv1alpha1.PlanRequest) (
 	}
 
 	if err := s.diffTerraformPluginSDK(ctx, desired, live, kc); err != nil {
+		if IsDiffComputationNotSupportedError(err) {
+			return nil, status.Error(codes.FailedPrecondition, errors.Wrap(err, errDiffPluginSDKv2).Error())
+		}
 		return nil, status.Error(codes.Internal, errors.Wrap(err, errDiffPluginSDKv2).Error())
 	}
 
