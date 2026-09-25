@@ -123,7 +123,7 @@ func (s *PlanService) planResponse(d *tf.InstanceDiff, exists bool, declared map
 			// changes that accompany them are reported on their own.
 			continue
 		}
-		c, err := fieldChange(k, a, declared)
+		c, err := fieldChange(k, a, declared, exists)
 		if err != nil {
 			return nil, errors.Wrapf(err, fmtErrConvertAttribute, k)
 		}
@@ -152,11 +152,12 @@ func (s *PlanService) planResponse(d *tf.InstanceDiff, exists bool, declared map
 }
 
 // fieldChange converts a single attribute diff, keyed by its flatmap key,
-// into a field change.
-func fieldChange(key string, a *tf.ResourceAttrDiff, declared map[string]any) (*diffv1alpha1.FieldChange, error) {
+// into a field change. exists reports whether the external resource already
+// exists, because forcing a replacement is only meaningful for one that does.
+func fieldChange(key string, a *tf.ResourceAttrDiff, declared map[string]any, exists bool) (*diffv1alpha1.FieldChange, error) {
 	c := &diffv1alpha1.FieldChange{
 		Field:           fieldPath(key),
-		RequiresReplace: a.RequiresNew,
+		RequiresReplace: exists && a.RequiresNew,
 		Origin:          origin(key, declared),
 	}
 
@@ -199,6 +200,11 @@ func fieldChange(key string, a *tf.ResourceAttrDiff, declared map[string]any) (*
 // came from, e.g. "deletion_window_in_days" to
 // "spec.forProvider.deletionWindowInDays".
 //
+// The segment is lower camel cased the way the generated CRD serializes it,
+// which is Name.LowerCamelComputed rather than Name.LowerCamel: the latter
+// spells acronyms the way the Go field does, so "template_id" would become
+// "templateID" where the manifest has "templateId".
+//
 // Only the leading segment is translated. A flatmap key's later segments are
 // ambiguous without the resource schema: "logging_config.0.target_bucket" has
 // a nested field name that should be camel cased, whereas "tags.Team" has a
@@ -207,7 +213,7 @@ func fieldChange(key string, a *tf.ResourceAttrDiff, declared map[string]any) (*
 // until this walks the schema.
 func fieldPath(key string) string {
 	head, rest, found := strings.Cut(key, ".")
-	p := crdParametersPath + "." + name.NewFromSnake(head).LowerCamel
+	p := crdParametersPath + "." + name.NewFromSnake(head).LowerCamelComputed
 	if found {
 		p += "." + rest
 	}

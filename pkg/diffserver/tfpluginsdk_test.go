@@ -258,6 +258,38 @@ func TestPlanResponseChanges(t *testing.T) {
 				}},
 			},
 		},
+		"ForceNewOnCreateDoesNotRequireReplace": {
+			reason: "A force-new attribute on a resource that does not exist yet has nothing to replace, so the change must not claim it forces a replacement.",
+			d: &tf.InstanceDiff{Attributes: map[string]*tf.ResourceAttrDiff{
+				"region": {Old: "", New: "eu-central-1", RequiresNew: true},
+			}},
+			exists:   false,
+			declared: map[string]any{"region": "eu-central-1"},
+			want: &diffv1alpha1.PlanResponse{
+				Action: diffv1alpha1.Action_ACTION_CREATE,
+				Changes: []*diffv1alpha1.FieldChange{{
+					Field:   "spec.forProvider.region",
+					Origin:  diffv1alpha1.Origin_ORIGIN_DESIRED_STATE,
+					Planned: str("eu-central-1"),
+				}},
+			},
+		},
+		"AcronymInFieldName": {
+			reason: "The path must be spelled the way the generated CRD serializes the field, which lower cases the ID acronym, so that a client can resolve it against the manifest.",
+			d: &tf.InstanceDiff{Attributes: map[string]*tf.ResourceAttrDiff{
+				"template_id": {Old: "3f8a5c2e", New: "7d2b4f16"},
+				"vpc_id":      {Old: "vpc-a", New: "vpc-b"},
+			}},
+			exists:   true,
+			declared: map[string]any{"template_id": "7d2b4f16", "vpc_id": "vpc-b"},
+			want: &diffv1alpha1.PlanResponse{
+				Action: diffv1alpha1.Action_ACTION_UPDATE,
+				Changes: []*diffv1alpha1.FieldChange{
+					{Field: "spec.forProvider.templateId", Origin: diffv1alpha1.Origin_ORIGIN_DESIRED_STATE, Actual: str("3f8a5c2e"), Planned: str("7d2b4f16")},
+					{Field: "spec.forProvider.vpcId", Origin: diffv1alpha1.Origin_ORIGIN_DESIRED_STATE, Actual: str("vpc-a"), Planned: str("vpc-b")},
+				},
+			},
+		},
 		"NilAttributeDropped": {
 			reason: "An attribute without a diff carries no information and must not panic the conversion.",
 			d: &tf.InstanceDiff{Attributes: map[string]*tf.ResourceAttrDiff{
@@ -310,7 +342,7 @@ func TestPlanResponseChanges(t *testing.T) {
 			},
 		},
 		"CreateReportsEveryAttributeAsAdded": {
-			reason: "On a create the resource has no prior state, so every attribute is reported as an addition.",
+			reason: "On a create the resource has no prior state, so every attribute is reported as an addition, and no attribute forces a replacement because there is nothing to replace.",
 			d: &tf.InstanceDiff{Attributes: map[string]*tf.ResourceAttrDiff{
 				"description": {Old: "", New: "new key"},
 				"region":      {Old: "", New: "eu-central-1", RequiresNew: true},
@@ -321,7 +353,7 @@ func TestPlanResponseChanges(t *testing.T) {
 				Action: diffv1alpha1.Action_ACTION_CREATE,
 				Changes: []*diffv1alpha1.FieldChange{
 					{Field: "spec.forProvider.description", Origin: diffv1alpha1.Origin_ORIGIN_DESIRED_STATE, Planned: str("new key")},
-					{Field: "spec.forProvider.region", Origin: diffv1alpha1.Origin_ORIGIN_DESIRED_STATE, Planned: str("eu-central-1"), RequiresReplace: true},
+					{Field: "spec.forProvider.region", Origin: diffv1alpha1.Origin_ORIGIN_DESIRED_STATE, Planned: str("eu-central-1")},
 				},
 			},
 		},
