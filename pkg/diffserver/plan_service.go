@@ -77,7 +77,7 @@ func (s *PlanService) Plan(ctx context.Context, req *diffv1alpha1.PlanRequest) (
 	// match. Version skews are not allowed.
 	// TODO: Relax this constraint by incorporating CRD API conversion chains
 	// in the in-memory client.
-	if actualGVK != desiredGVK {
+	if actual != nil && actualGVK != desiredGVK {
 		return nil, status.Error(codes.InvalidArgument, errors.Errorf(fmtErrGVKMismatch, desiredGVK.String(), actualGVK.String()).Error())
 	}
 
@@ -86,7 +86,7 @@ func (s *PlanService) Plan(ctx context.Context, req *diffv1alpha1.PlanRequest) (
 		return nil, status.Error(codes.Internal, errors.Wrap(err, errInMemoryClient).Error())
 	}
 
-	cfg, t, err := s.getResourceConfiguration(actual)
+	cfg, t, err := s.getResourceConfiguration(desired)
 	if err != nil {
 		return nil, status.Error(codes.NotFound, errors.Wrap(err, errResourceConfigNotFound).Error())
 	}
@@ -161,6 +161,9 @@ func (s *PlanService) managed(st *structpb.Struct) (xpresource.Managed, schema.G
 	o, gvk, err := s.object(st)
 	if err != nil {
 		return nil, schema.GroupVersionKind{}, err
+	}
+	if o == nil {
+		return nil, schema.GroupVersionKind{}, nil
 	}
 	mg, ok := o.(xpresource.Managed)
 	if !ok {

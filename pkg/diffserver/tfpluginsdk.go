@@ -55,13 +55,22 @@ func (s *PlanService) diffTerraformPluginSDK(ctx context.Context, kc kclient.Cli
 		return nil, errors.Wrap(err, errConnectPluginSDKv2)
 	}
 
-	tr, ok := actual.(resource.Terraformed)
+	dtr, ok := desired.(resource.Terraformed)
 	if !ok {
-		return nil, errors.Errorf(fmtErrNotTerraformed, actual.GetObjectKind().GroupVersionKind().String())
+		return nil, errors.Errorf(fmtErrNotTerraformed, desired.GetObjectKind().GroupVersionKind().String())
 	}
-	opTracker.Tracker(tr).ResetReconstructedTfState()
-	if _, _, _, err := c.ReconstructTerraformState(ctx, tr, s.log); err != nil {
-		return nil, errors.Wrap(err, errReconstructTerraformState)
+
+	if actual == nil {
+		opTracker.Tracker(dtr).ResetReconstructedTfState()
+	} else {
+		tr, ok := actual.(resource.Terraformed)
+		if !ok {
+			return nil, errors.Errorf(fmtErrNotTerraformed, actual.GetObjectKind().GroupVersionKind().String())
+		}
+		opTracker.Tracker(tr).ResetReconstructedTfState()
+		if _, _, _, err := c.ReconstructTerraformState(ctx, tr, s.log); err != nil {
+			return nil, errors.Wrap(err, errReconstructTerraformState)
+		}
 	}
 
 	obs, err := ec.Observe(ctx, desired)
@@ -75,10 +84,6 @@ func (s *PlanService) diffTerraformPluginSDK(ctx context.Context, kc kclient.Cli
 	}
 	filterInstanceDiff(diff)
 
-	dtr, ok := desired.(resource.Terraformed)
-	if !ok {
-		return nil, errors.Errorf(fmtErrNotTerraformed, desired.GetObjectKind().GroupVersionKind().String())
-	}
 	declared, err := dtr.GetMergedParameters(true)
 	if err != nil {
 		return nil, errors.Wrap(err, errGetDesiredParameters)
