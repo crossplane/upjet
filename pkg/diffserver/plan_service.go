@@ -6,6 +6,7 @@ package diffserver
 
 import (
 	"context"
+	"regexp"
 	"strings"
 
 	"github.com/crossplane/crossplane-runtime/v2/pkg/errors"
@@ -29,11 +30,14 @@ import (
 )
 
 const (
+	errCLIDiffNotImplemented       = "diff support for Terraform CLI resources is not implemented yet"
+	errFrameworkDiffNotImplemented = "diff support for Terraform Plugin Framework resources is not implemented yet"
+
 	fmtErrEmptyGroupName         = "empty API group name for GVK %q"
 	fmtErrNotTerraformed         = "the API type %q is not a Terraformed resource"
 	fmtErrResourceConfigNotFound = "no resource configuration for the API type %q is registered in provider configurations"
-
-	fmtErrGVKMismatch = "the GVKs of both the desired and the actual resources must match, desired has %q, actual has %q"
+	fmtErrResourceTypeMatch      = "cannot match resource name %q to regex %q"
+	fmtErrGVKMismatch            = "the GVKs of both the desired and the actual resources must match, desired has %q, actual has %q"
 )
 
 // PlanService implements the upjet.diff.v1alpha1.PlanService gRPC service.
@@ -49,7 +53,7 @@ type PlanService struct {
 
 // Plan computes a diff between the desired and the actual resources supplied in
 // the request.
-func (s *PlanService) Plan(ctx context.Context, req *diffv1alpha1.PlanRequest) (*diffv1alpha1.PlanResponse, error) {
+func (s *PlanService) Plan(ctx context.Context, req *diffv1alpha1.PlanRequest) (*diffv1alpha1.PlanResponse, error) { //nolint:gocyclo // easier to follow as a unit
 	if req.GetDesiredResource() == nil {
 		return nil, status.Error(codes.InvalidArgument, errNoDesiredResource)
 	}
@@ -82,35 +86,71 @@ func (s *PlanService) Plan(ctx context.Context, req *diffv1alpha1.PlanRequest) (
 		return nil, status.Error(codes.Internal, errors.Wrap(err, errInMemoryClient).Error())
 	}
 
-	cfg, err := s.getResourceConfiguration(actual)
+	cfg, t, err := s.getResourceConfiguration(actual)
 	if err != nil {
 		return nil, status.Error(codes.NotFound, errors.Wrap(err, errResourceConfigNotFound).Error())
 	}
 
-	if err := s.diffTerraformPluginSDK(ctx, kc, cfg, desired, actual); err != nil {
-		if IsDiffComputationNotSupportedError(err) {
-			st := status.New(codes.FailedPrecondition, errors.Wrap(err, errDiffPluginSDKv2).Error())
-			ds, dErr := st.WithDetails(&errdetails.PreconditionFailure{
-				Violations: []*errdetails.PreconditionFailure_Violation{
-					{
-						Type:        violationDiffComputationNotSupported,
-						Subject:     desiredGVK.String(),
-						Description: err.Error(),
-					},
-				},
-			})
-			if dErr != nil {
-				// never let detail marshaling mask the original failure.
-				s.log.Debug("cannot attach status details", "error", dErr)
-				return nil, st.Err()
-			}
-			return nil, ds.Err()
-		}
+	var errorMsg string
+	switch t {
+	case config.ResourceTypeTerraformCLI:
+		return nil, s.preconditionFailure(nil, errCLIDiffNotImplemented, desiredGVK)
 
-		return nil, status.Error(codes.Internal, errors.Wrap(err, errDiffPluginSDKv2).Error())
+	case config.ResourceTypeTerraformFramework:
+		return nil, s.preconditionFailure(nil, errFrameworkDiffNotImplemented, desiredGVK)
+
+	case config.ResourceTypeTerraformSDK:
+		errorMsg = errDiffPluginSDKv2
+		err = s.diffTerraformPluginSDK(ctx, kc, cfg, desired, actual)
+
+	case config.ResourceTypeUnknown:
+		fallthrough
+	default:
+		return nil, s.preconditionFailure(nil, "", desiredGVK)
 	}
 
+	// err from the diff implementation above.
+	if err != nil {
+		if IsDiffComputationNotSupportedError(err) {
+			return nil, s.preconditionFailure(err, errorMsg, desiredGVK)
+		}
+		return nil, status.Error(codes.Internal, errors.Wrap(err, errorMsg).Error())
+	}
 	return &diffv1alpha1.PlanResponse{}, nil
+}
+
+func (s *PlanService) preconditionFailure(err error, msg string, desiredGVK schema.GroupVersionKind) error {
+	var sErr error
+	msg = strings.TrimSpace(msg)
+	if len(msg) > 0 {
+		if err != nil {
+			sErr = errors.Wrap(err, msg)
+		} else {
+			sErr = errors.New(msg)
+		}
+	} else {
+		sErr = err
+	}
+
+	if sErr == nil {
+		sErr = ErrDiffComputationNotSupported
+	}
+	st := status.New(codes.FailedPrecondition, sErr.Error())
+	ds, dErr := st.WithDetails(&errdetails.PreconditionFailure{
+		Violations: []*errdetails.PreconditionFailure_Violation{
+			{
+				Type:        violationDiffComputationNotSupported,
+				Subject:     desiredGVK.String(),
+				Description: err.Error(),
+			},
+		},
+	})
+	if dErr != nil {
+		// never let detail marshaling mask the original failure.
+		s.log.Debug("cannot attach status details", "error", dErr)
+		return st.Err()
+	}
+	return ds.Err()
 }
 
 // managed deserializes the given resource into an MR type
@@ -164,16 +204,16 @@ func (s *PlanService) inMemoryClient(req *diffv1alpha1.PlanRequest) (kclient.Cli
 	return kc, nil
 }
 
-func (s *PlanService) getResourceConfiguration(m xpresource.Managed) (*config.Resource, error) {
+func (s *PlanService) getResourceConfiguration(m xpresource.Managed) (*config.Resource, config.ResourceType, error) {
 	gvk := m.GetObjectKind().GroupVersionKind()
 	parts := strings.SplitN(gvk.Group, ".", 2)
 	if len(parts) != 2 {
-		return nil, errors.Errorf(fmtErrEmptyGroupName, gvk.String())
+		return nil, config.ResourceTypeUnknown, errors.Errorf(fmtErrEmptyGroupName, gvk.String())
 	}
 
 	tr, ok := m.(resource.Terraformed)
 	if !ok {
-		return nil, errors.Errorf(fmtErrNotTerraformed, gvk.String())
+		return nil, config.ResourceTypeUnknown, errors.Errorf(fmtErrNotTerraformed, gvk.String())
 	}
 	tfName := tr.GetTerraformResourceType()
 	for _, pc := range s.providerConfigurations {
@@ -181,8 +221,64 @@ func (s *PlanService) getResourceConfiguration(m xpresource.Managed) (*config.Re
 			continue
 		}
 		if c, ok := pc.Resources[tfName]; ok {
-			return c, nil
+			t, err := resourceType(pc, c.Name)
+			if err != nil {
+				return nil, config.ResourceTypeUnknown, err
+			}
+			if t == config.ResourceTypeUnknown {
+				// Treat unknown resource type as not found.
+				return nil, config.ResourceTypeUnknown, errors.Errorf(fmtErrResourceConfigNotFound, gvk.String())
+			}
+			// We always return a valid resource config with a known resource type.
+			return c, t, nil
 		}
 	}
-	return nil, errors.Errorf(fmtErrResourceConfigNotFound, gvk.String())
+	return nil, config.ResourceTypeUnknown, errors.Errorf(fmtErrResourceConfigNotFound, gvk.String())
+}
+
+func resourceType(pc *config.Provider, name string) (config.ResourceType, error) {
+	if pc == nil {
+		return config.ResourceTypeUnknown, nil
+	}
+
+	// Search in TF CLI resources.
+	ok, err := searchInRegexList(pc.IncludeList, name)
+	if err != nil {
+		return config.ResourceTypeUnknown, errors.Wrap(err, "cannot search resource in Terraform CLI resources list")
+	}
+	if ok {
+		return config.ResourceTypeTerraformCLI, nil
+	}
+
+	// Search in TF plugin SDK resources.
+	ok, err = searchInRegexList(pc.TerraformPluginSDKIncludeList, name)
+	if err != nil {
+		return config.ResourceTypeUnknown, errors.Wrap(err, "cannot search resource in Terraform Plugin SDK resources list")
+	}
+	if ok {
+		return config.ResourceTypeTerraformSDK, nil
+	}
+
+	// Search in TF plugin framework resources.
+	ok, err = searchInRegexList(pc.TerraformPluginFrameworkIncludeList, name)
+	if err != nil {
+		return config.ResourceTypeUnknown, errors.Wrap(err, "cannot search resource in Terraform Plugin Framework resources list")
+	}
+	if ok {
+		return config.ResourceTypeTerraformFramework, nil
+	}
+	return config.ResourceTypeUnknown, nil
+}
+
+func searchInRegexList(l []string, name string) (bool, error) {
+	for _, r := range l {
+		ok, err := regexp.MatchString(r, name)
+		if err != nil {
+			return false, errors.Errorf(fmtErrResourceTypeMatch, name, r)
+		}
+		if ok {
+			return true, nil
+		}
+	}
+	return false, nil
 }

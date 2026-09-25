@@ -81,6 +81,27 @@ const (
 	StructTypeGranular StructType = "granular"
 )
 
+// ResourceType represents the upjet-based provider managed resource's
+// type such as a Terraform Plugin SDKv2 resource or CLI resource.
+type ResourceType string
+
+const (
+	// ResourceTypeTerraformSDK represents Terraform-based resources
+	// reconciled with the Terraform plugin SDKv2.
+	ResourceTypeTerraformSDK = "tf_plugin_sdkv2"
+
+	// ResourceTypeTerraformFramework represents Terraform-based resources
+	// reconciled with the modern Terraform plugin framework.
+	ResourceTypeTerraformFramework = "tf_plugin_framework"
+
+	// ResourceTypeTerraformCLI represents Terraform-based resources
+	// reconciled with the Terraform CLI.
+	ResourceTypeTerraformCLI = "tf_cli"
+
+	// ResourceTypeUnknown represents an unknown type.
+	ResourceTypeUnknown = ""
+)
+
 // SetIdentifierArgumentsFn sets the name of the resource in Terraform attributes map,
 // i.e. Main HCL file.
 type SetIdentifierArgumentsFn func(base map[string]any, externalName string)
