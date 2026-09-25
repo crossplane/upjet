@@ -8,36 +8,15 @@
 package internal
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 
 	"github.com/crossplane/crossplane-runtime/v2/pkg/errors"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource/unstructured"
-	fnv1 "github.com/crossplane/crossplane/v2/proto/fn/v1"
 	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
 	kunstructured "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 )
-
-// Tag uniquely identifies a request. Two identical requests created by the
-// same Crossplane binary will produce identical tags. Different builds of
-// Crossplane may produce different tags for the same inputs. See the docs for
-// the Deterministic protobuf MarshalOption for more details.
-func Tag(req *fnv1.RunFunctionRequest) string {
-	m := proto.MarshalOptions{Deterministic: true}
-
-	b, err := m.Marshal(req)
-	if err != nil {
-		return ""
-	}
-
-	h := sha256.Sum256(b)
-
-	return hex.EncodeToString(h[:])
-}
 
 // AsStruct converts the supplied object to a protocol buffer Struct well-known
 // type.

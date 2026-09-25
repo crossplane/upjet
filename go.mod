@@ -12,7 +12,6 @@ require (
 	github.com/antchfx/htmlquery v1.2.4
 	github.com/crossplane/crossplane-runtime/v2 v2.4.0
 	github.com/crossplane/crossplane/apis/v2 v2.4.1
-	github.com/crossplane/crossplane/v2 v2.1.3
 	github.com/fatih/camelcase v1.0.0
 	github.com/golang/mock v1.6.0
 	github.com/google/go-cmp v0.7.0

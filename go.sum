@@ -4,7 +4,6 @@ cloud.google.com/go v0.123.0 h1:2NAUJwPR47q+E35uaJeYoNhuNEM9kM8SjgRgdeOJUSE=
 cloud.google.com/go v0.123.0/go.mod h1:xBoMV08QcqUGuPW65Qfm1o9Y4zKZBpGS+7bImXLTAZU=
 dario.cat/mergo v1.0.2 h1:85+piFYR1tMbRrLcDwR18y4UKJ3aH1Tbzi24VRW1TK8=
 dario.cat/mergo v1.0.2/go.mod h1:E/hbnu0NxMFBjpMIE34DRGLWqDy0g5FuKDhCb31ngxA=
-github.com/Masterminds/semver v1.5.0 h1:H65muMkzWKEuNDnfl9d70GUjFniHKHRbFPGBuZ3QEww=
 github.com/Masterminds/semver/v3 v3.5.0 h1:kQceYJfbupGfZOKZQg0kou0DgAKhzDg2NZPAwZ/2OOE=
 github.com/Masterminds/semver/v3 v3.5.0/go.mod h1:4V+yj/TJE1HU9XfppCwVMZq3I84lprf4nC11bSS5beM=
 github.com/agext/levenshtein v1.2.1/go.mod h1:JEDfjyjHDjOF/1e4FlBE/PkbqA9OfWu2ki2W0IB5558=
@@ -44,8 +43,6 @@ github.com/crossplane/crossplane-runtime/v2 v2.4.0 h1:m5iGVHbtEh9nZYz7w/wUWDsXVl
 github.com/crossplane/crossplane-runtime/v2 v2.4.0/go.mod h1:Pf+hg5A/46QaGjKi7Pk+HdsrFOA/THvST9qM4El8Rzs=
 github.com/crossplane/crossplane/apis/v2 v2.4.1 h1:ye1vpLjSDicKQbKnMzPjzWNxwOdqYVlKDWSHt9VVz5g=
 github.com/crossplane/crossplane/apis/v2 v2.4.1/go.mod h1:OBNx+tl5RQh31Hqo2Q1KZ5tlwZXUIetAvpKKozP8HhU=
-github.com/crossplane/crossplane/v2 v2.1.3 h1:2fc5xHF/J0qrpe+WYKwIa4MEa9IjQh7R4I+jAIc50rs=
-github.com/crossplane/crossplane/v2 v2.1.3/go.mod h1:9+J8aLPlE2ELeqpIXgkMJMuF9Oxj1czJAy4E9aBVsa0=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc h1:U9qPSI2PIWSS1VwoXQT9A3Wy9MM3WgvqSxFWenqJduM=

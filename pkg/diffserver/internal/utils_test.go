@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource/unstructured/composite"
-	fnv1 "github.com/crossplane/crossplane/v2/proto/fn/v1"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/protobuf/testing/protocmp"
@@ -22,41 +21,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
-
-func TestTag(t *testing.T) {
-	cases := map[string]struct {
-		reason string
-		req    *fnv1.RunFunctionRequest
-		want   string
-	}{
-		"NilRequest": {
-			reason: "It should be possible to get a tag for a request.",
-			req: &fnv1.RunFunctionRequest{
-				Observed: &fnv1.State{
-					Composite: &fnv1.Resource{
-						Resource: MustStruct(map[string]any{
-							"apiVersion": "example.org/v1",
-							"kind":       "Test",
-						}),
-					},
-				},
-			},
-			// TODO(negz): This could change if proto wire encoding
-			// changes when we update the library. If that happens
-			// too often I'm fine just deleting this test.
-			want: "60e065117e1992fb17c3c5ef2a50de370eeec23fbd380836d31ad388bbe4e082",
-		},
-	}
-
-	for name, tc := range cases {
-		t.Run(name, func(t *testing.T) {
-			got := Tag(tc.req)
-			if diff := cmp.Diff(tc.want, got); diff != "" {
-				t.Errorf("\n%s\nTag(...): -want, +got:\n%s", tc.reason, diff)
-			}
-		})
-	}
-}
 
 func TestAsStruct(t *testing.T) {
 	type want struct {
