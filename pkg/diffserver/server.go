@@ -15,6 +15,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/v2/pkg/logging"
 	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	tf "github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/reflection"
@@ -58,6 +59,8 @@ const (
 	fmtErrConvertProtoBuf        = "cannot convert %s unstructured object from protobuf"
 	fmtErrEmptyGroupName         = "empty API group name for GVK %q"
 	fmtErrResourceConfigNotFound = "cannot find the resource configuration for the API type %q"
+
+	violationDiffComputationNotSupported = "DIFF_COMPUTATION_NOT_SUPPORTED"
 )
 
 // PlanService implements the upjet.diff.v1alpha1.PlanService gRPC service.
@@ -100,8 +103,24 @@ func (s *PlanService) Plan(ctx context.Context, req *diffv1alpha1.PlanRequest) (
 
 	if err := s.diffTerraformPluginSDK(ctx, desired, live, kc); err != nil {
 		if IsDiffComputationNotSupportedError(err) {
-			return nil, status.Error(codes.FailedPrecondition, errors.Wrap(err, errDiffPluginSDKv2).Error())
+			st := status.New(codes.FailedPrecondition, errors.Wrap(err, errDiffPluginSDKv2).Error())
+			ds, dErr := st.WithDetails(&errdetails.PreconditionFailure{
+				Violations: []*errdetails.PreconditionFailure_Violation{
+					{
+						Type:        violationDiffComputationNotSupported,
+						Subject:     desiredGVK.String(),
+						Description: err.Error(),
+					},
+				},
+			})
+			if dErr != nil {
+				// never let detail marshaling mask the original failure.
+				s.log.Debug("cannot attach status details", "error", dErr)
+				return nil, st.Err()
+			}
+			return nil, ds.Err()
 		}
+
 		return nil, status.Error(codes.Internal, errors.Wrap(err, errDiffPluginSDKv2).Error())
 	}
 
