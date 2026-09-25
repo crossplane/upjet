@@ -26,19 +26,20 @@ const (
 	errListen = "cannot listen on %s address %q"
 	errServe  = "cannot serve the diff gRPC services"
 
-	errNoDesiredResource = "the desired resource is not set in the plan request"
-	errMarshalStruct     = "cannot marshal the resource as JSON"
-	errDecode            = "cannot decode the resource into a registered API type"
-	errDesiredResource   = "cannot read the desired resource"
-	errLiveResource      = "cannot read the live resource"
-	errInMemoryClient    = "cannot initialize the in-memory Kubernetes API client"
+	errNoDesiredResource      = "the desired resource is not set in the plan request"
+	errMarshalStruct          = "cannot marshal the resource as JSON"
+	errDecode                 = "cannot decode the resource into a registered API type"
+	errDesiredResource        = "cannot read the desired resource"
+	errActualResource         = "cannot read the actual resource"
+	errInMemoryClient         = "cannot initialize the in-memory Kubernetes API client"
+	errResourceConfigNotFound = "cannot find the resource configuration"
 
 	fmtErrNotManaged             = "the API type %q registered for the resource is not a managed resource"
 	fmtErrNotObject              = "the API type %q registered for the resource is not a metav1.Object"
-	fmtErrNotTerraformed         = "the API type %q is not a Terraformed resource"
 	fmtErrConvertProtoBuf        = "cannot convert %s unstructured object from protobuf"
 	fmtErrEmptyGroupName         = "empty API group name for GVK %q"
-	fmtErrResourceConfigNotFound = "cannot find the resource configuration for the API type %q"
+	fmtErrNotTerraformed         = "the API type %q is not a Terraformed resource"
+	fmtErrResourceConfigNotFound = "no resource configuration for the API type %q is registered in provider configurations"
 
 	violationDiffComputationNotSupported = "DIFF_COMPUTATION_NOT_SUPPORTED"
 )

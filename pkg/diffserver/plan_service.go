@@ -39,7 +39,7 @@ type PlanService struct {
 	providerConfigurations []*config.Provider
 }
 
-// Plan computes a diff between the desired and the live resources supplied in
+// Plan computes a diff between the desired and the actual resources supplied in
 // the request.
 func (s *PlanService) Plan(ctx context.Context, req *diffv1alpha1.PlanRequest) (*diffv1alpha1.PlanResponse, error) {
 	if req.GetDesiredResource() == nil {
@@ -50,23 +50,28 @@ func (s *PlanService) Plan(ctx context.Context, req *diffv1alpha1.PlanRequest) (
 		return nil, status.Error(codes.InvalidArgument, errors.Wrap(err, errDesiredResource).Error())
 	}
 
-	// The live resource is unset for a resource that does not exist yet,
+	// The actual resource is unset for a resource that does not exist yet,
 	// which plans as a create.
-	live, liveGVK, err := s.managed(req.GetLiveResource())
+	actual, actualGVK, err := s.managed(req.GetLiveResource())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, errors.Wrap(err, errLiveResource).Error())
+		return nil, status.Error(codes.InvalidArgument, errors.Wrap(err, errActualResource).Error())
 	}
 
 	s.log.Debug("Received a plan request",
 		"desired-gvk", desiredGVK.String(), "desired-name", desired.GetName(),
-		"live-gvk", liveGVK.String())
+		"actual-gvk", actualGVK.String())
 
 	kc, err := s.inMemoryClient(req)
 	if err != nil {
 		return nil, status.Error(codes.Internal, errors.Wrap(err, errInMemoryClient).Error())
 	}
 
-	if err := s.diffTerraformPluginSDK(ctx, desired, live, kc); err != nil {
+	cfg, err := s.getResourceConfiguration(actual)
+	if err != nil {
+		return nil, status.Error(codes.NotFound, errors.Wrap(err, errResourceConfigNotFound).Error())
+	}
+
+	if err := s.diffTerraformPluginSDK(ctx, kc, cfg, desired, actual); err != nil {
 		if IsDiffComputationNotSupportedError(err) {
 			st := status.New(codes.FailedPrecondition, errors.Wrap(err, errDiffPluginSDKv2).Error())
 			ds, dErr := st.WithDetails(&errdetails.PreconditionFailure{

@@ -12,6 +12,7 @@ import (
 	tf "github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 	kclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/crossplane/upjet/v2/pkg/config"
 	"github.com/crossplane/upjet/v2/pkg/controller"
 	"github.com/crossplane/upjet/v2/pkg/resource"
 )
@@ -24,12 +25,7 @@ const (
 	errDiffPluginSDKv2           = "cannot compute diff for a Terraform plugin SDKv2 resource"
 )
 
-func (s *PlanService) diffTerraformPluginSDK(ctx context.Context, desired, actual xpresource.Managed, kc kclient.Client) error {
-	cfg, err := s.getResourceConfiguration(actual)
-	if err != nil {
-		return err
-	}
-
+func (s *PlanService) diffTerraformPluginSDK(ctx context.Context, kc kclient.Client, cfg *config.Resource, desired, actual xpresource.Managed) error {
 	opTracker := controller.NewOperationStore(s.log)
 	c := controller.NewTerraformPluginSDKConnector(
 		kc, s.setupFn, cfg, opTracker,
@@ -66,7 +62,7 @@ func (s *PlanService) diffTerraformPluginSDK(ctx context.Context, desired, actua
 // filterInstanceDiff removes the attribute diffs that do not represent a
 // meaningful change from d, in place, so that what remains answers the
 // question "did anything meaningful change?". Once filtered, d.Empty()
-// reports whether the desired resource differs from the live one.
+// reports whether the desired resource differs from the actual one.
 func filterInstanceDiff(d *tf.InstanceDiff) {
 	if d == nil {
 		return
