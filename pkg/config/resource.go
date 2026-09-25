@@ -88,18 +88,18 @@ type ResourceType string
 const (
 	// ResourceTypeTerraformSDK represents Terraform-based resources
 	// reconciled with the Terraform plugin SDKv2.
-	ResourceTypeTerraformSDK = "tf_plugin_sdkv2"
+	ResourceTypeTerraformSDK ResourceType = "tf_plugin_sdkv2"
 
 	// ResourceTypeTerraformFramework represents Terraform-based resources
 	// reconciled with the modern Terraform plugin framework.
-	ResourceTypeTerraformFramework = "tf_plugin_framework"
+	ResourceTypeTerraformFramework ResourceType = "tf_plugin_framework"
 
 	// ResourceTypeTerraformCLI represents Terraform-based resources
 	// reconciled with the Terraform CLI.
-	ResourceTypeTerraformCLI = "tf_cli"
+	ResourceTypeTerraformCLI ResourceType = "tf_cli"
 
 	// ResourceTypeUnknown represents an unknown type.
-	ResourceTypeUnknown = ""
+	ResourceTypeUnknown ResourceType = ""
 )
 
 // SetIdentifierArgumentsFn sets the name of the resource in Terraform attributes map,
