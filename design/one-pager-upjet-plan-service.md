@@ -94,7 +94,7 @@ A `PlanService` with one RPC:
 
 ```protobuf
 service PlanService {
-  // Plan computes a diff between the desired resource and the live resource.
+  // Plan computes a diff between the desired resource and the actual resource.
   rpc Plan(PlanRequest) returns (PlanResponse);
 }
 
@@ -103,26 +103,67 @@ message PlanRequest {
   // spec). Always set; the protocol does not express deletion (see below).
   google.protobuf.Struct desired_resource = 1;
 
-  // The live resource, with status.atProvider populated. Must carry the
+  // The actual resource, with status.atProvider populated. Must carry the
   // same apiVersion as the desired resource. Unset for a resource that
   // does not exist yet, which plans as a create.
-  google.protobuf.Struct live_resource = 2;
+  google.protobuf.Struct actual_resource = 2;
 
-  // The ProviderConfig the desired resource references, if the caller can
-  // supply it. Optional. The server reads non-credential fields only (a
-  // project ID, a subscription ID, custom endpoints); credential
-  // references are never resolved.
-  google.protobuf.Struct provider_config = 3;
+  // The Kubernetes object store that will be used to initialize an
+  // in-memory Kubernetes API client.
+  repeated google.protobuf.Struct kubernetes_object_store = 3;
+}
+
+// The kind of change the plan implies for the resource. The protocol does not
+// express deletion, so there is no delete action.
+enum Action {
+  // The server did not determine an action. A client must treat this as an
+  // unusable plan rather than as "nothing to do", because it is also what an
+  // older client sees for an action added after it was built.
+  ACTION_UNSPECIFIED = 0;
+
+  // The desired resource matches the actual one: nothing meaningful changed.
+  ACTION_NO_OP = 1;
+
+  // The external resource does not exist yet and would be created.
+  ACTION_CREATE = 2;
+
+  // The external resource exists and would be updated in place.
+  ACTION_UPDATE = 3;
+
+  // The external resource exists but the change cannot be applied in place,
+  // so it would be destroyed and recreated. See PlanResponse.replace_fields
+  // for the fields that force the replacement.
+  ACTION_REPLACE = 4;
 }
 
 message PlanResponse {
-  string action = 1;                  // no-op | create | update | replace
+  Action action = 1;
   repeated FieldChange changes = 2;
-  bool requires_replace = 3;
-  repeated string replace_fields = 4; // CRD paths, e.g. spec.forProvider.region
-  repeated Diagnostic diagnostics = 5;
+  // repeated Diagnostic diagnostics = 5;
   string error = 6;
   google.protobuf.Timestamp computed_at = 7;
+}
+
+// Where a planned value came from. This is about provenance, not about
+// whether the value changed: a field the desired resource declares has
+// ORIGIN_DESIRED_STATE whether or not its value differs from the actual one.
+enum Origin {
+  // The server did not say where the planned value came from. A client must
+  // treat this as unknown provenance rather than assuming either case,
+  // because it is also what an older client sees for an origin added after
+  // it was built.
+  ORIGIN_UNSPECIFIED = 0;
+
+  // The desired resource declares this field, so the planned value follows
+  // from what the user wrote.
+  ORIGIN_DESIRED_STATE = 1;
+
+  // The provider planned this value for a field the desired resource does not
+  // declare, for example from a schema default or a custom diff. For a
+  // parameter, late initialization writes the value back into the managed
+  // resource's spec.forProvider once the change is applied, so the user's own
+  // object changes too.
+  ORIGIN_PROVIDER = 2;
 }
 
 message FieldChange {
@@ -130,30 +171,54 @@ message FieldChange {
   // e.g. spec.forProvider.deletionWindowInDays.
   string field = 1;
 
-  FieldValue current = 2; // Unset when the field does not exist yet.
-  FieldValue desired = 3; // Unset when the change removes the field.
+  // The value the external resource has now. Unset when the field does not
+  // exist yet.
+  FieldValue actual = 2;
+
+  // The value the external resource will have once the change is applied.
+  // This is not simply the value from PlanRequest.desired_resource: a
+  // provider can plan a value the desired resource never declared, such as a
+  // schema default. Unset when the change removes the field.
+  FieldValue planned = 3;
+
   bool requires_replace = 4;
+
+  // Where the planned value came from.
+  Origin origin = 5;
+}
+
+// Why a FieldValue carries no concrete value. A value that is present is
+// carried in FieldValue.value instead, so there is no "present" member here.
+enum Absence {
+  // The server did not say why the value is absent. A client must treat this
+  // as an unusable value rather than as any particular reason, because it is
+  // also what an older client sees for a reason added after it was built.
+  ABSENCE_UNSPECIFIED = 0;
+
+  // The value is known only after apply.
+  ABSENCE_UNKNOWN = 1;
+
+  // The value is sensitive and was redacted by the server.
+  ABSENCE_SENSITIVE = 2;
+
+  // The value comes from a reference (a Secret, or another resource via a
+  // ref field) the server cannot resolve, so this plan could not evaluate
+  // it. The reconciler will resolve it and may find a real change here.
+  ABSENCE_UNRESOLVED = 3;
 }
 
 // The value on one side of a change. Unset, concrete (including explicit
-// null), unknown, sensitive, and unresolved are five distinct states.
+// null), and each Absence reason are distinct states: an unset kind means
+// there is no value on this side at all, whereas an absence means there is
+// one but the server cannot put it in the plan.
 message FieldValue {
   oneof kind {
     // The concrete value. google.protobuf.Value carries strings, numbers,
     // booleans, lists, objects, and explicit nulls, so null and "" differ.
     google.protobuf.Value value = 1;
 
-    // The value is known only after apply.
-    bool unknown = 2;
-
-    // The value is sensitive and was redacted by the server.
-    bool sensitive = 3;
-
-    // The value comes from a reference (a Secret, or another resource via
-    // a ref field) the server cannot resolve, so this plan could not
-    // evaluate it. The reconciler will resolve it and may find a real
-    // change here.
-    bool unresolved = 4;
+    // Set when the server has a value for this side but cannot report it.
+    Absence absence = 2;
   }
 }
 ```
