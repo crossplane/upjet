@@ -128,9 +128,12 @@ func Convert(params map[string]any, p []string, mode ListConversionMode, opts *C
 					return nil, errors.Wrapf(err, "cannot set the singleton list's value at the field path %s", e)
 				}
 			case ToEmbeddedObject:
+				// An empty singleton list is an absent block: it converts to
+				// nil, so that the embedded object is omitted rather than
+				// stored as an empty object that would come back as a list
+				// with one all-null element.
 				var newVal any = nil
 				if v != nil {
-					newVal = map[string]any{}
 					s, ok := v.([]any)
 					if !ok {
 						// then it's not a slice
@@ -147,7 +150,9 @@ func Convert(params map[string]any, p []string, mode ListConversionMode, opts *C
 					// We replace 0th index with "*" to be able to stay consistent
 					// with the paths parameter in the keys of opts.ListInjectKeys.
 					if inj, ok := opts.ListInjectKeys[strings.ReplaceAll(e, "0", "*")]; ok && inj.Key != "" && inj.Value != "" {
-						delete(newVal.(map[string]any), inj.Key)
+						if m, ok := newVal.(map[string]any); ok {
+							delete(m, inj.Key)
+						}
 					}
 				}
 				if err := setValue(pv, newVal, e); err != nil {
