@@ -443,12 +443,12 @@ func (n *terraformPluginFrameworkExternalClient) getDiffPlanResponse(ctx context
 		return nil, false, errors.Wrap(err, "cannot unmarshal planned state")
 	}
 
-	rawDiff, err := plannedStateValue.Diff(tfStateValue)
+	priorValue, plannedValue, rawDiff, err := normalizedDiff(tfStateValue, plannedStateValue)
 	if err != nil {
-		return nil, false, errors.Wrap(err, "cannot compare prior state and plan")
+		return nil, false, err
 	}
 
-	if err := n.filterRequiresReplace(ctx, planResponse, tfStateValue, plannedStateValue); err != nil {
+	if err := n.filterRequiresReplace(ctx, planResponse, priorValue, plannedValue); err != nil {
 		return nil, false, errors.Wrap(err, "failed to check for required replacement fields")
 	}
 	if n.supportsIdentity() {
@@ -492,11 +492,61 @@ func (n *terraformPluginFrameworkExternalClient) filterRequiresReplace(ctx conte
 		}
 		if !plannedVal.Equal(priorVal) {
 			filteredRequiresReplace = append(filteredRequiresReplace, path)
+			continue
 		}
 		n.logger.Debug("TF plan reported a diff at path that require resource replacement, but the prior and plan values are equal. Skipping...", "path", path)
 	}
 	planResponse.RequiresReplace = filteredRequiresReplace
 	return nil
+}
+
+// normalizedDiff normalizes the prior and the planned state with
+// nullCollectionsAsEmpty and returns them together with the diff between
+// them. The prior state rebuilt from a managed resource cannot tell an empty
+// collection from an absent one, and the plan carries the framework's empty
+// defaults, so both sides are compared with null collections as empty.
+func normalizedDiff(prior, planned tftypes.Value) (tftypes.Value, tftypes.Value, []tftypes.ValueDiff, error) {
+	priorValue, err := nullCollectionsAsEmpty(prior)
+	if err != nil {
+		return tftypes.Value{}, tftypes.Value{}, nil, errors.Wrap(err, "cannot normalize prior state")
+	}
+	plannedValue, err := nullCollectionsAsEmpty(planned)
+	if err != nil {
+		return tftypes.Value{}, tftypes.Value{}, nil, errors.Wrap(err, "cannot normalize planned state")
+	}
+	rawDiff, err := plannedValue.Diff(priorValue)
+	if err != nil {
+		return tftypes.Value{}, tftypes.Value{}, nil, errors.Wrap(err, "cannot compare prior state and plan")
+	}
+	return priorValue, plannedValue, rawDiff, nil
+}
+
+// nullCollectionsAsEmpty returns a copy of v in which every null list, set or
+// map, at any depth, is replaced by an empty collection of the same type.
+// Unknown values, non-empty collections and values of other types are kept.
+//
+// The prior state reconstructed from a managed resource cannot tell an empty
+// collection from an absent one: the generated parameters and observation are
+// marshalled with omitempty, so an empty collection stored by the provider
+// comes back as null after a provider restart or once the status is dropped.
+// The plan, on the other hand, carries the framework's empty defaults. A
+// null-versus-empty difference between the two is an artifact of the
+// reconstruction, not a change the user asked for, so the diff and the
+// RequiresReplace paths are evaluated on values normalized this way.
+func nullCollectionsAsEmpty(v tftypes.Value) (tftypes.Value, error) {
+	return tftypes.Transform(v, func(_ *tftypes.AttributePath, v tftypes.Value) (tftypes.Value, error) {
+		if !v.IsNull() {
+			return v, nil
+		}
+		switch v.Type().(type) {
+		case tftypes.List, tftypes.Set:
+			return tftypes.NewValue(v.Type(), []tftypes.Value{}), nil
+		case tftypes.Map:
+			return tftypes.NewValue(v.Type(), map[string]tftypes.Value{}), nil
+		default:
+			return v, nil
+		}
+	})
 }
 
 // recoverExternalName tries to extract the externalname from the current TF state

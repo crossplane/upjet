@@ -113,8 +113,9 @@ type testConfiguration struct {
 	applyErr   error
 	applyDiags []*tfprotov6.Diagnostic
 
-	planErr   error
-	planDiags []*tfprotov6.Diagnostic
+	planErr             error
+	planDiags           []*tfprotov6.Diagnostic
+	planRequiresReplace []*tftypes.AttributePath
 
 	// Identity fields for response mocking
 	readNewIdentity     *tfprotov6.ResourceIdentityData
@@ -172,6 +173,7 @@ func prepareTPFExternalWithTestConfig(testConfig testConfiguration) *terraformPl
 				return &tfprotov6.PlanResourceChangeResponse{
 					PlannedState:    plannedStateVal,
 					PlannedIdentity: testConfig.planPlannedIdentity,
+					RequiresReplace: testConfig.planRequiresReplace,
 					Diagnostics:     testConfig.planDiags,
 				}, testConfig.planErr
 			},
@@ -1649,6 +1651,329 @@ func TestFilteredDiffExistsNestedAttributeRemoval(t *testing.T) {
 			got := n.filteredDiffExists(ctx, rawDiff)
 			if diff := cmp.Diff(tc.want, got); diff != "" {
 				t.Errorf("%s\nfilteredDiffExists(...): -want, +got:\n%s", tc.reason, diff)
+			}
+		})
+	}
+}
+
+func TestFilterRequiresReplace(t *testing.T) {
+	sch := rschema.Schema{
+		Attributes: map[string]rschema.Attribute{
+			"name": rschema.StringAttribute{
+				Required: true,
+			},
+			"ssh_keys": rschema.SetAttribute{
+				Optional:    true,
+				Computed:    true,
+				ElementType: types.StringType,
+			},
+		},
+		Blocks: map[string]rschema.Block{
+			"import": rschema.SetNestedBlock{
+				NestedObject: rschema.NestedBlockObject{
+					Attributes: map[string]rschema.Attribute{
+						"source": rschema.StringAttribute{
+							Required: true,
+						},
+					},
+				},
+			},
+		},
+	}
+	tfType := sch.Type().TerraformType(context.TODO())
+	value := func(m map[string]any) tftypes.Value {
+		v, err := tfValueFromMap(m, tfType)
+		if err != nil {
+			t.Fatalf("cannot build value: %v", err)
+		}
+		return v
+	}
+	path := func(name string) *tftypes.AttributePath {
+		return tftypes.NewAttributePath().WithAttributeName(name)
+	}
+	pathStrings := func(paths []*tftypes.AttributePath) []string {
+		if len(paths) == 0 {
+			return nil
+		}
+		out := make([]string, 0, len(paths))
+		for _, p := range paths {
+			out = append(out, p.String())
+		}
+		return out
+	}
+
+	cases := map[string]struct {
+		reason          string
+		prior           map[string]any
+		planned         map[string]any
+		requiresReplace []*tftypes.AttributePath
+		want            []string
+	}{
+		"UnchangedAttribute": {
+			reason:          "A reported path whose prior and planned values are equal is a false positive.",
+			prior:           map[string]any{"name": "a"},
+			planned:         map[string]any{"name": "a"},
+			requiresReplace: []*tftypes.AttributePath{path("name")},
+			want:            nil,
+		},
+		"ChangedAttribute": {
+			reason:          "A reported path whose value changed requires replacement.",
+			prior:           map[string]any{"name": "a"},
+			planned:         map[string]any{"name": "b"},
+			requiresReplace: []*tftypes.AttributePath{path("name")},
+			want:            []string{`AttributeName("name")`},
+		},
+		"NullVersusEmptyIsNotNormalizedHere": {
+			reason:          "The filter compares the values it is given; null-versus-empty collections are normalized by getDiffPlanResponse before it runs.",
+			prior:           map[string]any{"name": "a"},
+			planned:         map[string]any{"name": "a", "ssh_keys": []any{}},
+			requiresReplace: []*tftypes.AttributePath{path("ssh_keys")},
+			want:            []string{`AttributeName("ssh_keys")`},
+		},
+		"NullBlockPlannedElement": {
+			reason:          "A nested block that gains an element requires replacement.",
+			prior:           map[string]any{"name": "a"},
+			planned:         map[string]any{"name": "a", "import": []any{map[string]any{"source": "http-import"}}},
+			requiresReplace: []*tftypes.AttributePath{path("import")},
+			want:            []string{`AttributeName("import")`},
+		},
+		"EmptySetAttributePlannedElement": {
+			reason:          "A set attribute that gains an element requires replacement.",
+			prior:           map[string]any{"name": "a", "ssh_keys": []any{}},
+			planned:         map[string]any{"name": "a", "ssh_keys": []any{"ssh-ed25519 AAAA"}},
+			requiresReplace: []*tftypes.AttributePath{path("ssh_keys")},
+			want:            []string{`AttributeName("ssh_keys")`},
+		},
+	}
+
+	n := &terraformPluginFrameworkExternalClient{
+		logger:         logTest,
+		resourceSchema: sch,
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			resp := &tfprotov6.PlanResourceChangeResponse{RequiresReplace: tc.requiresReplace}
+			if err := n.filterRequiresReplace(context.TODO(), resp, value(tc.prior), value(tc.planned)); err != nil {
+				t.Fatalf("filterRequiresReplace(...): unexpected error: %v", err)
+			}
+			if diff := cmp.Diff(tc.want, pathStrings(resp.RequiresReplace)); diff != "" {
+				t.Errorf("%s\nfilterRequiresReplace(...): -want, +got:\n%s", tc.reason, diff)
+			}
+		})
+	}
+}
+
+// nullAndEmptyCollectionsSchema holds the attribute shapes in which a null
+// collection in the reconstructed prior state meets an empty collection in
+// the plan: a top-level set with an empty default, a set inside a single
+// nested attribute and a set inside the elements of a set nested attribute.
+func nullAndEmptyCollectionsSchema() rschema.Schema {
+	keys := rschema.SetAttribute{
+		Optional:    true,
+		Computed:    true,
+		ElementType: types.StringType,
+	}
+	return rschema.Schema{
+		Attributes: map[string]rschema.Attribute{
+			"id": rschema.StringAttribute{
+				Computed: true,
+			},
+			"name": rschema.StringAttribute{
+				Required: true,
+			},
+			"ssh_keys": keys,
+			"obj": rschema.SingleNestedAttribute{
+				Optional: true,
+				Attributes: map[string]rschema.Attribute{
+					"keys": keys,
+				},
+			},
+			"nested_set": rschema.SetNestedAttribute{
+				Optional: true,
+				NestedObject: rschema.NestedAttributeObject{
+					Attributes: map[string]rschema.Attribute{
+						"name": rschema.StringAttribute{
+							Required: true,
+						},
+						"keys": keys,
+					},
+				},
+			},
+		},
+	}
+}
+
+// TestTPFObserveNullAndEmptyCollections covers the state a resource is in
+// after a provider restart or once its status is dropped: the prior state
+// reconstructed from the MR has unset collections as null, the plan carries
+// them as empty collections and lists the path under RequiresReplace. The
+// resource must be observed as up to date and the following Update must not
+// be refused as a replacement, while a collection that gains an element still
+// is a diff that requires replacement.
+func TestTPFObserveNullAndEmptyCollections(t *testing.T) {
+	path := func(name string) *tftypes.AttributePath {
+		return tftypes.NewAttributePath().WithAttributeName(name)
+	}
+	cases := map[string]struct {
+		reason          string
+		prior           map[string]any
+		planned         map[string]any
+		requiresReplace *tftypes.AttributePath
+		wantUpToDate    bool
+		wantUpdateErr   bool
+	}{
+		"SetAttributeEmptyDefault": {
+			reason:          "A set attribute that is null in the prior state and empty in the plan is not a diff and not a replacement.",
+			prior:           map[string]any{"id": "example-id", "name": "example"},
+			planned:         map[string]any{"id": "example-id", "name": "example", "ssh_keys": []any{}},
+			requiresReplace: path("ssh_keys"),
+			wantUpToDate:    true,
+		},
+		"SetAttributePlannedNullPriorEmpty": {
+			reason:          "The comparison is symmetric: an empty prior against a null plan is not a diff either.",
+			prior:           map[string]any{"id": "example-id", "name": "example", "ssh_keys": []any{}},
+			planned:         map[string]any{"id": "example-id", "name": "example"},
+			requiresReplace: path("ssh_keys"),
+			wantUpToDate:    true,
+		},
+		"SetAttributeInsideSingleNestedAttribute": {
+			reason:          "A null set inside a single nested attribute is normalized before the parent object is compared.",
+			prior:           map[string]any{"id": "example-id", "name": "example", "obj": map[string]any{}},
+			planned:         map[string]any{"id": "example-id", "name": "example", "obj": map[string]any{"keys": []any{}}},
+			requiresReplace: path("obj"),
+			wantUpToDate:    true,
+		},
+		"SetAttributeInsideSetNestedAttribute": {
+			reason:          "A null set inside a set element is normalized before the elements are matched by value.",
+			prior:           map[string]any{"id": "example-id", "name": "example", "nested_set": []any{map[string]any{"name": "a"}}},
+			planned:         map[string]any{"id": "example-id", "name": "example", "nested_set": []any{map[string]any{"name": "a", "keys": []any{}}}},
+			requiresReplace: path("nested_set"),
+			wantUpToDate:    true,
+		},
+		"SetAttributeGainsElement": {
+			reason:          "A set attribute that gains an element is a diff and keeps its replacement requirement.",
+			prior:           map[string]any{"id": "example-id", "name": "example"},
+			planned:         map[string]any{"id": "example-id", "name": "example", "ssh_keys": []any{"ssh-ed25519 AAAA"}},
+			requiresReplace: path("ssh_keys"),
+			wantUpToDate:    false,
+			wantUpdateErr:   true,
+		},
+		"SetNestedAttributeGainsElement": {
+			reason:          "A set nested attribute that gains an element is a diff and keeps its replacement requirement.",
+			prior:           map[string]any{"id": "example-id", "name": "example", "nested_set": []any{map[string]any{"name": "a"}}},
+			planned:         map[string]any{"id": "example-id", "name": "example", "nested_set": []any{map[string]any{"name": "a", "keys": []any{}}, map[string]any{"name": "b", "keys": []any{}}}},
+			requiresReplace: path("nested_set"),
+			wantUpToDate:    false,
+			wantUpdateErr:   true,
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			tcfg := testConfiguration{
+				r: &mockTPFResource{
+					SchemaMethod: func(_ context.Context, _ resource.SchemaRequest, response *resource.SchemaResponse) {
+						response.Schema = nullAndEmptyCollectionsSchema()
+					},
+				},
+				cfg: newBaseUpjetConfig(),
+				obj: fake.Terraformed{
+					Parameterizable: fake.Parameterizable{Parameters: map[string]any{"name": "example"}},
+					Observable:      fake.Observable{Observation: map[string]any{}},
+				},
+				params:              map[string]any{"id": "example-id", "name": "example"},
+				currentStateMap:     tc.prior,
+				plannedStateMap:     tc.planned,
+				newStateMap:         tc.planned,
+				planRequiresReplace: []*tftypes.AttributePath{tc.requiresReplace},
+			}
+			tpfExternal := prepareTPFExternalWithTestConfig(tcfg)
+
+			obs, err := tpfExternal.Observe(context.TODO(), &tcfg.obj)
+			if err != nil {
+				t.Fatalf("%s\nObserve(...): unexpected error: %v", tc.reason, err)
+			}
+			if !obs.ResourceExists {
+				t.Errorf("%s\nObserve(...): want ResourceExists, got %+v", tc.reason, obs)
+			}
+			if diff := cmp.Diff(tc.wantUpToDate, obs.ResourceUpToDate); diff != "" {
+				t.Errorf("%s\nObserve(...) ResourceUpToDate: -want, +got:\n%s", tc.reason, diff)
+			}
+			_, err = tpfExternal.Update(context.TODO(), &tcfg.obj)
+			if diff := cmp.Diff(tc.wantUpdateErr, err != nil); diff != "" {
+				t.Errorf("%s\nUpdate(...) returned error %v: -wantErr, +gotErr:\n%s", tc.reason, err, diff)
+			}
+		})
+	}
+}
+
+func TestNullCollectionsAsEmpty(t *testing.T) {
+	strSet := tftypes.Set{ElementType: tftypes.String}
+	strList := tftypes.List{ElementType: tftypes.String}
+	strMap := tftypes.Map{ElementType: tftypes.String}
+	inner := tftypes.Object{AttributeTypes: map[string]tftypes.Type{"keys": strSet}}
+	typ := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"s":   strSet,
+		"l":   strList,
+		"m":   strMap,
+		"str": tftypes.String,
+		"o":   inner,
+		"ns":  tftypes.Set{ElementType: inner},
+	}}
+	str := func(s string) tftypes.Value { return tftypes.NewValue(tftypes.String, s) }
+	elems := func(vals ...tftypes.Value) []tftypes.Value { return vals }
+
+	cases := map[string]struct {
+		reason string
+		in     tftypes.Value
+		want   tftypes.Value
+	}{
+		"NullCollectionsBecomeEmptyAtEveryDepth": {
+			reason: "Null lists, sets and maps become empty at the top level, inside an object and inside set elements; other null values are kept.",
+			in: tftypes.NewValue(typ, map[string]tftypes.Value{
+				"s":   tftypes.NewValue(strSet, nil),
+				"l":   tftypes.NewValue(strList, nil),
+				"m":   tftypes.NewValue(strMap, nil),
+				"str": tftypes.NewValue(tftypes.String, nil),
+				"o":   tftypes.NewValue(inner, map[string]tftypes.Value{"keys": tftypes.NewValue(strSet, nil)}),
+				"ns":  tftypes.NewValue(tftypes.Set{ElementType: inner}, elems(tftypes.NewValue(inner, map[string]tftypes.Value{"keys": tftypes.NewValue(strSet, nil)}))),
+			}),
+			want: tftypes.NewValue(typ, map[string]tftypes.Value{
+				"s":   tftypes.NewValue(strSet, elems()),
+				"l":   tftypes.NewValue(strList, elems()),
+				"m":   tftypes.NewValue(strMap, map[string]tftypes.Value{}),
+				"str": tftypes.NewValue(tftypes.String, nil),
+				"o":   tftypes.NewValue(inner, map[string]tftypes.Value{"keys": tftypes.NewValue(strSet, elems())}),
+				"ns":  tftypes.NewValue(tftypes.Set{ElementType: inner}, elems(tftypes.NewValue(inner, map[string]tftypes.Value{"keys": tftypes.NewValue(strSet, elems())}))),
+			}),
+		},
+		"NullObjectsUnknownAndNonEmptyValuesAreKept": {
+			reason: "A null object stays null, an unknown collection stays unknown and collections with elements are untouched.",
+			in: tftypes.NewValue(typ, map[string]tftypes.Value{
+				"s":   tftypes.NewValue(strSet, tftypes.UnknownValue),
+				"l":   tftypes.NewValue(strList, elems(str("a"))),
+				"m":   tftypes.NewValue(strMap, map[string]tftypes.Value{"k": str("v")}),
+				"str": str("x"),
+				"o":   tftypes.NewValue(inner, nil),
+				"ns":  tftypes.NewValue(tftypes.Set{ElementType: inner}, nil),
+			}),
+			want: tftypes.NewValue(typ, map[string]tftypes.Value{
+				"s":   tftypes.NewValue(strSet, tftypes.UnknownValue),
+				"l":   tftypes.NewValue(strList, elems(str("a"))),
+				"m":   tftypes.NewValue(strMap, map[string]tftypes.Value{"k": str("v")}),
+				"str": str("x"),
+				"o":   tftypes.NewValue(inner, nil),
+				"ns":  tftypes.NewValue(tftypes.Set{ElementType: inner}, elems()),
+			}),
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			got, err := nullCollectionsAsEmpty(tc.in)
+			if err != nil {
+				t.Fatalf("%s\nnullCollectionsAsEmpty(...): unexpected error: %v", tc.reason, err)
+			}
+			if !got.Equal(tc.want) {
+				t.Errorf("%s\nnullCollectionsAsEmpty(...):\nwant: %s\ngot:  %s", tc.reason, tc.want, got)
 			}
 		})
 	}
