@@ -61,7 +61,14 @@ func (s *PlanService) diffTerraformPluginSDK(ctx context.Context, kc kclient.Cli
 	}
 
 	if actual == nil {
-		opTracker.Tracker(dtr).ResetReconstructedTfState()
+		// Connect reconstructed a Terraform state from the desired resource.
+		// There is nothing to observe for a create, so that state is emptied
+		// rather than discarded: Observe reads the external resource's absence
+		// off an empty ID, and the state is also what carries the RawPlan and
+		// the RawConfig that computing the diff needs. This leaves the
+		// Terraform provider with the same state the reconciler diffs against
+		// on a create, where the absence comes from a refresh instead.
+		markAbsent(opTracker.Tracker(dtr).GetTfState())
 	} else {
 		tr, ok := actual.(resource.Terraformed)
 		if !ok {
@@ -95,6 +102,23 @@ func (s *PlanService) diffTerraformPluginSDK(ctx context.Context, kc kclient.Cli
 		return nil, errors.Wrap(err, errConvertDesiredParameters)
 	}
 	return s.planResponse(diff, obs.ResourceExists, declared, cfg)
+}
+
+// markAbsent empties the given reconstructed Terraform state in place so that
+// it stands for an external resource that does not exist yet. Observe reports
+// a resource as existing exactly when its state carries an ID, so clearing the
+// ID is what makes the plan a create.
+//
+// RawPlan and RawConfig are deliberately left alone: the instance diff is
+// computed against them, and a Terraform provider may assume they are not
+// null. The AWS provider's transparent tagging interceptor, for one, calls
+// ResourceDiff.GetRawPlan().GetAttr("tags"), which panics on a zero cty.Value.
+func markAbsent(s *tf.InstanceState) {
+	if s == nil {
+		return
+	}
+	s.ID = ""
+	s.Attributes = nil
 }
 
 // planResponse converts a filtered Terraform instance diff into a plan

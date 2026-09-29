@@ -41,6 +41,7 @@ type Server struct {
 	providerConfigurations []*config.Provider
 	log                    logging.Logger
 	setupFn                terraform.SetupFn
+	apiGroups              []string
 }
 
 // ServerOption represents a configuration option for a Server instance.
@@ -83,6 +84,34 @@ func WithTerraformSetupFn(setupFn terraform.SetupFn) ServerOption {
 	}
 }
 
+// WithAPIGroups restricts a Server to the given resource API groups. A group
+// is named by the first label of a resource's Kubernetes API group, so that
+// one name covers both the cluster-scoped and the namespaced flavour of it,
+// e.g. "ec2" for ec2.example.upbound.io and ec2.example.m.upbound.io alike.
+//
+// A provider published as a family of single-group packages should declare the
+// group its package serves. A package's provider configuration and its runtime
+// scheme both cover every group the provider has, so without this a package
+// answers plan requests for resources its own controllers never reconcile,
+// which makes a misrouted request look like a valid plan. Leaving it unset
+// serves every group.
+//
+// Because a package name is what a generated provider has to hand, the name of
+// the monolithic package is accepted here and understood as every group: that
+// package contains all of the provider's resources, so recording its name as
+// if it were a group would serve none of them.
+func WithAPIGroups(groups ...string) ServerOption {
+	return func(s *Server) {
+		for _, g := range groups {
+			if g == config.PackageNameMonolith {
+				s.apiGroups = nil
+				return
+			}
+		}
+		s.apiGroups = groups
+	}
+}
+
 // Serve starts a gRPC server serving the diff services on the given network
 // and address, and blocks until ctx is done or the server fails. A "unix"
 // network address is removed before it's bound so that a socket left behind by
@@ -110,6 +139,7 @@ func (s *Server) Serve(ctx context.Context, network, address string, scheme *run
 			serializer.NewCodecFactory(scheme).UniversalDeserializer(),
 			s.log,
 			s.setupFn,
+			s.apiGroups,
 			s.providerConfigurations...,
 		),
 	)
