@@ -1667,6 +1667,20 @@ func TestFilterRequiresReplace(t *testing.T) {
 				Computed:    true,
 				ElementType: types.StringType,
 			},
+			"nested_set": rschema.SetNestedAttribute{
+				Optional: true,
+				NestedObject: rschema.NestedAttributeObject{
+					Attributes: map[string]rschema.Attribute{
+						"name": rschema.StringAttribute{
+							Required: true,
+						},
+						"keys": rschema.SetAttribute{
+							Optional:    true,
+							ElementType: types.StringType,
+						},
+					},
+				},
+			},
 		},
 		Blocks: map[string]rschema.Block{
 			"import": rschema.SetNestedBlock{
@@ -1676,21 +1690,43 @@ func TestFilterRequiresReplace(t *testing.T) {
 							Required: true,
 						},
 					},
+					Blocks: map[string]rschema.Block{
+						"header": rschema.SetNestedBlock{
+							NestedObject: rschema.NestedBlockObject{
+								Attributes: map[string]rschema.Attribute{
+									"name": rschema.StringAttribute{
+										Required: true,
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 		},
 	}
 	tfType := sch.Type().TerraformType(context.TODO())
-	value := func(m map[string]any) tftypes.Value {
-		v, err := tfValueFromMap(m, tfType)
+	valueOf := func(m map[string]any, typ tftypes.Type) tftypes.Value {
+		v, err := tfValueFromMap(m, typ)
 		if err != nil {
 			t.Fatalf("cannot build value: %v", err)
 		}
 		return v
 	}
+	value := func(m map[string]any) tftypes.Value {
+		return valueOf(m, tfType)
+	}
 	path := func(name string) *tftypes.AttributePath {
 		return tftypes.NewAttributePath().WithAttributeName(name)
 	}
+	// elementPath is a path into a set element, as the framework reports it:
+	// the element step carries the raw element, with absent collections null.
+	elementPath := func(set string, element map[string]any, attr string) *tftypes.AttributePath {
+		elementType := tfType.(tftypes.Object).AttributeTypes[set].(tftypes.Set).ElementType
+		return path(set).WithElementKeyValue(valueOf(element, elementType)).WithAttributeName(attr)
+	}
+	newNestedSetElement := elementPath("nested_set", map[string]any{"name": "b"}, "name")
+	newImportElement := elementPath("import", map[string]any{"source": "direct-upload"}, "source")
 	pathStrings := func(paths []*tftypes.AttributePath) []string {
 		if len(paths) == 0 {
 			return nil
@@ -1743,6 +1779,20 @@ func TestFilterRequiresReplace(t *testing.T) {
 			planned:         map[string]any{"name": "a", "ssh_keys": []any{"ssh-ed25519 AAAA"}},
 			requiresReplace: []*tftypes.AttributePath{path("ssh_keys")},
 			want:            []string{`AttributeName("ssh_keys")`},
+		},
+		"NewSetElementWithNullCollection": {
+			reason:          "A path into a new set element whose inner collection is null in the path and empty in the normalized plan is found in the plan and requires replacement.",
+			prior:           map[string]any{"name": "a", "nested_set": []any{map[string]any{"name": "a", "keys": []any{}}}},
+			planned:         map[string]any{"name": "a", "nested_set": []any{map[string]any{"name": "a", "keys": []any{}}, map[string]any{"name": "b", "keys": []any{}}}},
+			requiresReplace: []*tftypes.AttributePath{newNestedSetElement},
+			want:            []string{newNestedSetElement.String()},
+		},
+		"NewBlockElementWithNestedBlock": {
+			reason:          "The framework reports a new block element with its nested blocks null while the plan carries them empty; the path is found in the plan and requires replacement.",
+			prior:           map[string]any{"name": "a", "import": []any{map[string]any{"source": "http-import", "header": []any{}}}},
+			planned:         map[string]any{"name": "a", "import": []any{map[string]any{"source": "http-import", "header": []any{}}, map[string]any{"source": "direct-upload", "header": []any{}}}},
+			requiresReplace: []*tftypes.AttributePath{newImportElement},
+			want:            []string{newImportElement.String()},
 		},
 	}
 
