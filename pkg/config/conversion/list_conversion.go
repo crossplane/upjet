@@ -115,6 +115,12 @@ func Convert(params map[string]any, p []string, mode ListConversionMode, opts *C
 			}
 			switch mode {
 			case ToSingletonList:
+				// A nil embedded object is an absent block, the reverse of
+				// an empty singleton list in ToEmbeddedObject mode: wrapping
+				// it would produce a singleton list with a null element.
+				if v == nil {
+					continue
+				}
 				if opts != nil {
 					// We replace 0th index with "*" to be able to stay consistent
 					// with the paths parameter in the keys of opts.ListInjectKeys.
