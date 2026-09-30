@@ -146,7 +146,7 @@ func TestPlanResponseAction(t *testing.T) {
 	s := &PlanService{}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			r, err := s.planResponse(tc.d, tc.exists, tc.declared, testResource())
+			r, err := s.planResponse(tc.d, tc.exists, tc.declared, nil, testResource())
 			if err != nil {
 				t.Fatalf("\n%s\nplanResponse(...): unexpected error: %v", tc.reason, err)
 			}
@@ -405,7 +405,7 @@ func TestPlanResponseChanges(t *testing.T) {
 	s := &PlanService{}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			got, err := s.planResponse(tc.d, tc.exists, tc.declared, testResource())
+			got, err := s.planResponse(tc.d, tc.exists, tc.declared, nil, testResource())
 			if err != nil {
 				t.Fatalf("\n%s\nplanResponse(...): unexpected error: %v", tc.reason, err)
 			}
@@ -430,12 +430,12 @@ func TestPlanResponseIsDeterministic(t *testing.T) {
 	}}
 
 	s := &PlanService{}
-	first, err := s.planResponse(d, true, nil, testResource())
+	first, err := s.planResponse(d, true, nil, nil, testResource())
 	if err != nil {
 		t.Fatalf("planResponse(...): unexpected error: %v", err)
 	}
 	for i := 0; i < 50; i++ {
-		got, err := s.planResponse(d, true, nil, testResource())
+		got, err := s.planResponse(d, true, nil, nil, testResource())
 		if err != nil {
 			t.Fatalf("planResponse(...): unexpected error on run %d: %v", i, err)
 		}
@@ -447,7 +447,7 @@ func TestPlanResponseIsDeterministic(t *testing.T) {
 
 func TestPlanResponseSetsComputedAt(t *testing.T) {
 	s := &PlanService{}
-	r, err := s.planResponse(nil, true, nil, testResource())
+	r, err := s.planResponse(nil, true, nil, nil, testResource())
 	if err != nil {
 		t.Fatalf("planResponse(...): unexpected error: %v", err)
 	}
@@ -604,7 +604,7 @@ func TestPlanResponseOrigin(t *testing.T) {
 	s := &PlanService{}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			got, err := s.planResponse(tc.d, true, tc.declared, testResource())
+			got, err := s.planResponse(tc.d, true, tc.declared, nil, testResource())
 			if err != nil {
 				t.Fatalf("\n%s\nplanResponse(...): unexpected error: %v", tc.reason, err)
 			}
@@ -776,3 +776,39 @@ func TestMarkAbsent(t *testing.T) {
 		}
 	})
 }
+
+func TestPlanResponseUnresolvedSecret(t *testing.T) {
+	// The Secret behind master_password was not supplied. The diff still
+	// carries the attribute, because the value never arrived and so looks like
+	// a removal, and reporting that would tell the user their password is
+	// being cleared. It has to be replaced by the unresolved report.
+	d := &tf.InstanceDiff{Attributes: map[string]*tf.ResourceAttrDiff{
+		"master_password": {Old: "old-secret", New: "", Sensitive: true},
+		"description":     {Old: "a", New: "b"},
+	}}
+
+	r, err := s().planResponse(d, true, map[string]any{"description": "b"}, []string{"master_password"}, testResource())
+	if err != nil {
+		t.Fatalf("planResponse(...): unexpected error: %v", err)
+	}
+
+	want := []*diffv1alpha1.FieldChange{
+		{
+			Field:   "spec.forProvider.description",
+			Actual:  str("a"),
+			Planned: str("b"),
+			Origin:  diffv1alpha1.Origin_ORIGIN_DESIRED_STATE,
+		},
+		{
+			Field:   "spec.forProvider.masterPassword",
+			Actual:  absent(diffv1alpha1.Absence_ABSENCE_SENSITIVE),
+			Planned: absent(diffv1alpha1.Absence_ABSENCE_UNRESOLVED),
+			Origin:  diffv1alpha1.Origin_ORIGIN_DESIRED_STATE,
+		},
+	}
+	if diff := cmp.Diff(want, r.GetChanges(), protocmp.Transform()); diff != "" {
+		t.Errorf("planResponse(...): -want changes, +got changes:\n%s", diff)
+	}
+}
+
+func s() *PlanService { return &PlanService{} }

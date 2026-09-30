@@ -409,7 +409,7 @@ func TestFrameworkPlanResponseAction(t *testing.T) {
 	s := &PlanService{}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			r, err := s.frameworkPlanResponse(ctx, fwSchema(), fwResource(), tc.prior, tc.planned, tc.requiresReplace, tc.exists, nil)
+			r, err := s.frameworkPlanResponse(ctx, fwSchema(), fwResource(), tc.prior, tc.planned, tc.requiresReplace, tc.exists, nil, nil)
 			if err != nil {
 				t.Fatalf("\n%s\nframeworkPlanResponse(...): unexpected error: %v", tc.reason, err)
 			}
@@ -597,7 +597,7 @@ func TestFrameworkPlanResponseChanges(t *testing.T) {
 	s := &PlanService{}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			r, err := s.frameworkPlanResponse(ctx, fwSchema(), fwResource(), tc.prior, tc.planned, tc.requiresReplace, tc.exists, tc.declared)
+			r, err := s.frameworkPlanResponse(ctx, fwSchema(), fwResource(), tc.prior, tc.planned, tc.requiresReplace, tc.exists, tc.declared, nil)
 			if err != nil {
 				t.Fatalf("\n%s\nframeworkPlanResponse(...): unexpected error: %v", tc.reason, err)
 			}
@@ -611,3 +611,52 @@ func TestFrameworkPlanResponseChanges(t *testing.T) {
 // the schema helpers must stay in step with the attr package's types, which is
 // what this reference keeps honest.
 var _ attr.Type = types.StringType
+
+func TestFrameworkPlanResponseUnresolvedSecret(t *testing.T) {
+	// The same rule on the Framework path: a parameter whose Secret was not
+	// supplied never reaches the configuration, so the plan would otherwise
+	// report it as being cleared.
+	prior := fwObject(t, map[string]tftypes.Value{
+		"master_password": tftypes.NewValue(tftypes.String, "old-secret"),
+		"display_name":    tftypes.NewValue(tftypes.String, "demo"),
+	})
+	planned := fwObject(t, map[string]tftypes.Value{
+		"display_name": tftypes.NewValue(tftypes.String, "renamed"),
+	})
+
+	r, err := (&PlanService{}).frameworkPlanResponse(
+		context.Background(), fwSchema(), fwResource(), prior, planned, nil, true,
+		map[string]any{"display_name": "renamed"}, []string{"master_password"})
+	if err != nil {
+		t.Fatalf("frameworkPlanResponse(...): unexpected error: %v", err)
+	}
+
+	want := []*diffv1alpha1.FieldChange{
+		{
+			Field:   "spec.forProvider.displayName",
+			Actual:  str("demo"),
+			Planned: str("renamed"),
+			Origin:  diffv1alpha1.Origin_ORIGIN_DESIRED_STATE,
+		},
+		{
+			Field:   "spec.forProvider.masterPassword",
+			Actual:  absent(diffv1alpha1.Absence_ABSENCE_SENSITIVE),
+			Planned: absent(diffv1alpha1.Absence_ABSENCE_UNRESOLVED),
+			Origin:  diffv1alpha1.Origin_ORIGIN_DESIRED_STATE,
+		},
+	}
+	if diff := cmp.Diff(want, r.GetChanges(), protocmp.Transform()); diff != "" {
+		t.Errorf("frameworkPlanResponse(...): -want changes, +got changes:\n%s", diff)
+	}
+}
+
+func TestFrameworkTerraformPath(t *testing.T) {
+	// The path has to be spelled the way a connection details mapping spells a
+	// Terraform attribute, or an unresolved parameter will not be matched
+	// against the diff entry it has to replace.
+	p := tftypes.NewAttributePath().WithAttributeName("action").WithElementKeyInt(0).
+		WithAttributeName("authenticate_oidc").WithElementKeyInt(1).WithAttributeName("client_secret")
+	if diff := cmp.Diff("action[0].authenticate_oidc[1].client_secret", frameworkTerraformPath(p)); diff != "" {
+		t.Errorf("frameworkTerraformPath(): -want, +got:\n%s", diff)
+	}
+}

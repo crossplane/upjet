@@ -119,11 +119,11 @@ func (s *PlanService) diffTerraformPluginFramework(ctx context.Context, kc kclie
 
 	// The attribute paths the diff reports are in Terraform shape, so the
 	// parameters they are compared against must be too.
-	declared, err := declaredParameters(dtr, cfg)
+	declared, unresolved, err := declaredParameters(ctx, kc, dtr, cfg)
 	if err != nil {
 		return nil, err
 	}
-	return s.frameworkPlanResponse(ctx, sch, cfg, prior, planned, planResponse.RequiresReplace, obs.ResourceExists, declared)
+	return s.frameworkPlanResponse(ctx, sch, cfg, prior, planned, planResponse.RequiresReplace, obs.ResourceExists, declared, unresolved)
 }
 
 // frameworkSchema returns the resource schema of the configured Terraform
@@ -157,7 +157,7 @@ func markAbsentFramework(t *controller.AsyncTracker, ty tftypes.Type) error {
 // planned Terraform state into a plan response. exists reports whether the
 // external resource already exists, which is what distinguishes a create from
 // an update.
-func (s *PlanService) frameworkPlanResponse(ctx context.Context, sch rschema.Schema, cfg *config.Resource, prior, planned tftypes.Value, requiresReplace []*tftypes.AttributePath, exists bool, declared map[string]any) (*diffv1alpha1.PlanResponse, error) {
+func (s *PlanService) frameworkPlanResponse(ctx context.Context, sch rschema.Schema, cfg *config.Resource, prior, planned tftypes.Value, requiresReplace []*tftypes.AttributePath, exists bool, declared map[string]any, unresolved []string) (*diffv1alpha1.PlanResponse, error) {
 	r := &diffv1alpha1.PlanResponse{
 		Action:     diffv1alpha1.Action_ACTION_NO_OP,
 		ComputedAt: timestamppb.Now(),
@@ -166,6 +166,7 @@ func (s *PlanService) frameworkPlanResponse(ctx context.Context, sch rschema.Sch
 	if err != nil {
 		return nil, errors.Wrap(err, errFrameworkStateDiff)
 	}
+	skip := unresolvedSet(unresolved)
 
 	for _, d := range diffs {
 		if d.Path == nil || len(d.Path.Steps()) == 0 {
@@ -179,6 +180,12 @@ func (s *PlanService) frameworkPlanResponse(ctx context.Context, sch rschema.Sch
 			// inside it that differ. The elements say where the change is, so
 			// reporting their container too would repeat the same change at
 			// every level above it.
+			continue
+		}
+		if _, ok := skip[frameworkTerraformPath(d.Path)]; ok {
+			// The Secret behind this attribute was not supplied, so whatever
+			// the diff says about it is an artefact of the value never having
+			// arrived. It is reported below as unresolved instead.
 			continue
 		}
 		replaces := forcesReplacement(d.Path, requiresReplace)
@@ -204,6 +211,10 @@ func (s *PlanService) frameworkPlanResponse(ctx context.Context, sch rschema.Sch
 			}
 		}
 		r.Changes = append(r.GetChanges(), c)
+	}
+
+	for _, k := range unresolved {
+		r.Changes = append(r.GetChanges(), unresolvedChange(k))
 	}
 
 	changes := r.GetChanges()
@@ -354,6 +365,28 @@ func frameworkFieldPath(p *tftypes.AttributePath, cfg *config.Resource) string {
 		}
 	}
 	return path
+}
+
+// frameworkTerraformPath renders an attribute path the way a resource's
+// connection details mapping spells a Terraform attribute, so that the two can
+// be compared: dotted field names with bracketed indices, as
+// "logging_config[0].bucket".
+func frameworkTerraformPath(p *tftypes.AttributePath) string {
+	var b strings.Builder
+	for _, st := range p.Steps() {
+		switch s := st.(type) {
+		case tftypes.AttributeName:
+			if b.Len() > 0 {
+				b.WriteString(".")
+			}
+			b.WriteString(string(s))
+		case tftypes.ElementKeyInt:
+			b.WriteString("[" + strconv.FormatInt(int64(s), 10) + "]")
+		case tftypes.ElementKeyString:
+			b.WriteString("[" + string(s) + "]")
+		}
+	}
+	return b.String()
 }
 
 // frameworkOrigin reports where the planned value of the attribute at the

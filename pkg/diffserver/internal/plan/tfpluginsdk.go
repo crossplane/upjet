@@ -86,11 +86,11 @@ func (s *PlanService) diffTerraformPluginSDK(ctx context.Context, kc kclient.Cli
 
 	// The flatmap keys the diff reports are in Terraform shape, so the
 	// parameters they are compared against must be too.
-	declared, err := declaredParameters(dtr, cfg)
+	declared, unresolved, err := declaredParameters(ctx, kc, dtr, cfg)
 	if err != nil {
 		return nil, err
 	}
-	return s.planResponse(diff, obs.ResourceExists, declared, cfg)
+	return s.planResponse(diff, obs.ResourceExists, declared, unresolved, cfg)
 }
 
 // markAbsent empties the given reconstructed Terraform state in place so that
@@ -120,13 +120,14 @@ func markAbsent(s *tf.InstanceState) {
 // against the resource schema, which means a number reads as "30" and a
 // boolean as "true". Clients should not infer a type from the JSON shape of
 // a plugin SDKv2 plan.
-func (s *PlanService) planResponse(d *tf.InstanceDiff, exists bool, declared map[string]any, cfg *config.Resource) (*diffv1alpha1.PlanResponse, error) {
+func (s *PlanService) planResponse(d *tf.InstanceDiff, exists bool, declared map[string]any, unresolved []string, cfg *config.Resource) (*diffv1alpha1.PlanResponse, error) {
 	r := &diffv1alpha1.PlanResponse{
 		Action:     diffv1alpha1.Action_ACTION_NO_OP,
 		ComputedAt: timestamppb.Now(),
 	}
 
 	var requiresReplace bool
+	skip := unresolvedSet(unresolved)
 
 	// A nil diff carries no attributes. Ranging over the nil map below is
 	// safe, and InstanceDiff.Empty reports true for a nil receiver.
@@ -150,11 +151,21 @@ func (s *PlanService) planResponse(d *tf.InstanceDiff, exists bool, declared map
 			// changes that accompany them are reported on their own.
 			continue
 		}
+		if _, ok := skip[k]; ok {
+			// The Secret behind this attribute was not supplied, so whatever
+			// the diff says about it is an artefact of the value never having
+			// arrived. It is reported below as unresolved instead.
+			continue
+		}
 		c, err := fieldChange(k, a, declared, exists, cfg)
 		if err != nil {
 			return nil, errors.Wrapf(err, fmtErrConvertAttribute, k)
 		}
 		r.Changes = append(r.GetChanges(), c)
+	}
+
+	for _, k := range unresolved {
+		r.Changes = append(r.GetChanges(), unresolvedChange(k))
 	}
 
 	// Map iteration is unordered, so sort to keep a plan stable across calls.

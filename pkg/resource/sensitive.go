@@ -155,6 +155,73 @@ func GetSensitiveAttributes(from map[string]any, mapping map[string]string) (map
 	return vals, nil
 }
 
+// SensitiveParameterPaths returns the Terraform attribute paths of the given
+// resource whose values come from a Secret its spec references, for the
+// references the spec actually declares.
+//
+// It walks the same mapping GetSensitiveParameters does, and expands the same
+// wildcards, but reads no Secrets: it answers which attributes a Secret would
+// fill, not what they would be filled with. A caller that needs to tell an
+// attribute whose Secret could not be read from one the resource never
+// referenced needs this, because GetSensitiveParameters deliberately tolerates
+// a missing Secret and so leaves the two cases looking alike.
+//
+// Where a reference names a whole Secret rather than one of its keys, the
+// attribute is a map whose entries are the Secret's, and those keys are not
+// knowable without reading it. The parent attribute's path is returned in that
+// case.
+func SensitiveParameterPaths(from resource.Managed, mapping map[string]string) ([]string, error) {
+	if len(mapping) == 0 {
+		return nil, nil
+	}
+	pavedJSON, err := fieldpath.PaveObject(from)
+	if err != nil {
+		return nil, err
+	}
+
+	var paths []string
+	seen := make(map[string]struct{}, len(mapping))
+	for _, jsonPath := range mapping {
+		prefixes := []string{"spec.initProvider.", "spec.forProvider."}
+		jp := jsonPath
+		groups := reFieldPathSpec.FindStringSubmatch(jsonPath)
+		if len(groups) == 3 {
+			jp = groups[2]
+		} else if strings.HasPrefix(jsonPath, "status.atProvider.") {
+			prefixes = []string{""}
+		}
+
+		for _, p := range prefixes {
+			expanded, err := pavedJSON.ExpandWildcards(p + jp)
+			if err != nil {
+				return nil, errors.Wrapf(err, "cannot expand wildcard for xp resource")
+			}
+			for _, e := range expanded {
+				v, err := pavedJSON.GetValue(e)
+				if err != nil {
+					return nil, errors.Wrapf(err, errFmtCannotGetValueForFieldPath, e)
+				}
+				// An optional reference the spec leaves out is not declared.
+				if v == nil {
+					continue
+				}
+				tfPath, err := expandedTFPath(e, mapping)
+				if err != nil {
+					return nil, err
+				}
+				if _, ok := seen[tfPath]; ok {
+					// spec.forProvider and spec.initProvider can both carry a
+					// reference for the same attribute, and forProvider wins.
+					continue
+				}
+				seen[tfPath] = struct{}{}
+				paths = append(paths, tfPath)
+			}
+		}
+	}
+	return paths, nil
+}
+
 // GetSensitiveParameters will collect sensitive information as terraform state
 // attributes by following secret references in the spec.
 func GetSensitiveParameters(ctx context.Context, client SecretClient, from resource.Managed, into map[string]any, mapping map[string]string) error {
