@@ -525,3 +525,41 @@ func roundTrip(m map[string]any) (map[string]any, error) {
 	var r map[string]any
 	return r, jsoniter.ConfigCompatibleWithStandardLibrary.Unmarshal(buff, &r)
 }
+
+func TestConvertToSingletonListLeavesAnExistingListAlone(t *testing.T) {
+	// A conversion path is a path the CRD models as an embedded object, which
+	// is true of one API version: older ones declare a list there. An object
+	// at such a version arrives already in the shape Terraform wants, and
+	// wrapping it again would produce a list of lists that no resource schema
+	// accepts. Malformed input cannot reach here to be confused with it: the
+	// API server rejects it for a reconcile and the request decoder rejects it
+	// for a diff, both against the version's own Go types.
+	cases := map[string]struct {
+		reason string
+		params map[string]any
+		want   map[string]any
+	}{
+		"EmbeddedObjectIsWrapped": {
+			reason: "The version that embeds the path carries an object, which becomes the singleton list Terraform expects.",
+			params: map[string]any{"config": map[string]any{"key": "value"}},
+			want:   map[string]any{"config": []any{map[string]any{"key": "value"}}},
+		},
+		"ExistingListIsLeftAlone": {
+			reason: "A version that predates the embedding already carries a list, and it is already what Terraform expects.",
+			params: map[string]any{"config": []any{map[string]any{"key": "value"}}},
+			want:   map[string]any{"config": []any{map[string]any{"key": "value"}}},
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			got, err := Convert(tc.params, []string{"config"}, ToSingletonList, nil)
+			if err != nil {
+				t.Fatalf("\n%s\nConvert(...): unexpected error: %v", tc.reason, err)
+			}
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("\n%s\nConvert(...): -want, +got:\n%s", tc.reason, diff)
+			}
+		})
+	}
+}
