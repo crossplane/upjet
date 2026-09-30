@@ -461,11 +461,17 @@ func (n *terraformPluginFrameworkExternalClient) getDiffPlanResponse(ctx context
 // filterRequiresReplace checks the TF plan response for fields that require/force resource
 // replacement, and filters false-positives. The generated plan sometimes reports a field,
 // but the prior and plan values are actually the same.
-func (n *terraformPluginFrameworkExternalClient) filterRequiresReplace(ctx context.Context, planResponse *tfprotov6.PlanResourceChangeResponse, stateValue, plannedValue tftypes.Value) error {
+// The caller normalizes stateValue and plannedValue with nullCollectionsAsEmpty,
+// and each path is looked up with its set elements normalized the same way.
+func (n *terraformPluginFrameworkExternalClient) filterRequiresReplace(ctx context.Context, planResponse *tfprotov6.PlanResourceChangeResponse, stateValue, plannedValue tftypes.Value) error { //nolint:gocyclo // easier to follow as a unit
 	var filteredRequiresReplace []*tftypes.AttributePath
 	for _, path := range planResponse.RequiresReplace {
-		priorValInt, _, errPrior := tftypes.WalkAttributePath(stateValue, path)
-		plannedValInt, _, errPlanned := tftypes.WalkAttributePath(plannedValue, path)
+		lookupPath, err := nullCollectionsAsEmptyInPath(path)
+		if err != nil {
+			return errors.Wrapf(err, "cannot normalize the path %s", path)
+		}
+		priorValInt, _, errPrior := tftypes.WalkAttributePath(stateValue, lookupPath)
+		plannedValInt, _, errPlanned := tftypes.WalkAttributePath(plannedValue, lookupPath)
 		if errPrior != nil && errPlanned != nil {
 			n.logger.Debug("upstream TF provider generated an invalid plan")
 			continue
@@ -547,6 +553,30 @@ func nullCollectionsAsEmpty(v tftypes.Value) (tftypes.Value, error) {
 			return v, nil
 		}
 	})
+}
+
+// nullCollectionsAsEmptyInPath returns a copy of p in which the value of every
+// set element step is normalized with nullCollectionsAsEmpty.
+//
+// A set element step matches only an element equal to its value, and the paths
+// that require replacement come from the raw plan, so they have to be
+// normalized like the values they are looked up in. This also covers the
+// framework building those steps from its internal value, where nested blocks
+// are null, while the planned state carries them as empty collections.
+func nullCollectionsAsEmptyInPath(p *tftypes.AttributePath) (*tftypes.AttributePath, error) {
+	steps := p.Steps()
+	for i, step := range steps {
+		element, ok := step.(tftypes.ElementKeyValue)
+		if !ok {
+			continue
+		}
+		v, err := nullCollectionsAsEmpty(tftypes.Value(element))
+		if err != nil {
+			return nil, err
+		}
+		steps[i] = tftypes.ElementKeyValue(v)
+	}
+	return tftypes.NewAttributePathWithSteps(steps), nil
 }
 
 // recoverExternalName tries to extract the externalname from the current TF state
