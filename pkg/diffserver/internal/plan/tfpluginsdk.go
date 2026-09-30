@@ -36,6 +36,7 @@ const (
 )
 
 func (s *PlanService) diffTerraformPluginSDK(ctx context.Context, kc kclient.Client, cfg *config.Resource, desired, actual xpresource.Managed) (*diffv1alpha1.PlanResponse, error) {
+	cfg = planConfig(cfg, desired)
 	opTracker := controller.NewOperationStore(s.log)
 	c := controller.NewTerraformPluginSDKConnector(
 		kc, s.setupFn, cfg, opTracker,
@@ -127,7 +128,6 @@ func (s *PlanService) planResponse(d *tf.InstanceDiff, exists bool, declared map
 	}
 
 	var requiresReplace bool
-	skip := unresolvedSet(unresolved)
 
 	// A nil diff carries no attributes. Ranging over the nil map below is
 	// safe, and InstanceDiff.Empty reports true for a nil receiver.
@@ -151,7 +151,7 @@ func (s *PlanService) planResponse(d *tf.InstanceDiff, exists bool, declared map
 			// changes that accompany them are reported on their own.
 			continue
 		}
-		if _, ok := skip[k]; ok {
+		if isUnresolvedParameter(k, unresolved) {
 			// The Secret behind this attribute was not supplied, so whatever
 			// the diff says about it is an artefact of the value never having
 			// arrived. It is reported below as unresolved instead.

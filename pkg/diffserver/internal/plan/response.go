@@ -10,6 +10,7 @@ import (
 
 	"github.com/crossplane/crossplane-runtime/v2/pkg/errors"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/fieldpath"
+	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -37,6 +38,45 @@ const (
 	// which the Terraform resource's arguments appear.
 	crdParametersPath = "spec.forProvider"
 )
+
+// planConfig returns the resource configuration to plan the given resource
+// with.
+//
+// A resource's Terraform conversions turn the CRD's embedded objects into the
+// singleton lists Terraform expects, and back again when the observation is
+// read. Which paths those are is a property of one API version: the version
+// the configuration was generated for, cfg.Version. The versions that predate
+// the embedding declare a list at those paths, which is already the shape
+// Terraform uses, so for them the conversion is not merely unnecessary but
+// wrong - it wraps a list into a list of lists on the way in, and unwraps one
+// into an object on the way out.
+//
+// A reconciler never meets this, because the API server converts every object
+// to the reconciled version before a controller sees it. The diff server is
+// the first caller to take the API version from a request, so it is the first
+// that has to ask the question at all: it plans a resource at a version other
+// than cfg.Version with the singleton conversion left out.
+func planConfig(cfg *config.Resource, mg xpresource.Managed) *config.Resource {
+	if mg.GetObjectKind().GroupVersionKind().Version == cfg.Version {
+		return cfg
+	}
+	singleton := config.NewTFSingletonConversion()
+	kept := make([]config.TerraformConversion, 0, len(cfg.TerraformConversions))
+	for _, c := range cfg.TerraformConversions {
+		// The conversions are empty structs, so comparing against a fresh one
+		// selects it by type without naming the type, which the package does
+		// not export. Every other conversion, such as the one for dynamically
+		// typed attributes, is unrelated to the CRD's shape and is kept.
+		if c != singleton {
+			kept = append(kept, c)
+		}
+	}
+	// A shallow copy is enough: only this slice is replaced, and the shared
+	// configuration the provider's controllers use is left untouched.
+	c := *cfg
+	c.TerraformConversions = kept
+	return &c
+}
 
 // declaredParameters returns the parameters the desired resource declares, in
 // their Terraform shape.
@@ -139,6 +179,21 @@ func isResolvedSecret(paved *fieldpath.Paved, path string) bool {
 		// A reference to a whole Secret becomes a map of its entries, each of
 		// which the probe marked.
 		return len(t) > 0
+	case []any:
+		// A list of key selectors becomes a list of values, one per selector.
+		// It counts as resolved only when every one of them was found, because
+		// a selector whose key is missing records an empty value rather than
+		// failing, and a parameter built from a partly read list is not one
+		// the plan can stand behind.
+		if len(t) == 0 {
+			return false
+		}
+		for _, e := range t {
+			if s, ok := e.(string); !ok || s != secretResolvedMarker {
+				return false
+			}
+		}
+		return true
 	default:
 		return false
 	}
@@ -194,17 +249,34 @@ func absentValue(a diffv1alpha1.Absence) *diffv1alpha1.FieldValue {
 	return &diffv1alpha1.FieldValue{Kind: &diffv1alpha1.FieldValue_Absence{Absence: a}}
 }
 
-// unresolvedSet indexes the given Terraform attribute paths for lookup while
-// walking a diff.
-func unresolvedSet(paths []string) map[string]struct{} {
-	if len(paths) == 0 {
-		return nil
+// flatmapPath renders a Terraform attribute path the way a diff spells it,
+// with every index and map key as a segment of its own. The paths a resource's
+// sensitive parameters are reported at use the field path syntax instead, so
+// the two have to be brought to one form before they can be compared:
+// "action[0].client_secret" and "action.0.client_secret" are the same
+// attribute.
+func flatmapPath(p string) string {
+	return strings.NewReplacer("[", ".", "]", "").Replace(p)
+}
+
+// isUnresolvedParameter reports whether the attribute at the given path is one
+// whose Secret the request did not supply.
+//
+// A reference to a whole Secret names the parameter its entries land under,
+// and the diff reports those entries individually, so everything beneath an
+// unresolved path is unresolved too.
+func isUnresolvedParameter(path string, unresolved []string) bool {
+	if len(unresolved) == 0 {
+		return false
 	}
-	s := make(map[string]struct{}, len(paths))
-	for _, p := range paths {
-		s[p] = struct{}{}
+	p := flatmapPath(path)
+	for _, u := range unresolved {
+		f := flatmapPath(u)
+		if p == f || strings.HasPrefix(p, f+".") {
+			return true
+		}
 	}
-	return s
+	return false
 }
 
 // unresolvedChange reports a parameter whose Secret the request did not

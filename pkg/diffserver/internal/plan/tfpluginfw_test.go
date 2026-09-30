@@ -660,3 +660,70 @@ func TestFrameworkTerraformPath(t *testing.T) {
 		t.Errorf("frameworkTerraformPath(): -want, +got:\n%s", diff)
 	}
 }
+
+func TestIsSensitivePath(t *testing.T) {
+	// Sensitivity is declared on the attribute and covers everything within
+	// it. A path that ends at an element does not resolve to an attribute, so
+	// taking the lookup error to mean "not sensitive" would print an element
+	// of a sensitive collection in the clear.
+	sch := rschema.Schema{
+		Attributes: map[string]rschema.Attribute{
+			"display_name": rschema.StringAttribute{Optional: true},
+			"password":     rschema.StringAttribute{Optional: true, Sensitive: true},
+			"secrets": rschema.ListAttribute{
+				Optional: true, Sensitive: true, ElementType: types.StringType,
+			},
+			"public_ids": rschema.ListAttribute{
+				Optional: true, ElementType: types.StringType,
+			},
+			"secret_tags": rschema.MapAttribute{
+				Optional: true, Sensitive: true, ElementType: types.StringType,
+			},
+		},
+	}
+
+	cases := map[string]struct {
+		reason string
+		path   *tftypes.AttributePath
+		want   bool
+	}{
+		"SensitiveAttribute": {
+			reason: "The plain case.",
+			path:   tftypes.NewAttributePath().WithAttributeName("password"),
+			want:   true,
+		},
+		"PlainAttribute": {
+			reason: "An attribute the schema does not mark stays visible.",
+			path:   tftypes.NewAttributePath().WithAttributeName("display_name"),
+			want:   false,
+		},
+		"ElementOfASensitiveList": {
+			reason: "An element of a sensitive list is sensitive, and this is the path a diff actually reports.",
+			path:   tftypes.NewAttributePath().WithAttributeName("secrets").WithElementKeyInt(0),
+			want:   true,
+		},
+		"EntryOfASensitiveMap": {
+			reason: "A map entry is covered by the attribute that declares it.",
+			path:   tftypes.NewAttributePath().WithAttributeName("secret_tags").WithElementKeyString("token"),
+			want:   true,
+		},
+		"ElementOfAPlainList": {
+			reason: "Climbing to the enclosing attribute must not make everything sensitive.",
+			path:   tftypes.NewAttributePath().WithAttributeName("public_ids").WithElementKeyInt(0),
+			want:   false,
+		},
+		"UnknownAttribute": {
+			reason: "A path the schema cannot account for at all is not reported as sensitive.",
+			path:   tftypes.NewAttributePath().WithAttributeName("nonexistent"),
+			want:   false,
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			if diff := cmp.Diff(tc.want, isSensitivePath(context.Background(), sch, tc.path)); diff != "" {
+				t.Errorf("\n%s\nisSensitivePath(...): -want, +got:\n%s", tc.reason, diff)
+			}
+		})
+	}
+}

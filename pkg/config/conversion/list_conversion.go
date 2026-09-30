@@ -121,25 +121,6 @@ func Convert(params map[string]any, p []string, mode ListConversionMode, opts *C
 				if v == nil {
 					continue
 				}
-				if _, ok := v.([]any); ok {
-					// The value is already a singleton list, so there is
-					// nothing to wrap.
-					//
-					// A conversion path is a path the CRD models as an embedded
-					// object, which is a property of one API version: the
-					// versions that predate the embedding declare a list there
-					// instead. Whichever version an object is at, its values
-					// have been decoded into that version's Go types before
-					// reaching here - by the API server for a reconcile, and by
-					// the request decoder for a diff - so a value that is
-					// already a list is not malformed input. It is an object at
-					// a version that never embedded this path, and it is
-					// already in the shape Terraform wants.
-					//
-					// Wrapping it again would produce a list of lists, which
-					// fails to convert against the resource schema.
-					continue
-				}
 				if opts != nil {
 					// We replace 0th index with "*" to be able to stay consistent
 					// with the paths parameter in the keys of opts.ListInjectKeys.

@@ -46,6 +46,7 @@ const (
 )
 
 func (s *PlanService) diffTerraformPluginFramework(ctx context.Context, kc kclient.Client, cfg *config.Resource, desired, actual xpresource.Managed) (*diffv1alpha1.PlanResponse, error) {
+	cfg = planConfig(cfg, desired)
 	opTracker := controller.NewOperationStore(s.log)
 	c := controller.NewTerraformPluginFrameworkConnector(
 		kc, s.setupFn, cfg, opTracker,
@@ -166,7 +167,6 @@ func (s *PlanService) frameworkPlanResponse(ctx context.Context, sch rschema.Sch
 	if err != nil {
 		return nil, errors.Wrap(err, errFrameworkStateDiff)
 	}
-	skip := unresolvedSet(unresolved)
 
 	for _, d := range diffs {
 		if d.Path == nil || len(d.Path.Steps()) == 0 {
@@ -182,7 +182,7 @@ func (s *PlanService) frameworkPlanResponse(ctx context.Context, sch rschema.Sch
 			// every level above it.
 			continue
 		}
-		if _, ok := skip[frameworkTerraformPath(d.Path)]; ok {
+		if isUnresolvedParameter(frameworkTerraformPath(d.Path), unresolved) {
 			// The Secret behind this attribute was not supplied, so whatever
 			// the diff says about it is an artefact of the value never having
 			// arrived. It is reported below as unresolved instead.
@@ -429,14 +429,23 @@ func frameworkOrigin(p *tftypes.AttributePath, declared map[string]any) diffv1al
 }
 
 // isSensitivePath reports whether the resource schema marks the attribute at
-// the given path sensitive. A path the schema cannot account for, such as one
-// inside a nested block, is reported as not sensitive.
+// the given path sensitive.
+//
+// A path that ends inside an attribute rather than at one does not resolve:
+// asking for `secrets[0]` of a sensitive list returns an error rather than the
+// list's own attribute. Sensitivity is declared on the attribute and covers
+// everything within it, so the walk climbs to the nearest enclosing attribute
+// and takes its answer. Treating the error as "not sensitive" would print an
+// element of a sensitive collection in the clear.
 func isSensitivePath(ctx context.Context, sch rschema.Schema, p *tftypes.AttributePath) bool {
-	a, err := sch.AttributeAtTerraformPath(ctx, p)
-	if err != nil {
-		return false
+	for steps := p.Steps(); len(steps) > 0; steps = steps[:len(steps)-1] {
+		a, err := sch.AttributeAtTerraformPath(ctx, tftypes.NewAttributePathWithSteps(steps))
+		if err != nil {
+			continue
+		}
+		return a.IsSensitive()
 	}
-	return a.IsSensitive()
+	return false
 }
 
 // frameworkValue converts one side of a difference into a field value. A nil
