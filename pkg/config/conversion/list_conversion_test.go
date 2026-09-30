@@ -449,6 +449,21 @@ func TestConvert(t *testing.T) {
 				},
 			},
 		},
+		"NilEmbeddedObjectToSingletonList": {
+			reason: `A nil embedded object stays nil in mode "ToSingletonList" instead of becoming a singleton list with a null element, the reverse of "EmptySingletonListToEmbeddedObject".`,
+			args: args{
+				params: map[string]any{
+					"l": nil,
+				},
+				paths: []string{"l"},
+				mode:  ToSingletonList,
+			},
+			want: want{
+				params: map[string]any{
+					"l": nil,
+				},
+			},
+		},
 	}
 
 	for n, tt := range tests {
