@@ -111,3 +111,71 @@ func safePreconditionFailure(s *PlanService, err error, msg string, gvk schema.G
 	defer func() { recovered = recover() }()
 	return nil, s.preconditionFailure(err, msg, gvk)
 }
+
+func TestServesAPIGroup(t *testing.T) {
+	gvk := func(group string) schema.GroupVersionKind {
+		return schema.GroupVersionKind{Group: group, Version: "v1beta1", Kind: "Thing"}
+	}
+
+	cases := map[string]struct {
+		reason string
+		groups []string
+		gvk    schema.GroupVersionKind
+		want   bool
+	}{
+		"NoGroupsServesEverything": {
+			reason: "A service that declares no groups is the monolith, or a caller that did not restrict it, and serves every group.",
+			groups: nil,
+			gvk:    gvk("iam.aws.upbound.io"),
+			want:   true,
+		},
+		"ClusterScopedGroup": {
+			reason: "A group is named by its first label, which is what a package knows about itself.",
+			groups: []string{"ec2"},
+			gvk:    gvk("ec2.aws.upbound.io"),
+			want:   true,
+		},
+		"NamespacedGroup": {
+			reason: "The namespaced flavour of a group has the same first label, so one name has to cover both.",
+			groups: []string{"ec2"},
+			gvk:    gvk("ec2.aws.m.upbound.io"),
+			want:   true,
+		},
+		"AnotherGroup": {
+			reason: "A package whose controllers do not reconcile the resource must decline it rather than answer from a configuration that covers every group anyway.",
+			groups: []string{"ec2"},
+			gvk:    gvk("iam.aws.upbound.io"),
+			want:   false,
+		},
+		"OneOfSeveral": {
+			reason: "A package serving several groups serves each of them.",
+			groups: []string{"ec2", "iam"},
+			gvk:    gvk("iam.aws.upbound.io"),
+			want:   true,
+		},
+		"PrefixOfAServedGroup": {
+			reason: "A group whose first label merely starts with a served one is a different group.",
+			groups: []string{"ec2"},
+			gvk:    gvk("ec2metadata.aws.upbound.io"),
+			want:   false,
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			s := NewPlanService(nil, nil, logging.NewNopLogger(), nil, tc.groups)
+			if diff := cmp.Diff(tc.want, s.servesAPIGroup(tc.gvk)); diff != "" {
+				t.Errorf("\n%s\nservesAPIGroup(...): -want, +got:\n%s", tc.reason, diff)
+			}
+		})
+	}
+}
+
+func TestServedAPIGroups(t *testing.T) {
+	// Sorted, because the list goes into the error a declined request gets and
+	// a message that reorders itself between calls is a poor one.
+	s := NewPlanService(nil, nil, logging.NewNopLogger(), nil, []string{"s3", "ec2", "iam"})
+	if diff := cmp.Diff([]string{"ec2", "iam", "s3"}, s.servedAPIGroups()); diff != "" {
+		t.Errorf("servedAPIGroups(): -want, +got:\n%s", diff)
+	}
+}

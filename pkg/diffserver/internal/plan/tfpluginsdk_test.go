@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/hashicorp/go-cty/cty"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	tf "github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 	"google.golang.org/protobuf/testing/protocmp"
@@ -737,4 +738,41 @@ func TestFilterInstanceDiff(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestMarkAbsent(t *testing.T) {
+	t.Run("NilState", func(t *testing.T) {
+		// Connect always leaves a state behind, but a nil one must not panic
+		// the server on the create path.
+		markAbsent(nil)
+	})
+
+	t.Run("EmptiesTheStateButKeepsTheRawValues", func(t *testing.T) {
+		raw := cty.ObjectVal(map[string]cty.Value{"tags": cty.NullVal(cty.Map(cty.String))})
+		s := &tf.InstanceState{
+			ID:         "vpc-123",
+			Attributes: map[string]string{"cidr_block": "10.0.0.0/16"},
+			RawPlan:    raw,
+			RawConfig:  raw,
+		}
+		markAbsent(s)
+
+		if s.ID != "" {
+			t.Errorf("markAbsent(): want an empty ID, because that is how Observe reads the external resource's absence, got %q", s.ID)
+		}
+		if s.Attributes != nil {
+			t.Errorf("markAbsent(): want no attributes, got %v", s.Attributes)
+		}
+		// The diff is computed against these, and a Terraform provider may
+		// assume they are not null: the AWS transparent tagging interceptor
+		// calls ResourceDiff.GetRawPlan().GetAttr("tags"), which panics on a
+		// zero cty.Value. Clearing them here would move that panic into every
+		// create plan.
+		if s.RawPlan.IsNull() || !s.RawPlan.RawEquals(raw) {
+			t.Error("markAbsent(): want RawPlan left alone, because the instance diff is computed against it")
+		}
+		if s.RawConfig.IsNull() || !s.RawConfig.RawEquals(raw) {
+			t.Error("markAbsent(): want RawConfig left alone, because the instance diff is computed against it")
+		}
+	})
 }
