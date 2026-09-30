@@ -121,7 +121,7 @@ func markAbsent(s *tf.InstanceState) {
 // against the resource schema, which means a number reads as "30" and a
 // boolean as "true". Clients should not infer a type from the JSON shape of
 // a plugin SDKv2 plan.
-func (s *PlanService) planResponse(d *tf.InstanceDiff, exists bool, declared map[string]any, unresolved []string, cfg *config.Resource) (*diffv1alpha1.PlanResponse, error) {
+func (s *PlanService) planResponse(d *tf.InstanceDiff, exists bool, declared map[string]any, unresolved []string, cfg *config.Resource) (*diffv1alpha1.PlanResponse, error) { //nolint:gocyclo // the cases an attribute diff falls into are easier to follow as a unit
 	r := &diffv1alpha1.PlanResponse{
 		Action:     diffv1alpha1.Action_ACTION_NO_OP,
 		ComputedAt: timestamppb.Now(),

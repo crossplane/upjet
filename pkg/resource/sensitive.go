@@ -170,7 +170,7 @@ func GetSensitiveAttributes(from map[string]any, mapping map[string]string) (map
 // attribute is a map whose entries are the Secret's, and those keys are not
 // knowable without reading it. The parent attribute's path is returned in that
 // case.
-func SensitiveParameterPaths(from resource.Managed, mapping map[string]string) ([]string, error) {
+func SensitiveParameterPaths(from resource.Managed, mapping map[string]string) ([]string, error) { //nolint:gocyclo // mirrors the traversal in GetSensitiveParameters, easier to follow as a unit
 	if len(mapping) == 0 {
 		return nil, nil
 	}

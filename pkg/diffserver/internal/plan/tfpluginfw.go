@@ -45,7 +45,7 @@ const (
 	fmtErrConvertFrameworkValue = "cannot convert the value at %q"
 )
 
-func (s *PlanService) diffTerraformPluginFramework(ctx context.Context, kc kclient.Client, cfg *config.Resource, desired, actual xpresource.Managed) (*diffv1alpha1.PlanResponse, error) {
+func (s *PlanService) diffTerraformPluginFramework(ctx context.Context, kc kclient.Client, cfg *config.Resource, desired, actual xpresource.Managed) (*diffv1alpha1.PlanResponse, error) { //nolint:gocyclo // easier to follow as a unit, and it mirrors the plugin SDKv2 path step for step
 	cfg = planConfig(cfg, desired)
 	opTracker := controller.NewOperationStore(s.log)
 	c := controller.NewTerraformPluginFrameworkConnector(
@@ -158,7 +158,7 @@ func markAbsentFramework(t *controller.AsyncTracker, ty tftypes.Type) error {
 // planned Terraform state into a plan response. exists reports whether the
 // external resource already exists, which is what distinguishes a create from
 // an update.
-func (s *PlanService) frameworkPlanResponse(ctx context.Context, sch rschema.Schema, cfg *config.Resource, prior, planned tftypes.Value, requiresReplace []*tftypes.AttributePath, exists bool, declared map[string]any, unresolved []string) (*diffv1alpha1.PlanResponse, error) {
+func (s *PlanService) frameworkPlanResponse(ctx context.Context, sch rschema.Schema, cfg *config.Resource, prior, planned tftypes.Value, requiresReplace []*tftypes.AttributePath, exists bool, declared map[string]any, unresolved []string) (*diffv1alpha1.PlanResponse, error) { //nolint:gocyclo // the cases a reported difference falls into are easier to follow as a unit
 	r := &diffv1alpha1.PlanResponse{
 		Action:     diffv1alpha1.Action_ACTION_NO_OP,
 		ComputedAt: timestamppb.Now(),
@@ -392,7 +392,7 @@ func frameworkTerraformPath(p *tftypes.AttributePath) string {
 // frameworkOrigin reports where the planned value of the attribute at the
 // given path came from, by walking the desired resource's declared parameters
 // alongside it.
-func frameworkOrigin(p *tftypes.AttributePath, declared map[string]any) diffv1alpha1.Origin {
+func frameworkOrigin(p *tftypes.AttributePath, declared map[string]any) diffv1alpha1.Origin { //nolint:gocyclo // a walk over the kinds of path step, easier to follow as a unit
 	var current any = declared
 	for _, st := range p.Steps() {
 		switch s := st.(type) {
