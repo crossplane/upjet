@@ -49,6 +49,7 @@ type TerraformPluginFrameworkConnector struct {
 	metricRecorder              *metrics.MetricRecorder
 	operationTrackerStore       *OperationTrackerStore
 	isManagementPoliciesEnabled bool
+	observationMode             ObservationMode
 }
 
 // TerraformPluginFrameworkConnectorOption allows you to configure TerraformPluginFrameworkConnector.
@@ -77,6 +78,17 @@ func WithTerraformPluginFrameworkManagementPolicies(isManagementPoliciesEnabled 
 	}
 }
 
+// WithTerraformPluginFrameworkObservationMode configures how the client
+// observes the external resource. The default, ReadExternalResource, reads it
+// from the provider's API. UseLocalState instead observes the Terraform state
+// the operation tracker already holds, so that a caller which supplies that
+// state itself, such as the diff server, never reaches the API.
+func WithTerraformPluginFrameworkObservationMode(m ObservationMode) TerraformPluginFrameworkConnectorOption {
+	return func(c *TerraformPluginFrameworkConnector) {
+		c.observationMode = m
+	}
+}
+
 // NewTerraformPluginFrameworkConnector creates a new
 // TerraformPluginFrameworkConnector with given options.
 func NewTerraformPluginFrameworkConnector(kube client.Client, sf terraform.SetupFn, cfg *config.Resource, ots *OperationTrackerStore, opts ...TerraformPluginFrameworkConnectorOption) *TerraformPluginFrameworkConnector {
@@ -85,6 +97,7 @@ func NewTerraformPluginFrameworkConnector(kube client.Client, sf terraform.Setup
 		kube:                  kube,
 		config:                cfg,
 		operationTrackerStore: ots,
+		observationMode:       ReadExternalResource,
 	}
 	for _, f := range opts {
 		f(connector)
@@ -108,6 +121,18 @@ type terraformPluginFrameworkExternalClient struct {
 	resourceValueTerraformType tftypes.Type
 	// configured value for the resource in terraform type system
 	resourceTerraformConfigValue tftypes.Value
+	observationMode              ObservationMode
+}
+
+// TerraformPluginFrameworkPlanResponse returns the plan the given external
+// client computed during its last Observe. It is the Terraform Plugin
+// Framework counterpart of TerraformPluginSDKInstanceDiff.
+func TerraformPluginFrameworkPlanResponse(ec managed.ExternalClient) (*tfprotov6.PlanResourceChangeResponse, error) {
+	n, ok := ec.(*terraformPluginFrameworkExternalClient)
+	if !ok {
+		return nil, errors.New("not a Terraform plugin Framework external client")
+	}
+	return n.planResponse, nil
 }
 
 // supportsIdentity reports whether the underlying TF resource implements
@@ -258,6 +283,7 @@ func (c *TerraformPluginFrameworkConnector) Connect(ctx context.Context, mg xpre
 		resourceSchema:               resourceSchema,
 		resourceValueTerraformType:   resourceTfValueType,
 		resourceTerraformConfigValue: resourceConfigTFValue,
+		observationMode:              c.observationMode,
 	}, nil
 }
 
@@ -631,15 +657,21 @@ func hasMissingResourceIdentityDiagnostic(diags []*tfprotov6.Diagnostic) bool {
 	return false
 }
 
-func (n *terraformPluginFrameworkExternalClient) Observe(ctx context.Context, mg xpresource.Managed) (managed.ExternalObservation, error) { //nolint:gocyclo
-	n.logger.Debug("Observing the external resource")
-
-	if meta.WasDeleted(mg) && n.opTracker.IsDeleted() {
-		return managed.ExternalObservation{
-			ResourceExists: false,
-		}, nil
+// localState returns the Terraform state the operation tracker holds, for an
+// external client observing in UseLocalState mode. Nothing is read from the
+// provider's API.
+func (n *terraformPluginFrameworkExternalClient) localState() (tftypes.Value, error) {
+	state := n.opTracker.GetFrameworkTFState()
+	if state == nil {
+		return tftypes.NewValue(n.resourceValueTerraformType, nil), nil
 	}
+	v, err := state.Unmarshal(n.resourceValueTerraformType)
+	return v, errors.Wrap(err, "cannot unmarshal the local Terraform state")
+}
 
+// readState reads the external resource through the Terraform provider and
+// returns its state, recording it on the operation tracker.
+func (n *terraformPluginFrameworkExternalClient) readState(ctx context.Context) (tftypes.Value, error) { //nolint:gocyclo // preserved from Observe, where it used to be inline
 	readRequest := &tfprotov6.ReadResourceRequest{
 		TypeName:     n.config.Name,
 		CurrentState: n.opTracker.GetFrameworkTFState(),
@@ -650,7 +682,7 @@ func (n *terraformPluginFrameworkExternalClient) Observe(ctx context.Context, mg
 	readResponse, err := n.server.ReadResource(ctx, readRequest)
 	if err != nil {
 		n.opTracker.ResetReconstructedFrameworkTFState()
-		return managed.ExternalObservation{}, errors.Wrap(err, "cannot read resource")
+		return tftypes.Value{}, errors.Wrap(err, "cannot read resource")
 	}
 
 	// Some Terraform resource implementations return SeverityError diagnostics
@@ -661,7 +693,7 @@ func (n *terraformPluginFrameworkExternalClient) Observe(ctx context.Context, mg
 		isMissingIdentityDiags := n.supportsIdentity() && hasMissingResourceIdentityDiagnostic(readResponse.Diagnostics)
 		if !isResourceNotFoundDiags && !isMissingIdentityDiags {
 			n.opTracker.ResetReconstructedFrameworkTFState()
-			return managed.ExternalObservation{}, errors.Wrap(fatalDiags, "read resource request failed")
+			return tftypes.Value{}, errors.Wrap(fatalDiags, "read resource request failed")
 		}
 		if isResourceNotFoundDiags {
 			n.logger.Debug("TF ReadResource returned error diagnostics, but XP resource was configured to treat them as `Resource not exists`. Skipping", "skippedDiags", fatalDiags)
@@ -672,29 +704,55 @@ func (n *terraformPluginFrameworkExternalClient) Observe(ctx context.Context, mg
 		}
 	}
 
-	var tfStateValue tftypes.Value
 	if isResourceNotFoundDiags {
 		// we nullify the state here, because the resource has an explicit
 		// configuration that says, these diagnostics actually correspond
 		// to a "resource not found" situation.
-		tfStateValue = tftypes.NewValue(n.resourceValueTerraformType, nil)
+		tfStateValue := tftypes.NewValue(n.resourceValueTerraformType, nil)
 		nildynamicValue, err := tfprotov6.NewDynamicValue(n.resourceValueTerraformType, tfStateValue)
 		if err != nil {
-			return managed.ExternalObservation{}, errors.Wrap(err, "cannot create nil dynamic value")
+			return tftypes.Value{}, errors.Wrap(err, "cannot create nil dynamic value")
 		}
 		n.opTracker.SetFrameworkTFState(&nildynamicValue)
 		if n.supportsIdentity() {
 			n.opTracker.SetFrameworkIdentity(nil)
 		}
-	} else {
-		tfStateValue, err = readResponse.NewState.Unmarshal(n.resourceValueTerraformType)
-		if err != nil {
-			return managed.ExternalObservation{}, errors.Wrap(err, "cannot unmarshal state value")
-		}
-		n.opTracker.SetFrameworkTFState(readResponse.NewState)
-		if n.supportsIdentity() {
-			n.opTracker.SetFrameworkIdentity(readResponse.NewIdentity)
-		}
+		return tfStateValue, nil
+	}
+
+	tfStateValue, err := readResponse.NewState.Unmarshal(n.resourceValueTerraformType)
+	if err != nil {
+		return tftypes.Value{}, errors.Wrap(err, "cannot unmarshal state value")
+	}
+	n.opTracker.SetFrameworkTFState(readResponse.NewState)
+	if n.supportsIdentity() {
+		n.opTracker.SetFrameworkIdentity(readResponse.NewIdentity)
+	}
+	return tfStateValue, nil
+}
+
+func (n *terraformPluginFrameworkExternalClient) Observe(ctx context.Context, mg xpresource.Managed) (managed.ExternalObservation, error) { //nolint:gocyclo
+	n.logger.Debug("Observing the external resource")
+
+	if meta.WasDeleted(mg) && n.opTracker.IsDeleted() {
+		return managed.ExternalObservation{
+			ResourceExists: false,
+		}, nil
+	}
+
+	var tfStateValue tftypes.Value
+	var err error
+	switch n.observationMode { //nolint:exhaustive // the default branch covers ReadExternalResource and the zero value
+	case UseLocalState:
+		// The caller supplied the state to observe, so there is nothing to
+		// read. Everything below, the existence check and the plan, is
+		// computed against the state the operation tracker already holds.
+		tfStateValue, err = n.localState()
+	default:
+		tfStateValue, err = n.readState(ctx)
+	}
+	if err != nil {
+		return managed.ExternalObservation{}, err
 	}
 
 	// Determine if the resource exists based on Terraform state

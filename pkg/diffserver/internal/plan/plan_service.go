@@ -45,8 +45,7 @@ const (
 
 	violationDiffComputationNotSupported = "DIFF_COMPUTATION_NOT_SUPPORTED"
 
-	errCLIDiffNotImplemented       = "diff support for Terraform CLI resources is not implemented yet"
-	errFrameworkDiffNotImplemented = "diff support for Terraform Plugin Framework resources is not implemented yet"
+	errCLIDiffNotImplemented = "diff support for Terraform CLI resources is not implemented yet"
 
 	fmtErrEmptyGroupName         = "empty API group name for GVK %q"
 	fmtErrNotTerraformed         = "the API type %q is not a Terraformed resource"
@@ -142,7 +141,8 @@ func (s *PlanService) Plan(ctx context.Context, req *diffv1alpha1.PlanRequest) (
 		return nil, s.preconditionFailure(nil, errCLIDiffNotImplemented, desiredGVK)
 
 	case config.ResourceTypeTerraformFramework:
-		return nil, s.preconditionFailure(nil, errFrameworkDiffNotImplemented, desiredGVK)
+		errorMsg = errDiffPluginFramework
+		rsp, err = s.diffTerraformPluginFramework(ctx, kc, cfg, desired, actual)
 
 	case config.ResourceTypeTerraformSDK:
 		errorMsg = errDiffPluginSDKv2

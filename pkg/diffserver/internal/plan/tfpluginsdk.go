@@ -31,15 +31,8 @@ const (
 	errObservePluginSDKv2        = "cannot observe Terraform plugin SDKv2 resource"
 	errGetInstanceDiff           = "cannot read Terraform plugin SDKv2 resource instance diff"
 	errDiffPluginSDKv2           = "cannot compute diff for a Terraform plugin SDKv2 resource"
-	errConvertValue              = "cannot convert the attribute value to a protobuf value"
-	errGetDesiredParameters      = "cannot get the parameters of the desired resource"
-	errConvertDesiredParameters  = "cannot convert the parameters of the desired resource to their Terraform shape"
 
 	fmtErrConvertAttribute = "cannot convert the diff of the attribute %q"
-
-	// crdParametersPath is the path, in a managed resource's manifest, under
-	// which the Terraform resource's arguments appear.
-	crdParametersPath = "spec.forProvider"
 )
 
 func (s *PlanService) diffTerraformPluginSDK(ctx context.Context, kc kclient.Client, cfg *config.Resource, desired, actual xpresource.Managed) (*diffv1alpha1.PlanResponse, error) {
@@ -91,15 +84,11 @@ func (s *PlanService) diffTerraformPluginSDK(ctx context.Context, kc kclient.Cli
 	}
 	filterInstanceDiff(diff)
 
-	declared, err := dtr.GetMergedParameters(true)
+	// The flatmap keys the diff reports are in Terraform shape, so the
+	// parameters they are compared against must be too.
+	declared, err := declaredParameters(dtr, cfg)
 	if err != nil {
-		return nil, errors.Wrap(err, errGetDesiredParameters)
-	}
-	// The flatmap keys are in Terraform shape, so the parameters must be too:
-	// this turns the CRD's embedded objects back into singleton lists.
-	declared, err = cfg.ApplyTFConversions(declared, config.ToTerraform)
-	if err != nil {
-		return nil, errors.Wrap(err, errConvertDesiredParameters)
+		return nil, err
 	}
 	return s.planResponse(diff, obs.ResourceExists, declared, cfg)
 }
@@ -415,10 +404,6 @@ func concreteValue(s string) (*diffv1alpha1.FieldValue, error) {
 		return nil, errors.Wrap(err, errConvertValue)
 	}
 	return &diffv1alpha1.FieldValue{Kind: &diffv1alpha1.FieldValue_Value{Value: v}}, nil
-}
-
-func absentValue(a diffv1alpha1.Absence) *diffv1alpha1.FieldValue {
-	return &diffv1alpha1.FieldValue{Kind: &diffv1alpha1.FieldValue_Absence{Absence: a}}
 }
 
 // filterInstanceDiff removes the attribute diffs that do not represent a
