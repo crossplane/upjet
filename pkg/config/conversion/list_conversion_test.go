@@ -411,6 +411,59 @@ func TestConvert(t *testing.T) {
 				},
 			},
 		},
+		"EmptySingletonListToEmbeddedObject": {
+			reason: `An empty singleton list is an absent block and converts to nil in mode "ToEmbeddedObject", not to an empty object that would come back as a list with one all-null element.`,
+			args: args{
+				params: map[string]any{
+					"l": []map[string]any{},
+				},
+				paths: []string{"l"},
+				mode:  ToEmbeddedObject,
+			},
+			want: want{
+				params: map[string]any{
+					"l": nil,
+				},
+			},
+		},
+		"WithInjectedKeyEmptySingletonListToEmbeddedObject": {
+			reason: "An empty singleton list with an injected key configured converts to nil without touching the injected key.",
+			args: args{
+				params: map[string]any{
+					"l": []map[string]any{},
+				},
+				paths: []string{"l"},
+				mode:  ToEmbeddedObject,
+				opts: &ConvertOptions{
+					ListInjectKeys: map[string]SingletonListInjectKey{
+						"l": {
+							Key:   "index",
+							Value: "0",
+						},
+					},
+				},
+			},
+			want: want{
+				params: map[string]any{
+					"l": nil,
+				},
+			},
+		},
+		"NilEmbeddedObjectToSingletonList": {
+			reason: `A nil embedded object stays nil in mode "ToSingletonList" instead of becoming a singleton list with a null element, the reverse of "EmptySingletonListToEmbeddedObject".`,
+			args: args{
+				params: map[string]any{
+					"l": nil,
+				},
+				paths: []string{"l"},
+				mode:  ToSingletonList,
+			},
+			want: want{
+				params: map[string]any{
+					"l": nil,
+				},
+			},
+		},
 	}
 
 	for n, tt := range tests {
