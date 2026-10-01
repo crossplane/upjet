@@ -44,32 +44,71 @@ const (
 //
 // A resource's Terraform conversions turn the CRD's embedded objects into the
 // singleton lists Terraform expects, and back again when the observation is
-// read. Which paths those are is a property of one API version: the version
-// the configuration was generated for, cfg.Version. The versions that predate
-// the embedding declare a list at those paths, which is already the shape
-// Terraform uses, so for them the conversion is not merely unnecessary but
-// wrong - it wraps a list into a list of lists on the way in, and unwraps one
-// into an object on the way out.
+// read. Which paths those are is a property of the Terraform schema alone -
+// TFListConversionPaths(), populated once from the (version-invariant)
+// Terraform schema regardless of which CRD version is being generated - so it
+// is available for any served version, whether or not the reconciler's own
+// TerraformConversions happens to include the conversion.
 //
-// A reconciler never meets this, because the API server converts every object
-// to the reconciled version before a controller sees it. The diff server is
-// the first caller to take the API version from a request, so it is the first
-// that has to ask the question at all: it plans a resource at a version other
-// than cfg.Version with the singleton conversion left out.
+// Whether a given served version's CRD type actually needs that conversion
+// is a different question: it depends on whether that version's Go type
+// still declares the field as a list (the shape the versions predating the
+// embedding used, and already the shape Terraform expects, so converting it
+// again would wrap a list into a list of lists and unwrap one into an object
+// on the way out) or as an embedded object (cfg.Version's shape, and that of
+// every other version sharing it). cfg.SingletonListVersions is how a
+// provider records which served versions are the former; every version not
+// listed there is assumed to share cfg.Version's embedded shape.
+//
+// A reconciler never has to ask this question, because the API server
+// converts every object to the reconciled version before a controller sees
+// it, and whatever TerraformConversions a provider registered already
+// matches that one version. The diff server is the first caller to take the
+// API version from a request rather than always operating on the reconciled
+// one, so it is the first that needs an answer for every served version: the
+// conversion is dropped for a version listed in SingletonListVersions even
+// if the reconciler's configuration carries it, and constructed from
+// TFListConversionPaths() for an unlisted (embedded) version even if the
+// reconciler's configuration does not - which happens whenever the
+// reconciler itself runs on a legacy-shaped version and so was never given
+// the conversion to begin with.
 func planConfig(cfg *config.Resource, mg xpresource.Managed) *config.Resource {
-	if mg.GetObjectKind().GroupVersionKind().Version == cfg.Version {
-		return cfg
-	}
 	singleton := config.NewTFSingletonConversion()
-	kept := make([]config.TerraformConversion, 0, len(cfg.TerraformConversions))
+	has := false
 	for _, c := range cfg.TerraformConversions {
 		// The conversions are empty structs, so comparing against a fresh one
 		// selects it by type without naming the type, which the package does
-		// not export. Every other conversion, such as the one for dynamically
-		// typed attributes, is unrelated to the CRD's shape and is kept.
+		// not export.
+		if c == singleton {
+			has = true
+			break
+		}
+	}
+	legacy := false
+	v := mg.GetObjectKind().GroupVersionKind().Version
+	for _, lv := range cfg.SingletonListVersions {
+		if lv == v {
+			legacy = true
+			break
+		}
+	}
+	needed := !legacy && len(cfg.TFListConversionPaths()) > 0
+
+	if has == needed {
+		return cfg
+	}
+
+	kept := make([]config.TerraformConversion, 0, len(cfg.TerraformConversions)+1)
+	for _, c := range cfg.TerraformConversions {
+		// Every other conversion, such as the one for dynamically typed
+		// attributes, is unrelated to the CRD's shape and is kept
+		// unconditionally.
 		if c != singleton {
 			kept = append(kept, c)
 		}
+	}
+	if needed {
+		kept = append(kept, singleton)
 	}
 	// A shallow copy is enough: only this slice is replaced, and the shared
 	// configuration the provider's controllers use is left untouched.

@@ -179,31 +179,41 @@ func TestIsUnresolvedParameter(t *testing.T) {
 }
 
 func TestPlanConfig(t *testing.T) {
-	// The singleton conversion describes the CRD shape of cfg.Version. Applied
-	// to an object at a version that predates the embedding, it wraps a list
-	// that is already in Terraform's shape, and unwraps Terraform's list into
-	// an object the older version cannot hold. Other conversions say nothing
-	// about the CRD shape and are kept either way.
-	cfg := &config.Resource{
-		Version: "v1beta2",
-		TerraformConversions: []config.TerraformConversion{
-			config.NewTFSingletonConversion(),
-			config.NewTFDynamicValueConversion(),
-		},
-	}
 	at := func(v string) xpresource.Managed {
 		tr := &fake.Terraformed{}
 		tr.SetGroupVersionKind(schema.GroupVersionKind{Group: "example.upbound.io", Version: v, Kind: "Thing"})
 		return tr
 	}
+	// A fresh Resource with the singleton paths a schema traversal would
+	// have found - the same regardless of which version is requested, since
+	// they come from the (version-invariant) Terraform schema alone.
+	withPaths := func() *config.Resource {
+		r := config.DefaultResource("test_resource", nil, nil, nil)
+		r.Version = "v1beta2"
+		r.AddSingletonListConversion("website", "website")
+		return r
+	}
 
-	t.Run("TheConfiguredVersionIsPlannedAsIs", func(t *testing.T) {
+	t.Run("EmbeddedHubVersionWithTheConversionAlreadyRegistered", func(t *testing.T) {
+		// The common case: cfg.Version's own request, nothing to reconcile.
+		cfg := withPaths()
+		cfg.TerraformConversions = []config.TerraformConversion{
+			config.NewTFSingletonConversion(),
+			config.NewTFDynamicValueConversion(),
+		}
 		if got := planConfig(cfg, at("v1beta2")); got != cfg {
-			t.Error("planConfig(): want the configuration untouched for the version it describes")
+			t.Error("planConfig(): want the configuration untouched when the conversion is already correct for the requested version")
 		}
 	})
 
-	t.Run("AnOlderVersionDropsOnlyTheSingletonConversion", func(t *testing.T) {
+	t.Run("ALegacyShapedVersionDropsOnlyTheSingletonConversion", func(t *testing.T) {
+		// Case B: a served version that predates the embedding.
+		cfg := withPaths()
+		cfg.SingletonListVersions = []string{"v1beta1"}
+		cfg.TerraformConversions = []config.TerraformConversion{
+			config.NewTFSingletonConversion(),
+			config.NewTFDynamicValueConversion(),
+		}
 		got := planConfig(cfg, at("v1beta1"))
 		if got == cfg {
 			t.Fatal("planConfig(): want a copy, so that the shared configuration is not modified")
@@ -216,6 +226,51 @@ func TestPlanConfig(t *testing.T) {
 		}
 		if diff := cmp.Diff(2, len(cfg.TerraformConversions)); diff != "" {
 			t.Errorf("planConfig(): the shared configuration was modified: -want, +got:\n%s", diff)
+		}
+	})
+
+	t.Run("AnotherEmbeddedVersionKeepsTheConversion", func(t *testing.T) {
+		// Case C: a non-hub served version that shares cfg.Version's shape,
+		// not listed in SingletonListVersions. Nothing to reconcile, same as
+		// the hub itself - this is the provider-gcp Bucket regression case.
+		cfg := withPaths()
+		cfg.TerraformConversions = []config.TerraformConversion{config.NewTFSingletonConversion()}
+		if got := planConfig(cfg, at("v1beta3")); got != cfg {
+			t.Error("planConfig(): want the configuration untouched for an unlisted version sharing the hub's shape")
+		}
+	})
+
+	t.Run("AnEmbeddedVersionConstructsTheMissingConversion", func(t *testing.T) {
+		// Case A: the reconciler itself runs on a legacy-shaped version (so
+		// the provider never registered the conversion at all), but the
+		// requested version is embedded. The conversion is built from the
+		// paths the schema traversal already found.
+		cfg := withPaths()
+		cfg.Version = "v1beta1"
+		cfg.SingletonListVersions = []string{"v1beta1"}
+		// TerraformConversions intentionally left empty: the reconciler
+		// reconciles v1beta1, which does not need the conversion.
+		got := planConfig(cfg, at("v1beta2"))
+		if got == cfg {
+			t.Fatal("planConfig(): want a copy, so that the shared configuration is not modified")
+		}
+		if diff := cmp.Diff(1, len(got.TerraformConversions)); diff != "" {
+			t.Fatalf("planConfig(): -want conversions, +got:\n%s", diff)
+		}
+		if got.TerraformConversions[0] != config.NewTFSingletonConversion() {
+			t.Error("planConfig(): want the singleton conversion constructed for the embedded requested version")
+		}
+		if diff := cmp.Diff(0, len(cfg.TerraformConversions)); diff != "" {
+			t.Errorf("planConfig(): the shared configuration was modified: -want, +got:\n%s", diff)
+		}
+	})
+
+	t.Run("NoSingletonPathsIsAlwaysAsIs", func(t *testing.T) {
+		// A resource with nothing to convert: constructing a conversion with
+		// no paths to act on would be pointless noise, not merely harmless.
+		cfg := &config.Resource{Version: "v1beta2"}
+		if got := planConfig(cfg, at("v1beta1")); got != cfg {
+			t.Error("planConfig(): want the configuration untouched when there are no singleton paths at all")
 		}
 	})
 }
