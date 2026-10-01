@@ -190,10 +190,6 @@ func (c *TerraformPluginFrameworkConnector) Connect(ctx context.Context, mg xpre
 	}
 
 	resourceTfValueType := resourceSchema.Type().TerraformType(ctx)
-	resourceConfigTFValue, err := c.getResourceConfigTerraformValue(ctx, resourceTfValueType, params, resourceSchema)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get resource config TF value")
-	}
 	hasState := false
 	if opTracker.HasFrameworkTFState() {
 		tfStateValue, err := opTracker.GetFrameworkTFState().Unmarshal(resourceTfValueType)
@@ -201,6 +197,21 @@ func (c *TerraformPluginFrameworkConnector) Connect(ctx context.Context, mg xpre
 			return nil, errors.Wrap(err, "cannot unmarshal TF state dynamic value during state existence check")
 		}
 		hasState = !tfStateValue.IsNull()
+	}
+
+	// Strip initProvider-exclusive fields from params when the resource already exists,
+	// so they are not re-applied on every update.
+	// This mirrors filterInitExclusiveDiffs from the SDKv2 client.
+	if hasState && c.isManagementPoliciesEnabled {
+		err := removeInitProviderExclusiveParams(tr, params, c.config)
+		if err != nil {
+			return nil, errors.Wrap(err, "cannot remove initProvider-exclusive params")
+		}
+	}
+
+	resourceConfigTFValue, err := c.getResourceConfigTerraformValue(ctx, resourceTfValueType, params, resourceSchema)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get resource config TF value")
 	}
 
 	if !hasState {
