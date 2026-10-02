@@ -376,7 +376,7 @@ func forcesReplacement(p *tftypes.AttributePath, requiresReplace []*tftypes.Attr
 func frameworkFieldPath(ctx context.Context, sch rschema.Schema, p *tftypes.AttributePath, cfg *config.Resource) string {
 	path := crdParametersPath
 	var tfPath []string
-	var consumed []tftypes.AttributePathStep
+	consumed := make([]tftypes.AttributePathStep, 0, len(p.Steps()))
 	for _, st := range p.Steps() {
 		switch s := st.(type) {
 		case tftypes.AttributeName:

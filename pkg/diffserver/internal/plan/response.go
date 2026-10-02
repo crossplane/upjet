@@ -362,7 +362,7 @@ func unresolvedChange(tfPath string, cfg *config.Resource, exists bool) *diffv1a
 // whether its Secret happened to resolve.
 func crdFieldPath(tfPath string, cfg *config.Resource) string {
 	segments := strings.Split(tfPath, ".")
-	var seenFields []string
+	seenFields := make([]string, 0, len(segments))
 	for i, s := range segments {
 		field, index := s, ""
 		if b := strings.Index(s, "["); b >= 0 {
