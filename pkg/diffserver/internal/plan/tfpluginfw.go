@@ -224,7 +224,7 @@ func (s *PlanService) frameworkPlanResponse(ctx context.Context, sch rschema.Sch
 	}
 
 	for _, k := range unresolved {
-		r.Changes = append(r.GetChanges(), unresolvedChange(k))
+		r.Changes = append(r.GetChanges(), unresolvedChange(k, cfg, exists))
 	}
 
 	changes := r.GetChanges()

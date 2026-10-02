@@ -174,7 +174,7 @@ func (s *PlanService) planResponse(d *tf.InstanceDiff, exists bool, declared map
 	}
 
 	for _, k := range unresolved {
-		r.Changes = append(r.GetChanges(), unresolvedChange(k))
+		r.Changes = append(r.GetChanges(), unresolvedChange(k, cfg, exists))
 	}
 
 	// Map iteration is unordered, so sort to keep a plan stable across calls.

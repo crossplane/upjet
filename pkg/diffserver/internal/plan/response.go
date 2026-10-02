@@ -332,29 +332,45 @@ func isUnresolvedParameter(path string, unresolved []string) bool {
 }
 
 // unresolvedChange reports a parameter whose Secret the request did not
-// supply. Both sides are absent, for different reasons: the current value is
-// sensitive, and the desired one could not be evaluated at all. The field is
-// the user's, because they declared the reference, so a client that hides
-// provider-originated changes still shows this one.
-func unresolvedChange(tfPath string) *diffv1alpha1.FieldChange {
-	return &diffv1alpha1.FieldChange{
-		Field:   crdParametersPath + "." + crdFieldPath(tfPath),
-		Actual:  absentValue(diffv1alpha1.Absence_ABSENCE_SENSITIVE),
+// supply.
+//
+// exists reports whether the external resource already exists. Both sides are
+// absent, for different reasons: the desired value could not be evaluated at
+// all, and the current one - when there is one to withhold at all - is
+// treated as sensitive by association with the Secret it would otherwise come
+// from. The field is the user's, because they declared the reference, so a
+// client that hides provider-originated changes still shows this one.
+func unresolvedChange(tfPath string, cfg *config.Resource, exists bool) *diffv1alpha1.FieldChange {
+	c := &diffv1alpha1.FieldChange{
+		Field:   crdParametersPath + "." + crdFieldPath(tfPath, cfg),
 		Planned: absentValue(diffv1alpha1.Absence_ABSENCE_UNRESOLVED),
 		Origin:  diffv1alpha1.Origin_ORIGIN_DESIRED_STATE,
 	}
+	if exists {
+		c.Actual = absentValue(diffv1alpha1.Absence_ABSENCE_SENSITIVE)
+	}
+	return c
 }
 
 // crdFieldPath renders a Terraform attribute path the way the CRD spells it,
-// lower camel casing each field name and leaving any index alone. It is used
-// for a path that has no diff to walk alongside, which is why it works off the
-// path's own shape rather than the resource schema.
-func crdFieldPath(tfPath string) string {
+// lower camel casing each field name segment. An index is left alone, unless
+// it addresses a singleton list the CRD models as an embedded object, in
+// which case it is dropped - the same convention frameworkFieldPath and
+// fieldPath follow for a resolved change, which this has no schema in hand to
+// walk alongside and so works off the path's own shape instead. Without this,
+// the same attribute would be spelled two different ways depending on
+// whether its Secret happened to resolve.
+func crdFieldPath(tfPath string, cfg *config.Resource) string {
 	segments := strings.Split(tfPath, ".")
+	var seenFields []string
 	for i, s := range segments {
 		field, index := s, ""
 		if b := strings.Index(s, "["); b >= 0 {
 			field, index = s[:b], s[b:]
+		}
+		seenFields = append(seenFields, field)
+		if index != "" && cfg.SchemaElementOptions.EmbeddedObject(strings.Join(seenFields, ".")) {
+			index = ""
 		}
 		segments[i] = name.NewFromSnake(field).LowerCamelComputed + index
 	}

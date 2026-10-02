@@ -18,56 +18,72 @@ import (
 	diffv1alpha1 "github.com/crossplane/upjet/v2/proto/diff/v1alpha1"
 )
 
-func TestCRDFieldPath(t *testing.T) {
+func TestUnresolvedChange(t *testing.T) {
+	// A parameter whose Secret the caller did not supply. The desired side
+	// can never be shown, because it was never evaluated; the current side,
+	// when there is one to withhold at all, is treated as sensitive by
+	// association with the Secret it would otherwise come from. The field is
+	// the user's because they wrote the reference, so reporting it as the
+	// provider's would let a client that hides provider-originated changes
+	// drop it.
 	cases := map[string]struct {
 		reason string
 		tfPath string
-		want   string
+		exists bool
+		want   *diffv1alpha1.FieldChange
 	}{
-		"PlainField": {
-			reason: "A Terraform attribute name is lower camel cased the way the CRD spells it.",
+		"ExistingResource": {
+			reason: "An update withholds the current value as sensitive.",
 			tfPath: "master_password",
-			want:   "masterPassword",
+			exists: true,
+			want: &diffv1alpha1.FieldChange{
+				Field:   "spec.forProvider.masterPassword",
+				Actual:  absentValue(diffv1alpha1.Absence_ABSENCE_SENSITIVE),
+				Planned: absentValue(diffv1alpha1.Absence_ABSENCE_UNRESOLVED),
+				Origin:  diffv1alpha1.Origin_ORIGIN_DESIRED_STATE,
+			},
 		},
-		"Acronym": {
-			reason: "An acronym is spelled the way the manifest has it.",
-			tfPath: "kms_key_id",
-			want:   "kmsKeyId",
+		"ResourceBeingCreated": {
+			reason: "A create has no current value to withhold at all, sensitive or otherwise - unlike an update, there is nothing here yet.",
+			tfPath: "master_password",
+			exists: false,
+			want: &diffv1alpha1.FieldChange{
+				Field:   "spec.forProvider.masterPassword",
+				Planned: absentValue(diffv1alpha1.Absence_ABSENCE_UNRESOLVED),
+				Origin:  diffv1alpha1.Origin_ORIGIN_DESIRED_STATE,
+			},
 		},
-		"Nested": {
-			reason: "Every segment is cased, not just the first.",
-			tfPath: "logging_config.target_bucket",
-			want:   "loggingConfig.targetBucket",
+		"EmbeddedObjectDropsTheIndex": {
+			reason: "A singleton list the CRD models as an embedded object must be spelled the same way a resolved change at the same attribute is - encryption_config is configured as one in testResource - or a client correlating changes by field would see the same attribute as two different fields depending on whether its Secret resolved.",
+			tfPath: "encryption_config[0].kms_key_id",
+			exists: true,
+			want: &diffv1alpha1.FieldChange{
+				Field:   "spec.forProvider.encryptionConfig.kmsKeyId",
+				Actual:  absentValue(diffv1alpha1.Absence_ABSENCE_SENSITIVE),
+				Planned: absentValue(diffv1alpha1.Absence_ABSENCE_UNRESOLVED),
+				Origin:  diffv1alpha1.Origin_ORIGIN_DESIRED_STATE,
+			},
 		},
-		"Indexed": {
-			reason: "An index belongs to the element, not to the field name, so it is left alone.",
-			tfPath: "action[0].authenticate_oidc[1].client_secret",
-			want:   "action[0].authenticateOidc[1].clientSecret",
+		"GenuineListKeepsTheIndex": {
+			reason: "An index into a list the CRD does not model as an embedded object still belongs to the element.",
+			tfPath: "subnet_ids[2]",
+			exists: true,
+			want: &diffv1alpha1.FieldChange{
+				Field:   "spec.forProvider.subnetIds[2]",
+				Actual:  absentValue(diffv1alpha1.Absence_ABSENCE_SENSITIVE),
+				Planned: absentValue(diffv1alpha1.Absence_ABSENCE_UNRESOLVED),
+				Origin:  diffv1alpha1.Origin_ORIGIN_DESIRED_STATE,
+			},
 		},
 	}
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			if diff := cmp.Diff(tc.want, crdFieldPath(tc.tfPath)); diff != "" {
-				t.Errorf("\n%s\ncrdFieldPath(...): -want, +got:\n%s", tc.reason, diff)
+			got := unresolvedChange(tc.tfPath, testResource(), tc.exists)
+			if diff := cmp.Diff(tc.want, got, protocmp.Transform()); diff != "" {
+				t.Errorf("\n%s\nunresolvedChange(...): -want, +got:\n%s", tc.reason, diff)
 			}
 		})
-	}
-}
-
-func TestUnresolvedChange(t *testing.T) {
-	// A parameter whose Secret the caller did not supply. Neither side can be
-	// shown, for different reasons, and the field is the user's because they
-	// wrote the reference. Reporting it as the provider's would let a client
-	// that hides provider-originated changes drop it.
-	want := &diffv1alpha1.FieldChange{
-		Field:   "spec.forProvider.masterPassword",
-		Actual:  absentValue(diffv1alpha1.Absence_ABSENCE_SENSITIVE),
-		Planned: absentValue(diffv1alpha1.Absence_ABSENCE_UNRESOLVED),
-		Origin:  diffv1alpha1.Origin_ORIGIN_DESIRED_STATE,
-	}
-	if diff := cmp.Diff(want, unresolvedChange("master_password"), protocmp.Transform()); diff != "" {
-		t.Errorf("unresolvedChange(): -want, +got:\n%s", diff)
 	}
 }
 
