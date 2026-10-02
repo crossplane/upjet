@@ -469,7 +469,7 @@ func (n *terraformPluginFrameworkExternalClient) getDiffPlanResponse(ctx context
 		return nil, false, errors.Wrap(err, "cannot unmarshal planned state")
 	}
 
-	priorValue, plannedValue, rawDiff, err := normalizedDiff(tfStateValue, plannedStateValue)
+	priorValue, plannedValue, rawDiff, err := NormalizedDiff(tfStateValue, plannedStateValue)
 	if err != nil {
 		return nil, false, err
 	}
@@ -489,28 +489,46 @@ func (n *terraformPluginFrameworkExternalClient) getDiffPlanResponse(ctx context
 // but the prior and plan values are actually the same.
 // The caller normalizes stateValue and plannedValue with nullCollectionsAsEmpty,
 // and each path is looked up with its set elements normalized the same way.
-func (n *terraformPluginFrameworkExternalClient) filterRequiresReplace(ctx context.Context, planResponse *tfprotov6.PlanResourceChangeResponse, stateValue, plannedValue tftypes.Value) error { //nolint:gocyclo // easier to follow as a unit
-	var filteredRequiresReplace []*tftypes.AttributePath
-	for _, path := range planResponse.RequiresReplace {
+func (n *terraformPluginFrameworkExternalClient) filterRequiresReplace(ctx context.Context, planResponse *tfprotov6.PlanResourceChangeResponse, stateValue, plannedValue tftypes.Value) error {
+	filtered, err := FilterRequiresReplace(ctx, n.logger, n.resourceSchema, planResponse.RequiresReplace, stateValue, plannedValue)
+	if err != nil {
+		return err
+	}
+	planResponse.RequiresReplace = filtered
+	return nil
+}
+
+// FilterRequiresReplace checks requiresReplace for paths whose prior and
+// planned values are actually the same, and filters out those false
+// positives. stateValue and plannedValue must already be normalized with
+// NormalizedDiff, and each path is looked up with its set elements normalized
+// the same way.
+//
+// This is also what the diff server's Plugin Framework path uses, so that a
+// RequiresReplace path it reports agrees with what the reconciler itself
+// would, rather than reimplementing this filtering on its own.
+func FilterRequiresReplace(ctx context.Context, logger logging.Logger, sch rschema.Schema, requiresReplace []*tftypes.AttributePath, stateValue, plannedValue tftypes.Value) ([]*tftypes.AttributePath, error) { //nolint:gocyclo // easier to follow as a unit
+	var filtered []*tftypes.AttributePath
+	for _, path := range requiresReplace {
 		lookupPath, err := nullCollectionsAsEmptyInPath(path)
 		if err != nil {
-			return errors.Wrapf(err, "cannot normalize the path %s", path)
+			return nil, errors.Wrapf(err, "cannot normalize the path %s", path)
 		}
 		priorValInt, _, errPrior := tftypes.WalkAttributePath(stateValue, lookupPath)
 		plannedValInt, _, errPlanned := tftypes.WalkAttributePath(plannedValue, lookupPath)
 		if errPrior != nil && errPlanned != nil {
-			n.logger.Debug("upstream TF provider generated an invalid plan")
+			logger.Debug("upstream TF provider generated an invalid plan")
 			continue
 		}
-		tfType, err := n.resourceSchema.TypeAtTerraformPath(ctx, path)
+		tfType, err := sch.TypeAtTerraformPath(ctx, path)
 		if err != nil {
-			return errors.New("cannot get the type at path from resource schema: %v")
+			return nil, errors.New("cannot get the type at path from resource schema: %v")
 		}
 
 		priorVal, ok := priorValInt.(tftypes.Value)
 		if !ok {
 			if priorValInt != nil {
-				return fmt.Errorf("cannot convert prior value to tftypes.Value")
+				return nil, fmt.Errorf("cannot convert prior value to tftypes.Value")
 			}
 			priorVal = tftypes.NewValue(tfType.TerraformType(ctx), nil)
 		}
@@ -518,26 +536,29 @@ func (n *terraformPluginFrameworkExternalClient) filterRequiresReplace(ctx conte
 		plannedVal, ok := plannedValInt.(tftypes.Value)
 		if !ok {
 			if plannedValInt != nil {
-				return fmt.Errorf("cannot convert planned value to tftypes.Value")
+				return nil, fmt.Errorf("cannot convert planned value to tftypes.Value")
 			}
 			plannedVal = tftypes.NewValue(tfType.TerraformType(ctx), nil)
 		}
 		if !plannedVal.Equal(priorVal) {
-			filteredRequiresReplace = append(filteredRequiresReplace, path)
+			filtered = append(filtered, path)
 			continue
 		}
-		n.logger.Debug("TF plan reported a diff at path that require resource replacement, but the prior and plan values are equal. Skipping...", "path", path)
+		logger.Debug("TF plan reported a diff at path that require resource replacement, but the prior and plan values are equal. Skipping...", "path", path)
 	}
-	planResponse.RequiresReplace = filteredRequiresReplace
-	return nil
+	return filtered, nil
 }
 
-// normalizedDiff normalizes the prior and the planned state with
+// NormalizedDiff normalizes the prior and the planned state with
 // nullCollectionsAsEmpty and returns them together with the diff between
 // them. The prior state rebuilt from a managed resource cannot tell an empty
 // collection from an absent one, and the plan carries the framework's empty
 // defaults, so both sides are compared with null collections as empty.
-func normalizedDiff(prior, planned tftypes.Value) (tftypes.Value, tftypes.Value, []tftypes.ValueDiff, error) {
+//
+// This is also what the diff server's Plugin Framework path uses, so that it
+// is not caught by the same null-versus-empty noise this was written to fix
+// for the reconciler.
+func NormalizedDiff(prior, planned tftypes.Value) (tftypes.Value, tftypes.Value, []tftypes.ValueDiff, error) {
 	priorValue, err := nullCollectionsAsEmpty(prior)
 	if err != nil {
 		return tftypes.Value{}, tftypes.Value{}, nil, errors.Wrap(err, "cannot normalize prior state")

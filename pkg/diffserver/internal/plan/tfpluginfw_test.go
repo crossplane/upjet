@@ -457,7 +457,11 @@ func TestFrameworkPlanResponseAction(t *testing.T) {
 	s := &PlanService{}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			r, err := s.frameworkPlanResponse(ctx, fwSchema(), fwResource(), tc.prior, tc.planned, tc.requiresReplace, tc.exists, nil, nil)
+			diffs, err := tc.planned.Diff(tc.prior)
+			if err != nil {
+				t.Fatalf("\n%s\nDiff(...): unexpected error: %v", tc.reason, err)
+			}
+			r, err := s.frameworkPlanResponse(ctx, fwSchema(), fwResource(), diffs, tc.requiresReplace, tc.exists, nil, nil)
 			if err != nil {
 				t.Fatalf("\n%s\nframeworkPlanResponse(...): unexpected error: %v", tc.reason, err)
 			}
@@ -645,7 +649,11 @@ func TestFrameworkPlanResponseChanges(t *testing.T) {
 	s := &PlanService{}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			r, err := s.frameworkPlanResponse(ctx, fwSchema(), fwResource(), tc.prior, tc.planned, tc.requiresReplace, tc.exists, tc.declared, nil)
+			diffs, err := tc.planned.Diff(tc.prior)
+			if err != nil {
+				t.Fatalf("\n%s\nDiff(...): unexpected error: %v", tc.reason, err)
+			}
+			r, err := s.frameworkPlanResponse(ctx, fwSchema(), fwResource(), diffs, tc.requiresReplace, tc.exists, tc.declared, nil)
 			if err != nil {
 				t.Fatalf("\n%s\nframeworkPlanResponse(...): unexpected error: %v", tc.reason, err)
 			}
@@ -672,8 +680,12 @@ func TestFrameworkPlanResponseUnresolvedSecret(t *testing.T) {
 		"display_name": tftypes.NewValue(tftypes.String, "renamed"),
 	})
 
+	diffs, err := planned.Diff(prior)
+	if err != nil {
+		t.Fatalf("Diff(...): unexpected error: %v", err)
+	}
 	r, err := (&PlanService{}).frameworkPlanResponse(
-		context.Background(), fwSchema(), fwResource(), prior, planned, nil, true,
+		context.Background(), fwSchema(), fwResource(), diffs, nil, true,
 		map[string]any{"display_name": "renamed"}, []string{"master_password"})
 	if err != nil {
 		t.Fatalf("frameworkPlanResponse(...): unexpected error: %v", err)

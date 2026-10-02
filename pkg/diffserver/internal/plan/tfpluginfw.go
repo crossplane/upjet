@@ -42,6 +42,7 @@ const (
 	errUnmarshalFrameworkPlanned    = "cannot unmarshal the planned Terraform state"
 	errNoFrameworkResource          = "no Terraform plugin Framework resource is configured"
 	errNoFrameworkPlannedState      = "the Terraform plugin Framework plan carries no planned state"
+	errFilterRequiresReplace        = "cannot filter the paths that require resource replacement"
 
 	fmtErrConvertFrameworkValue = "cannot convert the value at %q"
 )
@@ -127,6 +128,20 @@ func (s *PlanService) diffTerraformPluginFramework(ctx context.Context, kc kclie
 			return nil, errors.Wrap(err, errUnmarshalFrameworkPriorState)
 		}
 	}
+	// Both sides are normalized the same way the reconciler's own Observe
+	// normalizes them: the prior state reconstructed from a managed resource
+	// cannot tell an empty collection from an absent one, while the plan
+	// carries the Framework's empty defaults, so a null-versus-empty
+	// difference between the two is a reconstruction artifact, not a change
+	// the user asked for.
+	prior, planned, diffs, err := controller.NormalizedDiff(prior, planned)
+	if err != nil {
+		return nil, errors.Wrap(err, errFrameworkStateDiff)
+	}
+	requiresReplace, err := controller.FilterRequiresReplace(ctx, s.log, sch, planResponse.RequiresReplace, prior, planned)
+	if err != nil {
+		return nil, errors.Wrap(err, errFilterRequiresReplace)
+	}
 
 	// The attribute paths the diff reports are in Terraform shape, so the
 	// parameters they are compared against must be too.
@@ -134,7 +149,7 @@ func (s *PlanService) diffTerraformPluginFramework(ctx context.Context, kc kclie
 	if err != nil {
 		return nil, err
 	}
-	return s.frameworkPlanResponse(ctx, sch, cfg, prior, planned, planResponse.RequiresReplace, obs.ResourceExists, declared, unresolved)
+	return s.frameworkPlanResponse(ctx, sch, cfg, diffs, requiresReplace, obs.ResourceExists, declared, unresolved)
 }
 
 // frameworkSchema returns the resource schema of the configured Terraform
@@ -164,19 +179,17 @@ func markAbsentFramework(t *controller.AsyncTracker, ty tftypes.Type) error {
 	return nil
 }
 
-// frameworkPlanResponse converts the difference between the prior and the
+// frameworkPlanResponse converts a difference between the prior and the
 // planned Terraform state into a plan response. exists reports whether the
 // external resource already exists, which is what distinguishes a create from
-// an update.
-func (s *PlanService) frameworkPlanResponse(ctx context.Context, sch rschema.Schema, cfg *config.Resource, prior, planned tftypes.Value, requiresReplace []*tftypes.AttributePath, exists bool, declared map[string]any, unresolved []string) (*diffv1alpha1.PlanResponse, error) { //nolint:gocyclo // the cases a reported difference falls into are easier to follow as a unit
+// an update. diffs and requiresReplace are already normalized - by
+// controller.NormalizedDiff and controller.FilterRequiresReplace, respectively.
+func (s *PlanService) frameworkPlanResponse(ctx context.Context, sch rschema.Schema, cfg *config.Resource, diffs []tftypes.ValueDiff, requiresReplace []*tftypes.AttributePath, exists bool, declared map[string]any, unresolved []string) (*diffv1alpha1.PlanResponse, error) { //nolint:gocyclo // the cases a reported difference falls into are easier to follow as a unit
 	r := &diffv1alpha1.PlanResponse{
 		Action:     diffv1alpha1.Action_ACTION_NO_OP,
 		ComputedAt: timestamppb.Now(),
 	}
-	diffs, err := planned.Diff(prior)
-	if err != nil {
-		return nil, errors.Wrap(err, errFrameworkStateDiff)
-	}
+	var err error
 
 	for _, d := range diffs {
 		if d.Path == nil || len(d.Path.Steps()) == 0 {
