@@ -6,6 +6,7 @@ package plan
 
 import (
 	"context"
+	"hash/fnv"
 	"math/big"
 	"sort"
 	"strconv"
@@ -202,7 +203,7 @@ func (s *PlanService) frameworkPlanResponse(ctx context.Context, sch rschema.Sch
 			continue
 		}
 		c := &diffv1alpha1.FieldChange{
-			Field:           frameworkFieldPath(d.Path, cfg),
+			Field:           frameworkFieldPath(ctx, sch, d.Path, cfg),
 			RequiresReplace: exists && replaces,
 			Origin:          frameworkOrigin(d.Path, declared),
 		}
@@ -358,9 +359,10 @@ func forcesReplacement(p *tftypes.AttributePath, requiresReplace []*tftypes.Attr
 // field it came from. Unlike the plugin SDKv2 path, which has to resolve a
 // flat string key against the resource schema, the steps here already say what
 // each segment selects.
-func frameworkFieldPath(p *tftypes.AttributePath, cfg *config.Resource) string {
+func frameworkFieldPath(ctx context.Context, sch rschema.Schema, p *tftypes.AttributePath, cfg *config.Resource) string {
 	path := crdParametersPath
 	var tfPath []string
+	var consumed []tftypes.AttributePathStep
 	for _, st := range p.Steps() {
 		switch s := st.(type) {
 		case tftypes.AttributeName:
@@ -369,19 +371,39 @@ func frameworkFieldPath(p *tftypes.AttributePath, cfg *config.Resource) string {
 		case tftypes.ElementKeyString:
 			path += "." + string(s)
 		case tftypes.ElementKeyInt:
-			if cfg.SchemaElementOptions.EmbeddedObject(strings.Join(tfPath, ".")) {
-				// The CRD models this singleton list as an embedded object, so
-				// it has no index to address.
-				continue
+			if !cfg.SchemaElementOptions.EmbeddedObject(strings.Join(tfPath, ".")) {
+				// A singleton list the CRD models as an embedded object has
+				// no index to address, otherwise the element keeps its
+				// position.
+				path += "[" + strconv.FormatInt(int64(s), 10) + "]"
 			}
-			path += "[" + strconv.FormatInt(int64(s), 10) + "]"
 		case tftypes.ElementKeyValue:
 			// A set element is addressed by its value rather than by a
 			// position, so the path locates the field but not the element.
-			path += "[" + tftypes.Value(s).String() + "]"
+			// That value is only safe to spell into the path - as a list's
+			// index is - when none of its own fields is sensitive: changing
+			// any one of them changes the value Terraform addresses the
+			// element by, so a sensitive field reaches here on an ordinary
+			// update to the element, not only on it being added or removed.
+			// consumed is the set attribute's own path, one step short of
+			// this one.
+			if isSensitivePath(ctx, sch, tftypes.NewAttributePathWithSteps(consumed)) {
+				path += "[" + strconv.FormatUint(uint64(setElementHash(tftypes.Value(s))), 10) + "]"
+			} else {
+				path += "[" + tftypes.Value(s).String() + "]"
+			}
 		}
+		consumed = append(consumed, st)
 	}
 	return path
+}
+
+// setElementHash returns a stable, non-reversible identifier for a set
+// element, standing in for the value itself in a field path.
+func setElementHash(v tftypes.Value) uint32 {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(v.String()))
+	return h.Sum32()
 }
 
 // frameworkTerraformPath renders an attribute path the way a resource's

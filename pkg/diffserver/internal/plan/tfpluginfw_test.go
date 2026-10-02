@@ -6,6 +6,7 @@ package plan
 
 import (
 	"context"
+	"strconv"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -34,6 +35,22 @@ func fwSchema() rschema.Schema {
 			"master_password": rschema.StringAttribute{Optional: true, Sensitive: true},
 			"tags":            rschema.MapAttribute{Optional: true, ElementType: types.StringType},
 			"subnet_ids":      rschema.ListAttribute{Optional: true, ElementType: types.StringType},
+			"public_keys": rschema.SetNestedAttribute{
+				Optional: true,
+				NestedObject: rschema.NestedAttributeObject{
+					Attributes: map[string]rschema.Attribute{
+						"name": rschema.StringAttribute{Optional: true},
+					},
+				},
+			},
+			"credentials": rschema.SetNestedAttribute{
+				Optional: true,
+				NestedObject: rschema.NestedAttributeObject{
+					Attributes: map[string]rschema.Attribute{
+						"password": rschema.StringAttribute{Optional: true, Sensitive: true},
+					},
+				},
+			},
 		},
 		Blocks: map[string]rschema.Block{
 			"encryption_config": rschema.ListNestedBlock{
@@ -93,6 +110,15 @@ func boolean(b bool) *diffv1alpha1.FieldValue {
 }
 
 func TestFrameworkFieldPath(t *testing.T) {
+	publicKey := tftypes.NewValue(
+		tftypes.Object{AttributeTypes: map[string]tftypes.Type{"name": tftypes.String}},
+		map[string]tftypes.Value{"name": tftypes.NewValue(tftypes.String, "k1")},
+	)
+	credential := tftypes.NewValue(
+		tftypes.Object{AttributeTypes: map[string]tftypes.Type{"password": tftypes.String}},
+		map[string]tftypes.Value{"password": tftypes.NewValue(tftypes.String, "s3cr3t")},
+	)
+
 	cases := map[string]struct {
 		reason string
 		path   *tftypes.AttributePath
@@ -124,11 +150,22 @@ func TestFrameworkFieldPath(t *testing.T) {
 				WithElementKeyInt(0).WithAttributeName("kms_key_id"),
 			want: "spec.forProvider.encryptionConfig.kmsKeyId",
 		},
+		"SetElementWithNoSensitiveDescendant": {
+			reason: "A set with no sensitive descendant renders its element's value, which is what lets a client see which element the diff is about.",
+			path:   tftypes.NewAttributePath().WithAttributeName("public_keys").WithElementKeyValue(publicKey),
+			want:   "spec.forProvider.publicKeys[" + publicKey.String() + "]",
+		},
+		"SetElementWithSensitiveDescendant": {
+			reason: "A set element's value is never spelled into the path when one of its own fields is sensitive - that would print the sensitive field's value into the path text itself.",
+			path:   tftypes.NewAttributePath().WithAttributeName("credentials").WithElementKeyValue(credential),
+			want:   "spec.forProvider.credentials[" + strconv.FormatUint(uint64(setElementHash(credential)), 10) + "]",
+		},
 	}
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			if diff := cmp.Diff(tc.want, frameworkFieldPath(tc.path, fwResource())); diff != "" {
+			got := frameworkFieldPath(context.Background(), fwSchema(), tc.path, fwResource())
+			if diff := cmp.Diff(tc.want, got); diff != "" {
 				t.Errorf("\n%s\nframeworkFieldPath(...): -want, +got:\n%s", tc.reason, diff)
 			}
 		})
