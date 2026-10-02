@@ -68,8 +68,17 @@ func (s *PlanService) diffTerraformPluginSDK(ctx context.Context, kc kclient.Cli
 		if !ok {
 			return nil, errors.Errorf(fmtErrNotTerraformed, actual.GetObjectKind().GroupVersionKind().String())
 		}
-		opTracker.Tracker(tr).ResetReconstructedTfState()
-		if _, _, _, err := c.ReconstructTerraformState(ctx, tr, s.log); err != nil {
+		// The tracker is keyed by UID, and every later read of it - Observe,
+		// and the diff computation below - asks for desired's. Reconstructing
+		// under actual's own UID would leave the state in a different slot
+		// whenever the two differ, which they do for a rendered desired
+		// manifest that was never applied and so carries no UID at all. A
+		// copy keeps actual's own observation and annotations; only the UID
+		// used to select the tracker slot changes.
+		trAtDesiredKey := tr.DeepCopyObject().(resource.Terraformed)
+		trAtDesiredKey.SetUID(dtr.GetUID())
+		opTracker.Tracker(trAtDesiredKey).ResetReconstructedTfState()
+		if _, _, _, err := c.ReconstructTerraformState(ctx, trAtDesiredKey, s.log); err != nil {
 			return nil, errors.Wrap(err, errReconstructTerraformState)
 		}
 	}

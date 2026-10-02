@@ -84,13 +84,22 @@ func (s *PlanService) diffTerraformPluginFramework(ctx context.Context, kc kclie
 		if !ok {
 			return nil, errors.Errorf(fmtErrNotTerraformed, actual.GetObjectKind().GroupVersionKind().String())
 		}
+		// The tracker is keyed by UID, and every later read of it - Observe,
+		// and the prior state below - asks for desired's. Reconstructing
+		// under actual's own UID would leave the state in a different slot
+		// whenever the two differ, which they do for a rendered desired
+		// manifest that was never applied and so carries no UID at all. A
+		// copy keeps actual's own observation and annotations; only the UID
+		// used to select the tracker slot changes.
+		trAtDesiredKey := tr.DeepCopyObject().(resource.Terraformed)
+		trAtDesiredKey.SetUID(dtr.GetUID())
 		// Reconstructing the state from the actual resource's observation is
 		// what Connect does, so connect again with the actual resource after
 		// dropping the state built from the desired one. The client it returns
 		// is discarded: only the state it leaves on the tracker is wanted,
 		// while the configuration side must stay the desired resource's.
-		opTracker.Tracker(tr).ResetReconstructedFrameworkTFState()
-		if _, err := c.Connect(ctx, tr); err != nil {
+		opTracker.Tracker(trAtDesiredKey).ResetReconstructedFrameworkTFState()
+		if _, err := c.Connect(ctx, trAtDesiredKey); err != nil {
 			return nil, errors.Wrap(err, errReconstructFrameworkState)
 		}
 	}
