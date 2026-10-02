@@ -812,3 +812,23 @@ func TestPlanResponseUnresolvedSecret(t *testing.T) {
 }
 
 func s() *PlanService { return &PlanService{} }
+
+func TestPlanResponseActionWithOnlyUnresolvedSecret(t *testing.T) {
+	// The Secret behind master_password was never supplied, and the
+	// attribute was never set either, so its Old and New are both empty and
+	// filterInstanceDiff has already dropped it from d by the time
+	// planResponse sees it: d itself is empty. unresolvedChange still
+	// reports it below, in Changes, because the user did declare the
+	// reference. An ACTION_NO_OP response carrying a non-empty Changes list
+	// would be self-contradictory.
+	r, err := s().planResponse(&tf.InstanceDiff{}, true, nil, []string{"master_password"}, testResource())
+	if err != nil {
+		t.Fatalf("planResponse(...): unexpected error: %v", err)
+	}
+	if diff := cmp.Diff(diffv1alpha1.Action_ACTION_UPDATE, r.GetAction()); diff != "" {
+		t.Errorf("planResponse(...): -want action, +got action:\n%s", diff)
+	}
+	if len(r.GetChanges()) == 0 {
+		t.Error("planResponse(...): want a non-empty Changes list reporting the unresolved reference")
+	}
+}

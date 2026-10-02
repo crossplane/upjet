@@ -188,7 +188,14 @@ func (s *PlanService) planResponse(d *tf.InstanceDiff, exists bool, declared map
 		// The external resource is not there yet, so the plan creates it
 		// whether or not the diff carries attribute changes.
 		r.Action = diffv1alpha1.Action_ACTION_CREATE
-	case d.Empty():
+	case d.Empty() && len(unresolved) == 0:
+		// d.Empty() alone is not enough: an unresolved Secret reference whose
+		// attribute's Old and New are both empty - never supplied, and never
+		// set either - is absent from d by the time this runs, yet
+		// unresolvedChange still reports it above, in changes, because the
+		// user did declare the reference. Without the len(unresolved) == 0
+		// term here, that combination would report ACTION_NO_OP alongside a
+		// non-empty Changes list.
 		r.Action = diffv1alpha1.Action_ACTION_NO_OP
 	case requiresReplace:
 		r.Action = diffv1alpha1.Action_ACTION_REPLACE
