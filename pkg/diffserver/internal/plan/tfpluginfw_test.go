@@ -297,6 +297,7 @@ func TestForcesReplacement(t *testing.T) {
 	replace := []*tftypes.AttributePath{
 		tftypes.NewAttributePath().WithAttributeName("vpc_id"),
 		tftypes.NewAttributePath().WithAttributeName("encryption_config"),
+		tftypes.NewAttributePath().WithAttributeName("auth").WithElementKeyInt(0).WithAttributeName("user"),
 	}
 
 	cases := map[string]struct {
@@ -323,6 +324,16 @@ func TestForcesReplacement(t *testing.T) {
 		"PrefixOfAName": {
 			reason: "A name that merely starts with a replacing path's name is a different field.",
 			path:   tftypes.NewAttributePath().WithAttributeName("vpc_id_extra"),
+			want:   false,
+		},
+		"Above": {
+			reason: "The diff collapses to the container because none of its elements has a diff of its own - an added or removed set element, for instance - and the container's entry is the only one standing in for the replacing path underneath it.",
+			path:   tftypes.NewAttributePath().WithAttributeName("auth").WithElementKeyInt(0),
+			want:   true,
+		},
+		"AboveWrongElement": {
+			reason: "A different element of the same collection is not the one the plan names.",
+			path:   tftypes.NewAttributePath().WithAttributeName("auth").WithElementKeyInt(1),
 			want:   false,
 		},
 	}

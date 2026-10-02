@@ -330,7 +330,12 @@ func hasNestedDiff(p *tftypes.AttributePath, diffs []tftypes.ValueDiff) bool {
 // forcesReplacement reports whether the attribute at the given path is one the
 // plan says forces the external resource to be replaced. A path that forces a
 // replacement also covers everything beneath it, which is how a whole block
-// being replaced reaches the attributes inside it.
+// being replaced reaches the attributes inside it - and the reverse also
+// holds: when the diff itself collapses to a container because none of its
+// descendants has a diff of its own to be reported at (an added or removed
+// list or set element, for instance), a RequiresReplace path naming one of
+// that container's descendants is the diff this container's entry stands in
+// for, and misses it being a replacement is misses the replacement itself.
 func forcesReplacement(p *tftypes.AttributePath, requiresReplace []*tftypes.AttributePath) bool {
 	for _, rp := range requiresReplace {
 		if rp == nil {
@@ -340,6 +345,9 @@ func forcesReplacement(p *tftypes.AttributePath, requiresReplace []*tftypes.Attr
 			return true
 		}
 		if strings.HasPrefix(p.String(), rp.String()+".") {
+			return true
+		}
+		if strings.HasPrefix(rp.String(), p.String()+".") {
 			return true
 		}
 	}
