@@ -191,79 +191,13 @@ func getFrameworkExtendedParameters(ctx context.Context, tr resource.Terraformed
 
 // Connect makes sure the underlying client is ready to issue requests to the
 // provider API.
-func (c *TerraformPluginFrameworkConnector) Connect(ctx context.Context, mg xpresource.Managed) (managed.ExternalClient, error) { //nolint:gocyclo
+func (c *TerraformPluginFrameworkConnector) Connect(ctx context.Context, mg xpresource.Managed) (managed.ExternalClient, error) {
 	c.metricRecorder.ObserveReconcileDelay(mg.GetObjectKind().GroupVersionKind(), metrics.NameForManaged(mg))
 	logger := c.logger.WithValues("uid", mg.GetUID(), "name", mg.GetName(), "namespace", mg.GetNamespace(), "gvk", mg.GetObjectKind().GroupVersionKind().String())
-	logger.Debug("Connecting to the service provider")
-	start := time.Now()
-	ts, err := c.getTerraformSetup(ctx, c.kube, mg)
-	metrics.ExternalAPITime.WithLabelValues("connect").Observe(time.Since(start).Seconds())
-	if err != nil {
-		return nil, errors.Wrap(err, errGetTerraformSetup)
-	}
-
 	tr := mg.(resource.Terraformed)
-	opTracker := c.operationTrackerStore.Tracker(tr)
-	externalName := meta.GetExternalName(tr)
-	resourceSchema, err := c.getResourceSchema(ctx)
+	ts, params, resourceSchema, resourceConfigTFValue, err := c.ReconstructFrameworkTerraformState(ctx, tr, logger)
 	if err != nil {
-		return nil, errors.Wrap(err, "could not retrieve resource schema")
-	}
-	params, err := getFrameworkExtendedParameters(ctx, tr, externalName, c.config, ts, c.isManagementPoliciesEnabled, c.kube, resourceSchema)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to get the extended parameters for resource %q", client.ObjectKeyFromObject(mg))
-	}
-
-	resourceTfValueType := resourceSchema.Type().TerraformType(ctx)
-	resourceConfigTFValue, err := c.getResourceConfigTerraformValue(ctx, resourceTfValueType, params, resourceSchema)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get resource config TF value")
-	}
-	hasState := false
-	if opTracker.HasFrameworkTFState() {
-		tfStateValue, err := opTracker.GetFrameworkTFState().Unmarshal(resourceTfValueType)
-		if err != nil {
-			return nil, errors.Wrap(err, "cannot unmarshal TF state dynamic value during state existence check")
-		}
-		hasState = !tfStateValue.IsNull()
-	}
-
-	if !hasState {
-		logger.Debug("Instance state not found in cache, reconstructing...")
-		tfState, err := tr.GetObservation()
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to get the observation")
-		}
-		if err := mergeAnnotationFieldsWithStatus(tfState, mg.GetAnnotations(), c.config); err != nil {
-			return nil, errors.Wrapf(err, "failed to merge annotations on resource %q", client.ObjectKeyFromObject(mg))
-		}
-		tfState, err = c.config.ApplyTFConversions(tfState, config.ToTerraform)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to run the API converters on the Terraform state")
-		}
-		// several possibilities for this:
-		// - resource is being reconciled for the first time
-		// - after initial reconciliation, we failed to set the state
-		// - resource is getting imported
-		// - previous TF operation returned an empty state
-		copyParams := len(tfState) == 0
-		if err = resource.GetSensitiveParameters(ctx, &APISecretClient{kube: c.kube}, tr, tfState, tr.GetConnectionDetailsMapping()); err != nil {
-			return nil, errors.Wrap(err, "cannot store sensitive parameters into tfState")
-		}
-		c.config.ExternalName.SetIdentifierArgumentFn(tfState, externalName)
-		_, hasIDInSchema := resourceSchema.GetAttributes()["id"]
-		if id, ok := params["id"]; ok && id != nil && id.(string) != "" && hasIDInSchema {
-			tfState["id"] = params["id"]
-		}
-		if copyParams {
-			tfState = copyParameters(tfState, params)
-		}
-
-		tfStateDynamicValue, err := protov6DynamicValueFromMap(tfState, resourceTfValueType)
-		if err != nil {
-			return nil, errors.Wrap(err, "cannot construct dynamic value for TF state")
-		}
-		opTracker.SetReconstructedFrameworkTFState(tfStateDynamicValue)
+		return nil, err
 	}
 
 	configuredProviderServer, err := c.configureProvider(ctx, ts)
@@ -276,15 +210,106 @@ func (c *TerraformPluginFrameworkConnector) Connect(ctx context.Context, mg xpre
 		config:                       c.config,
 		logger:                       logger,
 		metricRecorder:               c.metricRecorder,
-		opTracker:                    opTracker,
+		opTracker:                    c.operationTrackerStore.Tracker(tr),
 		resource:                     c.config.TerraformPluginFrameworkResource,
 		server:                       configuredProviderServer,
 		params:                       params,
 		resourceSchema:               resourceSchema,
-		resourceValueTerraformType:   resourceTfValueType,
+		resourceValueTerraformType:   resourceSchema.Type().TerraformType(ctx),
 		resourceTerraformConfigValue: resourceConfigTFValue,
 		observationMode:              c.observationMode,
 	}, nil
+}
+
+// ReconstructFrameworkTerraformState reconstructs the Terraform state the
+// given managed resource's observation and parameters imply, and stores it on
+// the tracker, so that a later Observe or Plan has a prior state to work
+// from. An observation that is empty, i.e. a resource that has not been
+// created yet, is seeded with the parameters instead. The reconstructed
+// state is stored on the tracker rather than returned, and a cached state is
+// left untouched.
+//
+// This is also what the diff server uses to reconstruct an actual resource's
+// state under a tracker slot keyed by a different (the desired resource's)
+// UID, without paying for a provider server it would immediately discard:
+// Connect needs one, to serve Observe and Plan on the connection it returns,
+// but a caller that only wants the tracker populated does not.
+//
+// On error, the returned terraform.Setup is the zero value, and the
+// parameter map, schema, and cty.Value are nil or zero valued.
+func (c *TerraformPluginFrameworkConnector) ReconstructFrameworkTerraformState(ctx context.Context, tr resource.Terraformed, logger logging.Logger) (terraform.Setup, map[string]any, rschema.Schema, tftypes.Value, error) { //nolint:gocyclo // mirrors the plugin SDKv2 counterpart step for step
+	logger.Debug("Connecting to the service provider")
+	start := time.Now()
+	ts, err := c.getTerraformSetup(ctx, c.kube, tr)
+	metrics.ExternalAPITime.WithLabelValues("connect").Observe(time.Since(start).Seconds())
+	if err != nil {
+		return terraform.Setup{}, nil, rschema.Schema{}, tftypes.Value{}, errors.Wrap(err, errGetTerraformSetup)
+	}
+
+	opTracker := c.operationTrackerStore.Tracker(tr)
+	externalName := meta.GetExternalName(tr)
+	resourceSchema, err := c.getResourceSchema(ctx)
+	if err != nil {
+		return terraform.Setup{}, nil, rschema.Schema{}, tftypes.Value{}, errors.Wrap(err, "could not retrieve resource schema")
+	}
+	params, err := getFrameworkExtendedParameters(ctx, tr, externalName, c.config, ts, c.isManagementPoliciesEnabled, c.kube, resourceSchema)
+	if err != nil {
+		return terraform.Setup{}, nil, rschema.Schema{}, tftypes.Value{}, errors.Wrapf(err, "failed to get the extended parameters for resource %q", client.ObjectKeyFromObject(tr))
+	}
+
+	resourceTfValueType := resourceSchema.Type().TerraformType(ctx)
+	resourceConfigTFValue, err := c.getResourceConfigTerraformValue(ctx, resourceTfValueType, params, resourceSchema)
+	if err != nil {
+		return terraform.Setup{}, nil, rschema.Schema{}, tftypes.Value{}, errors.Wrap(err, "could not get resource config TF value")
+	}
+	hasState := false
+	if opTracker.HasFrameworkTFState() {
+		tfStateValue, err := opTracker.GetFrameworkTFState().Unmarshal(resourceTfValueType)
+		if err != nil {
+			return terraform.Setup{}, nil, rschema.Schema{}, tftypes.Value{}, errors.Wrap(err, "cannot unmarshal TF state dynamic value during state existence check")
+		}
+		hasState = !tfStateValue.IsNull()
+	}
+
+	if !hasState {
+		logger.Debug("Instance state not found in cache, reconstructing...")
+		tfState, err := tr.GetObservation()
+		if err != nil {
+			return terraform.Setup{}, nil, rschema.Schema{}, tftypes.Value{}, errors.Wrap(err, "failed to get the observation")
+		}
+		if err := mergeAnnotationFieldsWithStatus(tfState, tr.GetAnnotations(), c.config); err != nil {
+			return terraform.Setup{}, nil, rschema.Schema{}, tftypes.Value{}, errors.Wrapf(err, "failed to merge annotations on resource %q", client.ObjectKeyFromObject(tr))
+		}
+		tfState, err = c.config.ApplyTFConversions(tfState, config.ToTerraform)
+		if err != nil {
+			return terraform.Setup{}, nil, rschema.Schema{}, tftypes.Value{}, errors.Wrap(err, "failed to run the API converters on the Terraform state")
+		}
+		// several possibilities for this:
+		// - resource is being reconciled for the first time
+		// - after initial reconciliation, we failed to set the state
+		// - resource is getting imported
+		// - previous TF operation returned an empty state
+		copyParams := len(tfState) == 0
+		if err = resource.GetSensitiveParameters(ctx, &APISecretClient{kube: c.kube}, tr, tfState, tr.GetConnectionDetailsMapping()); err != nil {
+			return terraform.Setup{}, nil, rschema.Schema{}, tftypes.Value{}, errors.Wrap(err, "cannot store sensitive parameters into tfState")
+		}
+		c.config.ExternalName.SetIdentifierArgumentFn(tfState, externalName)
+		_, hasIDInSchema := resourceSchema.GetAttributes()["id"]
+		if id, ok := params["id"]; ok && id != nil && id.(string) != "" && hasIDInSchema {
+			tfState["id"] = params["id"]
+		}
+		if copyParams {
+			tfState = copyParameters(tfState, params)
+		}
+
+		tfStateDynamicValue, err := protov6DynamicValueFromMap(tfState, resourceTfValueType)
+		if err != nil {
+			return terraform.Setup{}, nil, rschema.Schema{}, tftypes.Value{}, errors.Wrap(err, "cannot construct dynamic value for TF state")
+		}
+		opTracker.SetReconstructedFrameworkTFState(tfStateDynamicValue)
+	}
+
+	return ts, params, resourceSchema, resourceConfigTFValue, nil
 }
 
 // getResourceSchema returns the Terraform Plugin Framework-style resource schema for the configured framework resource on the connector

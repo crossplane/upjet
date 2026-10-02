@@ -96,12 +96,13 @@ func (s *PlanService) diffTerraformPluginFramework(ctx context.Context, kc kclie
 		trAtDesiredKey := tr.DeepCopyObject().(resource.Terraformed)
 		trAtDesiredKey.SetUID(dtr.GetUID())
 		// Reconstructing the state from the actual resource's observation is
-		// what Connect does, so connect again with the actual resource after
-		// dropping the state built from the desired one. The client it returns
-		// is discarded: only the state it leaves on the tracker is wanted,
-		// while the configuration side must stay the desired resource's.
+		// what this does, after dropping the state built from the desired
+		// one. Only the state it leaves on the tracker is wanted, while the
+		// configuration side must stay the desired resource's, so this calls
+		// the reconstruction directly rather than Connect, which would also
+		// configure a whole provider server just to discard it.
 		opTracker.Tracker(trAtDesiredKey).ResetReconstructedFrameworkTFState()
-		if _, err := c.Connect(ctx, trAtDesiredKey); err != nil {
+		if _, _, _, _, err := c.ReconstructFrameworkTerraformState(ctx, trAtDesiredKey, s.log); err != nil {
 			return nil, errors.Wrap(err, errReconstructFrameworkState)
 		}
 	}
