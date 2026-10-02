@@ -7,6 +7,7 @@ package plan
 import (
 	"context"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/crossplane/crossplane-runtime/v2/pkg/errors"
@@ -44,14 +45,14 @@ const (
 
 	violationDiffComputationNotSupported = "DIFF_COMPUTATION_NOT_SUPPORTED"
 
-	errCLIDiffNotImplemented       = "diff support for Terraform CLI resources is not implemented yet"
-	errFrameworkDiffNotImplemented = "diff support for Terraform Plugin Framework resources is not implemented yet"
+	errCLIDiffNotImplemented = "diff support for Terraform CLI resources is not implemented yet"
 
 	fmtErrEmptyGroupName         = "empty API group name for GVK %q"
 	fmtErrNotTerraformed         = "the API type %q is not a Terraformed resource"
 	fmtErrResourceConfigNotFound = "no resource configuration for the API type %q is registered in provider configurations"
 	fmtErrResourceTypeMatch      = "cannot match resource name %q to regex %q"
 	fmtErrGVKMismatch            = "the GVKs of both the desired and the actual resources must match, desired has %q, actual has %q"
+	fmtErrAPIGroupNotServed      = "the API group %q is not served by this provider package, which serves: %s"
 )
 
 // PlanService implements the upjet.diff.v1alpha1.PlanService gRPC service.
@@ -63,15 +64,24 @@ type PlanService struct {
 	log                    logging.Logger
 	setupFn                terraform.SetupFn
 	providerConfigurations []*config.Provider
+	// apiGroups holds the resource API groups this service serves, keyed by
+	// the first label of a resource's API group. It's empty when the service
+	// serves every group.
+	apiGroups map[string]struct{}
 }
 
-func NewPlanService(scheme *runtime.Scheme, decoder runtime.Decoder, log logging.Logger, setupFn terraform.SetupFn, providerConfigurations ...*config.Provider) *PlanService {
+func NewPlanService(scheme *runtime.Scheme, decoder runtime.Decoder, log logging.Logger, setupFn terraform.SetupFn, apiGroups []string, providerConfigurations ...*config.Provider) *PlanService {
+	groups := make(map[string]struct{}, len(apiGroups))
+	for _, g := range apiGroups {
+		groups[g] = struct{}{}
+	}
 	return &PlanService{
 		scheme:                 scheme,
 		decoder:                decoder,
 		log:                    log,
 		setupFn:                setupFn,
 		providerConfigurations: providerConfigurations,
+		apiGroups:              groups,
 	}
 }
 
@@ -96,6 +106,15 @@ func (s *PlanService) Plan(ctx context.Context, req *diffv1alpha1.PlanRequest) (
 	s.log.Debug("Received a plan request",
 		"desired-gvk", desiredGVK.String(), "desired-name", desired.GetName(),
 		"actual-gvk", actualGVK.String())
+
+	// A provider package's scheme and provider configuration both cover every
+	// API group the provider has, so decoding the resource says nothing about
+	// whether this package is the one that reconciles it. Decline the request
+	// instead of answering it from a configuration whose controllers do not
+	// run here, so that a misrouted request fails rather than misleads.
+	if !s.servesAPIGroup(desiredGVK) {
+		return nil, status.Error(codes.NotFound, errors.Errorf(fmtErrAPIGroupNotServed, desiredGVK.Group, strings.Join(s.servedAPIGroups(), ", ")).Error())
+	}
 
 	// We currently require that the whole GVKs of desired and actual states
 	// match. Version skews are not allowed.
@@ -122,7 +141,8 @@ func (s *PlanService) Plan(ctx context.Context, req *diffv1alpha1.PlanRequest) (
 		return nil, s.preconditionFailure(nil, errCLIDiffNotImplemented, desiredGVK)
 
 	case config.ResourceTypeTerraformFramework:
-		return nil, s.preconditionFailure(nil, errFrameworkDiffNotImplemented, desiredGVK)
+		errorMsg = errDiffPluginFramework
+		rsp, err = s.diffTerraformPluginFramework(ctx, kc, cfg, desired, actual)
 
 	case config.ResourceTypeTerraformSDK:
 		errorMsg = errDiffPluginSDKv2
@@ -230,6 +250,30 @@ func (s *PlanService) inMemoryClient(req *diffv1alpha1.PlanRequest) (kclient.Cli
 
 	kc := internal.NewInMemoryClient(s.scheme, store...)
 	return kc, nil
+}
+
+// servesAPIGroup reports whether this service serves the given resource's API
+// group. The group is named by its first label, the same way
+// getResourceConfiguration splits it, so that one name covers a resource's
+// cluster-scoped and namespaced API groups alike. A service that declares no
+// groups serves all of them.
+func (s *PlanService) servesAPIGroup(gvk schema.GroupVersionKind) bool {
+	if len(s.apiGroups) == 0 {
+		return true
+	}
+	_, ok := s.apiGroups[strings.SplitN(gvk.Group, ".", 2)[0]]
+	return ok
+}
+
+// servedAPIGroups returns the API groups this service serves, sorted, for
+// reporting them in an error.
+func (s *PlanService) servedAPIGroups() []string {
+	groups := make([]string, 0, len(s.apiGroups))
+	for g := range s.apiGroups {
+		groups = append(groups, g)
+	}
+	sort.Strings(groups)
+	return groups
 }
 
 func (s *PlanService) getResourceConfiguration(m xpresource.Managed) (*config.Resource, config.ResourceType, error) {

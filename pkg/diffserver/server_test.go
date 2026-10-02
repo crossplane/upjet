@@ -137,3 +137,46 @@ func TestNewServer(t *testing.T) {
 		}
 	})
 }
+
+func TestWithAPIGroups(t *testing.T) {
+	cases := map[string]struct {
+		reason string
+		groups []string
+		want   []string
+	}{
+		"Unset": {
+			reason: "A server told nothing about its groups serves every one of them.",
+			groups: nil,
+			want:   nil,
+		},
+		"OneGroup": {
+			reason: "A single-group package serves the group it was told about.",
+			groups: []string{"ec2"},
+			want:   []string{"ec2"},
+		},
+		"SeveralGroups": {
+			reason: "A package that serves more than one group keeps all of them.",
+			groups: []string{"ec2", "iam"},
+			want:   []string{"ec2", "iam"},
+		},
+		"Monolith": {
+			reason: "The monolithic package contains every group, so recording its name as if it were a group would serve none of them. It has to collapse to serving all.",
+			groups: []string{config.PackageNameMonolith},
+			want:   nil,
+		},
+		"MonolithAmongOthers": {
+			reason: "The collapse does not depend on the monolith's name arriving alone.",
+			groups: []string{"ec2", config.PackageNameMonolith},
+			want:   nil,
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			s := NewServer(WithAPIGroups(tc.groups...))
+			if diff := cmp.Diff(tc.want, s.apiGroups); diff != "" {
+				t.Errorf("\n%s\nWithAPIGroups(...): -want, +got:\n%s", tc.reason, diff)
+			}
+		})
+	}
+}

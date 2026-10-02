@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/hashicorp/go-cty/cty"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	tf "github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 	"google.golang.org/protobuf/testing/protocmp"
@@ -145,7 +146,7 @@ func TestPlanResponseAction(t *testing.T) {
 	s := &PlanService{}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			r, err := s.planResponse(tc.d, tc.exists, tc.declared, testResource())
+			r, err := s.planResponse(tc.d, tc.exists, tc.declared, nil, testResource())
 			if err != nil {
 				t.Fatalf("\n%s\nplanResponse(...): unexpected error: %v", tc.reason, err)
 			}
@@ -404,7 +405,7 @@ func TestPlanResponseChanges(t *testing.T) {
 	s := &PlanService{}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			got, err := s.planResponse(tc.d, tc.exists, tc.declared, testResource())
+			got, err := s.planResponse(tc.d, tc.exists, tc.declared, nil, testResource())
 			if err != nil {
 				t.Fatalf("\n%s\nplanResponse(...): unexpected error: %v", tc.reason, err)
 			}
@@ -429,12 +430,12 @@ func TestPlanResponseIsDeterministic(t *testing.T) {
 	}}
 
 	s := &PlanService{}
-	first, err := s.planResponse(d, true, nil, testResource())
+	first, err := s.planResponse(d, true, nil, nil, testResource())
 	if err != nil {
 		t.Fatalf("planResponse(...): unexpected error: %v", err)
 	}
 	for i := 0; i < 50; i++ {
-		got, err := s.planResponse(d, true, nil, testResource())
+		got, err := s.planResponse(d, true, nil, nil, testResource())
 		if err != nil {
 			t.Fatalf("planResponse(...): unexpected error on run %d: %v", i, err)
 		}
@@ -446,7 +447,7 @@ func TestPlanResponseIsDeterministic(t *testing.T) {
 
 func TestPlanResponseSetsComputedAt(t *testing.T) {
 	s := &PlanService{}
-	r, err := s.planResponse(nil, true, nil, testResource())
+	r, err := s.planResponse(nil, true, nil, nil, testResource())
 	if err != nil {
 		t.Fatalf("planResponse(...): unexpected error: %v", err)
 	}
@@ -603,7 +604,7 @@ func TestPlanResponseOrigin(t *testing.T) {
 	s := &PlanService{}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			got, err := s.planResponse(tc.d, true, tc.declared, testResource())
+			got, err := s.planResponse(tc.d, true, tc.declared, nil, testResource())
 			if err != nil {
 				t.Fatalf("\n%s\nplanResponse(...): unexpected error: %v", tc.reason, err)
 			}
@@ -736,5 +737,98 @@ func TestFilterInstanceDiff(t *testing.T) {
 				t.Errorf("\n%s\nfilterInstanceDiff(...): -want Empty(), +got Empty():\n%s", tc.reason, diff)
 			}
 		})
+	}
+}
+
+func TestMarkAbsent(t *testing.T) {
+	t.Run("NilState", func(t *testing.T) {
+		// Connect always leaves a state behind, but a nil one must not panic
+		// the server on the create path.
+		markAbsent(nil)
+	})
+
+	t.Run("EmptiesTheStateButKeepsTheRawValues", func(t *testing.T) {
+		raw := cty.ObjectVal(map[string]cty.Value{"tags": cty.NullVal(cty.Map(cty.String))})
+		s := &tf.InstanceState{
+			ID:         "vpc-123",
+			Attributes: map[string]string{"cidr_block": "10.0.0.0/16"},
+			RawPlan:    raw,
+			RawConfig:  raw,
+		}
+		markAbsent(s)
+
+		if s.ID != "" {
+			t.Errorf("markAbsent(): want an empty ID, because that is how Observe reads the external resource's absence, got %q", s.ID)
+		}
+		if s.Attributes != nil {
+			t.Errorf("markAbsent(): want no attributes, got %v", s.Attributes)
+		}
+		// The diff is computed against these, and a Terraform provider may
+		// assume they are not null: the AWS transparent tagging interceptor
+		// calls ResourceDiff.GetRawPlan().GetAttr("tags"), which panics on a
+		// zero cty.Value. Clearing them here would move that panic into every
+		// create plan.
+		if s.RawPlan.IsNull() || !s.RawPlan.RawEquals(raw) {
+			t.Error("markAbsent(): want RawPlan left alone, because the instance diff is computed against it")
+		}
+		if s.RawConfig.IsNull() || !s.RawConfig.RawEquals(raw) {
+			t.Error("markAbsent(): want RawConfig left alone, because the instance diff is computed against it")
+		}
+	})
+}
+
+func TestPlanResponseUnresolvedSecret(t *testing.T) {
+	// The Secret behind master_password was not supplied. The diff still
+	// carries the attribute, because the value never arrived and so looks like
+	// a removal, and reporting that would tell the user their password is
+	// being cleared. It has to be replaced by the unresolved report.
+	d := &tf.InstanceDiff{Attributes: map[string]*tf.ResourceAttrDiff{
+		"master_password": {Old: "old-secret", New: "", Sensitive: true},
+		"description":     {Old: "a", New: "b"},
+	}}
+
+	r, err := s().planResponse(d, true, map[string]any{"description": "b"}, []string{"master_password"}, testResource())
+	if err != nil {
+		t.Fatalf("planResponse(...): unexpected error: %v", err)
+	}
+
+	want := []*diffv1alpha1.FieldChange{
+		{
+			Field:   "spec.forProvider.description",
+			Actual:  str("a"),
+			Planned: str("b"),
+			Origin:  diffv1alpha1.Origin_ORIGIN_DESIRED_STATE,
+		},
+		{
+			Field:   "spec.forProvider.masterPassword",
+			Actual:  absent(diffv1alpha1.Absence_ABSENCE_SENSITIVE),
+			Planned: absent(diffv1alpha1.Absence_ABSENCE_UNRESOLVED),
+			Origin:  diffv1alpha1.Origin_ORIGIN_DESIRED_STATE,
+		},
+	}
+	if diff := cmp.Diff(want, r.GetChanges(), protocmp.Transform()); diff != "" {
+		t.Errorf("planResponse(...): -want changes, +got changes:\n%s", diff)
+	}
+}
+
+func s() *PlanService { return &PlanService{} }
+
+func TestPlanResponseActionWithOnlyUnresolvedSecret(t *testing.T) {
+	// The Secret behind master_password was never supplied, and the
+	// attribute was never set either, so its Old and New are both empty and
+	// filterInstanceDiff has already dropped it from d by the time
+	// planResponse sees it: d itself is empty. unresolvedChange still
+	// reports it below, in Changes, because the user did declare the
+	// reference. An ACTION_NO_OP response carrying a non-empty Changes list
+	// would be self-contradictory.
+	r, err := s().planResponse(&tf.InstanceDiff{}, true, nil, []string{"master_password"}, testResource())
+	if err != nil {
+		t.Fatalf("planResponse(...): unexpected error: %v", err)
+	}
+	if diff := cmp.Diff(diffv1alpha1.Action_ACTION_UPDATE, r.GetAction()); diff != "" {
+		t.Errorf("planResponse(...): -want action, +got action:\n%s", diff)
+	}
+	if len(r.GetChanges()) == 0 {
+		t.Error("planResponse(...): want a non-empty Changes list reporting the unresolved reference")
 	}
 }
