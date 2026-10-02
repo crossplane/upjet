@@ -143,15 +143,25 @@ func declaredParameters(ctx context.Context, kube kclient.Client, tr resource.Te
 	// parameter would look like one the provider made up rather than one the
 	// user asked for, and a client that hides provider-originated changes
 	// would hide a password the user had just changed.
-	resolved, unresolved, err := secretParameters(ctx, kube, tr)
+	resolved, unresolved, probed, err := secretParameters(ctx, kube, tr)
 	if err != nil {
 		return nil, nil, err
 	}
 	paved := fieldpath.Pave(declared)
+	probedPaved := fieldpath.Pave(probed)
 	for _, p := range resolved {
-		// Only the presence of the path is consulted, never the value, so the
-		// secret itself has no reason to be here.
-		if err := paved.SetValue(p, ""); err != nil {
+		// The marker the probe recorded is set here rather than a flat
+		// empty string: a whole-Secret reference resolves to a map or a
+		// list, one marker per entry, and only that shape - not a scalar -
+		// lets a path beneath p, such as a single entry of that map, still
+		// walk all the way through declared. Only the presence of each path
+		// is ever consulted, never the value, so the secret itself has no
+		// reason to be here either way.
+		v, err := probedPaved.GetValue(p)
+		if err != nil {
+			return nil, nil, errors.Wrap(err, errMarkSecretParameter)
+		}
+		if err := paved.SetValue(p, v); err != nil {
 			return nil, nil, errors.Wrap(err, errMarkSecretParameter)
 		}
 	}
@@ -240,7 +250,10 @@ func isResolvedSecret(paved *fieldpath.Paved, path string) bool {
 
 // secretParameters reports on the parameters whose values come from a Secret
 // the desired resource references: which Terraform attributes they are, and
-// which of them the supplied object store could not resolve.
+// which of them the supplied object store could not resolve. probed is the
+// marker map the resolution was checked against, which the caller also needs
+// to record a resolved reference's presence in the shape a diff can walk
+// through, for a reference that names a whole Secret.
 //
 // Both matter to a plan. A reference the caller supplied the Secret for is a
 // value the user chose, so the change it causes belongs to the desired state
@@ -248,18 +261,18 @@ func isResolvedSecret(paved *fieldpath.Paved, path string) bool {
 // Secret for is worse than unknown: GetSensitiveParameters tolerates a missing
 // Secret, so the attribute simply never arrives, and a plan that says nothing
 // about it reads as "this field does not change" when it may well change.
-func secretParameters(ctx context.Context, kube kclient.Client, tr resource.Terraformed) (resolved, unresolved []string, err error) {
+func secretParameters(ctx context.Context, kube kclient.Client, tr resource.Terraformed) (resolved, unresolved []string, probed map[string]any, err error) {
 	mapping := tr.GetConnectionDetailsMapping()
 	if len(mapping) == 0 {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 
 	referenced, err := resource.SensitiveParameterPaths(tr, mapping)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, errSensitiveParameterPaths)
+		return nil, nil, nil, errors.Wrap(err, errSensitiveParameterPaths)
 	}
 	if len(referenced) == 0 {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 
 	// This runs the resource's own resolution so that wildcards, whole-Secret
@@ -268,7 +281,7 @@ func secretParameters(ctx context.Context, kube kclient.Client, tr resource.Terr
 	// which references resolved rather than the secrets themselves.
 	into := map[string]any{}
 	if err := resource.GetSensitiveParameters(ctx, &secretProbe{kube: kube}, tr, into, mapping); err != nil {
-		return nil, nil, errors.Wrap(err, errResolveSensitiveParameters)
+		return nil, nil, nil, errors.Wrap(err, errResolveSensitiveParameters)
 	}
 
 	paved := fieldpath.Pave(into)
@@ -279,7 +292,7 @@ func secretParameters(ctx context.Context, kube kclient.Client, tr resource.Terr
 		}
 		resolved = append(resolved, p)
 	}
-	return resolved, unresolved, nil
+	return resolved, unresolved, into, nil
 }
 
 // absentValue returns a field value that carries no concrete value, with the
