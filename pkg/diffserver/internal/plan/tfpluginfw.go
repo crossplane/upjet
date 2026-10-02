@@ -460,7 +460,37 @@ func isSensitivePath(ctx context.Context, sch rschema.Schema, p *tftypes.Attribu
 		if err != nil {
 			continue
 		}
-		return a.IsSensitive()
+		// The attribute this path resolves to is not always the one whose
+		// value a diff actually carries: when none of its descendants has a
+		// finer-grained diff of its own - an added or removed collection
+		// element, for instance - the value reported here is the whole
+		// subtree's, not just this attribute's own, so a sensitive
+		// descendant has to redact it too.
+		return a.IsSensitive() || sensitiveDescendant(a)
+	}
+	return false
+}
+
+// sensitiveDescendant reports whether any attribute nested beneath a is
+// marked sensitive.
+func sensitiveDescendant(a rschema.Attribute) bool {
+	var nested map[string]rschema.Attribute
+	switch t := a.(type) {
+	case rschema.ListNestedAttribute:
+		nested = t.NestedObject.Attributes
+	case rschema.SetNestedAttribute:
+		nested = t.NestedObject.Attributes
+	case rschema.MapNestedAttribute:
+		nested = t.NestedObject.Attributes
+	case rschema.SingleNestedAttribute:
+		nested = t.Attributes
+	default:
+		return false
+	}
+	for _, na := range nested {
+		if na.IsSensitive() || sensitiveDescendant(na) {
+			return true
+		}
 	}
 	return false
 }

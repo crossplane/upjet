@@ -690,6 +690,37 @@ func TestIsSensitivePath(t *testing.T) {
 			"secret_tags": rschema.MapAttribute{
 				Optional: true, Sensitive: true, ElementType: types.StringType,
 			},
+			"credentials": rschema.ListNestedAttribute{
+				Optional: true,
+				NestedObject: rschema.NestedAttributeObject{
+					Attributes: map[string]rschema.Attribute{
+						"user":     rschema.StringAttribute{Optional: true},
+						"password": rschema.StringAttribute{Optional: true, Sensitive: true},
+					},
+				},
+			},
+			"public_keys": rschema.SetNestedAttribute{
+				Optional: true,
+				NestedObject: rschema.NestedAttributeObject{
+					Attributes: map[string]rschema.Attribute{
+						"name": rschema.StringAttribute{Optional: true},
+						"key":  rschema.StringAttribute{Optional: true},
+					},
+				},
+			},
+			"auth": rschema.ListNestedAttribute{
+				Optional: true,
+				NestedObject: rschema.NestedAttributeObject{
+					Attributes: map[string]rschema.Attribute{
+						"oauth2": rschema.SingleNestedAttribute{
+							Optional: true,
+							Attributes: map[string]rschema.Attribute{
+								"client_secret": rschema.StringAttribute{Optional: true, Sensitive: true},
+							},
+						},
+					},
+				},
+			},
 		},
 	}
 
@@ -727,6 +758,21 @@ func TestIsSensitivePath(t *testing.T) {
 			reason: "A path the schema cannot account for at all is not reported as sensitive.",
 			path:   tftypes.NewAttributePath().WithAttributeName("nonexistent"),
 			want:   false,
+		},
+		"CollapsedListElementWithSensitiveChild": {
+			reason: "An added or removed element has no diff of its own to report its sensitive child at, so the whole element's path - the one a diff actually reports here - must be treated as sensitive too.",
+			path:   tftypes.NewAttributePath().WithAttributeName("credentials").WithElementKeyInt(0),
+			want:   true,
+		},
+		"CollapsedSetElementWithNoSensitiveChild": {
+			reason: "A collection with no sensitive descendant at all must stay visible.",
+			path:   tftypes.NewAttributePath().WithAttributeName("public_keys").WithElementKeyValue(tftypes.NewValue(tftypes.String, "k1")),
+			want:   false,
+		},
+		"CollapsedListElementWithDeeplyNestedSensitiveChild": {
+			reason: "The sensitive descendant can be nested more than one level down.",
+			path:   tftypes.NewAttributePath().WithAttributeName("auth").WithElementKeyInt(0),
+			want:   true,
 		},
 	}
 
