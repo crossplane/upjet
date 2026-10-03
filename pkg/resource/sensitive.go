@@ -182,6 +182,14 @@ func GetSensitiveParameters(ctx context.Context, client SecretClient, from resou
 			prefixes = []string{""}
 		}
 
+		// Check if plaintext value already exists in Terraform state
+		// This happens when AllowPlaintextValue is enabled and user provided plaintext
+		existingValue, err := pavedTF.GetValue(tfPath)
+		if err == nil && existingValue != nil {
+			// Plaintext value exists, skip secret reference handling
+			continue
+		}
+
 		// spec.forProvider secret references override the spec.initProvider
 		// references.
 		for _, p := range prefixes {
