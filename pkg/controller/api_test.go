@@ -12,8 +12,11 @@ import (
 	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	xpfake "github.com/crossplane/crossplane-runtime/v2/pkg/resource/fake"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/test"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrl "sigs.k8s.io/controller-runtime/pkg/manager"
@@ -567,6 +570,129 @@ func okManager() ctrl.Manager {
 // without depending on a real workqueue.
 func newUnprimedEventHandler() *handler.EventHandler {
 	return handler.NewEventHandler(handler.WithLogger(logging.NewNopLogger()))
+}
+
+func TestAPICallbacksStatusUpdateConflict(t *testing.T) {
+	errConflict := kerrors.NewConflict(schema.GroupResource{Resource: "terraformeds"}, "name", errors.New("the object has been modified"))
+	asyncErr := tjerrors.NewApplyFailed(nil)
+	type args struct {
+		// statusUpdate returns the error of the calls'th status update.
+		statusUpdate     func(calls int) error
+		withEventHandler bool
+	}
+	type want struct {
+		err error
+		// minGetCalls is the minimum number of times the resource must have
+		// been read. It is not an exact count because the number of retries
+		// depends on retry.DefaultRetry.
+		minGetCalls int
+		// maxGetCalls, when non-zero, is the maximum number of times the
+		// resource may have been read.
+		maxGetCalls int
+	}
+	cases := map[string]struct {
+		reason string
+		args
+		want
+	}{
+		"ConflictThenSuccess": {
+			reason: "It should re-read the resource and set the conditions again if the status update conflicts",
+			args: args{
+				statusUpdate: func(calls int) error {
+					if calls == 1 {
+						return errConflict
+					}
+					return nil
+				},
+			},
+			want: want{
+				minGetCalls: 2,
+			},
+		},
+		"PersistentConflict": {
+			reason: "It should return the wrapped status update error if the conflict cannot be resolved",
+			args: args{
+				statusUpdate: func(_ int) error {
+					return errConflict
+				},
+			},
+			want: want{
+				err:         errors.Wrapf(errConflict, errUpdateStatusFmt, "", ", Kind=//name", opUpdate),
+				minGetCalls: 2,
+			},
+		},
+		"PersistentConflictWithEventHandler": {
+			reason: "It should still request a reconciliation if the conflict cannot be resolved; with an uninitialized queue this surfaces as an errReconcileRequestFmt error.",
+			args: args{
+				statusUpdate: func(_ int) error {
+					return errConflict
+				},
+				withEventHandler: true,
+			},
+			want: want{
+				err:         errors.Errorf(errReconcileRequestFmt, "", ", Kind=//name", opUpdate),
+				minGetCalls: 2,
+			},
+		},
+		"NonConflictError": {
+			reason: "It should not retry a status update error other than a conflict",
+			args: args{
+				statusUpdate: func(_ int) error {
+					return errBoom
+				},
+			},
+			want: want{
+				err:         errors.Wrapf(errBoom, errUpdateStatusFmt, "", ", Kind=//name", opUpdate),
+				minGetCalls: 1,
+				maxGetCalls: 1,
+			},
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			getCalls, updateCalls := 0, 0
+			mgr := &xpfake.Manager{
+				Client: &test.MockClient{
+					MockGet: func(_ context.Context, _ client.ObjectKey, obj client.Object) error {
+						getCalls++
+						// The API client decodes into a zeroed target, so the
+						// conditions of a previous attempt are not observed
+						// here.
+						obj.(*fake.Terraformed).ConditionedStatus = xpv2.ConditionedStatus{}
+						return nil
+					},
+					MockStatusUpdate: func(_ context.Context, obj client.Object, _ ...client.SubResourceUpdateOption) error {
+						updateCalls++
+						err := tc.args.statusUpdate(updateCalls)
+						if err != nil {
+							return err
+						}
+						got := obj.(resource.Terraformed).GetCondition(resource.TypeLastAsyncOperation)
+						if diff := cmp.Diff(resource.LastAsyncOperationCondition(asyncErr), got); diff != "" {
+							t.Errorf("\nUpdate(...): -want condition, +got condition:\n%s", diff)
+						}
+						return nil
+					},
+				},
+				Scheme: xpfake.SchemeWith(&fake.Terraformed{}),
+			}
+			var opts []APICallbacksOption
+			if tc.args.withEventHandler {
+				opts = append(opts, WithEventHandler(newUnprimedEventHandler()))
+			}
+			e := NewAPICallbacks(mgr, xpresource.ManagedKind(xpfake.GVK(&fake.Terraformed{})), opts...)
+			err := e.Update(types.NamespacedName{Name: "name"}, true)(asyncErr, context.TODO())
+			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
+				t.Errorf("\n%s\nUpdate(...): -want error, +got error:\n%s", tc.reason, diff)
+			}
+			if getCalls < tc.want.minGetCalls {
+				t.Errorf("\n%s\nUpdate(...): expected the resource to be read at least %d times, got %d", tc.reason, tc.want.minGetCalls, getCalls)
+			}
+			if tc.want.maxGetCalls > 0 && getCalls > tc.want.maxGetCalls {
+				t.Errorf("\n%s\nUpdate(...): expected the resource to be read at most %d times, got %d", tc.reason, tc.want.maxGetCalls, getCalls)
+			}
+		})
+	}
 }
 
 func TestAPICallbacksCreateRequestReconcile(t *testing.T) {
