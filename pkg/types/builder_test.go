@@ -396,7 +396,7 @@ func TestBuild(t *testing.T) {
 // +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.resourceIn) || (has(self.initProvider) && has(self.initProvider.resourceIn))",message="spec.forProvider.resourceIn is a required parameter"`,
 			},
 		},
-		"Singleton_Nested_Block_Max_Items": {
+		"SingletonNestedBlockMaxItems": {
 			args: args{
 				crdScope: CRDScopeCluster,
 				cfg: &config.Resource{
