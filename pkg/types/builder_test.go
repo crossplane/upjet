@@ -423,13 +423,14 @@ func TestBuild(t *testing.T) {
 				forProvider: `type example.Parameters struct{Permissions []example.PermissionsParameters "json:\"permissions,omitempty\" tf:\"permissions,omitempty\""}`,
 				atProvider:  `type example.Observation struct{Permissions []example.PermissionsObservation "json:\"permissions,omitempty\" tf:\"permissions,omitempty\""}`,
 				commentChecks: map[string]func(t *testing.T, comments map[string]string){
-					"ParameterAndObservationMaxItems": func(t *testing.T, comments map[string]string) {
+					"ParameterInitAndObservationMaxItems": func(t *testing.T, comments map[string]string) {
 						t.Helper()
-						key := "example.Parameters:Permissions"
-						if !strings.Contains(comments[key], "+kubebuilder:validation:MaxItems=1") {
-							t.Errorf("field comment %q missing MaxItems marker: %s", key, comments[key])
+						for _, key := range []string{"example.Parameters:Permissions", "example.InitParameters:Permissions"} {
+							if !strings.Contains(comments[key], "+kubebuilder:validation:MaxItems=1") {
+								t.Errorf("field comment %q missing MaxItems marker: %s", key, comments[key])
+							}
 						}
-						key = "example.Observation:Permissions"
+						key := "example.Observation:Permissions"
 						if strings.Contains(comments[key], "+kubebuilder:validation:MaxItems=1") {
 							t.Errorf("observation field comment %q unexpectedly has MaxItems marker: %s", key, comments[key])
 						}
