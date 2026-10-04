@@ -446,7 +446,9 @@ func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames, opt
 			f.Comment.ServerSideApplyOptions.ListMapKey = nil
 		}
 		f.Comment.KubebuilderOptions.Default = nil
-		g.comments.AddFieldComment(typeNames.ObservationTypeName, f.FieldNameCamel, f.Comment.Build())
+		observationComment := *f.Comment
+		observationComment.KubebuilderOptions.MaxItems = nil
+		g.comments.AddFieldComment(typeNames.ObservationTypeName, f.FieldNameCamel, observationComment.Build())
 	}
 }
 

@@ -425,10 +425,13 @@ func TestBuild(t *testing.T) {
 				commentChecks: map[string]func(t *testing.T, comments map[string]string){
 					"ParameterAndObservationMaxItems": func(t *testing.T, comments map[string]string) {
 						t.Helper()
-						for _, key := range []string{"example.Parameters:Permissions", "example.Observation:Permissions"} {
-							if !strings.Contains(comments[key], "+kubebuilder:validation:MaxItems=1") {
-								t.Errorf("field comment %q missing MaxItems marker: %s", key, comments[key])
-							}
+						key := "example.Parameters:Permissions"
+						if !strings.Contains(comments[key], "+kubebuilder:validation:MaxItems=1") {
+							t.Errorf("field comment %q missing MaxItems marker: %s", key, comments[key])
+						}
+						key = "example.Observation:Permissions"
+						if strings.Contains(comments[key], "+kubebuilder:validation:MaxItems=1") {
+							t.Errorf("observation field comment %q unexpectedly has MaxItems marker: %s", key, comments[key])
 						}
 					},
 				},
