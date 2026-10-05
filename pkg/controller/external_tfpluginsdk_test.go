@@ -14,6 +14,7 @@ import (
 	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/test"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/hashicorp/go-cty/cty"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -562,6 +563,119 @@ func TestTerraformPluginSDKUpdate(t *testing.T) {
 			_, err := terraformPluginSDKExternal.Update(t.Context(), &tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nConnect(...): -want error, +got error:\n", diff)
+			}
+		})
+	}
+}
+
+func TestTerraformPluginSDKDeleteOnly(t *testing.T) {
+	cases := map[string]struct {
+		nilDiff     bool
+		pending     bool
+		forceNew    bool
+		diffTimeout bool
+	}{
+		"NilDiff":              {nilDiff: true},
+		"NoChanges":            {},
+		"NoChangesWithTimeout": {diffTimeout: true},
+		"PendingUpdate":        {pending: true, diffTimeout: true},
+		"PendingForceNew":      {pending: true, forceNew: true, diffTimeout: true},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			const stateTimeout = 5 * time.Minute
+			const diffTimeout = 10 * time.Minute
+			deleteCalls, createCalls := 0, 0
+			r := &schema.Resource{
+				Schema: map[string]*schema.Schema{
+					"name": {Type: schema.TypeString, Required: true, ForceNew: tc.forceNew},
+				},
+				Identity: &schema.ResourceIdentity{
+					SchemaFunc: func() map[string]*schema.Schema {
+						return map[string]*schema.Schema{
+							"name": {Type: schema.TypeString, RequiredForImport: true},
+						}
+					},
+				},
+				CreateContext: func(_ context.Context, d *schema.ResourceData, _ interface{}) diag.Diagnostics {
+					createCalls++
+					d.SetId("replacement-id")
+					return nil
+				},
+				DeleteContext: func(_ context.Context, d *schema.ResourceData, _ interface{}) diag.Diagnostics {
+					deleteCalls++
+					if d.Id() != "example-id" || d.Get("name") != "existing" {
+						t.Errorf("Delete callback did not receive prior state: id=%q, name=%v", d.Id(), d.Get("name"))
+					}
+					identity, err := d.Identity()
+					if err != nil {
+						t.Fatalf("Identity(): %v", err)
+					}
+					if got := identity.Get("name"); got != "existing" {
+						t.Errorf("Delete callback identity: want existing, got %v", got)
+					}
+					wantTimeout := stateTimeout
+					if tc.diffTimeout {
+						wantTimeout = diffTimeout
+					}
+					if got := d.Timeout(schema.TimeoutDelete); got != wantTimeout {
+						t.Errorf("Delete callback timeout: want %v, got %v", wantTimeout, got)
+					}
+					d.SetId("")
+					return nil
+				},
+			}
+			ext := prepareTerraformPluginSDKExternal(r, &config.Resource{TerraformResource: r})
+			ext.opTracker.SetTfState(&tf.InstanceState{
+				ID: "example-id", Attributes: map[string]string{"name": "existing"},
+				Identity: map[string]string{"name": "existing"},
+				Meta:     map[string]interface{}{schema.TimeoutKey: map[string]interface{}{schema.TimeoutDelete: stateTimeout.Nanoseconds()}},
+			})
+			newDiff := func() *tf.InstanceDiff {
+				if tc.nilDiff {
+					return nil
+				}
+				d := tf.NewInstanceDiff()
+				if tc.pending {
+					d.Attributes["name"] = &tf.ResourceAttrDiff{Old: "existing", New: "desired", RequiresNew: tc.forceNew}
+					d.Identity = map[string]string{"name": "desired"}
+				}
+				if tc.diffTimeout {
+					d.Meta = map[string]interface{}{schema.TimeoutKey: map[string]interface{}{schema.TimeoutDelete: diffTimeout.Nanoseconds()}}
+				}
+				return d
+			}
+			ext.instanceDiff = newDiff()
+			originalDiff, wantDiff := ext.instanceDiff, newDiff()
+			if tc.forceNew {
+				_, err := ext.Update(t.Context(), &obj)
+				wantErr := errors.Wrap(errors.New(`cannot change the value of the argument "name" from "existing" to "desired"`), "refuse to update the external resource because the following update requires replacing it")
+				if diff := cmp.Diff(wantErr, err, test.EquateErrors()); diff != "" {
+					t.Errorf("Update(...) must reject ForceNew (-want, +got):\n%s", diff)
+				}
+				if deleteCalls != 0 || createCalls != 0 {
+					t.Fatal("Update(...) invoked SDK callbacks despite a ForceNew change")
+				}
+			}
+			defer func() {
+				if r := recover(); r != nil {
+					t.Errorf("Delete(...) panicked: %v", r)
+				}
+			}()
+			if _, err := ext.Delete(t.Context(), &obj); err != nil {
+				t.Fatalf("Delete(...): %v", err)
+			}
+			if deleteCalls != 1 || createCalls != 0 {
+				t.Errorf("SDK callbacks: want Delete=1 Create=0, got Delete=%d Create=%d", deleteCalls, createCalls)
+			}
+			if ext.opTracker.GetTfState() != nil || !ext.opTracker.IsDeleted() {
+				t.Error("Delete(...) did not clear the tracked state and mark the resource deleted")
+			}
+			if ext.instanceDiff != originalDiff {
+				t.Error("Delete(...) replaced the observation diff")
+			}
+			if diff := cmp.Diff(wantDiff, ext.instanceDiff, cmpopts.IgnoreUnexported(tf.InstanceDiff{}), cmp.Comparer(func(a, b cty.Value) bool { return a.RawEquals(b) })); diff != "" {
+				t.Errorf("Delete(...) mutated the observation diff (-want, +got):\n%s", diff)
 			}
 		})
 	}

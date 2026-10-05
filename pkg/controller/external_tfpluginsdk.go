@@ -887,13 +887,17 @@ func (n *terraformPluginSDKExternal) Update(ctx context.Context, mg xpresource.M
 
 func (n *terraformPluginSDKExternal) Delete(ctx context.Context, _ xpresource.Managed) (managed.ExternalDelete, error) {
 	n.logger.Debug("Deleting the external resource")
-	if n.instanceDiff == nil {
-		n.instanceDiff = tf.NewInstanceDiff()
+	// A destroy-only diff must not include pending changes, which can cause
+	// the SDK to replace the resource or pass desired values to Delete.
+	destroyDiff := tf.NewInstanceDiff()
+	destroyDiff.Destroy = true
+	if n.instanceDiff != nil {
+		// Preserve timeout overrides; the SDK otherwise falls back to state.
+		destroyDiff.Meta = n.instanceDiff.Meta
 	}
 
-	n.instanceDiff.Destroy = true
 	start := time.Now()
-	newState, diag := n.resourceSchema.Apply(ctx, n.opTracker.GetTfState(), n.instanceDiff, n.ts.Meta)
+	newState, diag := n.resourceSchema.Apply(ctx, n.opTracker.GetTfState(), destroyDiff, n.ts.Meta)
 	metrics.ExternalAPITime.WithLabelValues("delete").Observe(time.Since(start).Seconds())
 	if diag != nil && diag.HasError() {
 		return managed.ExternalDelete{}, errors.Errorf("failed to delete the resource: %v", diag)
