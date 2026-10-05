@@ -31,18 +31,12 @@ const (
 	errObservePluginSDKv2        = "cannot observe Terraform plugin SDKv2 resource"
 	errGetInstanceDiff           = "cannot read Terraform plugin SDKv2 resource instance diff"
 	errDiffPluginSDKv2           = "cannot compute diff for a Terraform plugin SDKv2 resource"
-	errConvertValue              = "cannot convert the attribute value to a protobuf value"
-	errGetDesiredParameters      = "cannot get the parameters of the desired resource"
-	errConvertDesiredParameters  = "cannot convert the parameters of the desired resource to their Terraform shape"
 
 	fmtErrConvertAttribute = "cannot convert the diff of the attribute %q"
-
-	// crdParametersPath is the path, in a managed resource's manifest, under
-	// which the Terraform resource's arguments appear.
-	crdParametersPath = "spec.forProvider"
 )
 
 func (s *PlanService) diffTerraformPluginSDK(ctx context.Context, kc kclient.Client, cfg *config.Resource, desired, actual xpresource.Managed) (*diffv1alpha1.PlanResponse, error) {
+	cfg = planConfig(cfg, desired)
 	opTracker := controller.NewOperationStore(s.log)
 	c := controller.NewTerraformPluginSDKConnector(
 		kc, s.setupFn, cfg, opTracker,
@@ -61,14 +55,30 @@ func (s *PlanService) diffTerraformPluginSDK(ctx context.Context, kc kclient.Cli
 	}
 
 	if actual == nil {
-		opTracker.Tracker(dtr).ResetReconstructedTfState()
+		// Connect reconstructed a Terraform state from the desired resource.
+		// There is nothing to observe for a create, so that state is emptied
+		// rather than discarded: Observe reads the external resource's absence
+		// off an empty ID, and the state is also what carries the RawPlan and
+		// the RawConfig that computing the diff needs. This leaves the
+		// Terraform provider with the same state the reconciler diffs against
+		// on a create, where the absence comes from a refresh instead.
+		markAbsent(opTracker.Tracker(dtr).GetTfState())
 	} else {
 		tr, ok := actual.(resource.Terraformed)
 		if !ok {
 			return nil, errors.Errorf(fmtErrNotTerraformed, actual.GetObjectKind().GroupVersionKind().String())
 		}
-		opTracker.Tracker(tr).ResetReconstructedTfState()
-		if _, _, _, err := c.ReconstructTerraformState(ctx, tr, s.log); err != nil {
+		// The tracker is keyed by UID, and every later read of it - Observe,
+		// and the diff computation below - asks for desired's. Reconstructing
+		// under actual's own UID would leave the state in a different slot
+		// whenever the two differ, which they do for a rendered desired
+		// manifest that was never applied and so carries no UID at all. A
+		// copy keeps actual's own observation and annotations; only the UID
+		// used to select the tracker slot changes.
+		trAtDesiredKey := tr.DeepCopyObject().(resource.Terraformed)
+		trAtDesiredKey.SetUID(dtr.GetUID())
+		opTracker.Tracker(trAtDesiredKey).ResetReconstructedTfState()
+		if _, _, _, err := c.ReconstructTerraformState(ctx, trAtDesiredKey, s.log); err != nil {
 			return nil, errors.Wrap(err, errReconstructTerraformState)
 		}
 	}
@@ -84,17 +94,30 @@ func (s *PlanService) diffTerraformPluginSDK(ctx context.Context, kc kclient.Cli
 	}
 	filterInstanceDiff(diff)
 
-	declared, err := dtr.GetMergedParameters(true)
+	// The flatmap keys the diff reports are in Terraform shape, so the
+	// parameters they are compared against must be too.
+	declared, unresolved, err := declaredParameters(ctx, kc, dtr, cfg)
 	if err != nil {
-		return nil, errors.Wrap(err, errGetDesiredParameters)
+		return nil, err
 	}
-	// The flatmap keys are in Terraform shape, so the parameters must be too:
-	// this turns the CRD's embedded objects back into singleton lists.
-	declared, err = cfg.ApplyTFConversions(declared, config.ToTerraform)
-	if err != nil {
-		return nil, errors.Wrap(err, errConvertDesiredParameters)
+	return s.planResponse(diff, obs.ResourceExists, declared, unresolved, cfg)
+}
+
+// markAbsent empties the given reconstructed Terraform state in place so that
+// it stands for an external resource that does not exist yet. Observe reports
+// a resource as existing exactly when its state carries an ID, so clearing the
+// ID is what makes the plan a create.
+//
+// RawPlan and RawConfig are deliberately left alone: the instance diff is
+// computed against them, and a Terraform provider may assume they are not
+// null. The AWS provider's transparent tagging interceptor, for one, calls
+// ResourceDiff.GetRawPlan().GetAttr("tags"), which panics on a zero cty.Value.
+func markAbsent(s *tf.InstanceState) {
+	if s == nil {
+		return
 	}
-	return s.planResponse(diff, obs.ResourceExists, declared, cfg)
+	s.ID = ""
+	s.Attributes = nil
 }
 
 // planResponse converts a filtered Terraform instance diff into a plan
@@ -107,7 +130,7 @@ func (s *PlanService) diffTerraformPluginSDK(ctx context.Context, kc kclient.Cli
 // against the resource schema, which means a number reads as "30" and a
 // boolean as "true". Clients should not infer a type from the JSON shape of
 // a plugin SDKv2 plan.
-func (s *PlanService) planResponse(d *tf.InstanceDiff, exists bool, declared map[string]any, cfg *config.Resource) (*diffv1alpha1.PlanResponse, error) {
+func (s *PlanService) planResponse(d *tf.InstanceDiff, exists bool, declared map[string]any, unresolved []string, cfg *config.Resource) (*diffv1alpha1.PlanResponse, error) { //nolint:gocyclo // the cases an attribute diff falls into are easier to follow as a unit
 	r := &diffv1alpha1.PlanResponse{
 		Action:     diffv1alpha1.Action_ACTION_NO_OP,
 		ComputedAt: timestamppb.Now(),
@@ -137,11 +160,21 @@ func (s *PlanService) planResponse(d *tf.InstanceDiff, exists bool, declared map
 			// changes that accompany them are reported on their own.
 			continue
 		}
+		if isUnresolvedParameter(k, unresolved) {
+			// The Secret behind this attribute was not supplied, so whatever
+			// the diff says about it is an artefact of the value never having
+			// arrived. It is reported below as unresolved instead.
+			continue
+		}
 		c, err := fieldChange(k, a, declared, exists, cfg)
 		if err != nil {
 			return nil, errors.Wrapf(err, fmtErrConvertAttribute, k)
 		}
 		r.Changes = append(r.GetChanges(), c)
+	}
+
+	for _, k := range unresolved {
+		r.Changes = append(r.GetChanges(), unresolvedChange(k, cfg, exists))
 	}
 
 	// Map iteration is unordered, so sort to keep a plan stable across calls.
@@ -155,7 +188,14 @@ func (s *PlanService) planResponse(d *tf.InstanceDiff, exists bool, declared map
 		// The external resource is not there yet, so the plan creates it
 		// whether or not the diff carries attribute changes.
 		r.Action = diffv1alpha1.Action_ACTION_CREATE
-	case d.Empty():
+	case d.Empty() && len(unresolved) == 0:
+		// d.Empty() alone is not enough: an unresolved Secret reference whose
+		// attribute's Old and New are both empty - never supplied, and never
+		// set either - is absent from d by the time this runs, yet
+		// unresolvedChange still reports it above, in changes, because the
+		// user did declare the reference. Without the len(unresolved) == 0
+		// term here, that combination would report ACTION_NO_OP alongside a
+		// non-empty Changes list.
 		r.Action = diffv1alpha1.Action_ACTION_NO_OP
 	case requiresReplace:
 		r.Action = diffv1alpha1.Action_ACTION_REPLACE
@@ -391,10 +431,6 @@ func concreteValue(s string) (*diffv1alpha1.FieldValue, error) {
 		return nil, errors.Wrap(err, errConvertValue)
 	}
 	return &diffv1alpha1.FieldValue{Kind: &diffv1alpha1.FieldValue_Value{Value: v}}, nil
-}
-
-func absentValue(a diffv1alpha1.Absence) *diffv1alpha1.FieldValue {
-	return &diffv1alpha1.FieldValue{Kind: &diffv1alpha1.FieldValue_Absence{Absence: a}}
 }
 
 // filterInstanceDiff removes the attribute diffs that do not represent a

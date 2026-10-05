@@ -53,8 +53,8 @@ enum Action {
   ACTION_UPDATE = 3;
 
   // The external resource exists but the change cannot be applied in place,
-  // so it would be destroyed and recreated. See PlanResponse.replace_fields
-  // for the fields that force the replacement.
+  // so it would be destroyed and recreated. The fields that force the
+  // replacement are the ones whose FieldChange sets requires_replace.
   ACTION_REPLACE = 4;
 }
 
@@ -62,6 +62,14 @@ message PlanResponse {
   Action action = 1;
   repeated FieldChange changes = 2;
   // repeated Diagnostic diagnostics = 5;
+
+  // Reserved, and not set by any server today. A request that cannot be
+  // answered fails with a gRPC status instead: the code says what kind of
+  // failure it is, and a FAILED_PRECONDITION carries a PreconditionFailure
+  // detail of type DIFF_COMPUTATION_NOT_SUPPORTED, which is what tells a
+  // client to fall back to diffing the manifests. This field is kept for the
+  // case a status cannot express, a plan that was computed but is known to be
+  // partial, and clients should not read it until something sets it.
   string error = 6;
   google.protobuf.Timestamp computed_at = 7;
 }

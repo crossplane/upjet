@@ -47,8 +47,8 @@ const (
 	// The external resource exists and would be updated in place.
 	Action_ACTION_UPDATE Action = 3
 	// The external resource exists but the change cannot be applied in place,
-	// so it would be destroyed and recreated. See PlanResponse.replace_fields
-	// for the fields that force the replacement.
+	// so it would be destroyed and recreated. The fields that force the
+	// replacement are the ones whose FieldChange sets requires_replace.
 	Action_ACTION_REPLACE Action = 4
 )
 
@@ -292,8 +292,14 @@ func (x *PlanRequest) GetKubernetesObjectStore() []*structpb.Struct {
 type PlanResponse struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Action  Action                 `protobuf:"varint,1,opt,name=action,proto3,enum=upjet.diff.v1alpha1.Action" json:"action,omitempty"`
-	Changes []*FieldChange         `protobuf:"bytes,2,rep,name=changes,proto3" json:"changes,omitempty"`
-	// repeated Diagnostic diagnostics = 5;
+	Changes []*FieldChange         `protobuf:"bytes,2,rep,name=changes,proto3" json:"changes,omitempty"` // repeated Diagnostic diagnostics = 5;
+	// Reserved, and not set by any server today. A request that cannot be
+	// answered fails with a gRPC status instead: the code says what kind of
+	// failure it is, and a FAILED_PRECONDITION carries a PreconditionFailure
+	// detail of type DIFF_COMPUTATION_NOT_SUPPORTED, which is what tells a
+	// client to fall back to diffing the manifests. This field is kept for the
+	// case a status cannot express, a plan that was computed but is known to be
+	// partial, and clients should not read it until something sets it.
 	Error         string                 `protobuf:"bytes,6,opt,name=error,proto3" json:"error,omitempty"`
 	ComputedAt    *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=computed_at,json=computedAt,proto3" json:"computed_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
