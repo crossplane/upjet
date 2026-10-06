@@ -49,6 +49,7 @@ type TerraformPluginFrameworkConnector struct {
 	metricRecorder              *metrics.MetricRecorder
 	operationTrackerStore       *OperationTrackerStore
 	isManagementPoliciesEnabled bool
+	observationMode             ObservationMode
 }
 
 // TerraformPluginFrameworkConnectorOption allows you to configure TerraformPluginFrameworkConnector.
@@ -77,6 +78,17 @@ func WithTerraformPluginFrameworkManagementPolicies(isManagementPoliciesEnabled 
 	}
 }
 
+// WithTerraformPluginFrameworkObservationMode configures how the client
+// observes the external resource. The default, ReadExternalResource, reads it
+// from the provider's API. UseLocalState instead observes the Terraform state
+// the operation tracker already holds, so that a caller which supplies that
+// state itself, such as the diff server, never reaches the API.
+func WithTerraformPluginFrameworkObservationMode(m ObservationMode) TerraformPluginFrameworkConnectorOption {
+	return func(c *TerraformPluginFrameworkConnector) {
+		c.observationMode = m
+	}
+}
+
 // NewTerraformPluginFrameworkConnector creates a new
 // TerraformPluginFrameworkConnector with given options.
 func NewTerraformPluginFrameworkConnector(kube client.Client, sf terraform.SetupFn, cfg *config.Resource, ots *OperationTrackerStore, opts ...TerraformPluginFrameworkConnectorOption) *TerraformPluginFrameworkConnector {
@@ -85,6 +97,7 @@ func NewTerraformPluginFrameworkConnector(kube client.Client, sf terraform.Setup
 		kube:                  kube,
 		config:                cfg,
 		operationTrackerStore: ots,
+		observationMode:       ReadExternalResource,
 	}
 	for _, f := range opts {
 		f(connector)
@@ -108,6 +121,18 @@ type terraformPluginFrameworkExternalClient struct {
 	resourceValueTerraformType tftypes.Type
 	// configured value for the resource in terraform type system
 	resourceTerraformConfigValue tftypes.Value
+	observationMode              ObservationMode
+}
+
+// TerraformPluginFrameworkPlanResponse returns the plan the given external
+// client computed during its last Observe. It is the Terraform Plugin
+// Framework counterpart of TerraformPluginSDKInstanceDiff.
+func TerraformPluginFrameworkPlanResponse(ec managed.ExternalClient) (*tfprotov6.PlanResourceChangeResponse, error) {
+	n, ok := ec.(*terraformPluginFrameworkExternalClient)
+	if !ok {
+		return nil, errors.New("not a Terraform plugin Framework external client")
+	}
+	return n.planResponse, nil
 }
 
 // supportsIdentity reports whether the underlying TF resource implements
@@ -166,90 +191,13 @@ func getFrameworkExtendedParameters(ctx context.Context, tr resource.Terraformed
 
 // Connect makes sure the underlying client is ready to issue requests to the
 // provider API.
-func (c *TerraformPluginFrameworkConnector) Connect(ctx context.Context, mg xpresource.Managed) (managed.ExternalClient, error) { //nolint:gocyclo
+func (c *TerraformPluginFrameworkConnector) Connect(ctx context.Context, mg xpresource.Managed) (managed.ExternalClient, error) {
 	c.metricRecorder.ObserveReconcileDelay(mg.GetObjectKind().GroupVersionKind(), metrics.NameForManaged(mg))
 	logger := c.logger.WithValues("uid", mg.GetUID(), "name", mg.GetName(), "namespace", mg.GetNamespace(), "gvk", mg.GetObjectKind().GroupVersionKind().String())
-	logger.Debug("Connecting to the service provider")
-	start := time.Now()
-	ts, err := c.getTerraformSetup(ctx, c.kube, mg)
-	metrics.ExternalAPITime.WithLabelValues("connect").Observe(time.Since(start).Seconds())
-	if err != nil {
-		return nil, errors.Wrap(err, errGetTerraformSetup)
-	}
-
 	tr := mg.(resource.Terraformed)
-	opTracker := c.operationTrackerStore.Tracker(tr)
-	externalName := meta.GetExternalName(tr)
-	resourceSchema, err := c.getResourceSchema(ctx)
+	ts, params, resourceSchema, resourceConfigTFValue, err := c.ReconstructFrameworkTerraformState(ctx, tr, logger)
 	if err != nil {
-		return nil, errors.Wrap(err, "could not retrieve resource schema")
-	}
-	params, err := getFrameworkExtendedParameters(ctx, tr, externalName, c.config, ts, c.isManagementPoliciesEnabled, c.kube, resourceSchema)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to get the extended parameters for resource %q", client.ObjectKeyFromObject(mg))
-	}
-
-	resourceTfValueType := resourceSchema.Type().TerraformType(ctx)
-	hasState := false
-	if opTracker.HasFrameworkTFState() {
-		tfStateValue, err := opTracker.GetFrameworkTFState().Unmarshal(resourceTfValueType)
-		if err != nil {
-			return nil, errors.Wrap(err, "cannot unmarshal TF state dynamic value during state existence check")
-		}
-		hasState = !tfStateValue.IsNull()
-	}
-
-	// Strip initProvider-exclusive fields from params when the resource already exists,
-	// so they are not re-applied on every update.
-	// This mirrors filterInitExclusiveDiffs from the SDKv2 client.
-	if hasState && c.isManagementPoliciesEnabled {
-		err := removeInitProviderExclusiveParams(tr, params, c.config)
-		if err != nil {
-			return nil, errors.Wrap(err, "cannot remove initProvider-exclusive params")
-		}
-	}
-
-	resourceConfigTFValue, err := c.getResourceConfigTerraformValue(ctx, resourceTfValueType, params, resourceSchema)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get resource config TF value")
-	}
-
-	if !hasState {
-		logger.Debug("Instance state not found in cache, reconstructing...")
-		tfState, err := tr.GetObservation()
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to get the observation")
-		}
-		if err := mergeAnnotationFieldsWithStatus(tfState, mg.GetAnnotations(), c.config); err != nil {
-			return nil, errors.Wrapf(err, "failed to merge annotations on resource %q", client.ObjectKeyFromObject(mg))
-		}
-		tfState, err = c.config.ApplyTFConversions(tfState, config.ToTerraform)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to run the API converters on the Terraform state")
-		}
-		// several possibilities for this:
-		// - resource is being reconciled for the first time
-		// - after initial reconciliation, we failed to set the state
-		// - resource is getting imported
-		// - previous TF operation returned an empty state
-		copyParams := len(tfState) == 0
-		if err = resource.GetSensitiveParameters(ctx, &APISecretClient{kube: c.kube}, tr, tfState, tr.GetConnectionDetailsMapping()); err != nil {
-			return nil, errors.Wrap(err, "cannot store sensitive parameters into tfState")
-		}
-		c.config.ExternalName.SetIdentifierArgumentFn(tfState, externalName)
-		_, hasIDInSchema := resourceSchema.GetAttributes()["id"]
-		if id, ok := params["id"]; ok && id != nil && id.(string) != "" && hasIDInSchema {
-			tfState["id"] = params["id"]
-		}
-		if copyParams {
-			tfState = copyParameters(tfState, params)
-		}
-
-		tfStateDynamicValue, err := protov6DynamicValueFromMap(tfState, resourceTfValueType)
-		if err != nil {
-			return nil, errors.Wrap(err, "cannot construct dynamic value for TF state")
-		}
-		opTracker.SetReconstructedFrameworkTFState(tfStateDynamicValue)
+		return nil, err
 	}
 
 	configuredProviderServer, err := c.configureProvider(ctx, ts)
@@ -262,14 +210,106 @@ func (c *TerraformPluginFrameworkConnector) Connect(ctx context.Context, mg xpre
 		config:                       c.config,
 		logger:                       logger,
 		metricRecorder:               c.metricRecorder,
-		opTracker:                    opTracker,
+		opTracker:                    c.operationTrackerStore.Tracker(tr),
 		resource:                     c.config.TerraformPluginFrameworkResource,
 		server:                       configuredProviderServer,
 		params:                       params,
 		resourceSchema:               resourceSchema,
-		resourceValueTerraformType:   resourceTfValueType,
+		resourceValueTerraformType:   resourceSchema.Type().TerraformType(ctx),
 		resourceTerraformConfigValue: resourceConfigTFValue,
+		observationMode:              c.observationMode,
 	}, nil
+}
+
+// ReconstructFrameworkTerraformState reconstructs the Terraform state the
+// given managed resource's observation and parameters imply, and stores it on
+// the tracker, so that a later Observe or Plan has a prior state to work
+// from. An observation that is empty, i.e. a resource that has not been
+// created yet, is seeded with the parameters instead. The reconstructed
+// state is stored on the tracker rather than returned, and a cached state is
+// left untouched.
+//
+// This is also what the diff server uses to reconstruct an actual resource's
+// state under a tracker slot keyed by a different (the desired resource's)
+// UID, without paying for a provider server it would immediately discard:
+// Connect needs one, to serve Observe and Plan on the connection it returns,
+// but a caller that only wants the tracker populated does not.
+//
+// On error, the returned terraform.Setup is the zero value, and the
+// parameter map, schema, and cty.Value are nil or zero valued.
+func (c *TerraformPluginFrameworkConnector) ReconstructFrameworkTerraformState(ctx context.Context, tr resource.Terraformed, logger logging.Logger) (terraform.Setup, map[string]any, rschema.Schema, tftypes.Value, error) { //nolint:gocyclo // mirrors the plugin SDKv2 counterpart step for step
+	logger.Debug("Connecting to the service provider")
+	start := time.Now()
+	ts, err := c.getTerraformSetup(ctx, c.kube, tr)
+	metrics.ExternalAPITime.WithLabelValues("connect").Observe(time.Since(start).Seconds())
+	if err != nil {
+		return terraform.Setup{}, nil, rschema.Schema{}, tftypes.Value{}, errors.Wrap(err, errGetTerraformSetup)
+	}
+
+	opTracker := c.operationTrackerStore.Tracker(tr)
+	externalName := meta.GetExternalName(tr)
+	resourceSchema, err := c.getResourceSchema(ctx)
+	if err != nil {
+		return terraform.Setup{}, nil, rschema.Schema{}, tftypes.Value{}, errors.Wrap(err, "could not retrieve resource schema")
+	}
+	params, err := getFrameworkExtendedParameters(ctx, tr, externalName, c.config, ts, c.isManagementPoliciesEnabled, c.kube, resourceSchema)
+	if err != nil {
+		return terraform.Setup{}, nil, rschema.Schema{}, tftypes.Value{}, errors.Wrapf(err, "failed to get the extended parameters for resource %q", client.ObjectKeyFromObject(tr))
+	}
+
+	resourceTfValueType := resourceSchema.Type().TerraformType(ctx)
+	resourceConfigTFValue, err := c.getResourceConfigTerraformValue(ctx, resourceTfValueType, params, resourceSchema)
+	if err != nil {
+		return terraform.Setup{}, nil, rschema.Schema{}, tftypes.Value{}, errors.Wrap(err, "could not get resource config TF value")
+	}
+	hasState := false
+	if opTracker.HasFrameworkTFState() {
+		tfStateValue, err := opTracker.GetFrameworkTFState().Unmarshal(resourceTfValueType)
+		if err != nil {
+			return terraform.Setup{}, nil, rschema.Schema{}, tftypes.Value{}, errors.Wrap(err, "cannot unmarshal TF state dynamic value during state existence check")
+		}
+		hasState = !tfStateValue.IsNull()
+	}
+
+	if !hasState {
+		logger.Debug("Instance state not found in cache, reconstructing...")
+		tfState, err := tr.GetObservation()
+		if err != nil {
+			return terraform.Setup{}, nil, rschema.Schema{}, tftypes.Value{}, errors.Wrap(err, "failed to get the observation")
+		}
+		if err := mergeAnnotationFieldsWithStatus(tfState, tr.GetAnnotations(), c.config); err != nil {
+			return terraform.Setup{}, nil, rschema.Schema{}, tftypes.Value{}, errors.Wrapf(err, "failed to merge annotations on resource %q", client.ObjectKeyFromObject(tr))
+		}
+		tfState, err = c.config.ApplyTFConversions(tfState, config.ToTerraform)
+		if err != nil {
+			return terraform.Setup{}, nil, rschema.Schema{}, tftypes.Value{}, errors.Wrap(err, "failed to run the API converters on the Terraform state")
+		}
+		// several possibilities for this:
+		// - resource is being reconciled for the first time
+		// - after initial reconciliation, we failed to set the state
+		// - resource is getting imported
+		// - previous TF operation returned an empty state
+		copyParams := len(tfState) == 0
+		if err = resource.GetSensitiveParameters(ctx, &APISecretClient{kube: c.kube}, tr, tfState, tr.GetConnectionDetailsMapping()); err != nil {
+			return terraform.Setup{}, nil, rschema.Schema{}, tftypes.Value{}, errors.Wrap(err, "cannot store sensitive parameters into tfState")
+		}
+		c.config.ExternalName.SetIdentifierArgumentFn(tfState, externalName)
+		_, hasIDInSchema := resourceSchema.GetAttributes()["id"]
+		if id, ok := params["id"]; ok && id != nil && id.(string) != "" && hasIDInSchema {
+			tfState["id"] = params["id"]
+		}
+		if copyParams {
+			tfState = copyParameters(tfState, params)
+		}
+
+		tfStateDynamicValue, err := protov6DynamicValueFromMap(tfState, resourceTfValueType)
+		if err != nil {
+			return terraform.Setup{}, nil, rschema.Schema{}, tftypes.Value{}, errors.Wrap(err, "cannot construct dynamic value for TF state")
+		}
+		opTracker.SetReconstructedFrameworkTFState(tfStateDynamicValue)
+	}
+
+	return ts, params, resourceSchema, resourceConfigTFValue, nil
 }
 
 // getResourceSchema returns the Terraform Plugin Framework-style resource schema for the configured framework resource on the connector
@@ -454,12 +494,12 @@ func (n *terraformPluginFrameworkExternalClient) getDiffPlanResponse(ctx context
 		return nil, false, errors.Wrap(err, "cannot unmarshal planned state")
 	}
 
-	rawDiff, err := plannedStateValue.Diff(tfStateValue)
+	priorValue, plannedValue, rawDiff, err := NormalizedDiff(tfStateValue, plannedStateValue)
 	if err != nil {
-		return nil, false, errors.Wrap(err, "cannot compare prior state and plan")
+		return nil, false, err
 	}
 
-	if err := n.filterRequiresReplace(ctx, planResponse, tfStateValue, plannedStateValue); err != nil {
+	if err := n.filterRequiresReplace(ctx, planResponse, priorValue, plannedValue); err != nil {
 		return nil, false, errors.Wrap(err, "failed to check for required replacement fields")
 	}
 	if n.supportsIdentity() {
@@ -472,24 +512,48 @@ func (n *terraformPluginFrameworkExternalClient) getDiffPlanResponse(ctx context
 // filterRequiresReplace checks the TF plan response for fields that require/force resource
 // replacement, and filters false-positives. The generated plan sometimes reports a field,
 // but the prior and plan values are actually the same.
+// The caller normalizes stateValue and plannedValue with nullCollectionsAsEmpty,
+// and each path is looked up with its set elements normalized the same way.
 func (n *terraformPluginFrameworkExternalClient) filterRequiresReplace(ctx context.Context, planResponse *tfprotov6.PlanResourceChangeResponse, stateValue, plannedValue tftypes.Value) error {
-	var filteredRequiresReplace []*tftypes.AttributePath
-	for _, path := range planResponse.RequiresReplace {
-		priorValInt, _, errPrior := tftypes.WalkAttributePath(stateValue, path)
-		plannedValInt, _, errPlanned := tftypes.WalkAttributePath(plannedValue, path)
+	filtered, err := FilterRequiresReplace(ctx, n.logger, n.resourceSchema, planResponse.RequiresReplace, stateValue, plannedValue)
+	if err != nil {
+		return err
+	}
+	planResponse.RequiresReplace = filtered
+	return nil
+}
+
+// FilterRequiresReplace checks requiresReplace for paths whose prior and
+// planned values are actually the same, and filters out those false
+// positives. stateValue and plannedValue must already be normalized with
+// NormalizedDiff, and each path is looked up with its set elements normalized
+// the same way.
+//
+// This is also what the diff server's Plugin Framework path uses, so that a
+// RequiresReplace path it reports agrees with what the reconciler itself
+// would, rather than reimplementing this filtering on its own.
+func FilterRequiresReplace(ctx context.Context, logger logging.Logger, sch rschema.Schema, requiresReplace []*tftypes.AttributePath, stateValue, plannedValue tftypes.Value) ([]*tftypes.AttributePath, error) { //nolint:gocyclo // easier to follow as a unit
+	var filtered []*tftypes.AttributePath
+	for _, path := range requiresReplace {
+		lookupPath, err := nullCollectionsAsEmptyInPath(path)
+		if err != nil {
+			return nil, errors.Wrapf(err, "cannot normalize the path %s", path)
+		}
+		priorValInt, _, errPrior := tftypes.WalkAttributePath(stateValue, lookupPath)
+		plannedValInt, _, errPlanned := tftypes.WalkAttributePath(plannedValue, lookupPath)
 		if errPrior != nil && errPlanned != nil {
-			n.logger.Debug("upstream TF provider generated an invalid plan")
+			logger.Debug("upstream TF provider generated an invalid plan")
 			continue
 		}
-		tfType, err := n.resourceSchema.TypeAtTerraformPath(ctx, path)
+		tfType, err := sch.TypeAtTerraformPath(ctx, path)
 		if err != nil {
-			return errors.New("cannot get the type at path from resource schema: %v")
+			return nil, errors.New("cannot get the type at path from resource schema: %v")
 		}
 
 		priorVal, ok := priorValInt.(tftypes.Value)
 		if !ok {
 			if priorValInt != nil {
-				return fmt.Errorf("cannot convert prior value to tftypes.Value")
+				return nil, fmt.Errorf("cannot convert prior value to tftypes.Value")
 			}
 			priorVal = tftypes.NewValue(tfType.TerraformType(ctx), nil)
 		}
@@ -497,17 +561,94 @@ func (n *terraformPluginFrameworkExternalClient) filterRequiresReplace(ctx conte
 		plannedVal, ok := plannedValInt.(tftypes.Value)
 		if !ok {
 			if plannedValInt != nil {
-				return fmt.Errorf("cannot convert planned value to tftypes.Value")
+				return nil, fmt.Errorf("cannot convert planned value to tftypes.Value")
 			}
 			plannedVal = tftypes.NewValue(tfType.TerraformType(ctx), nil)
 		}
 		if !plannedVal.Equal(priorVal) {
-			filteredRequiresReplace = append(filteredRequiresReplace, path)
+			filtered = append(filtered, path)
+			continue
 		}
-		n.logger.Debug("TF plan reported a diff at path that require resource replacement, but the prior and plan values are equal. Skipping...", "path", path)
+		logger.Debug("TF plan reported a diff at path that require resource replacement, but the prior and plan values are equal. Skipping...", "path", path)
 	}
-	planResponse.RequiresReplace = filteredRequiresReplace
-	return nil
+	return filtered, nil
+}
+
+// NormalizedDiff normalizes the prior and the planned state with
+// nullCollectionsAsEmpty and returns them together with the diff between
+// them. The prior state rebuilt from a managed resource cannot tell an empty
+// collection from an absent one, and the plan carries the framework's empty
+// defaults, so both sides are compared with null collections as empty.
+//
+// This is also what the diff server's Plugin Framework path uses, so that it
+// is not caught by the same null-versus-empty noise this was written to fix
+// for the reconciler.
+func NormalizedDiff(prior, planned tftypes.Value) (tftypes.Value, tftypes.Value, []tftypes.ValueDiff, error) {
+	priorValue, err := nullCollectionsAsEmpty(prior)
+	if err != nil {
+		return tftypes.Value{}, tftypes.Value{}, nil, errors.Wrap(err, "cannot normalize prior state")
+	}
+	plannedValue, err := nullCollectionsAsEmpty(planned)
+	if err != nil {
+		return tftypes.Value{}, tftypes.Value{}, nil, errors.Wrap(err, "cannot normalize planned state")
+	}
+	rawDiff, err := plannedValue.Diff(priorValue)
+	if err != nil {
+		return tftypes.Value{}, tftypes.Value{}, nil, errors.Wrap(err, "cannot compare prior state and plan")
+	}
+	return priorValue, plannedValue, rawDiff, nil
+}
+
+// nullCollectionsAsEmpty returns a copy of v in which every null list, set or
+// map, at any depth, is replaced by an empty collection of the same type.
+// Unknown values, non-empty collections and values of other types are kept.
+//
+// The prior state reconstructed from a managed resource cannot tell an empty
+// collection from an absent one: the generated parameters and observation are
+// marshalled with omitempty, so an empty collection stored by the provider
+// comes back as null after a provider restart or once the status is dropped.
+// The plan, on the other hand, carries the framework's empty defaults. A
+// null-versus-empty difference between the two is an artifact of the
+// reconstruction, not a change the user asked for, so the diff and the
+// RequiresReplace paths are evaluated on values normalized this way.
+func nullCollectionsAsEmpty(v tftypes.Value) (tftypes.Value, error) {
+	return tftypes.Transform(v, func(_ *tftypes.AttributePath, v tftypes.Value) (tftypes.Value, error) {
+		if !v.IsNull() {
+			return v, nil
+		}
+		switch v.Type().(type) {
+		case tftypes.List, tftypes.Set:
+			return tftypes.NewValue(v.Type(), []tftypes.Value{}), nil
+		case tftypes.Map:
+			return tftypes.NewValue(v.Type(), map[string]tftypes.Value{}), nil
+		default:
+			return v, nil
+		}
+	})
+}
+
+// nullCollectionsAsEmptyInPath returns a copy of p in which the value of every
+// set element step is normalized with nullCollectionsAsEmpty.
+//
+// A set element step matches only an element equal to its value, and the paths
+// that require replacement come from the raw plan, so they have to be
+// normalized like the values they are looked up in. This also covers the
+// framework building those steps from its internal value, where nested blocks
+// are null, while the planned state carries them as empty collections.
+func nullCollectionsAsEmptyInPath(p *tftypes.AttributePath) (*tftypes.AttributePath, error) {
+	steps := p.Steps()
+	for i, step := range steps {
+		element, ok := step.(tftypes.ElementKeyValue)
+		if !ok {
+			continue
+		}
+		v, err := nullCollectionsAsEmpty(tftypes.Value(element))
+		if err != nil {
+			return nil, err
+		}
+		steps[i] = tftypes.ElementKeyValue(v)
+	}
+	return tftypes.NewAttributePathWithSteps(steps), nil
 }
 
 // recoverExternalName tries to extract the externalname from the current TF state
@@ -562,15 +703,21 @@ func hasMissingResourceIdentityDiagnostic(diags []*tfprotov6.Diagnostic) bool {
 	return false
 }
 
-func (n *terraformPluginFrameworkExternalClient) Observe(ctx context.Context, mg xpresource.Managed) (managed.ExternalObservation, error) { //nolint:gocyclo
-	n.logger.Debug("Observing the external resource")
-
-	if meta.WasDeleted(mg) && n.opTracker.IsDeleted() {
-		return managed.ExternalObservation{
-			ResourceExists: false,
-		}, nil
+// localState returns the Terraform state the operation tracker holds, for an
+// external client observing in UseLocalState mode. Nothing is read from the
+// provider's API.
+func (n *terraformPluginFrameworkExternalClient) localState() (tftypes.Value, error) {
+	state := n.opTracker.GetFrameworkTFState()
+	if state == nil {
+		return tftypes.NewValue(n.resourceValueTerraformType, nil), nil
 	}
+	v, err := state.Unmarshal(n.resourceValueTerraformType)
+	return v, errors.Wrap(err, "cannot unmarshal the local Terraform state")
+}
 
+// readState reads the external resource through the Terraform provider and
+// returns its state, recording it on the operation tracker.
+func (n *terraformPluginFrameworkExternalClient) readState(ctx context.Context) (tftypes.Value, error) { //nolint:gocyclo // preserved from Observe, where it used to be inline
 	readRequest := &tfprotov6.ReadResourceRequest{
 		TypeName:     n.config.Name,
 		CurrentState: n.opTracker.GetFrameworkTFState(),
@@ -581,7 +728,7 @@ func (n *terraformPluginFrameworkExternalClient) Observe(ctx context.Context, mg
 	readResponse, err := n.server.ReadResource(ctx, readRequest)
 	if err != nil {
 		n.opTracker.ResetReconstructedFrameworkTFState()
-		return managed.ExternalObservation{}, errors.Wrap(err, "cannot read resource")
+		return tftypes.Value{}, errors.Wrap(err, "cannot read resource")
 	}
 
 	// Some Terraform resource implementations return SeverityError diagnostics
@@ -592,7 +739,7 @@ func (n *terraformPluginFrameworkExternalClient) Observe(ctx context.Context, mg
 		isMissingIdentityDiags := n.supportsIdentity() && hasMissingResourceIdentityDiagnostic(readResponse.Diagnostics)
 		if !isResourceNotFoundDiags && !isMissingIdentityDiags {
 			n.opTracker.ResetReconstructedFrameworkTFState()
-			return managed.ExternalObservation{}, errors.Wrap(fatalDiags, "read resource request failed")
+			return tftypes.Value{}, errors.Wrap(fatalDiags, "read resource request failed")
 		}
 		if isResourceNotFoundDiags {
 			n.logger.Debug("TF ReadResource returned error diagnostics, but XP resource was configured to treat them as `Resource not exists`. Skipping", "skippedDiags", fatalDiags)
@@ -603,29 +750,55 @@ func (n *terraformPluginFrameworkExternalClient) Observe(ctx context.Context, mg
 		}
 	}
 
-	var tfStateValue tftypes.Value
 	if isResourceNotFoundDiags {
 		// we nullify the state here, because the resource has an explicit
 		// configuration that says, these diagnostics actually correspond
 		// to a "resource not found" situation.
-		tfStateValue = tftypes.NewValue(n.resourceValueTerraformType, nil)
+		tfStateValue := tftypes.NewValue(n.resourceValueTerraformType, nil)
 		nildynamicValue, err := tfprotov6.NewDynamicValue(n.resourceValueTerraformType, tfStateValue)
 		if err != nil {
-			return managed.ExternalObservation{}, errors.Wrap(err, "cannot create nil dynamic value")
+			return tftypes.Value{}, errors.Wrap(err, "cannot create nil dynamic value")
 		}
 		n.opTracker.SetFrameworkTFState(&nildynamicValue)
 		if n.supportsIdentity() {
 			n.opTracker.SetFrameworkIdentity(nil)
 		}
-	} else {
-		tfStateValue, err = readResponse.NewState.Unmarshal(n.resourceValueTerraformType)
-		if err != nil {
-			return managed.ExternalObservation{}, errors.Wrap(err, "cannot unmarshal state value")
-		}
-		n.opTracker.SetFrameworkTFState(readResponse.NewState)
-		if n.supportsIdentity() {
-			n.opTracker.SetFrameworkIdentity(readResponse.NewIdentity)
-		}
+		return tfStateValue, nil
+	}
+
+	tfStateValue, err := readResponse.NewState.Unmarshal(n.resourceValueTerraformType)
+	if err != nil {
+		return tftypes.Value{}, errors.Wrap(err, "cannot unmarshal state value")
+	}
+	n.opTracker.SetFrameworkTFState(readResponse.NewState)
+	if n.supportsIdentity() {
+		n.opTracker.SetFrameworkIdentity(readResponse.NewIdentity)
+	}
+	return tfStateValue, nil
+}
+
+func (n *terraformPluginFrameworkExternalClient) Observe(ctx context.Context, mg xpresource.Managed) (managed.ExternalObservation, error) { //nolint:gocyclo
+	n.logger.Debug("Observing the external resource")
+
+	if meta.WasDeleted(mg) && n.opTracker.IsDeleted() {
+		return managed.ExternalObservation{
+			ResourceExists: false,
+		}, nil
+	}
+
+	var tfStateValue tftypes.Value
+	var err error
+	switch n.observationMode { //nolint:exhaustive // the default branch covers ReadExternalResource and the zero value
+	case UseLocalState:
+		// The caller supplied the state to observe, so there is nothing to
+		// read. Everything below, the existence check and the plan, is
+		// computed against the state the operation tracker already holds.
+		tfStateValue, err = n.localState()
+	default:
+		tfStateValue, err = n.readState(ctx)
+	}
+	if err != nil {
+		return managed.ExternalObservation{}, err
 	}
 
 	// Determine if the resource exists based on Terraform state

@@ -81,6 +81,27 @@ const (
 	StructTypeGranular StructType = "granular"
 )
 
+// ResourceType represents the upjet-based provider managed resource's
+// type such as a Terraform Plugin SDKv2 resource or CLI resource.
+type ResourceType string
+
+const (
+	// ResourceTypeTerraformSDK represents Terraform-based resources
+	// reconciled with the Terraform plugin SDKv2.
+	ResourceTypeTerraformSDK ResourceType = "tf_plugin_sdkv2"
+
+	// ResourceTypeTerraformFramework represents Terraform-based resources
+	// reconciled with the modern Terraform plugin framework.
+	ResourceTypeTerraformFramework ResourceType = "tf_plugin_framework"
+
+	// ResourceTypeTerraformCLI represents Terraform-based resources
+	// reconciled with the Terraform CLI.
+	ResourceTypeTerraformCLI ResourceType = "tf_cli"
+
+	// ResourceTypeUnknown represents an unknown type.
+	ResourceTypeUnknown ResourceType = ""
+)
+
 // SetIdentifierArgumentsFn sets the name of the resource in Terraform attributes map,
 // i.e. Main HCL file.
 type SetIdentifierArgumentsFn func(base map[string]any, externalName string)
@@ -510,6 +531,39 @@ type Resource struct {
 	// Please consider the post processor hooks like for storage, deprecation and served
 	// version management also relies on the PreviousVersions.
 	PreviousVersions []string
+
+	// SingletonListVersions is the subset of this resource's served API
+	// versions (Version and/or entries of PreviousVersions) whose generated
+	// CRD Go types predate the singleton-list-to-embedded-object conversion:
+	// at the paths in TFListConversionPaths(), these versions' types still
+	// declare a Terraform-shaped list rather than an embedded object.
+	//
+	// A version's shape is a historical fact fixed at the point its CRD type
+	// was last (re)generated, and previous versions are loaded as-is from
+	// their committed source rather than regenerated - see
+	// VersionGenerator.InsertPreviousObjects - so it cannot be recovered by
+	// inspecting the current Terraform schema or SchemaElementOptions, both
+	// of which only describe the shape Version uses today. Provider
+	// maintainers are expected to record it explicitly, at the same point
+	// they already configure Version/PreviousVersions/CRDStorageVersion for
+	// a resource whose CRD once used the legacy shape.
+	//
+	// Defaults to empty, which is correct whenever every served version
+	// shares the same shape - the common case, and always true for a
+	// resource with a single served version. It only needs an entry for a
+	// version that is both currently served and genuinely legacy-shaped;
+	// a version that predates the embedding but is no longer served needs no
+	// entry, since it can never appear in a request.
+	//
+	// Consumers that need to exchange data with the Terraform layer at a
+	// specific served version - such as upjet's diff server, which can be
+	// asked to plan any served version rather than only the one the
+	// controller reconciles - use this to decide, per request, whether the
+	// singleton-list conversion applies: skip it for a version listed here,
+	// and apply it (constructing it from TFListConversionPaths() if the
+	// reconciler's own TerraformConversions does not already carry it)
+	// otherwise.
+	SingletonListVersions []string
 
 	// servedVersions specifies which API versions should be served by the API server.
 	// If empty or nil, all versions (Version + PreviousVersions) are served by default

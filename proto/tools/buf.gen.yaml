@@ -1,0 +1,16 @@
+# SPDX-FileCopyrightText: 2026 The Crossplane Authors <https://crossplane.io>
+#
+# SPDX-License-Identifier: CC0-1.0
+
+version: v2
+plugins:
+  # buf is invoked from the tools/ module directory (see generate.go), so the
+  # protoc plugins resolve as tools of that module. They are plain
+  # stdin/stdout filters, so their working directory does not affect where the
+  # generated files land: buf writes those itself, relative to its own --output.
+  - local: ["go", "tool", "protoc-gen-go"]
+    out: .
+    opt: paths=source_relative
+  - local: ["go", "tool", "protoc-gen-go-grpc"]
+    out: .
+    opt: paths=source_relative

@@ -32,6 +32,13 @@ import (
 	"github.com/crossplane/upjet/v2/pkg/terraform"
 )
 
+type ObservationMode string
+
+const (
+	ReadExternalResource ObservationMode = "remote"
+	UseLocalState        ObservationMode = "local"
+)
+
 type TerraformPluginSDKConnector struct {
 	getTerraformSetup           terraform.SetupFn
 	kube                        client.Client
@@ -40,6 +47,7 @@ type TerraformPluginSDKConnector struct {
 	metricRecorder              *metrics.MetricRecorder
 	operationTrackerStore       *OperationTrackerStore
 	isManagementPoliciesEnabled bool
+	observationMode             ObservationMode
 }
 
 // TerraformPluginSDKOption allows you to configure TerraformPluginSDKConnector.
@@ -68,6 +76,12 @@ func WithTerraformPluginSDKManagementPolicies(isManagementPoliciesEnabled bool) 
 	}
 }
 
+func WithObservationMode(m ObservationMode) TerraformPluginSDKOption {
+	return func(c *TerraformPluginSDKConnector) {
+		c.observationMode = m
+	}
+}
+
 // NewTerraformPluginSDKConnector initializes a new TerraformPluginSDKConnector
 func NewTerraformPluginSDKConnector(kube client.Client, sf terraform.SetupFn, cfg *config.Resource, ots *OperationTrackerStore, opts ...TerraformPluginSDKOption) *TerraformPluginSDKConnector {
 	nfc := &TerraformPluginSDKConnector{
@@ -75,6 +89,8 @@ func NewTerraformPluginSDKConnector(kube client.Client, sf terraform.SetupFn, cf
 		getTerraformSetup:     sf,
 		config:                cfg,
 		operationTrackerStore: ots,
+		logger:                logging.NewNopLogger(),
+		observationMode:       ReadExternalResource,
 	}
 	for _, f := range opts {
 		f(nfc)
@@ -121,6 +137,15 @@ type terraformPluginSDKExternal struct {
 	metricRecorder              *metrics.MetricRecorder
 	opTracker                   *AsyncTracker
 	isManagementPoliciesEnabled bool
+	observationMode             ObservationMode
+}
+
+func TerraformPluginSDKInstanceDiff(ec managed.ExternalClient) (*tf.InstanceDiff, error) {
+	n, ok := ec.(*terraformPluginSDKExternal)
+	if !ok {
+		return nil, errors.New("not a Terraform plugin SDKv2 external client")
+	}
+	return n.instanceDiff, nil
 }
 
 func getExtendedParameters(ctx context.Context, tr resource.Terraformed, externalName string, cfg *config.Resource, ts terraform.Setup, initParamsMerged bool, kube client.Client) (map[string]any, error) { //nolint:gocyclo // easier to follow as a unit
@@ -242,77 +267,108 @@ func (c *TerraformPluginSDKConnector) applyHCLParserToParam(sc *schema.Schema, p
 	return param
 }
 
-func (c *TerraformPluginSDKConnector) Connect(ctx context.Context, mg xpresource.Managed) (managed.ExternalClient, error) { //nolint:gocyclo
-	c.metricRecorder.ObserveReconcileDelay(mg.GetObjectKind().GroupVersionKind(), metrics.NameForManaged(mg))
-	logger := c.logger.WithValues("uid", mg.GetUID(), "name", mg.GetName(), "namespace", mg.GetNamespace(), "gvk", mg.GetObjectKind().GroupVersionKind().String())
-	logger.Debug("Connecting to the service provider")
+// ReconstructTerraformState prepares the Terraform inputs for the given
+// managed resource. It first obtains the terraform.Setup for the resource,
+// recording the call under the "connect" external API time metric, and returns
+// it so that callers can hand it to the Terraform provider. It then returns
+// the resource's desired configuration as a Terraform parameter map, together
+// with that map as a cty.Value suitable for terraform.InstanceState.RawConfig,
+// both derived from spec.forProvider merged with spec.initProvider.
+//
+// If the operation tracker does not already hold an instance state for the
+// resource, it also reconstructs one from status.atProvider and stores it on
+// the tracker, so that the subsequent Terraform calls have a prior state to
+// diff against. An observation that is empty, i.e. a resource that has not
+// been created yet, is seeded with the parameters instead. The reconstructed
+// state is stored on the tracker rather than returned, and a cached state is
+// left untouched.
+//
+// On error, the returned terraform.Setup is the zero value and the parameter
+// map and cty.Value are nil.
+func (c *TerraformPluginSDKConnector) ReconstructTerraformState(ctx context.Context, tr resource.Terraformed, logger logging.Logger) (terraform.Setup, map[string]any, cty.Value, error) { //nolint:gocyclo
 	start := time.Now()
-	ts, err := c.getTerraformSetup(ctx, c.kube, mg)
+	ts, err := c.getTerraformSetup(ctx, c.kube, tr)
 	metrics.ExternalAPITime.WithLabelValues("connect").Observe(time.Since(start).Seconds())
 	if err != nil {
-		return nil, errors.Wrap(err, errGetTerraformSetup)
+		return terraform.Setup{}, nil, cty.NilVal, errors.Wrap(err, errGetTerraformSetup)
 	}
 
-	// To Compute the ResourceDiff: n.resourceSchema.Diff(...)
-	tr := mg.(resource.Terraformed)
 	opTracker := c.operationTrackerStore.Tracker(tr)
 	externalName := meta.GetExternalName(tr)
 	params, err := getExtendedParameters(ctx, tr, externalName, c.config, ts, c.isManagementPoliciesEnabled, c.kube)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to get the extended parameters for resource %q", client.ObjectKeyFromObject(mg))
+		return terraform.Setup{}, nil, cty.NilVal, errors.Wrapf(err, "failed to get the extended parameters for resource %q", client.ObjectKeyFromObject(tr))
 	}
 	params = c.processParamsWithHCLParser(c.config.TerraformResource.Schema, params)
 
 	schemaBlock := c.config.TerraformResource.CoreConfigSchema()
 	rawConfig, err := schema.JSONMapToStateValue(params, schemaBlock)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to convert params JSON map to cty.Value")
+		return terraform.Setup{}, nil, cty.NilVal, errors.Wrap(err, "failed to convert params JSON map to cty.Value")
 	}
-	if !opTracker.HasState() {
-		logger.Debug("Instance state not found in cache, reconstructing...")
-		tfState, err := tr.GetObservation()
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to get the observation")
-		}
-		if err := mergeAnnotationFieldsWithStatus(tfState, mg.GetAnnotations(), c.config); err != nil {
-			return nil, errors.Wrapf(err, "failed to merge annotations on resource %q", client.ObjectKeyFromObject(mg))
-		}
-		tfState, err = c.config.ApplyTFConversions(tfState, config.ToTerraform)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to run the API converters on the Terraform state")
-		}
-		copyParams := len(tfState) == 0
-		if err = resource.GetSensitiveParameters(ctx, &APISecretClient{kube: c.kube}, tr, tfState, tr.GetConnectionDetailsMapping()); err != nil {
-			return nil, errors.Wrap(err, "cannot store sensitive parameters into tfState")
-		}
-		c.config.ExternalName.SetIdentifierArgumentFn(tfState, externalName)
-		tfState["id"] = params["id"]
-		if copyParams {
-			tfState = copyParameters(tfState, params)
-		}
 
-		tfStateCtyValue, err := schema.JSONMapToStateValue(tfState, schemaBlock)
-		if err != nil {
-			return nil, errors.Wrap(err, "cannot convert JSON map to state cty.Value")
-		}
-		s, err := c.config.TerraformResource.ShimInstanceStateFromValue(tfStateCtyValue)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to convert cty.Value to terraform.InstanceState")
-		}
-		s.RawPlan = tfStateCtyValue
-		s.RawConfig = rawConfig
+	if opTracker.HasState() {
+		return ts, params, rawConfig, nil
+	}
 
-		timeouts := getTimeoutParameters(c.config)
-		if len(timeouts) > 0 {
-			if s == nil {
-				s = &tf.InstanceState{}
-			}
-			if s.Meta == nil {
-				s.Meta = make(map[string]interface{})
-			}
-			s.Meta[schema.TimeoutKey] = timeouts
+	// if the tracker does not have previous state.
+	logger.Debug("Instance state not found in cache, reconstructing...")
+	tfState, err := tr.GetObservation()
+	if err != nil {
+		return terraform.Setup{}, nil, cty.NilVal, errors.Wrap(err, "failed to get the observation")
+	}
+	if err := mergeAnnotationFieldsWithStatus(tfState, tr.GetAnnotations(), c.config); err != nil {
+		return terraform.Setup{}, nil, cty.NilVal, errors.Wrapf(err, "failed to merge annotations on resource %q", client.ObjectKeyFromObject(tr))
+	}
+	tfState, err = c.config.ApplyTFConversions(tfState, config.ToTerraform)
+	if err != nil {
+		return terraform.Setup{}, nil, cty.NilVal, errors.Wrap(err, "failed to run the API converters on the Terraform state")
+	}
+	copyParams := len(tfState) == 0
+	if err = resource.GetSensitiveParameters(ctx, &APISecretClient{kube: c.kube}, tr, tfState, tr.GetConnectionDetailsMapping()); err != nil {
+		return terraform.Setup{}, nil, cty.NilVal, errors.Wrap(err, "cannot store sensitive parameters into tfState")
+	}
+	c.config.ExternalName.SetIdentifierArgumentFn(tfState, externalName)
+	tfState["id"] = params["id"]
+	if copyParams {
+		tfState = copyParameters(tfState, params)
+	}
+
+	tfStateCtyValue, err := schema.JSONMapToStateValue(tfState, schemaBlock)
+	if err != nil {
+		return terraform.Setup{}, nil, cty.NilVal, errors.Wrap(err, "cannot convert JSON map to state cty.Value")
+	}
+	s, err := c.config.TerraformResource.ShimInstanceStateFromValue(tfStateCtyValue)
+	if err != nil {
+		return terraform.Setup{}, nil, cty.NilVal, errors.Wrap(err, "failed to convert cty.Value to terraform.InstanceState")
+	}
+	s.RawPlan = tfStateCtyValue
+	s.RawConfig = rawConfig
+
+	timeouts := getTimeoutParameters(c.config)
+	if len(timeouts) > 0 {
+		if s == nil {
+			s = &tf.InstanceState{}
 		}
-		opTracker.SetReconstructedTfState(s)
+		if s.Meta == nil {
+			s.Meta = make(map[string]interface{})
+		}
+		s.Meta[schema.TimeoutKey] = timeouts
+	}
+	opTracker.SetReconstructedTfState(s)
+	return ts, params, rawConfig, nil
+}
+
+func (c *TerraformPluginSDKConnector) Connect(ctx context.Context, mg xpresource.Managed) (managed.ExternalClient, error) {
+	c.metricRecorder.ObserveReconcileDelay(mg.GetObjectKind().GroupVersionKind(), metrics.NameForManaged(mg))
+	logger := c.logger.WithValues("uid", mg.GetUID(), "name", mg.GetName(), "namespace", mg.GetNamespace(), "gvk", mg.GetObjectKind().GroupVersionKind().String())
+	logger.Debug("Connecting to the service provider")
+
+	// To Compute the ResourceDiff: n.resourceSchema.Diff(...)
+	tr := mg.(resource.Terraformed)
+	ts, params, rawConfig, err := c.ReconstructTerraformState(ctx, tr, logger)
+	if err != nil {
+		return nil, err
 	}
 
 	return &terraformPluginSDKExternal{
@@ -323,8 +379,9 @@ func (c *TerraformPluginSDKConnector) Connect(ctx context.Context, mg xpresource
 		rawConfig:                   rawConfig,
 		logger:                      logger,
 		metricRecorder:              c.metricRecorder,
-		opTracker:                   opTracker,
+		opTracker:                   c.operationTrackerStore.Tracker(tr),
 		isManagementPoliciesEnabled: c.isManagementPoliciesEnabled,
+		observationMode:             c.observationMode,
 	}, nil
 }
 
@@ -506,11 +563,20 @@ func (n *terraformPluginSDKExternal) Observe(ctx context.Context, mg xpresource.
 	}
 
 	start := time.Now()
-	newState, diag := n.resourceSchema.RefreshWithoutUpgrade(ctx, n.opTracker.GetTfState(), n.ts.Meta)
-	metrics.ExternalAPITime.WithLabelValues("read").Observe(time.Since(start).Seconds())
-	if diag != nil && diag.HasError() {
-		n.opTracker.ResetReconstructedTfState()
-		return managed.ExternalObservation{}, errors.Errorf("failed to observe the resource: %v", diag)
+
+	var newState *tf.InstanceState
+	switch n.observationMode { //nolint:exhaustive // the default branch covers ReadExternalResource and the zero value
+	case UseLocalState:
+		newState = n.opTracker.GetTfState()
+
+	default:
+		ns, diag := n.resourceSchema.RefreshWithoutUpgrade(ctx, n.opTracker.GetTfState(), n.ts.Meta)
+		metrics.ExternalAPITime.WithLabelValues("read").Observe(time.Since(start).Seconds())
+		if diag != nil && diag.HasError() {
+			n.opTracker.ResetReconstructedTfState()
+			return managed.ExternalObservation{}, errors.Errorf("failed to observe the resource: %v", diag)
+		}
+		newState = ns
 	}
 	diffState := n.opTracker.GetTfState()
 	n.opTracker.SetTfState(newState) // TODO: missing RawConfig & RawPlan here...
