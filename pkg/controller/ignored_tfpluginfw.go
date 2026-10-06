@@ -5,20 +5,22 @@
 package controller
 
 import (
-	"strconv"
-	"strings"
+	"slices"
 
+	"github.com/crossplane/crossplane-runtime/v2/pkg/fieldpath"
 	"github.com/pkg/errors"
 
 	"github.com/crossplane/upjet/v2/pkg/config"
 	"github.com/crossplane/upjet/v2/pkg/resource"
 )
 
-// removeInitProviderExclusiveParams removes initProvider-exclusive fields
-// from the merged params map so they are not sent in the TF config on
-// updates.
-// This is the Plugin Framework equivalent of filterInitExclusiveDiffs from the SDKv2 client.
-func removeInitProviderExclusiveParams(tr resource.Terraformed, params map[string]any, cfg *config.Resource) error {
+// preserveInitProviderExclusiveParams sets every initProvider-exclusive path
+// in params to its value in the given Terraform state, or removes the path
+// from params when the state has no value there.
+// This is what Terraform does for `ignore_changes`: the attribute keeps its
+// current value instead of being re-applied from initProvider or planned as removed.
+// This is the TPF equivalent of filterInitExclusiveDiffs from SDK client.
+func preserveInitProviderExclusiveParams(tr resource.Terraformed, params, state map[string]any, cfg *config.Resource) error {
 	forProviderParams, err := tr.GetParameters()
 	if err != nil {
 		return errors.Wrap(err, "cannot get spec.forProvider parameters")
@@ -36,40 +38,23 @@ func removeInitProviderExclusiveParams(tr resource.Terraformed, params map[strin
 		return errors.Wrap(err, "cannot apply tf conversions to spec.initProvider parameters")
 	}
 
-	for _, key := range getTerraformIgnoreChanges(forProviderParams, initParams) {
-		deleteNestedParam(params, key)
+	pavedParams := fieldpath.Pave(params)
+	pavedState := fieldpath.Pave(state)
+	paths := resource.GetTerraformIgnoreChanges(forProviderParams, initParams)
+	// Remove higher list indices first, so that a removal doesn't shift later paths.
+	slices.Reverse(paths)
+	for _, p := range paths {
+		v, err := pavedState.GetValue(p)
+		if err != nil {
+			if err := pavedParams.DeleteField(p); err != nil && !fieldpath.IsNotFound(err) {
+				return errors.Wrapf(err, "cannot remove initProvider-exclusive parameter %q", p)
+			}
+			continue
+		}
+		err = pavedParams.SetValue(p, v)
+		if err != nil {
+			return errors.Wrapf(err, "cannot set initProvider-exclusive parameter %q from state", p)
+		}
 	}
 	return nil
-}
-
-// deleteNestedParam removes a dot-separated key path from a nested map[string]any.
-// If any intermediate segment is missing or has an unexpected type, the function is a no-op.
-func deleteNestedParam(current any, path string) {
-	segments := strings.Split(path, ".")
-	deleteSegments(current, segments)
-}
-
-func deleteSegments(current any, segments []string) {
-	if len(segments) == 0 {
-		return
-	}
-
-	switch v := current.(type) {
-	case map[string]any:
-		if len(segments) == 1 {
-			delete(v, segments[0])
-			return
-		}
-		next, ok := v[segments[0]]
-		if !ok {
-			return
-		}
-		deleteSegments(next, segments[1:])
-	case []any: // numeric segments are array indices, e.g. "items.0.value"
-		idx, err := strconv.Atoi(segments[0])
-		if err != nil || idx < 0 || idx >= len(v) {
-			return
-		}
-		deleteSegments(v[idx], segments[1:])
-	}
 }

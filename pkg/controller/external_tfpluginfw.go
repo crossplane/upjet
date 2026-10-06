@@ -122,6 +122,7 @@ type terraformPluginFrameworkExternalClient struct {
 	// configured value for the resource in terraform type system
 	resourceTerraformConfigValue tftypes.Value
 	observationMode              ObservationMode
+	isManagementPoliciesEnabled  bool
 }
 
 // TerraformPluginFrameworkPlanResponse returns the plan the given external
@@ -218,6 +219,7 @@ func (c *TerraformPluginFrameworkConnector) Connect(ctx context.Context, mg xpre
 		resourceValueTerraformType:   resourceSchema.Type().TerraformType(ctx),
 		resourceTerraformConfigValue: resourceConfigTFValue,
 		observationMode:              c.observationMode,
+		isManagementPoliciesEnabled:  c.isManagementPoliciesEnabled,
 	}, nil
 }
 
@@ -258,7 +260,7 @@ func (c *TerraformPluginFrameworkConnector) ReconstructFrameworkTerraformState(c
 	}
 
 	resourceTfValueType := resourceSchema.Type().TerraformType(ctx)
-	resourceConfigTFValue, err := c.getResourceConfigTerraformValue(ctx, resourceTfValueType, params, resourceSchema)
+	resourceConfigTFValue, err := getResourceConfigTerraformValue(ctx, c.config, resourceTfValueType, params, resourceSchema)
 	if err != nil {
 		return terraform.Setup{}, nil, rschema.Schema{}, tftypes.Value{}, errors.Wrap(err, "could not get resource config TF value")
 	}
@@ -360,11 +362,11 @@ func (c *TerraformPluginFrameworkConnector) configureProvider(ctx context.Contex
 	return providerServer, nil
 }
 
-func (c *TerraformPluginFrameworkConnector) getResourceConfigTerraformValue(ctx context.Context, tfType tftypes.Type, params map[string]any, sch rschema.Schema) (tftypes.Value, error) {
+func getResourceConfigTerraformValue(ctx context.Context, cfg *config.Resource, tfType tftypes.Type, params map[string]any, sch rschema.Schema) (tftypes.Value, error) {
 	configValues := maps.Clone(params)
 	// if some computed identifiers have been configured explicitly,
 	// remove them from config.
-	for _, id := range c.config.ExternalName.TFPluginFrameworkOptions.ComputedIdentifierAttributes {
+	for _, id := range cfg.ExternalName.TFPluginFrameworkOptions.ComputedIdentifierAttributes {
 		delete(configValues, id)
 	}
 
@@ -853,6 +855,21 @@ func (n *terraformPluginFrameworkExternalClient) Observe(ctx context.Context, mg
 		// This is fine as Upjet in fact does not rely on TF resource
 		// identities and rehydrates them in subsequent reconciles
 		n.opTracker.SetFrameworkIdentity(nil)
+	}
+
+	// Keep the current values of initProvider-exclusive fields, so that they
+	// aren't re-applied/removed on update.
+	// This is done against the state returned by Read, so that a resource
+	// which doesn't exist is still created with its initProvider values.
+	if resourceExists && n.isManagementPoliciesEnabled {
+		err := preserveInitProviderExclusiveParams(mg.(resource.Terraformed), n.params, stateValueMap, n.config)
+		if err != nil {
+			return managed.ExternalObservation{}, errors.Wrap(err, "cannot preserve initProvider-exclusive params")
+		}
+		n.resourceTerraformConfigValue, err = getResourceConfigTerraformValue(ctx, n.config, n.resourceValueTerraformType, n.params, n.resourceSchema)
+		if err != nil {
+			return managed.ExternalObservation{}, errors.Wrap(err, "could not get resource config TF value")
+		}
 	}
 
 	// TODO(cem): Consider skipping diff calculation to avoid potential config
