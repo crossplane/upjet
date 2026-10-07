@@ -862,13 +862,15 @@ func (n *terraformPluginFrameworkExternalClient) Observe(ctx context.Context, mg
 	// This is done against the state returned by Read, so that a resource
 	// which doesn't exist is still created with its initProvider values.
 	if resourceExists && n.isManagementPoliciesEnabled {
-		err := preserveInitProviderExclusiveParams(mg.(resource.Terraformed), n.params, stateValueMap, n.config)
+		changed, err := preserveInitProviderExclusiveParams(mg.(resource.Terraformed), n.params, stateValueMap, n.config, n.resourceValueTerraformType)
 		if err != nil {
 			return managed.ExternalObservation{}, errors.Wrap(err, "cannot preserve initProvider-exclusive params")
 		}
-		n.resourceTerraformConfigValue, err = getResourceConfigTerraformValue(ctx, n.config, n.resourceValueTerraformType, n.params, n.resourceSchema)
-		if err != nil {
-			return managed.ExternalObservation{}, errors.Wrap(err, "could not get resource config TF value")
+		if changed {
+			n.resourceTerraformConfigValue, err = getResourceConfigTerraformValue(ctx, n.config, n.resourceValueTerraformType, n.params, n.resourceSchema)
+			if err != nil {
+				return managed.ExternalObservation{}, errors.Wrap(err, "could not get resource config TF value")
+			}
 		}
 	}
 

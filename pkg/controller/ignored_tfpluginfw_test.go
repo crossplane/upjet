@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/crossplane/upjet/v2/pkg/config"
 	"github.com/crossplane/upjet/v2/pkg/resource/fake"
@@ -22,7 +23,9 @@ func TestPreserveInitProviderExclusiveParams(t *testing.T) {
 		initParams  map[string]any
 		params      map[string]any
 		state       map[string]any
+		tfType      tftypes.Type
 		want        map[string]any
+		wantChanged bool
 	}{
 		"InitExclusiveFieldsTakeStateValue": {
 			reason: "initProvider-exclusive fields must keep the values of the external resource, so that they are not re-applied on update. Fields in forProvider must still be applied.",
@@ -55,6 +58,7 @@ func TestPreserveInitProviderExclusiveParams(t *testing.T) {
 				"labels":        map[string]any{"a": "1", "app.kubernetes.io/name": "y"},
 				"settings":      []any{map[string]any{"enabled": true, "seed_value": int64(7)}},
 			},
+			wantChanged: true,
 		},
 		"InitExclusiveFieldsRemovedExternally": {
 			reason: "initProvider-exclusive map keys and list elements that are not in the state must be removed from the config, so that they are not added again.",
@@ -78,6 +82,61 @@ func TestPreserveInitProviderExclusiveParams(t *testing.T) {
 				"tags": map[string]any{"a": "1"},
 				"list": []any{"a"},
 			},
+			wantChanged: true,
+		},
+		"ListElementsRemovedInDescendingIndexOrder": {
+			reason:      "list[10] must be removed before list[9], so that a removal does not shift an element that must also be removed.",
+			forProvider: map[string]any{"list": []any{"e0"}},
+			initParams:  map[string]any{"list": []any{"e0", "e1", "e2", "e3", "e4", "e5", "e6", "e7", "e8", "e9", "e10"}},
+			params:      map[string]any{"list": []any{"e0", "e1", "e2", "e3", "e4", "e5", "e6", "e7", "e8", "e9", "e10"}},
+			state:       map[string]any{"list": []any{"e0", "e1", "e2", "e3", "e4", "e5", "e6", "e7", "e8"}},
+			want:        map[string]any{"list": []any{"e0", "e1", "e2", "e3", "e4", "e5", "e6", "e7", "e8"}},
+			wantChanged: true,
+		},
+		"SetElementsLeftAsIs": {
+			reason: "A set returned by Read has no stable order, so a spec index must not pick a set element from the state.",
+			forProvider: map[string]any{
+				"rule": []any{map[string]any{"name": "a"}, map[string]any{"name": "b"}},
+				"strs": []any{"a"},
+			},
+			initParams: map[string]any{
+				"rule": []any{map[string]any{"weight": float64(1)}, map[string]any{"weight": float64(2)}},
+				"strs": []any{"a", "b"},
+			},
+			params: map[string]any{
+				"rule": []any{map[string]any{"name": "a", "weight": float64(1)}, map[string]any{"name": "b", "weight": float64(2)}},
+				"strs": []any{"a", "b"},
+			},
+			state: map[string]any{
+				"rule": []any{map[string]any{"name": "b", "weight": int64(2)}, map[string]any{"name": "a", "weight": int64(1)}},
+				"strs": []any{"b", "a"},
+			},
+			tfType: tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+				"rule": tftypes.Set{ElementType: tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+					"name":   tftypes.String,
+					"weight": tftypes.Number,
+				}}},
+				"strs": tftypes.Set{ElementType: tftypes.String},
+			}},
+			want: map[string]any{
+				"rule": []any{map[string]any{"name": "a", "weight": float64(1)}, map[string]any{"name": "b", "weight": float64(2)}},
+				"strs": []any{"a", "b"},
+			},
+		},
+		"UnparseablePathLeftAsIs": {
+			reason:      "A map key that fieldpath cannot parse must not fail Observe on every reconcile.",
+			forProvider: map[string]any{"tags": map[string]any{"a": "1"}},
+			initParams:  map[string]any{"tags": map[string]any{"a": "1", "b[0]": "2"}},
+			params:      map[string]any{"tags": map[string]any{"a": "1", "b[0]": "2"}},
+			state:       map[string]any{"tags": map[string]any{"a": "1"}},
+			want:        map[string]any{"tags": map[string]any{"a": "1", "b[0]": "2"}},
+		},
+		"EmptyInitProviderIsNoop": {
+			reason:      "Without initProvider nothing changes, so that the config value is not rebuilt.",
+			forProvider: map[string]any{"name": "my-resource"},
+			params:      map[string]any{"name": "my-resource"},
+			state:       map[string]any{"name": "changed-externally"},
+			want:        map[string]any{"name": "my-resource"},
 		},
 	}
 
@@ -89,8 +148,12 @@ func TestPreserveInitProviderExclusiveParams(t *testing.T) {
 					InitParameters: tc.initParams,
 				},
 			}
-			if err := preserveInitProviderExclusiveParams(tr, tc.params, tc.state, &config.Resource{}); err != nil {
+			changed, err := preserveInitProviderExclusiveParams(tr, tc.params, tc.state, &config.Resource{}, tc.tfType)
+			if err != nil {
 				t.Fatalf("\n%s\npreserveInitProviderExclusiveParams(...): unexpected error: %v", tc.reason, err)
+			}
+			if changed != tc.wantChanged {
+				t.Errorf("\n%s\npreserveInitProviderExclusiveParams(...): want changed %v, got %v", tc.reason, tc.wantChanged, changed)
 			}
 			if diff := cmp.Diff(tc.want, tc.params); diff != "" {
 				t.Errorf("\n%s\npreserveInitProviderExclusiveParams(...): -want +got:\n%s", tc.reason, diff)
