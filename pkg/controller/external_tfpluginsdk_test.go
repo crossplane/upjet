@@ -704,8 +704,27 @@ func TestInstanceDiffValues(t *testing.T) {
 				schema: map[string]*schema.Schema{"keys": {Type: schema.TypeSet, Elem: &schema.Schema{Type: schema.TypeString, Sensitive: true}}},
 			},
 			want: want{
-				oldValues: map[string]string{"keys.#": "1", "keys.1234": "<sensitive>", "keys.5678": "<sensitive>"},
-				newValues: map[string]string{"keys.#": "1", "keys.5678": "<sensitive>"},
+				oldValues: map[string]string{"keys.#": "1", "keys.*0": "<sensitive>", "keys.*1": "<sensitive>"},
+				newValues: map[string]string{"keys.#": "1", "keys.*1": "<sensitive>"},
+			},
+		},
+		"SensitiveSetBlock": {
+			args: args{
+				diff: &tf.InstanceDiff{Attributes: map[string]*tf.ResourceAttrDiff{
+					"block.#":           {Old: "1", New: "1"},
+					"block.1234.name":   {Old: "a", NewRemoved: true},
+					"block.1234.secret": {Old: "x", NewRemoved: true},
+					"block.5678.name":   {Old: "", New: "b"},
+					"block.5678.secret": {Old: "", New: "y"},
+				}},
+				schema: map[string]*schema.Schema{"block": {Type: schema.TypeSet, Elem: &schema.Resource{Schema: map[string]*schema.Schema{
+					"name":   {Type: schema.TypeString},
+					"secret": {Type: schema.TypeString, Sensitive: true},
+				}}}},
+			},
+			want: want{
+				oldValues: map[string]string{"block.#": "1", "block.*0.name": "a", "block.*0.secret": "<sensitive>", "block.*1.name": "", "block.*1.secret": "<sensitive>"},
+				newValues: map[string]string{"block.#": "1", "block.*1.name": "b", "block.*1.secret": "<sensitive>"},
 			},
 		},
 		"SensitiveBlockField": {

@@ -7,6 +7,9 @@ package controller
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -930,11 +933,14 @@ func (n *terraformPluginSDKExternal) fromInstanceStateToJSONMap(newState *tf.Ins
 func instanceDiffValues(d *tf.InstanceDiff, s map[string]*schema.Schema) (map[string]string, map[string]string) {
 	oldValues := make(map[string]string, len(d.Attributes))
 	newValues := make(map[string]string, len(d.Attributes))
-	for k, a := range d.Attributes {
+	labels := make(map[string]string)
+	for _, k := range slices.Sorted(maps.Keys(d.Attributes)) {
+		a := d.Attributes[k]
 		if a == nil {
 			continue
 		}
-		if a.Sensitive || sensitiveAttr(s, k) {
+		k, sensitive := sensitiveKey(s, k, labels)
+		if a.Sensitive || sensitive {
 			oldValues[k] = "<sensitive>"
 			if !a.NewRemoved {
 				newValues[k] = "<sensitive>"
@@ -953,31 +959,75 @@ func instanceDiffValues(d *tf.InstanceDiff, s map[string]*schema.Schema) (map[st
 	return oldValues, newValues
 }
 
-// sensitiveAttr reports whether the flatmap attribute key k, or a collection
-// containing it, is marked sensitive in the schema. The element count of a
-// collection is only sensitive when the collection itself is.
-func sensitiveAttr(s map[string]*schema.Schema, k string) bool {
+// sensitiveKey reports whether the flatmap attribute key k, or a collection
+// containing it, is marked sensitive in the schema, and returns k with the
+// element identifiers of sets that hold sensitive values replaced by opaque
+// labels, since the SDK derives those identifiers from a hash of the element.
+// labels keeps the label of each identifier across keys. The element count of
+// a collection is only sensitive when the collection itself is.
+func sensitiveKey(s map[string]*schema.Schema, k string, labels map[string]string) (string, bool) {
 	segments := strings.Split(k, ".")
 	sc, ok := s[segments[0]]
-	for ok {
-		if sc.Sensitive {
-			return true
+	sensitive := false
+	for i := 1; ok; i++ {
+		sensitive = sensitive || sc.Sensitive
+		if i >= len(segments) || segments[i] == "#" || segments[i] == "%" {
+			break
 		}
-		segments = segments[1:]
-		if len(segments) == 0 || segments[0] == "#" || segments[0] == "%" {
-			return false
+		if sc.Type == schema.TypeSet && hasSensitive(sc) {
+			segments[i] = setLabel(labels, strings.Join(segments[:i+1], "."))
 		}
-		switch e := sc.Elem.(type) {
-		case *schema.Resource:
-			if len(segments) < 2 {
-				return false
+		sc, i, ok = elemSchema(sc, segments, i)
+	}
+	return strings.Join(segments, "."), sensitive
+}
+
+// setLabel returns the label of the set element at path, numbering the
+// elements of a set in the order they are first seen.
+func setLabel(labels map[string]string, path string) string {
+	if l, ok := labels[path]; ok {
+		return l
+	}
+	prefix := path[:strings.LastIndex(path, ".")+1]
+	n := 0
+	for p := range labels {
+		if strings.HasPrefix(p, prefix) && !strings.Contains(p[len(prefix):], ".") {
+			n++
+		}
+	}
+	labels[path] = "*" + strconv.Itoa(n)
+	return labels[path]
+}
+
+// elemSchema returns the schema addressed by the element identifier at
+// segments[i] and the index of the last segment it consumed.
+func elemSchema(sc *schema.Schema, segments []string, i int) (*schema.Schema, int, bool) {
+	switch e := sc.Elem.(type) {
+	case *schema.Resource:
+		if i+1 >= len(segments) {
+			return nil, i, false
+		}
+		field, ok := e.Schema[segments[i+1]]
+		return field, i + 1, ok
+	case *schema.Schema:
+		return e, i, true
+	default:
+		return nil, i, false
+	}
+}
+
+func hasSensitive(sc *schema.Schema) bool {
+	if sc.Sensitive {
+		return true
+	}
+	switch e := sc.Elem.(type) {
+	case *schema.Schema:
+		return hasSensitive(e)
+	case *schema.Resource:
+		for _, f := range e.Schema {
+			if hasSensitive(f) {
+				return true
 			}
-			segments = segments[1:]
-			sc, ok = e.Schema[segments[0]]
-		case *schema.Schema:
-			sc = e
-		default:
-			ok = false
 		}
 	}
 	return false
