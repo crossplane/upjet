@@ -534,7 +534,8 @@ func (n *terraformPluginSDKExternal) getResourceDataDiff(tr resource.Terraformed
 		instanceDiff.RawPlan = v
 	}
 	if instanceDiff != nil && !instanceDiff.Empty() {
-		n.logger.Debug("Diff detected", "instanceDiff", instanceDiff.GoString())
+		oldValues, newValues := instanceDiffValues(instanceDiff)
+		n.logger.Debug("Diff detected", "old", oldValues, "new", newValues)
 		// Assumption: Source of truth when applying diffs, for instance on updates, is instanceDiff.Attributes.
 		// Setting instanceDiff.RawConfig has no effect on diff application.
 		instanceDiff.RawConfig = n.rawConfig
@@ -919,4 +920,32 @@ func (n *terraformPluginSDKExternal) fromInstanceStateToJSONMap(newState *tf.Ins
 		return nil, cty.NilVal, errors.Wrap(err, "could not convert instance state value to JSON")
 	}
 	return stateValueMap, attrsAsCtyValue, nil
+}
+
+// instanceDiffValues returns the old and the planned attribute values of the
+// diff as two flat maps, so that the log output can be diffed.
+func instanceDiffValues(d *tf.InstanceDiff) (map[string]string, map[string]string) {
+	oldValues := make(map[string]string, len(d.Attributes))
+	newValues := make(map[string]string, len(d.Attributes))
+	for k, a := range d.Attributes {
+		if a == nil {
+			continue
+		}
+		if a.Sensitive {
+			oldValues[k] = "<sensitive>"
+			if !a.NewRemoved {
+				newValues[k] = "<sensitive>"
+			}
+			continue
+		}
+		oldValues[k] = a.Old
+		switch {
+		case a.NewRemoved:
+		case a.NewComputed:
+			newValues[k] = "<computed>"
+		default:
+			newValues[k] = a.New
+		}
+	}
+	return oldValues, newValues
 }

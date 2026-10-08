@@ -602,3 +602,36 @@ func TestTerraformPluginSDKDelete(t *testing.T) {
 		})
 	}
 }
+
+func TestInstanceDiffValues(t *testing.T) {
+	diff := &tf.InstanceDiff{
+		Attributes: map[string]*tf.ResourceAttrDiff{
+			"name":        {Old: "a", New: "b"},
+			"count":       {Old: "1", NewComputed: true},
+			"tags.env":    {Old: "dev", NewRemoved: true},
+			"password":    {Old: "x", New: "y", Sensitive: true},
+			"nil":         nil,
+			"description": {Old: "", New: "added"},
+		},
+	}
+	oldValues, newValues := instanceDiffValues(diff)
+	wantOld := map[string]string{
+		"name":        "a",
+		"count":       "1",
+		"tags.env":    "dev",
+		"password":    "<sensitive>",
+		"description": "",
+	}
+	wantNew := map[string]string{
+		"name":        "b",
+		"count":       "<computed>",
+		"password":    "<sensitive>",
+		"description": "added",
+	}
+	if diff := cmp.Diff(wantOld, oldValues); diff != "" {
+		t.Errorf("old values: -want, +got:\n%s", diff)
+	}
+	if diff := cmp.Diff(wantNew, newValues); diff != "" {
+		t.Errorf("new values: -want, +got:\n%s", diff)
+	}
+}
