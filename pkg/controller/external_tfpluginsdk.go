@@ -534,7 +534,7 @@ func (n *terraformPluginSDKExternal) getResourceDataDiff(tr resource.Terraformed
 		instanceDiff.RawPlan = v
 	}
 	if instanceDiff != nil && !instanceDiff.Empty() {
-		oldValues, newValues := instanceDiffValues(instanceDiff)
+		oldValues, newValues := instanceDiffValues(instanceDiff, n.config.TerraformResource.Schema)
 		n.logger.Debug("Diff detected", "old", oldValues, "new", newValues)
 		// Assumption: Source of truth when applying diffs, for instance on updates, is instanceDiff.Attributes.
 		// Setting instanceDiff.RawConfig has no effect on diff application.
@@ -923,15 +923,18 @@ func (n *terraformPluginSDKExternal) fromInstanceStateToJSONMap(newState *tf.Ins
 }
 
 // instanceDiffValues returns the old and the planned attribute values of the
-// diff as two flat maps, so that the log output can be diffed.
-func instanceDiffValues(d *tf.InstanceDiff) (map[string]string, map[string]string) {
+// diff as two flat maps, so that the log output can be diffed. Values are
+// redacted when the attribute is sensitive in the schema, which also covers
+// the diffs the SDK does not flag itself: removed attributes and the elements
+// of sensitive lists and sets.
+func instanceDiffValues(d *tf.InstanceDiff, s map[string]*schema.Schema) (map[string]string, map[string]string) {
 	oldValues := make(map[string]string, len(d.Attributes))
 	newValues := make(map[string]string, len(d.Attributes))
 	for k, a := range d.Attributes {
 		if a == nil {
 			continue
 		}
-		if a.Sensitive {
+		if a.Sensitive || sensitiveAttr(s, k) {
 			oldValues[k] = "<sensitive>"
 			if !a.NewRemoved {
 				newValues[k] = "<sensitive>"
@@ -948,4 +951,34 @@ func instanceDiffValues(d *tf.InstanceDiff) (map[string]string, map[string]strin
 		}
 	}
 	return oldValues, newValues
+}
+
+// sensitiveAttr reports whether the flatmap attribute key k, or a collection
+// containing it, is marked sensitive in the schema. The element count of a
+// collection is only sensitive when the collection itself is.
+func sensitiveAttr(s map[string]*schema.Schema, k string) bool {
+	segments := strings.Split(k, ".")
+	sc, ok := s[segments[0]]
+	for ok {
+		if sc.Sensitive {
+			return true
+		}
+		segments = segments[1:]
+		if len(segments) == 0 || segments[0] == "#" || segments[0] == "%" {
+			return false
+		}
+		switch e := sc.Elem.(type) {
+		case *schema.Resource:
+			if len(segments) < 2 {
+				return false
+			}
+			segments = segments[1:]
+			sc, ok = e.Schema[segments[0]]
+		case *schema.Schema:
+			sc = e
+		default:
+			ok = false
+		}
+	}
+	return false
 }

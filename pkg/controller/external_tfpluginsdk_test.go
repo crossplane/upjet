@@ -604,34 +604,137 @@ func TestTerraformPluginSDKDelete(t *testing.T) {
 }
 
 func TestInstanceDiffValues(t *testing.T) {
-	diff := &tf.InstanceDiff{
-		Attributes: map[string]*tf.ResourceAttrDiff{
-			"name":        {Old: "a", New: "b"},
-			"count":       {Old: "1", NewComputed: true},
-			"tags.env":    {Old: "dev", NewRemoved: true},
-			"password":    {Old: "x", New: "y", Sensitive: true},
-			"nil":         nil,
-			"description": {Old: "", New: "added"},
+	type args struct {
+		diff   *tf.InstanceDiff
+		schema map[string]*schema.Schema
+	}
+	type want struct {
+		oldValues map[string]string
+		newValues map[string]string
+	}
+	cases := map[string]struct {
+		args
+		want
+	}{
+		"Changed": {
+			args: args{
+				diff: &tf.InstanceDiff{Attributes: map[string]*tf.ResourceAttrDiff{"name": {Old: "a", New: "b"}}},
+			},
+			want: want{
+				oldValues: map[string]string{"name": "a"},
+				newValues: map[string]string{"name": "b"},
+			},
+		},
+		"Added": {
+			args: args{
+				diff: &tf.InstanceDiff{Attributes: map[string]*tf.ResourceAttrDiff{"description": {Old: "", New: "added"}}},
+			},
+			want: want{
+				oldValues: map[string]string{"description": ""},
+				newValues: map[string]string{"description": "added"},
+			},
+		},
+		"Computed": {
+			args: args{
+				diff: &tf.InstanceDiff{Attributes: map[string]*tf.ResourceAttrDiff{"count": {Old: "1", NewComputed: true}}},
+			},
+			want: want{
+				oldValues: map[string]string{"count": "1"},
+				newValues: map[string]string{"count": "<computed>"},
+			},
+		},
+		"Removed": {
+			args: args{
+				diff: &tf.InstanceDiff{Attributes: map[string]*tf.ResourceAttrDiff{"tags.env": {Old: "dev", NewRemoved: true}}},
+			},
+			want: want{
+				oldValues: map[string]string{"tags.env": "dev"},
+				newValues: map[string]string{},
+			},
+		},
+		"Nil": {
+			args: args{
+				diff: &tf.InstanceDiff{Attributes: map[string]*tf.ResourceAttrDiff{"name": nil}},
+			},
+			want: want{
+				oldValues: map[string]string{},
+				newValues: map[string]string{},
+			},
+		},
+		"SensitiveFlag": {
+			args: args{
+				diff: &tf.InstanceDiff{Attributes: map[string]*tf.ResourceAttrDiff{"password": {Old: "x", New: "y", Sensitive: true}}},
+			},
+			want: want{
+				oldValues: map[string]string{"password": "<sensitive>"},
+				newValues: map[string]string{"password": "<sensitive>"},
+			},
+		},
+		"SensitiveRemoved": {
+			args: args{
+				diff:   &tf.InstanceDiff{Attributes: map[string]*tf.ResourceAttrDiff{"password": {Old: "x", NewRemoved: true}}},
+				schema: map[string]*schema.Schema{"password": {Type: schema.TypeString, Sensitive: true}},
+			},
+			want: want{
+				oldValues: map[string]string{"password": "<sensitive>"},
+				newValues: map[string]string{},
+			},
+		},
+		"SensitiveList": {
+			args: args{
+				diff: &tf.InstanceDiff{Attributes: map[string]*tf.ResourceAttrDiff{
+					"keys.#": {Old: "1", New: "2"},
+					"keys.0": {Old: "k1", New: "k1"},
+					"keys.1": {Old: "", New: "k2"},
+				}},
+				schema: map[string]*schema.Schema{"keys": {Type: schema.TypeList, Sensitive: true, Elem: &schema.Schema{Type: schema.TypeString}}},
+			},
+			want: want{
+				oldValues: map[string]string{"keys.#": "<sensitive>", "keys.0": "<sensitive>", "keys.1": "<sensitive>"},
+				newValues: map[string]string{"keys.#": "<sensitive>", "keys.0": "<sensitive>", "keys.1": "<sensitive>"},
+			},
+		},
+		"SensitiveSetElements": {
+			args: args{
+				diff: &tf.InstanceDiff{Attributes: map[string]*tf.ResourceAttrDiff{
+					"keys.#":    {Old: "1", New: "1"},
+					"keys.1234": {Old: "k1", NewRemoved: true},
+					"keys.5678": {Old: "", New: "k2"},
+				}},
+				schema: map[string]*schema.Schema{"keys": {Type: schema.TypeSet, Elem: &schema.Schema{Type: schema.TypeString, Sensitive: true}}},
+			},
+			want: want{
+				oldValues: map[string]string{"keys.#": "1", "keys.1234": "<sensitive>", "keys.5678": "<sensitive>"},
+				newValues: map[string]string{"keys.#": "1", "keys.5678": "<sensitive>"},
+			},
+		},
+		"SensitiveBlockField": {
+			args: args{
+				diff: &tf.InstanceDiff{Attributes: map[string]*tf.ResourceAttrDiff{
+					"block.#":        {Old: "1", New: "1"},
+					"block.0.name":   {Old: "a", New: "b"},
+					"block.0.secret": {Old: "x", New: "y"},
+				}},
+				schema: map[string]*schema.Schema{"block": {Type: schema.TypeList, Elem: &schema.Resource{Schema: map[string]*schema.Schema{
+					"name":   {Type: schema.TypeString},
+					"secret": {Type: schema.TypeString, Sensitive: true},
+				}}}},
+			},
+			want: want{
+				oldValues: map[string]string{"block.#": "1", "block.0.name": "a", "block.0.secret": "<sensitive>"},
+				newValues: map[string]string{"block.#": "1", "block.0.name": "b", "block.0.secret": "<sensitive>"},
+			},
 		},
 	}
-	oldValues, newValues := instanceDiffValues(diff)
-	wantOld := map[string]string{
-		"name":        "a",
-		"count":       "1",
-		"tags.env":    "dev",
-		"password":    "<sensitive>",
-		"description": "",
-	}
-	wantNew := map[string]string{
-		"name":        "b",
-		"count":       "<computed>",
-		"password":    "<sensitive>",
-		"description": "added",
-	}
-	if diff := cmp.Diff(wantOld, oldValues); diff != "" {
-		t.Errorf("old values: -want, +got:\n%s", diff)
-	}
-	if diff := cmp.Diff(wantNew, newValues); diff != "" {
-		t.Errorf("new values: -want, +got:\n%s", diff)
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			oldValues, newValues := instanceDiffValues(tc.args.diff, tc.args.schema)
+			if diff := cmp.Diff(tc.want.oldValues, oldValues); diff != "" {
+				t.Errorf("\n%s\ninstanceDiffValues(...): -want old, +got old:\n", diff)
+			}
+			if diff := cmp.Diff(tc.want.newValues, newValues); diff != "" {
+				t.Errorf("\n%s\ninstanceDiffValues(...): -want new, +got new:\n", diff)
+			}
+		})
 	}
 }
