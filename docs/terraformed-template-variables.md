@@ -53,6 +53,7 @@ The following keys are available inside the template via `{{ .<Name> }}`.
 | `APIVersion` | `string` | The Go package name of the API version the resource belongs to (e.g. `v1beta1`). The default template uses it in the `package {{ .APIVersion }}` clause. |
 | `CRD.Kind` | `string` | Kubernetes Kind of the managed resource. Used as the receiver type for all generated methods (e.g. `func (tr *{{ .CRD.Kind }}) ...`). |
 | `CRD.ParametersTypeName` | `string` | Name of the generated `ForProvider` parameters struct for the resource. Used by `LateInitialize` to unmarshal Terraform state parameters. |
+| `CRD.ObservationTypeName` | `string` | Name of the generated `AtProvider` observation struct for the resource. Used by `SetObservation` to decode the observed state into a zero value. |
 | `Terraform.ResourceType` | `string` | Terraform resource type name (e.g. `aws_vpc`), returned by `GetTerraformResourceType`. |
 | `Terraform.ResourceSchema` | `*schema.Resource` | The Terraform Plugin SDK v2 resource schema (`github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema.Resource`) for the resource. The default template reads `{{ .Terraform.ResourceSchema.SchemaVersion }}` to implement `GetTerraformSchemaVersion`; a custom template may read any other exported field of the schema. |
 | `Sensitive.Fields` | `map[string]string` | Mapping from sensitive field paths to their connection-detail keys. When non-empty, `GetConnectionDetailsMapping` returns this map; otherwise it returns `nil`. |
@@ -67,7 +68,8 @@ interface on the `{{ .CRD.Kind }}` type, including:
 - `GetTerraformResourceType`, `GetTerraformSchemaVersion` — Terraform identity.
 - `GetConnectionDetailsMapping` — sensitive-field to connection-detail mapping.
 - `GetObservation` / `SetObservation` — marshal `status.atProvider` to/from the
-  Terraform state map.
+  Terraform state map. `SetObservation` replaces `status.atProvider` rather than
+  merging into it.
 - `GetParameters` / `SetParameters` — marshal `spec.forProvider` to/from the
   Terraform config map.
 - `GetInitParameters`, `GetMergedParameters` — expose and merge
@@ -76,7 +78,9 @@ interface on the `{{ .CRD.Kind }}` type, including:
   honoring the configured ignore filters.
 
 A custom template MUST implement the full `resource.Terraformed` interface for
-`{{ .CRD.Kind }}`; the runtime relies on every one of these methods.
+`{{ .CRD.Kind }}`; the runtime relies on every one of these methods. A custom
+`SetObservation` should likewise decode into a zero
+`{{ .CRD.ObservationTypeName }}` rather than into `status.atProvider`.
 
 ## Generated Output
 
