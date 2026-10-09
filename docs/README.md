@@ -37,6 +37,7 @@ provider.
 ## Additional documentation
 
 - [Provider identity based authentication](design-doc-provider-identity-based-auth.md)
+- [The Diff/Plan Server](diff-server.md) - computing provider-side plan previews over gRPC, offline.
 - [Monitoring](monitoring.md) the Upjet runtime using Prometheus.
 - [Migration Framework](migration-framework.md)
 - [Managing CRD Versions](managing-crd-versions.md) when Terraform schemas change.
