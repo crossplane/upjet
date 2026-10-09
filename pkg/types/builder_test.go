@@ -396,6 +396,48 @@ func TestBuild(t *testing.T) {
 // +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.resourceIn) || (has(self.initProvider) && has(self.initProvider.resourceIn))",message="spec.forProvider.resourceIn is a required parameter"`,
 			},
 		},
+		"SingletonNestedBlockMaxItems": {
+			args: args{
+				crdScope: CRDScopeCluster,
+				cfg: &config.Resource{
+					TerraformResource: &schema.Resource{
+						Schema: map[string]*schema.Schema{
+							"permissions": {
+								Type:     schema.TypeList,
+								Optional: true,
+								MaxItems: 1,
+								Elem: &schema.Resource{
+									Schema: map[string]*schema.Schema{
+										"enabled": {
+											Type:     schema.TypeBool,
+											Optional: true,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			want: want{
+				forProvider: `type example.Parameters struct{Permissions []example.PermissionsParameters "json:\"permissions,omitempty\" tf:\"permissions,omitempty\""}`,
+				atProvider:  `type example.Observation struct{Permissions []example.PermissionsObservation "json:\"permissions,omitempty\" tf:\"permissions,omitempty\""}`,
+				commentChecks: map[string]func(t *testing.T, comments map[string]string){
+					"ParameterInitAndObservationMaxItems": func(t *testing.T, comments map[string]string) {
+						t.Helper()
+						for _, key := range []string{"example.Parameters:Permissions", "example.InitParameters:Permissions"} {
+							if !strings.Contains(comments[key], "+kubebuilder:validation:MaxItems=1") {
+								t.Errorf("field comment %q missing MaxItems marker: %s", key, comments[key])
+							}
+						}
+						key := "example.Observation:Permissions"
+						if strings.Contains(comments[key], "+kubebuilder:validation:MaxItems=1") {
+							t.Errorf("observation field comment %q unexpectedly has MaxItems marker: %s", key, comments[key])
+						}
+					},
+				},
+			},
+		},
 		"Sensitive_Fields": {
 			args: args{
 				crdScope: CRDScopeCluster,
