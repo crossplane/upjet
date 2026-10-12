@@ -53,7 +53,7 @@ The following keys are available inside the template via `{{ .<Name> }}`.
 | `APIVersion` | `string` | The Go package name of the API version the resource belongs to (e.g. `v1beta1`). The default template uses it in the `package {{ .APIVersion }}` clause. |
 | `CRD.Kind` | `string` | Kubernetes Kind of the managed resource. Used as the receiver type for all generated methods (e.g. `func (tr *{{ .CRD.Kind }}) ...`). |
 | `CRD.ParametersTypeName` | `string` | Name of the generated `ForProvider` parameters struct for the resource. Used by `LateInitialize` to unmarshal Terraform state parameters. |
-| `CRD.ObservationTypeName` | `string` | Name of the generated `AtProvider` observation struct for the resource. Used by `SetObservation` to decode the observed state into a zero value. |
+| `CRD.ObservationTypeName` | `string` | Name of the generated `AtProvider` observation struct. |
 | `Terraform.ResourceType` | `string` | Terraform resource type name (e.g. `aws_vpc`), returned by `GetTerraformResourceType`. |
 | `Terraform.ResourceSchema` | `*schema.Resource` | The Terraform Plugin SDK v2 resource schema (`github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema.Resource`) for the resource. The default template reads `{{ .Terraform.ResourceSchema.SchemaVersion }}` to implement `GetTerraformSchemaVersion`; a custom template may read any other exported field of the schema. |
 | `Sensitive.Fields` | `map[string]string` | Mapping from sensitive field paths to their connection-detail keys. When non-empty, `GetConnectionDetailsMapping` returns this map; otherwise it returns `nil`. |
