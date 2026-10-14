@@ -1474,6 +1474,80 @@ func TestFieldTypeConversion(t *testing.T) {
 				}),
 			},
 		},
+		"FloatToStringLargeValueWithoutExponent": {
+			reason: "Convert a float64 of 1e6 or more to a string without exponent notation.",
+			args: args{
+				sourceVersion: "v1beta1",
+				targetVersion: "v1beta2",
+				fieldPath:     "spec.forProvider.ratio",
+				mode:          FloatToString,
+				sourceObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta1",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"ratio": float64(2592000),
+						},
+					},
+				}),
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{},
+					},
+				}),
+			},
+			want: want{
+				converted: true,
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"ratio": "2592000",
+						},
+					},
+				}),
+			},
+		},
+		"FloatToStringSmallValueWithoutExponent": {
+			reason: "Convert a float64 below 1e-4 to a string without exponent notation.",
+			args: args{
+				sourceVersion: "v1beta1",
+				targetVersion: "v1beta2",
+				fieldPath:     "spec.forProvider.ratio",
+				mode:          FloatToString,
+				sourceObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta1",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"ratio": float64(0.00001),
+						},
+					},
+				}),
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{},
+					},
+				}),
+			},
+			want: want{
+				converted: true,
+				targetObj: fieldpath.Pave(map[string]any{
+					"apiVersion": "test.crossplane.io/v1beta2",
+					"kind":       "TestResource",
+					"spec": map[string]any{
+						"forProvider": map[string]any{
+							"ratio": "0.00001",
+						},
+					},
+				}),
+			},
+		},
 		"SuccessfulStringToFloatConversion": {
 			reason: "Successfully convert string field to float64.",
 			args: args{
