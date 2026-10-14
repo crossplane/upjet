@@ -329,7 +329,45 @@ func (c *TerraformPluginSDKConnector) ReconstructTerraformState(ctx context.Cont
 		return terraform.Setup{}, nil, cty.NilVal, errors.Wrap(err, "cannot store sensitive parameters into tfState")
 	}
 	c.config.ExternalName.SetIdentifierArgumentFn(tfState, externalName)
-	tfState["id"] = params["id"]
+
+	// If the resource has an ImportState function, call it to split composite IDs
+	compositeID := params["id"].(string)
+	if c.config.TerraformResource.Importer != nil && c.config.TerraformResource.Importer.State != nil {
+		logger.Debug("Calling ImportState to split composite ID", "compositeID", compositeID)
+
+		// Create a minimal InstanceState with the composite ID
+		tempState := &tf.InstanceState{
+			ID:         compositeID,
+			Attributes: make(map[string]string),
+		}
+
+		// Create ResourceData from the state
+		tempResourceData := c.config.TerraformResource.Data(tempState)
+
+		// Call the provider's ImportState function to split the composite ID
+		importedData, err := c.config.TerraformResource.Importer.State(tempResourceData, ts.Meta)
+		if err != nil {
+			logger.Debug("ImportState failed, falling back to composite ID", "error", err)
+			tfState["id"] = compositeID
+		} else if len(importedData) > 0 {
+			// Use the split ID from ImportState
+			splitID := importedData[0].Id()
+			logger.Debug("ImportState succeeded, using split ID", "compositeID", compositeID, "splitID", splitID)
+			tfState["id"] = splitID
+
+			// Also copy any attributes set by ImportState (e.g., service_name)
+			for k, v := range importedData[0].State().Attributes {
+				if _, exists := tfState[k]; !exists && k != "id" {
+					tfState[k] = v
+				}
+			}
+		} else {
+			logger.Debug("ImportState returned no data, using composite ID")
+			tfState["id"] = compositeID
+		}
+	} else {
+		tfState["id"] = compositeID
+	}
 	if copyParams {
 		tfState = copyParameters(tfState, params)
 	}
