@@ -789,7 +789,11 @@ func (f *fieldTypeConverter) floatToString(value interface{}) (interface{}, erro
 	if !ok {
 		return "", errors.Errorf("expected float64 type, got %T", value)
 	}
-	return strconv.FormatFloat(v, 'g', -1, 64), nil
+	// Use the 'f' format: with the shortest precision, 'g' switches to
+	// exponent notation for any value >= 1e6 (e.g. 2592000 becomes
+	// "2.592e+06"), which Terraform providers that parse the string as an
+	// integer cannot read.
+	return strconv.FormatFloat(v, 'f', -1, 64), nil
 }
 
 func (f *fieldTypeConverter) stringToFloat(value interface{}) (interface{}, error) {
