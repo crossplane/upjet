@@ -43,46 +43,50 @@ func TestSetReconstructedTfStatePreservesAsyncCreateState(t *testing.T) {
 }
 
 func TestSetReconstructedTfState(t *testing.T) {
-	cases := map[string]struct {
+	type args struct {
 		initial       *tfsdk.InstanceState
 		reconstructed *tfsdk.InstanceState
-		preserve      bool
+	}
+	created := &tfsdk.InstanceState{ID: "created-id"}
+	reconstructed := &tfsdk.InstanceState{ID: "reconstructed-id"}
+	empty := &tfsdk.InstanceState{}
+	cases := map[string]struct {
+		args           args
+		want           *tfsdk.InstanceState
+		wantAfterReset *tfsdk.InstanceState
 	}{
 		"NilState": {
-			reconstructed: &tfsdk.InstanceState{ID: "reconstructed-id"},
+			args:           args{reconstructed: reconstructed},
+			want:           reconstructed,
+			wantAfterReset: nil,
 		},
 		"EmptyID": {
-			initial:       &tfsdk.InstanceState{},
-			reconstructed: &tfsdk.InstanceState{ID: "reconstructed-id"},
+			args:           args{initial: empty, reconstructed: reconstructed},
+			want:           reconstructed,
+			wantAfterReset: nil,
 		},
 		"EmptyReconstructedID": {
-			reconstructed: &tfsdk.InstanceState{},
+			args:           args{reconstructed: empty},
+			want:           empty,
+			wantAfterReset: nil,
 		},
 		"PreserveValidState": {
-			initial:       &tfsdk.InstanceState{ID: "created-id"},
-			reconstructed: &tfsdk.InstanceState{ID: "stale-id"},
-			preserve:      true,
+			args:           args{initial: created, reconstructed: reconstructed},
+			want:           created,
+			wantAfterReset: created,
 		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			tracker := NewAsyncTracker()
-			tracker.SetTfState(tc.initial)
-			tracker.SetReconstructedTfState(tc.reconstructed)
-			want := tc.reconstructed
-			if tc.preserve {
-				want = tc.initial
-			}
-			if got := tracker.GetTfState(); got != want {
-				t.Fatalf("unexpected state: got %v, want %v", got, want)
+			tracker.SetTfState(tc.args.initial)
+			tracker.SetReconstructedTfState(tc.args.reconstructed)
+			if got := tracker.GetTfState(); got != tc.want {
+				t.Fatalf("unexpected state: got %v, want %v", got, tc.want)
 			}
 			tracker.ResetReconstructedTfState()
-			want = nil
-			if tc.preserve {
-				want = tc.initial
-			}
-			if got := tracker.GetTfState(); got != want {
-				t.Fatalf("unexpected state after reset: got %v, want %v", got, want)
+			if got := tracker.GetTfState(); got != tc.wantAfterReset {
+				t.Fatalf("unexpected state after reset: got %v, want %v", got, tc.wantAfterReset)
 			}
 		})
 	}
