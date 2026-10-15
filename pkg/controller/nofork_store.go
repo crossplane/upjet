@@ -126,11 +126,17 @@ func (a *AsyncTracker) SetTfState(state *tfsdk.InstanceState) {
 }
 
 // SetReconstructedTfState stores the given SDKv2 Terraform InstanceState into
-// the AsyncTracker and marks the state as reconstructed.
+// the AsyncTracker and marks the state as reconstructed, unless a state with
+// a nonempty ID has already been stored.
 // MUST be only used for SDKv2 resources.
 func (a *AsyncTracker) SetReconstructedTfState(state *tfsdk.InstanceState) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	// An async operation may have published valid state while reconstruction
+	// was in progress. Preserve both that state and its mark.
+	if a.tfState != nil && a.tfState.ID != "" {
+		return
+	}
 	a.tfState = state
 	a.stateMark = reconstructedState
 }
