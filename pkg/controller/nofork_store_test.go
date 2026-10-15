@@ -8,7 +8,89 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
+	tfsdk "github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 )
+
+func TestSetReconstructedTfStatePreservesAsyncCreateState(t *testing.T) {
+	tracker := NewAsyncTracker()
+	reconstructing := make(chan struct{})
+	resume := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		// Connect checked the cache before async create published its state.
+		if tracker.HasState() {
+			t.Error("expected no state before reconstruction")
+		}
+		close(reconstructing)
+		<-resume
+		tracker.SetReconstructedTfState(&tfsdk.InstanceState{})
+	}()
+
+	<-reconstructing
+	created := &tfsdk.InstanceState{ID: "created-id"}
+	tracker.SetTfState(created)
+	close(resume)
+	<-done
+
+	if got := tracker.GetTfState(); got != created {
+		t.Fatalf("stale reconstruction replaced async create state: got %v, want %v", got, created)
+	}
+	tracker.ResetReconstructedTfState()
+	if got := tracker.GetTfState(); got != created {
+		t.Fatalf("reset cleared async create state: got %v, want %v", got, created)
+	}
+}
+
+func TestSetReconstructedTfState(t *testing.T) {
+	type args struct {
+		initial       *tfsdk.InstanceState
+		reconstructed *tfsdk.InstanceState
+	}
+	created := &tfsdk.InstanceState{ID: "created-id"}
+	reconstructed := &tfsdk.InstanceState{ID: "reconstructed-id"}
+	empty := &tfsdk.InstanceState{}
+	cases := map[string]struct {
+		args           args
+		want           *tfsdk.InstanceState
+		wantAfterReset *tfsdk.InstanceState
+	}{
+		"NilState": {
+			args:           args{reconstructed: reconstructed},
+			want:           reconstructed,
+			wantAfterReset: nil,
+		},
+		"EmptyID": {
+			args:           args{initial: empty, reconstructed: reconstructed},
+			want:           reconstructed,
+			wantAfterReset: nil,
+		},
+		"EmptyReconstructedID": {
+			args:           args{reconstructed: empty},
+			want:           empty,
+			wantAfterReset: nil,
+		},
+		"PreserveValidState": {
+			args:           args{initial: created, reconstructed: reconstructed},
+			want:           created,
+			wantAfterReset: created,
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			tracker := NewAsyncTracker()
+			tracker.SetTfState(tc.args.initial)
+			tracker.SetReconstructedTfState(tc.args.reconstructed)
+			if got := tracker.GetTfState(); got != tc.want {
+				t.Fatalf("unexpected state: got %v, want %v", got, tc.want)
+			}
+			tracker.ResetReconstructedTfState()
+			if got := tracker.GetTfState(); got != tc.wantAfterReset {
+				t.Fatalf("unexpected state after reset: got %v, want %v", got, tc.wantAfterReset)
+			}
+		})
+	}
+}
 
 // newTestIdentityData is defined in external_tfpluginfw_test.go
 
