@@ -10,12 +10,12 @@ import (
 	"strings"
 	"time"
 
+	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/fieldpath"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/logging"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
-	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	"github.com/hashicorp/go-cty/cty"
 	tfdiag "github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -32,13 +32,6 @@ import (
 	"github.com/crossplane/upjet/v2/pkg/terraform"
 )
 
-type ObservationMode string
-
-const (
-	ReadExternalResource ObservationMode = "remote"
-	UseLocalState        ObservationMode = "local"
-)
-
 type TerraformPluginSDKConnector struct {
 	getTerraformSetup           terraform.SetupFn
 	kube                        client.Client
@@ -47,7 +40,6 @@ type TerraformPluginSDKConnector struct {
 	metricRecorder              *metrics.MetricRecorder
 	operationTrackerStore       *OperationTrackerStore
 	isManagementPoliciesEnabled bool
-	observationMode             ObservationMode
 }
 
 // TerraformPluginSDKOption allows you to configure TerraformPluginSDKConnector.
@@ -76,12 +68,6 @@ func WithTerraformPluginSDKManagementPolicies(isManagementPoliciesEnabled bool) 
 	}
 }
 
-func WithObservationMode(m ObservationMode) TerraformPluginSDKOption {
-	return func(c *TerraformPluginSDKConnector) {
-		c.observationMode = m
-	}
-}
-
 // NewTerraformPluginSDKConnector initializes a new TerraformPluginSDKConnector
 func NewTerraformPluginSDKConnector(kube client.Client, sf terraform.SetupFn, cfg *config.Resource, ots *OperationTrackerStore, opts ...TerraformPluginSDKOption) *TerraformPluginSDKConnector {
 	nfc := &TerraformPluginSDKConnector{
@@ -89,8 +75,6 @@ func NewTerraformPluginSDKConnector(kube client.Client, sf terraform.SetupFn, cf
 		getTerraformSetup:     sf,
 		config:                cfg,
 		operationTrackerStore: ots,
-		logger:                logging.NewNopLogger(),
-		observationMode:       ReadExternalResource,
 	}
 	for _, f := range opts {
 		f(nfc)
@@ -137,30 +121,12 @@ type terraformPluginSDKExternal struct {
 	metricRecorder              *metrics.MetricRecorder
 	opTracker                   *AsyncTracker
 	isManagementPoliciesEnabled bool
-	observationMode             ObservationMode
 }
 
-func TerraformPluginSDKInstanceDiff(ec managed.ExternalClient) (*tf.InstanceDiff, error) {
-	n, ok := ec.(*terraformPluginSDKExternal)
-	if !ok {
-		return nil, errors.New("not a Terraform plugin SDKv2 external client")
-	}
-	return n.instanceDiff, nil
-}
-
-func getExtendedParameters(ctx context.Context, tr resource.Terraformed, externalName string, cfg *config.Resource, ts terraform.Setup, initParamsMerged bool, kube client.Client) (map[string]any, error) { //nolint:gocyclo // easier to follow as a unit
-	var err error
-	var params map[string]any                          // Assigned by both branches; functions return non-nil on success
-	if cfg.ControllerReconcileVersion == cfg.Version { //nolint:staticcheck // still handling deprecated field behavior
-		params, err = tr.GetMergedParameters(initParamsMerged)
-		if err != nil {
-			return nil, errors.Wrap(err, "cannot get merged parameters")
-		}
-	} else {
-		params, err = mergeAnnotationFieldsWithSpec(tr, initParamsMerged, tr.GetAnnotations())
-		if err != nil {
-			return nil, errors.Wrap(err, "cannot merge annotation fields")
-		}
+func getExtendedParameters(ctx context.Context, tr resource.Terraformed, externalName string, cfg *config.Resource, ts terraform.Setup, initParamsMerged bool, kube client.Client) (map[string]any, error) {
+	params, err := tr.GetMergedParameters(initParamsMerged)
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot get merged parameters")
 	}
 	params, err = cfg.ApplyTFConversions(params, config.ToTerraform)
 	if err != nil {
@@ -246,14 +212,9 @@ func (c *TerraformPluginSDKConnector) applyHCLParserToParam(sc *schema.Schema, p
 			}
 		}
 	case schema.TypeString:
-		paramStr, ok := param.(string)
-		if !ok {
-			c.logger.Debug("expected parameter value to be string", "parameterType", fmt.Sprintf("%T", param))
-			return param
-		}
 		// For String types check if it is an HCL string and process
-		if isHCLSnippetPattern.MatchString(paramStr) {
-			hclProccessedParam, err := processHCLParam(paramStr)
+		if isHCLSnippetPattern.MatchString(param.(string)) {
+			hclProccessedParam, err := processHCLParam(param.(string))
 			if err != nil {
 				c.logger.Debug("could not process param, returning original", "param", sc.GoString())
 			} else {
@@ -267,146 +228,115 @@ func (c *TerraformPluginSDKConnector) applyHCLParserToParam(sc *schema.Schema, p
 	return param
 }
 
-// ReconstructTerraformState prepares the Terraform inputs for the given
-// managed resource. It first obtains the terraform.Setup for the resource,
-// recording the call under the "connect" external API time metric, and returns
-// it so that callers can hand it to the Terraform provider. It then returns
-// the resource's desired configuration as a Terraform parameter map, together
-// with that map as a cty.Value suitable for terraform.InstanceState.RawConfig,
-// both derived from spec.forProvider merged with spec.initProvider.
-//
-// If the operation tracker does not already hold an instance state for the
-// resource, it also reconstructs one from status.atProvider and stores it on
-// the tracker, so that the subsequent Terraform calls have a prior state to
-// diff against. An observation that is empty, i.e. a resource that has not
-// been created yet, is seeded with the parameters instead. The reconstructed
-// state is stored on the tracker rather than returned, and a cached state is
-// left untouched.
-//
-// On error, the returned terraform.Setup is the zero value and the parameter
-// map and cty.Value are nil.
-func (c *TerraformPluginSDKConnector) ReconstructTerraformState(ctx context.Context, tr resource.Terraformed, logger logging.Logger) (terraform.Setup, map[string]any, cty.Value, error) { //nolint:gocyclo
+func (c *TerraformPluginSDKConnector) Connect(ctx context.Context, mg xpresource.Managed) (managed.ExternalClient, error) { //nolint:gocyclo
+	c.metricRecorder.ObserveReconcileDelay(mg.GetObjectKind().GroupVersionKind(), metrics.NameForManaged(mg))
+	logger := c.logger.WithValues("uid", mg.GetUID(), "name", mg.GetName(), "namespace", mg.GetNamespace(), "gvk", mg.GetObjectKind().GroupVersionKind().String())
+	logger.Debug("Connecting to the service provider")
 	start := time.Now()
-	ts, err := c.getTerraformSetup(ctx, c.kube, tr)
+	ts, err := c.getTerraformSetup(ctx, c.kube, mg)
 	metrics.ExternalAPITime.WithLabelValues("connect").Observe(time.Since(start).Seconds())
 	if err != nil {
-		return terraform.Setup{}, nil, cty.NilVal, errors.Wrap(err, errGetTerraformSetup)
+		return nil, errors.Wrap(err, errGetTerraformSetup)
 	}
 
+	// To Compute the ResourceDiff: n.resourceSchema.Diff(...)
+	tr := mg.(resource.Terraformed)
 	opTracker := c.operationTrackerStore.Tracker(tr)
 	externalName := meta.GetExternalName(tr)
 	params, err := getExtendedParameters(ctx, tr, externalName, c.config, ts, c.isManagementPoliciesEnabled, c.kube)
 	if err != nil {
-		return terraform.Setup{}, nil, cty.NilVal, errors.Wrapf(err, "failed to get the extended parameters for resource %q", client.ObjectKeyFromObject(tr))
+		return nil, errors.Wrapf(err, "failed to get the extended parameters for resource %q", client.ObjectKeyFromObject(mg))
 	}
 	params = c.processParamsWithHCLParser(c.config.TerraformResource.Schema, params)
 
 	schemaBlock := c.config.TerraformResource.CoreConfigSchema()
 	rawConfig, err := schema.JSONMapToStateValue(params, schemaBlock)
 	if err != nil {
-		return terraform.Setup{}, nil, cty.NilVal, errors.Wrap(err, "failed to convert params JSON map to cty.Value")
+		return nil, errors.Wrap(err, "failed to convert params JSON map to cty.Value")
 	}
-
-	if opTracker.HasState() {
-		return ts, params, rawConfig, nil
-	}
-
-	// if the tracker does not have previous state.
-	logger.Debug("Instance state not found in cache, reconstructing...")
-	tfState, err := tr.GetObservation()
-	if err != nil {
-		return terraform.Setup{}, nil, cty.NilVal, errors.Wrap(err, "failed to get the observation")
-	}
-	if err := mergeAnnotationFieldsWithStatus(tfState, tr.GetAnnotations(), c.config); err != nil {
-		return terraform.Setup{}, nil, cty.NilVal, errors.Wrapf(err, "failed to merge annotations on resource %q", client.ObjectKeyFromObject(tr))
-	}
-	tfState, err = c.config.ApplyTFConversions(tfState, config.ToTerraform)
-	if err != nil {
-		return terraform.Setup{}, nil, cty.NilVal, errors.Wrap(err, "failed to run the API converters on the Terraform state")
-	}
-	copyParams := len(tfState) == 0
-	if err = resource.GetSensitiveParameters(ctx, &APISecretClient{kube: c.kube}, tr, tfState, tr.GetConnectionDetailsMapping()); err != nil {
-		return terraform.Setup{}, nil, cty.NilVal, errors.Wrap(err, "cannot store sensitive parameters into tfState")
-	}
-	c.config.ExternalName.SetIdentifierArgumentFn(tfState, externalName)
-
-	// If the resource has an ImportState function, call it to split composite IDs
-	compositeID := params["id"].(string)
-	if c.config.TerraformResource.Importer != nil && c.config.TerraformResource.Importer.State != nil {
-		logger.Debug("Calling ImportState to split composite ID", "compositeID", compositeID)
-
-		// Create a minimal InstanceState with the composite ID
-		tempState := &tf.InstanceState{
-			ID:         compositeID,
-			Attributes: make(map[string]string),
-		}
-
-		// Create ResourceData from the state
-		tempResourceData := c.config.TerraformResource.Data(tempState)
-
-		// Call the provider's ImportState function to split the composite ID
-		importedData, err := c.config.TerraformResource.Importer.State(tempResourceData, ts.Meta)
+	if !opTracker.HasState() {
+		logger.Debug("Instance state not found in cache, reconstructing...")
+		tfState, err := tr.GetObservation()
 		if err != nil {
-			logger.Debug("ImportState failed, falling back to composite ID", "error", err)
-			tfState["id"] = compositeID
-		} else if len(importedData) > 0 {
-			// Use the split ID from ImportState
-			splitID := importedData[0].Id()
-			logger.Debug("ImportState succeeded, using split ID", "compositeID", compositeID, "splitID", splitID)
-			tfState["id"] = splitID
+			return nil, errors.Wrap(err, "failed to get the observation")
+		}
+		tfState, err = c.config.ApplyTFConversions(tfState, config.ToTerraform)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to run the API converters on the Terraform state")
+		}
+		copyParams := len(tfState) == 0
+		if err = resource.GetSensitiveParameters(ctx, &APISecretClient{kube: c.kube}, tr, tfState, tr.GetConnectionDetailsMapping()); err != nil {
+			return nil, errors.Wrap(err, "cannot store sensitive parameters into tfState")
+		}
+		c.config.ExternalName.SetIdentifierArgumentFn(tfState, externalName)
 
-			// Also copy any attributes set by ImportState (e.g., service_name)
-			for k, v := range importedData[0].State().Attributes {
-				if _, exists := tfState[k]; !exists && k != "id" {
-					tfState[k] = v
+		// If the resource has an ImportState function, call it to split composite IDs
+		compositeID := params["id"].(string)
+		if c.config.TerraformResource.Importer != nil && c.config.TerraformResource.Importer.State != nil {
+			logger.Debug("Calling ImportState to split composite ID", "compositeID", compositeID)
+
+			// Create a minimal InstanceState with the composite ID
+			tempState := &tf.InstanceState{
+				ID:         compositeID,
+				Attributes: make(map[string]string),
+			}
+
+			// Create ResourceData from the state
+			tempResourceData := c.config.TerraformResource.Data(tempState)
+
+			// Call the provider's ImportState function to split the composite ID
+			importedData, err := c.config.TerraformResource.Importer.State(tempResourceData, ts.Meta)
+			if err != nil {
+				logger.Debug("ImportState failed, falling back to composite ID", "error", err)
+				tfState["id"] = compositeID
+			} else if len(importedData) > 0 {
+				// Use the split ID from ImportState
+				splitID := importedData[0].Id()
+				logger.Debug("ImportState succeeded, using split ID", "compositeID", compositeID, "splitID", splitID)
+				tfState["id"] = splitID
+
+				// Also copy any attributes set by ImportState (e.g., service_name)
+				if state := importedData[0].State(); state != nil {
+					for k, v := range state.Attributes {
+						if _, exists := tfState[k]; !exists && k != "id" {
+							tfState[k] = v
+						}
+					}
 				}
+			} else {
+				logger.Debug("ImportState returned no data, using composite ID")
+				tfState["id"] = compositeID
 			}
 		} else {
-			logger.Debug("ImportState returned no data, using composite ID")
 			tfState["id"] = compositeID
 		}
-	} else {
-		tfState["id"] = compositeID
-	}
-	if copyParams {
-		tfState = copyParameters(tfState, params)
-	}
 
-	tfStateCtyValue, err := schema.JSONMapToStateValue(tfState, schemaBlock)
-	if err != nil {
-		return terraform.Setup{}, nil, cty.NilVal, errors.Wrap(err, "cannot convert JSON map to state cty.Value")
-	}
-	s, err := c.config.TerraformResource.ShimInstanceStateFromValue(tfStateCtyValue)
-	if err != nil {
-		return terraform.Setup{}, nil, cty.NilVal, errors.Wrap(err, "failed to convert cty.Value to terraform.InstanceState")
-	}
-	s.RawPlan = tfStateCtyValue
-	s.RawConfig = rawConfig
-
-	timeouts := getTimeoutParameters(c.config)
-	if len(timeouts) > 0 {
-		if s == nil {
-			s = &tf.InstanceState{}
+		if copyParams {
+			tfState = copyParameters(tfState, params)
 		}
-		if s.Meta == nil {
-			s.Meta = make(map[string]interface{})
+
+		tfStateCtyValue, err := schema.JSONMapToStateValue(tfState, schemaBlock)
+		if err != nil {
+			return nil, errors.Wrap(err, "cannot convert JSON map to state cty.Value")
 		}
-		s.Meta[schema.TimeoutKey] = timeouts
-	}
-	opTracker.SetReconstructedTfState(s)
-	return ts, params, rawConfig, nil
-}
+		s, err := c.config.TerraformResource.ShimInstanceStateFromValue(tfStateCtyValue)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to convert cty.Value to terraform.InstanceState")
+		}
+		s.RawPlan = tfStateCtyValue
+		s.RawConfig = rawConfig
 
-func (c *TerraformPluginSDKConnector) Connect(ctx context.Context, mg xpresource.Managed) (managed.ExternalClient, error) {
-	c.metricRecorder.ObserveReconcileDelay(mg.GetObjectKind().GroupVersionKind(), metrics.NameForManaged(mg))
-	logger := c.logger.WithValues("uid", mg.GetUID(), "name", mg.GetName(), "namespace", mg.GetNamespace(), "gvk", mg.GetObjectKind().GroupVersionKind().String())
-	logger.Debug("Connecting to the service provider")
-
-	// To Compute the ResourceDiff: n.resourceSchema.Diff(...)
-	tr := mg.(resource.Terraformed)
-	ts, params, rawConfig, err := c.ReconstructTerraformState(ctx, tr, logger)
-	if err != nil {
-		return nil, err
+		timeouts := getTimeoutParameters(c.config)
+		if len(timeouts) > 0 {
+			if s == nil {
+				s = &tf.InstanceState{}
+			}
+			if s.Meta == nil {
+				s.Meta = make(map[string]interface{})
+			}
+			s.Meta[schema.TimeoutKey] = timeouts
+		}
+		opTracker.SetTfState(s)
 	}
 
 	return &terraformPluginSDKExternal{
@@ -417,13 +347,12 @@ func (c *TerraformPluginSDKConnector) Connect(ctx context.Context, mg xpresource
 		rawConfig:                   rawConfig,
 		logger:                      logger,
 		metricRecorder:              c.metricRecorder,
-		opTracker:                   c.operationTrackerStore.Tracker(tr),
+		opTracker:                   opTracker,
 		isManagementPoliciesEnabled: c.isManagementPoliciesEnabled,
-		observationMode:             c.observationMode,
 	}, nil
 }
 
-func filterInitExclusiveDiffs(tr resource.Terraformed, instanceDiff *tf.InstanceDiff, cfg *config.Resource) error { //nolint:gocyclo
+func filterInitExclusiveDiffs(tr resource.Terraformed, instanceDiff *tf.InstanceDiff) error { //nolint:gocyclo
 	if instanceDiff == nil || instanceDiff.Empty() {
 		return nil
 	}
@@ -432,17 +361,9 @@ func filterInitExclusiveDiffs(tr resource.Terraformed, instanceDiff *tf.Instance
 	if err != nil {
 		return errors.Wrap(err, "cannot get spec.forProvider parameters")
 	}
-	paramsForProvider, err = cfg.ApplyTFConversions(paramsForProvider, config.ToTerraform)
-	if err != nil {
-		return errors.Wrap(err, "cannot apply tf conversions to spec.forProvider parameters")
-	}
 	paramsInitProvider, err := tr.GetInitParameters()
 	if err != nil {
 		return errors.Wrap(err, "cannot get spec.initProvider parameters")
-	}
-	paramsInitProvider, err = cfg.ApplyTFConversions(paramsInitProvider, config.ToTerraform)
-	if err != nil {
-		return errors.Wrap(err, "cannot apply tf conversions to spec.initProvider parameters")
 	}
 
 	initProviderExclusiveParamKeys := getTerraformIgnoreChanges(paramsForProvider, paramsInitProvider)
@@ -559,7 +480,7 @@ func (n *terraformPluginSDKExternal) getResourceDataDiff(tr resource.Terraformed
 	}
 
 	if resourceExists {
-		if err := filterInitExclusiveDiffs(tr, instanceDiff, n.config); err != nil {
+		if err := filterInitExclusiveDiffs(tr, instanceDiff); err != nil {
 			return nil, errors.Wrap(err, "failed to filter the diffs exclusive to spec.initProvider in the terraform.InstanceDiff")
 		}
 	}
@@ -601,20 +522,10 @@ func (n *terraformPluginSDKExternal) Observe(ctx context.Context, mg xpresource.
 	}
 
 	start := time.Now()
-
-	var newState *tf.InstanceState
-	switch n.observationMode { //nolint:exhaustive // the default branch covers ReadExternalResource and the zero value
-	case UseLocalState:
-		newState = n.opTracker.GetTfState()
-
-	default:
-		ns, diag := n.resourceSchema.RefreshWithoutUpgrade(ctx, n.opTracker.GetTfState(), n.ts.Meta)
-		metrics.ExternalAPITime.WithLabelValues("read").Observe(time.Since(start).Seconds())
-		if diag != nil && diag.HasError() {
-			n.opTracker.ResetReconstructedTfState()
-			return managed.ExternalObservation{}, errors.Errorf("failed to observe the resource: %v", diag)
-		}
-		newState = ns
+	newState, diag := n.resourceSchema.RefreshWithoutUpgrade(ctx, n.opTracker.GetTfState(), n.ts.Meta)
+	metrics.ExternalAPITime.WithLabelValues("read").Observe(time.Since(start).Seconds())
+	if diag != nil && diag.HasError() {
+		return managed.ExternalObservation{}, errors.Errorf("failed to observe the resource: %v", diag)
 	}
 	diffState := n.opTracker.GetTfState()
 	n.opTracker.SetTfState(newState) // TODO: missing RawConfig & RawPlan here...
@@ -627,41 +538,17 @@ func (n *terraformPluginSDKExternal) Observe(ctx context.Context, mg xpresource.
 			return managed.ExternalObservation{}, errors.Wrap(err, "cannot convert instance state to JSON map")
 		}
 		stateValueMap = jsonMap
-		// The Terraform provider's CustomizeDiff functions may read the raw
-		// state, plan and config of the resource (for example,
-		// google_compute_subnetwork calls
-		// ResourceDiff.GetRawState().GetAttr("secondary_ip_range") on every
-		// diff of an existing resource). go-cty's Value.GetAttr panics with
-		// "value is not an object" on the zero cty.Value, so all three must be
-		// populated before the diff is computed.
-		newState.RawState = stateValue
 		newState.RawPlan = stateValue
 		newState.RawConfig = n.rawConfig
 		diffState = newState
 	} else if diffState != nil {
 		diffState.Attributes = nil
 		diffState.ID = ""
-		// We still need to populate a non-nil RawPlan, RawConfig & RawState in
-		// InstanceState as the Terraform provider being called with this state
-		// may assume that they are not nil. An example is Terraform AWS
-		// provider's transparent tagging interceptor, which calls
-		// ResourceDiff.GetRawPlan().GetAttr("tags"), which will panic on the
-		// zero cty.Value with "value is not an object". The resource does not
-		// exist, so its raw state is always a typed null of the resource
-		// schema, which is what the SDK itself falls back to when no state is
-		// set. A raw state cached by a previous Observe is stale by now.
-		if diffState.RawPlan.IsNull() {
-			diffState.RawPlan = n.rawConfig
-		}
-		if diffState.RawConfig.IsNull() {
-			diffState.RawConfig = n.rawConfig
-		}
-		diffState.RawState = cty.NullVal(n.config.TerraformResource.CoreConfigSchema().ImpliedType())
 	}
 
 	n.instanceDiff = nil
-	policySet := sets.New[xpv2.ManagementAction](mg.(resource.Terraformed).GetManagementPolicies()...)
-	observeOnlyPolicy := sets.New(xpv2.ManagementActionObserve)
+	policySet := sets.New[xpv1.ManagementAction](mg.(resource.Terraformed).GetManagementPolicies()...)
+	observeOnlyPolicy := sets.New(xpv1.ManagementActionObserve)
 	isObserveOnlyPolicy := policySet.Equal(observeOnlyPolicy)
 	if !isObserveOnlyPolicy || !n.isManagementPoliciesEnabled {
 		n.instanceDiff, err = n.getResourceDataDiff(mg.(resource.Terraformed), ctx, diffState, resourceExists)
@@ -683,11 +570,11 @@ func (n *terraformPluginSDKExternal) Observe(ctx context.Context, mg xpresource.
 	var connDetails managed.ConnectionDetails
 	specUpdateRequired := false
 	if resourceExists {
-		if mg.GetCondition(xpv2.TypeReady).Status == corev1.ConditionUnknown ||
-			mg.GetCondition(xpv2.TypeReady).Status == corev1.ConditionFalse {
+		if mg.GetCondition(xpv1.TypeReady).Status == corev1.ConditionUnknown ||
+			mg.GetCondition(xpv1.TypeReady).Status == corev1.ConditionFalse {
 			addTTR(mg)
 		}
-		mg.SetConditions(xpv2.Available())
+		mg.SetConditions(xpv1.Available())
 
 		// we get the connection details from the observed state before
 		// the conversion because the sensitive paths assume the native Terraform
@@ -706,7 +593,7 @@ func (n *terraformPluginSDKExternal) Observe(ctx context.Context, mg xpresource.
 			return managed.ExternalObservation{}, errors.Wrap(err, "cannot marshal the attributes of the new state for late-initialization")
 		}
 
-		policyHasLateInit := policySet.HasAny(xpv2.ManagementActionLateInitialize, xpv2.ManagementActionAll)
+		policyHasLateInit := policySet.HasAny(xpv1.ManagementActionLateInitialize, xpv1.ManagementActionAll)
 		if policyHasLateInit {
 			specUpdateRequired, err = mg.(resource.Terraformed).LateInitialize(buff)
 			if err != nil {
@@ -718,20 +605,6 @@ func (n *terraformPluginSDKExternal) Observe(ctx context.Context, mg xpresource.
 		if err != nil {
 			return managed.ExternalObservation{}, errors.Errorf("could not set observation: %v", err)
 		}
-
-		obs, err := mg.(resource.Terraformed).GetObservation()
-		if err != nil {
-			return managed.ExternalObservation{}, errors.Wrap(err, "could not get observation")
-		}
-		annotations := mg.GetAnnotations()
-		annotationUpdate, err := moveTFStateValuesToAnnotation(stateValueMap, obs, annotations, n.config)
-		if err != nil {
-			return managed.ExternalObservation{}, errors.Wrap(err, "cannot move status values to annotation")
-		}
-		if annotationUpdate {
-			mg.SetAnnotations(annotations)
-		}
-		specUpdateRequired = specUpdateRequired || annotationUpdate
 
 		if !hasDiff {
 			n.metricRecorder.SetReconcileTime(metrics.NameForManaged(mg))
@@ -838,16 +711,6 @@ func (n *terraformPluginSDKExternal) Create(ctx context.Context, mg xpresource.M
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Errorf("could not set observation: %v", err)
 	}
-	obs, err := mg.(resource.Terraformed).GetObservation()
-	if err != nil {
-		return managed.ExternalCreation{}, errors.Wrap(err, "could not get observation")
-	}
-	annotations := mg.GetAnnotations()
-	if annotationUpdate, err := moveTFStateValuesToAnnotation(stateValueMap, obs, annotations, n.config); err != nil {
-		return managed.ExternalCreation{}, errors.Wrap(err, "cannot move status values to annotation")
-	} else if annotationUpdate {
-		mg.SetAnnotations(annotations)
-	}
 
 	return managed.ExternalCreation{ConnectionDetails: conn}, nil
 }
@@ -872,7 +735,7 @@ func (n *terraformPluginSDKExternal) assertNoForceNew() error {
 	return nil
 }
 
-func (n *terraformPluginSDKExternal) Update(ctx context.Context, mg xpresource.Managed) (managed.ExternalUpdate, error) { //nolint:gocyclo
+func (n *terraformPluginSDKExternal) Update(ctx context.Context, mg xpresource.Managed) (managed.ExternalUpdate, error) {
 	if n.config.UpdateLoopPrevention != nil {
 		preventResult, err := n.config.UpdateLoopPrevention.UpdateLoopPreventionFunc(n.instanceDiff, mg)
 		if err != nil {
@@ -906,19 +769,10 @@ func (n *terraformPluginSDKExternal) Update(ctx context.Context, mg xpresource.M
 	if err != nil {
 		return managed.ExternalUpdate{}, errors.Wrap(err, "cannot convert the singleton lists for the updated resource state value map into embedded objects")
 	}
+
 	err = mg.(resource.Terraformed).SetObservation(stateValueMap)
 	if err != nil {
 		return managed.ExternalUpdate{}, errors.Errorf("failed to set observation: %v", err)
-	}
-	obs, err := mg.(resource.Terraformed).GetObservation()
-	if err != nil {
-		return managed.ExternalUpdate{}, errors.Wrap(err, "could not get observation")
-	}
-	annotations := mg.GetAnnotations()
-	if annotationUpdate, err := moveTFStateValuesToAnnotation(stateValueMap, obs, annotations, n.config); err != nil {
-		return managed.ExternalUpdate{}, errors.Wrap(err, "cannot move status values to annotation")
-	} else if annotationUpdate {
-		mg.SetAnnotations(annotations)
 	}
 	return managed.ExternalUpdate{}, nil
 }
