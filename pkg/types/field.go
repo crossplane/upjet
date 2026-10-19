@@ -56,6 +56,9 @@ type Field struct {
 	// Sensitive is set if this Field holds sensitive data and is thus
 	// generated as a secret reference.
 	Sensitive bool
+	// AlternateFieldName is set when this field has an alternative field
+	// (e.g., clientId and clientIdSecretRef when AllowPlaintextValue is true)
+	AlternateFieldName string
 }
 
 // getDocString tries to extract the documentation string for the specified
@@ -288,6 +291,19 @@ func NewSensitiveField(g *Builder, cfg *config.Resource, r *resource, sch *schem
 		// Data will be stored in connection details secret
 		return nil, true, nil
 	}
+	
+	// When AllowPlaintextValue is true, the secret ref field is not required
+	// by itself since the plaintext field can be used instead.
+	// We need to mark the schema as optional to prevent it from being added
+	// to topLevelRequiredParams.
+	if cfg.Sensitive.AllowPlaintextValue {
+		f.Required = false
+		// Create a copy of the schema and mark it as optional
+		schemaCopy := *f.Schema
+		schemaCopy.Optional = true
+		f.Schema = &schemaCopy
+	}
+	
 	sfx := "SecretRef"
 	switch f.FieldType.(type) {
 	case *types.Slice:
