@@ -98,6 +98,14 @@ func WithProviderInUse(providerInUse InUse) WorkspaceOption {
 	}
 }
 
+// WithWorkspaceHasIDAttribute configures whether the Terraform resource
+// has an ID attribute in its schema.
+func WithWorkspaceHasIDAttribute(hasTerraformID bool) WorkspaceOption {
+	return func(w *Workspace) {
+		w.hasTFID = hasTerraformID
+	}
+}
+
 // NewWorkspace returns a new Workspace object that operates in the given
 // directory.
 func NewWorkspace(dir string, opts ...WorkspaceOption) *Workspace {
@@ -106,6 +114,7 @@ func NewWorkspace(dir string, opts ...WorkspaceOption) *Workspace {
 		dir:           dir,
 		logger:        logging.NewNopLogger(),
 		fs:            afero.Afero{Fs: afero.NewOsFs()},
+		hasTFID:       true,
 		providerInUse: noopInUse{},
 		mu:            &sync.Mutex{},
 	}
@@ -141,6 +150,7 @@ type Workspace struct {
 	filterFn func(string) string
 
 	terraformID string
+	hasTFID     bool
 }
 
 // UseProvider shares a native provider with the receiver Workspace.
@@ -288,8 +298,16 @@ func (w *Workspace) Refresh(ctx context.Context) (RefreshResult, error) {
 	if err := json.JSParser.Unmarshal(raw, s); err != nil {
 		return RefreshResult{}, errors.Wrap(err, "cannot unmarshal tfstate file")
 	}
+	attr, err := stateAttributes(s.GetAttributes())
+	if err != nil {
+		return RefreshResult{}, errors.Wrap(err, "cannot unmarshal state attributes")
+	}
+	exists, err := stateExists(attr, w.hasTFID)
+	if err != nil {
+		return RefreshResult{}, errors.Wrap(err, "cannot determine whether refreshed state exists")
+	}
 	return RefreshResult{
-		Exists: s.GetAttributes() != nil,
+		Exists: exists,
 		State:  s,
 	}, nil
 }
@@ -393,8 +411,16 @@ func (w *Workspace) Import(ctx context.Context, tr resource.Terraformed) (Import
 	if err := json.JSParser.Unmarshal(raw, s); err != nil {
 		return ImportResult{}, errors.Wrap(err, "cannot unmarshal tfstate file")
 	}
+	attr, err := stateAttributes(s.GetAttributes())
+	if err != nil {
+		return ImportResult{}, errors.Wrap(err, "cannot unmarshal state attributes")
+	}
+	exists, err := stateExists(attr, w.hasTFID)
+	if err != nil {
+		return ImportResult{}, errors.Wrap(err, "cannot determine whether imported state exists")
+	}
 	return ImportResult{
-		Exists: s.GetAttributes() != nil,
+		Exists: exists,
 		State:  s,
 	}, nil
 }

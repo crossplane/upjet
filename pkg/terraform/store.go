@@ -230,11 +230,22 @@ func (ws *WorkspaceStore) Workspace(ctx context.Context, c resource.SecretClient
 	if err := ws.fs.MkdirAll(dir, os.ModePerm); err != nil {
 		return nil, errors.Wrap(err, "cannot create directory for workspace")
 	}
+	// these are guaranteed to be never nil, defensively check just in case
+	if cfg.TerraformResource == nil || cfg.TerraformResource.Schema == nil {
+		return nil, errors.New("no Terraform schema found for resource")
+	}
+	_, hasIDInSchema := cfg.TerraformResource.Schema["id"]
 	ws.mu.Lock()
 	w, ok := ws.store[tr.GetUID()]
 	if !ok {
 		l := ws.logger.WithValues("workspace", dir)
-		ws.store[tr.GetUID()] = NewWorkspace(dir, WithLogger(l), WithExecutor(ws.executor), WithFilterFn(ts.filterSensitiveInformation))
+		ws.store[tr.GetUID()] = NewWorkspace(
+			dir,
+			WithLogger(l),
+			WithExecutor(ws.executor),
+			WithFilterFn(ts.filterSensitiveInformation),
+			WithWorkspaceHasIDAttribute(hasIDInSchema),
+		)
 		w = ws.store[tr.GetUID()]
 	}
 	ws.mu.Unlock()
@@ -243,12 +254,6 @@ func (ws *WorkspaceStore) Workspace(ctx context.Context, c resource.SecretClient
 	if w.LastOperation.IsRunning() {
 		return w, nil
 	}
-
-	// these are guaranteed to be never nil, defensively check just in case
-	if cfg.TerraformResource == nil || cfg.TerraformResource.Schema == nil {
-		return nil, errors.New("no Terraform schema found for resource")
-	}
-	_, hasIDInSchema := cfg.TerraformResource.Schema["id"]
 	fp, err := NewFileProducer(ctx, c, dir, tr, ts, cfg, WithFileProducerFeatures(ws.features), WithHasIDAttribute(hasIDInSchema))
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot create a new file producer")

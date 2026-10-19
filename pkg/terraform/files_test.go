@@ -276,8 +276,32 @@ func TestIsStateEmpty(t *testing.T) {
 				empty: false,
 			},
 		},
+		"NullID": {
+			reason: "If the ID is null, treat the state as empty.",
+			args: args{
+				fs: func() afero.Afero {
+					f := afero.Afero{Fs: afero.NewMemMapFs()}
+					s := json.NewStateV4()
+					s.Resources = []json.ResourceStateV4{
+						{
+							Instances: []json.InstanceObjectStateV4{
+								{
+									AttributesRaw: []byte(`{"id": null}`),
+								},
+							},
+						},
+					}
+					d, _ := json.JSParser.Marshal(s)
+					_ = f.WriteFile(filepath.Join(dir, "terraform.tfstate"), d, 0600)
+					return f
+				},
+			},
+			want: want{
+				empty: true,
+			},
+		},
 		"NonStringID": {
-			reason: "If the ID is there but not string, return true.",
+			reason: "If the ID is there but not string, return an error.",
 			args: args{
 				fs: func() afero.Afero {
 					f := afero.Afero{Fs: afero.NewMemMapFs()}
