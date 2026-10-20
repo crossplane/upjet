@@ -278,8 +278,7 @@ func (s *PlanService) servedAPIGroups() []string {
 
 func (s *PlanService) getResourceConfiguration(m xpresource.Managed) (*config.Resource, config.ResourceType, error) {
 	gvk := m.GetObjectKind().GroupVersionKind()
-	parts := strings.SplitN(gvk.Group, ".", 2)
-	if len(parts) != 2 {
+	if gvk.Group == "" {
 		return nil, config.ResourceTypeUnknown, errors.Errorf(fmtErrEmptyGroupName, gvk.String())
 	}
 
@@ -289,7 +288,15 @@ func (s *PlanService) getResourceConfiguration(m xpresource.Managed) (*config.Re
 	}
 	tfName := tr.GetTerraformResourceType()
 	for _, pc := range s.providerConfigurations {
-		if pc.RootGroup != parts[1] {
+		// A resource's CRD group is its provider's root group, either on its
+		// own - the shape a resource declared with no ShortGroup takes, e.g.
+		// provider-azure's ResourceGroup at "azure.upbound.io" - or prefixed
+		// with the resource's own short group and a dot, e.g.
+		// "network.azure.upbound.io". Splitting on the first "." and
+		// comparing the remainder against RootGroup, as this used to do,
+		// only recognises the second shape: it then compares "upbound.io"
+		// against "azure.upbound.io" for the first and always misses.
+		if gvk.Group != pc.RootGroup && !strings.HasSuffix(gvk.Group, "."+pc.RootGroup) {
 			continue
 		}
 		if c, ok := pc.Resources[tfName]; ok {

@@ -5,6 +5,7 @@
 package plan
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/crossplane/crossplane-runtime/v2/pkg/fieldpath"
@@ -212,13 +213,19 @@ func TestPlanConfig(t *testing.T) {
 
 	t.Run("EmbeddedHubVersionWithTheConversionAlreadyRegistered", func(t *testing.T) {
 		// The common case: cfg.Version's own request, nothing to reconcile.
+		// planConfig always returns a copy now (see the Sensitive reset
+		// below), so what this case checks is that the conversions
+		// themselves are carried over as-is, not rebuilt.
 		cfg := withPaths()
 		cfg.TerraformConversions = []config.TerraformConversion{
 			config.NewTFSingletonConversion(),
 			config.NewTFDynamicValueConversion(),
 		}
-		if got := planConfig(cfg, at("v1beta2")); got != cfg {
-			t.Error("planConfig(): want the configuration untouched when the conversion is already correct for the requested version")
+		got := planConfig(cfg, at("v1beta2"))
+		if len(got.TerraformConversions) != 2 ||
+			got.TerraformConversions[0] != config.NewTFSingletonConversion() ||
+			got.TerraformConversions[1] != config.NewTFDynamicValueConversion() {
+			t.Error("planConfig(): want the conversions untouched when the conversion is already correct for the requested version")
 		}
 	})
 
@@ -251,8 +258,9 @@ func TestPlanConfig(t *testing.T) {
 		// the hub itself - this is the provider-gcp Bucket regression case.
 		cfg := withPaths()
 		cfg.TerraformConversions = []config.TerraformConversion{config.NewTFSingletonConversion()}
-		if got := planConfig(cfg, at("v1beta3")); got != cfg {
-			t.Error("planConfig(): want the configuration untouched for an unlisted version sharing the hub's shape")
+		got := planConfig(cfg, at("v1beta3"))
+		if len(got.TerraformConversions) != 1 || got.TerraformConversions[0] != config.NewTFSingletonConversion() {
+			t.Error("planConfig(): want the conversions untouched for an unlisted version sharing the hub's shape")
 		}
 	})
 
@@ -285,8 +293,39 @@ func TestPlanConfig(t *testing.T) {
 		// A resource with nothing to convert: constructing a conversion with
 		// no paths to act on would be pointless noise, not merely harmless.
 		cfg := &config.Resource{Version: "v1beta2"}
-		if got := planConfig(cfg, at("v1beta1")); got != cfg {
-			t.Error("planConfig(): want the configuration untouched when there are no singleton paths at all")
+		got := planConfig(cfg, at("v1beta1"))
+		if len(got.TerraformConversions) != 0 {
+			t.Error("planConfig(): want the conversions untouched when there are no singleton paths at all")
+		}
+	})
+
+	t.Run("ConnectionDetailsAreResetToTheNoOp", func(t *testing.T) {
+		// A resource configuring a custom AdditionalConnectionDetailsFn, the
+		// way containerservice's azurerm_kubernetes_cluster does to build a
+		// connection Secret from kube_config. The diff server observes
+		// against a Terraform state reconstructed from the actual resource's
+		// status.atProvider, which never carries a sensitive attribute like
+		// kube_config, so the configured function would error on every call
+		// it is not consulted for anyway: a plan response never carries
+		// connection details.
+		erroring := func(attr map[string]any) (map[string][]byte, error) {
+			if _, ok := attr["kube_config"]; !ok {
+				return nil, errors.New("kube_config: not an array")
+			}
+			return nil, nil
+		}
+		cfg := &config.Resource{
+			Version:   "v1beta2",
+			Sensitive: config.Sensitive{AdditionalConnectionDetailsFn: erroring},
+		}
+
+		got := planConfig(cfg, at("v1beta1"))
+
+		if _, err := got.Sensitive.AdditionalConnectionDetailsFn(map[string]any{}); err != nil {
+			t.Errorf("planConfig(): want the no-op connection details function on the returned configuration, got an error calling it: %v", err)
+		}
+		if _, err := cfg.Sensitive.AdditionalConnectionDetailsFn(map[string]any{}); err == nil {
+			t.Error("planConfig(): the shared configuration's connection details function was modified")
 		}
 	})
 }

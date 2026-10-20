@@ -159,10 +159,14 @@ func TestResourceType(t *testing.T) {
 
 func TestGetResourceConfiguration(t *testing.T) {
 	sdkResource := &config.Resource{Name: "aws_vpc"}
+	rgResource := &config.Resource{Name: "aws_resourcegroup"}
 	provider := &config.Provider{
 		RootGroup:                     "aws.upbound.io",
-		TerraformPluginSDKIncludeList: []string{"aws_vpc$"},
-		Resources:                     map[string]*config.Resource{"aws_vpc": sdkResource},
+		TerraformPluginSDKIncludeList: []string{"aws_vpc$", "aws_resourcegroup$"},
+		Resources: map[string]*config.Resource{
+			"aws_vpc":           sdkResource,
+			"aws_resourcegroup": rgResource,
+		},
 	}
 
 	cases := map[string]struct {
@@ -173,12 +177,19 @@ func TestGetResourceConfiguration(t *testing.T) {
 		wantType config.ResourceType
 		wantErr  bool
 	}{
-		"GroupWithoutASubdomain": {
-			reason:   "A group with no dot cannot be split into a kind group and a root group.",
+		"GroupWithNoMatchingProvider": {
+			reason:   "A group with no dot is simply not any configured provider's root group.",
 			configs:  []*config.Provider{provider},
 			mg:       terraformed("aws", "VPC", "aws_vpc"),
 			wantType: config.ResourceTypeUnknown,
 			wantErr:  true,
+		},
+		"BareRootGroupMatches": {
+			reason:   "A resource declared with no ShortGroup has its provider's root group as its CRD group verbatim - e.g. provider-azure's ResourceGroup at \"azure.upbound.io\" - rather than that group prefixed with a short group and a dot. This must still resolve to the provider carrying that root group.",
+			configs:  []*config.Provider{provider},
+			mg:       terraformed("aws.upbound.io", "ResourceGroup", "aws_resourcegroup"),
+			wantCfg:  rgResource,
+			wantType: config.ResourceTypeTerraformSDK,
 		},
 		"RootGroupDoesNotMatch": {
 			reason:   "A provider configured for another root group does not supply the resource.",

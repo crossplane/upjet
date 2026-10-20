@@ -42,6 +42,14 @@ const (
 // planConfig returns the resource configuration to plan the given resource
 // with.
 //
+// It makes two adjustments on top of the reconciler's own configuration, each
+// described in its own part below, and always does so on a copy: the shared
+// configuration the provider's controllers use must be left untouched, since
+// the same *config.Resource survives for the life of the diff server process
+// and the server itself handles concurrent requests as concurrent goroutines.
+//
+// # Terraform conversions
+//
 // A resource's Terraform conversions turn the CRD's embedded objects into the
 // singleton lists Terraform expects, and back again when the observation is
 // read. Which paths those are is a property of the Terraform schema alone -
@@ -72,6 +80,22 @@ const (
 // reconciler's configuration does not - which happens whenever the
 // reconciler itself runs on a legacy-shaped version and so was never given
 // the conversion to begin with.
+//
+// # Connection details
+//
+// Sensitive.AdditionalConnectionDetailsFn is reset to the library's no-op
+// (config.NopSensitive). A provider configures it to build the managed
+// resource's connection Secret from attributes the Terraform state carries -
+// an AKS cluster's kube_config, say - which Observe collects unconditionally
+// whenever the external resource exists, whether or not the caller is the
+// reconciler itself. A plan response never reports connection details, so for
+// the diff server this is pure overhead at best. At worst it fails outright:
+// the diff server observes against a Terraform state reconstructed from the
+// actual resource's status.atProvider (ReconstructTerraformState), which
+// never carries a sensitive attribute like kube_config to begin with, so a
+// function reading one back out of it errors on every call rather than on
+// some. Resetting the function avoids both: diffing no longer depends on
+// state the offline server structurally cannot have.
 func planConfig(cfg *config.Resource, mg xpresource.Managed) *config.Resource {
 	singleton := config.NewTFSingletonConversion()
 	has := false
@@ -94,26 +118,28 @@ func planConfig(cfg *config.Resource, mg xpresource.Managed) *config.Resource {
 	}
 	needed := !legacy && len(cfg.TFListConversionPaths()) > 0
 
-	if has == needed {
-		return cfg
-	}
-
-	kept := make([]config.TerraformConversion, 0, len(cfg.TerraformConversions)+1)
-	for _, c := range cfg.TerraformConversions {
-		// Every other conversion, such as the one for dynamically typed
-		// attributes, is unrelated to the CRD's shape and is kept
-		// unconditionally.
-		if c != singleton {
-			kept = append(kept, c)
-		}
-	}
-	if needed {
-		kept = append(kept, singleton)
-	}
-	// A shallow copy is enough: only this slice is replaced, and the shared
-	// configuration the provider's controllers use is left untouched.
+	// A shallow copy is enough: Sensitive and (when rebuilt below)
+	// TerraformConversions are the only fields this function ever replaces,
+	// and replacing them here never reaches the configuration the provider's
+	// controllers share.
 	c := *cfg
-	c.TerraformConversions = kept
+	c.Sensitive = config.NopSensitive
+
+	if has != needed {
+		kept := make([]config.TerraformConversion, 0, len(cfg.TerraformConversions)+1)
+		for _, cv := range cfg.TerraformConversions {
+			// Every other conversion, such as the one for dynamically typed
+			// attributes, is unrelated to the CRD's shape and is kept
+			// unconditionally.
+			if cv != singleton {
+				kept = append(kept, cv)
+			}
+		}
+		if needed {
+			kept = append(kept, singleton)
+		}
+		c.TerraformConversions = kept
+	}
 	return &c
 }
 
