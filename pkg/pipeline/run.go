@@ -21,7 +21,8 @@ import (
 
 type terraformedInput struct {
 	*config.Resource
-	ParametersTypeName string
+	ParametersTypeName  string
+	ObservationTypeName string
 }
 
 // Run runs the Upjet code generation pipelines, using the given provider
@@ -207,8 +208,9 @@ func (r *PipelineRunner) Run(pc *config.Provider) []string { //nolint:gocyclo
 					panic(errors.Wrapf(err, "cannot generate crd for resource %s", name))
 				}
 				tfResources = append(tfResources, &terraformedInput{
-					Resource:           resources[name],
-					ParametersTypeName: paramTypeName,
+					Resource:            resources[name],
+					ParametersTypeName:  paramTypeName,
+					ObservationTypeName: crdGen.Generated.AtProviderType.Obj().Name(),
 				})
 
 				featuresPkgPath := ""
