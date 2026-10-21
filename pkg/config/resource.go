@@ -8,6 +8,8 @@ import (
 	"context"
 	"fmt"
 	"go/types"
+	"math"
+	"strconv"
 	"strings"
 	"time"
 
@@ -124,11 +126,31 @@ type GetExternalNameFn func(tfstate map[string]any) (string, error)
 
 // IDAsExternalName returns the TF State ID as external name.
 var IDAsExternalName GetExternalNameFn = func(tfstate map[string]any) (string, error) {
-	if id, ok := tfstate["id"].(string); ok && id != "" {
-		return id, nil
+	switch id := tfstate["id"].(type) {
+	case string:
+		if id != "" {
+			return id, nil
+		}
+	case float64:
+		// Terraform's plugin-SDK always stores `id` as a string, but
+		// plugin-framework providers may declare it as a number, and Terraform
+		// writes it back into the state with that type. External names are
+		// always strings, so render the number without an exponent or a
+		// trailing decimal point. Note that ids beyond 2^53 cannot round-trip
+		// through a float64 and are rejected below rather than silently
+		// truncated to a wrong identifier.
+		if id == math.Trunc(id) && math.Abs(id) <= maxExactFloat64Int {
+			return strconv.FormatFloat(id, 'f', -1, 64), nil
+		}
+		return "", errors.Errorf("id in tfstate is not an exactly representable integer: %v", id)
 	}
 	return "", errors.New("cannot find id in tfstate")
 }
+
+// maxExactFloat64Int is the largest integer a float64 represents exactly (2^53).
+// Past it, JSON decoding into a float64 loses precision, so an id read back from
+// the state could differ from the real one.
+const maxExactFloat64Int = 1 << 53
 
 // AdditionalConnectionDetailsFn functions adds custom keys to connection details
 // secret using input terraform attributes
