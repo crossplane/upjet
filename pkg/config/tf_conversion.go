@@ -91,8 +91,32 @@ func NewTFDynamicValueConversion() TerraformConversion {
 
 func (s dynamicValueConversion) Convert(params map[string]any, r *Resource, mode Mode) (map[string]any, error) {
 	if mode == FromTerraform {
-		// Terraform does not return dynamic pseudo-types in state.
-		// No conversion needed.
+		// Unwrap {type: ..., value: ...} envelopes back to bare values
+		// so that forProvider.value matches the bare format from the composition.
+		// TF cloudflare v5 Plugin Framework returns Dynamic types as envelopes.
+		paths := r.TFDynamicAttributeConversionPaths()
+		pv := fieldpath.Pave(params)
+		for _, fp := range paths {
+			exp, err := pv.ExpandWildcards(fp)
+			if err != nil && !fieldpath.IsNotFound(err) {
+				return nil, errors.Wrapf(err, "cannot expand wildcards for field path %s", fp)
+			}
+			for _, e := range exp {
+				val, err := pv.GetValue(e)
+				if err != nil {
+					continue
+				}
+				if m, ok := val.(map[string]interface{}); ok {
+					if inner, hasValue := m["value"]; hasValue {
+						if _, hasType := m["type"]; hasType {
+							if err := pv.SetValue(e, inner); err != nil {
+								return nil, errors.Wrapf(err, "cannot unwrap dynamic value at field path %s", e)
+							}
+						}
+					}
+				}
+			}
+		}
 		return params, nil
 	} else if mode != ToTerraform {
 		return nil, errors.Errorf("invalid conversion mode %s", mode.String())

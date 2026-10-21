@@ -1211,6 +1211,10 @@ func (n *terraformPluginFrameworkExternalClient) setExternalName(mg xpresource.M
 	return oldName != newName, nil
 }
 
+// errDynamicConversionNotSupported is returned when a DynamicPseudoType value
+// holds none of the concrete representations tftypes.Value.As can extract.
+var errDynamicConversionNotSupported = errors.New("DynamicPseudoType conversion is not supported")
+
 // tfValueToGoValue converts a given tftypes.Value to Go-native any type.
 // Useful for converting terraform values of state to JSON or for setting
 // observations at the MR.
@@ -1221,7 +1225,7 @@ func (n *terraformPluginFrameworkExternalClient) setExternalName(mg xpresource.M
 // tftypes.Bool => bool
 // tftypes.Number => int64, float64
 // tftypes.String => string
-// tftypes.DynamicPseudoType => conversion not supported and returns an error
+// tftypes.DynamicPseudoType => unwraps to inner concrete type
 func tfValueToGoValue(input tftypes.Value) (any, error) { //nolint:gocyclo
 	if !input.IsKnown() {
 		return nil, fmt.Errorf("cannot convert unknown value")
@@ -1295,10 +1299,48 @@ func tfValueToGoValue(input tftypes.Value) (any, error) { //nolint:gocyclo
 		var x string
 		return x, input.As(&x)
 	case valType.Is(tftypes.DynamicPseudoType):
-		if input.IsKnown() && input.IsNull() {
+		if input.IsNull() {
 			return nil, nil
 		}
-		return nil, errors.New("DynamicPseudoType conversion is not supported")
+		// A dynamic value holds one of the concrete representations, and
+		// tftypes.Value.As accepts only concrete destinations — probe them and
+		// reuse the concrete-type handling above.
+		var s string
+		if err := input.As(&s); err == nil {
+			return s, nil
+		}
+		var b bool
+		if err := input.As(&b); err == nil {
+			return b, nil
+		}
+		if n := new(big.Float); input.As(&n) == nil {
+			return tfValueToGoValue(tftypes.NewValue(tftypes.Number, n))
+		}
+		var m map[string]tftypes.Value
+		if err := input.As(&m); err == nil {
+			dest := make(map[string]any, len(m))
+			for k, v := range m {
+				res, err := tfValueToGoValue(v)
+				if err != nil {
+					return nil, errors.Wrapf(err, "cannot convert the dynamic value at key %q", k)
+				}
+				dest[k] = res
+			}
+			return dest, nil
+		}
+		var l []tftypes.Value
+		if err := input.As(&l); err == nil {
+			dest := make([]any, len(l))
+			for i, v := range l {
+				res, err := tfValueToGoValue(v)
+				if err != nil {
+					return nil, errors.Wrapf(err, "cannot convert the dynamic value at index %d", i)
+				}
+				dest[i] = res
+			}
+			return dest, nil
+		}
+		return nil, errDynamicConversionNotSupported
 	default:
 		return nil, fmt.Errorf("input value has unknown type: %s", valType.String())
 	}
