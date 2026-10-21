@@ -207,11 +207,21 @@ func (a *AsyncTracker) SetFrameworkTFState(state *tfprotov6.DynamicValue) {
 
 // SetReconstructedFrameworkTFState stores the given *tfprotov6.DynamicValue
 // Terraform Plugin Framework external resource reconstructed state into this
-// AsyncTracker's fwstate and marks the state as reconstructed.
+// AsyncTracker's fwstate and marks the state as reconstructed, unless a non-null
+// or unreadable state has already been stored.
 // MUST be used only for Terraform Plugin Framework resources
 func (a *AsyncTracker) SetReconstructedFrameworkTFState(state *tfprotov6.DynamicValue) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	// An async operation may have published state while reconstruction was in
+	// progress. Allow reconstruction of null state, but preserve existing state
+	// if it is non-null or cannot safely be classified as null.
+	if a.fwState != nil {
+		isNull, err := a.fwState.IsNull()
+		if err != nil || !isNull {
+			return
+		}
+	}
 	a.fwState = state
 	a.stateMark = reconstructedState
 }
