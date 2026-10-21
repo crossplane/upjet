@@ -109,7 +109,9 @@ func (s dynamicValueConversion) Convert(params map[string]any, r *Resource, mode
 				if m, ok := val.(map[string]interface{}); ok {
 					if inner, hasValue := m["value"]; hasValue {
 						if _, hasType := m["type"]; hasType {
-							_ = pv.SetValue(e, inner)
+							if err := pv.SetValue(e, inner); err != nil {
+								return nil, errors.Wrapf(err, "cannot unwrap dynamic value at field path %s", e)
+							}
 						}
 					}
 				}

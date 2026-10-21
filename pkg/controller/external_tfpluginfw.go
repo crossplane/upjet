@@ -1298,10 +1298,43 @@ func tfValueToGoValue(input tftypes.Value) (any, error) { //nolint:gocyclo
 		if input.IsNull() {
 			return nil, nil
 		}
-		// Unwrap DynamicPseudoType — the underlying value has a concrete type
-		var innerVal tftypes.Value
-		if err := input.As(&innerVal); err == nil {
-			return tfValueToGoValue(innerVal)
+		// A dynamic value holds one of the concrete representations, and
+		// tftypes.Value.As accepts only concrete destinations — probe them and
+		// reuse the concrete-type handling above.
+		var s string
+		if err := input.As(&s); err == nil {
+			return s, nil
+		}
+		var b bool
+		if err := input.As(&b); err == nil {
+			return b, nil
+		}
+		if n := new(big.Float); input.As(&n) == nil {
+			return tfValueToGoValue(tftypes.NewValue(tftypes.Number, n))
+		}
+		var m map[string]tftypes.Value
+		if err := input.As(&m); err == nil {
+			dest := make(map[string]any, len(m))
+			for k, v := range m {
+				res, err := tfValueToGoValue(v)
+				if err != nil {
+					return nil, err
+				}
+				dest[k] = res
+			}
+			return dest, nil
+		}
+		var l []tftypes.Value
+		if err := input.As(&l); err == nil {
+			dest := make([]any, len(l))
+			for i, v := range l {
+				res, err := tfValueToGoValue(v)
+				if err != nil {
+					return nil, err
+				}
+				dest[i] = res
+			}
+			return dest, nil
 		}
 		return nil, errors.New("DynamicPseudoType conversion is not supported")
 	default:
