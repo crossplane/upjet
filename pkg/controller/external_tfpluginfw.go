@@ -1211,6 +1211,10 @@ func (n *terraformPluginFrameworkExternalClient) setExternalName(mg xpresource.M
 	return oldName != newName, nil
 }
 
+// errDynamicConversionNotSupported is returned when a DynamicPseudoType value
+// holds none of the concrete representations tftypes.Value.As can extract.
+var errDynamicConversionNotSupported = errors.New("DynamicPseudoType conversion is not supported")
+
 // tfValueToGoValue converts a given tftypes.Value to Go-native any type.
 // Useful for converting terraform values of state to JSON or for setting
 // observations at the MR.
@@ -1318,7 +1322,7 @@ func tfValueToGoValue(input tftypes.Value) (any, error) { //nolint:gocyclo
 			for k, v := range m {
 				res, err := tfValueToGoValue(v)
 				if err != nil {
-					return nil, err
+					return nil, errors.Wrapf(err, "cannot convert the dynamic value at key %q", k)
 				}
 				dest[k] = res
 			}
@@ -1330,13 +1334,13 @@ func tfValueToGoValue(input tftypes.Value) (any, error) { //nolint:gocyclo
 			for i, v := range l {
 				res, err := tfValueToGoValue(v)
 				if err != nil {
-					return nil, err
+					return nil, errors.Wrapf(err, "cannot convert the dynamic value at index %d", i)
 				}
 				dest[i] = res
 			}
 			return dest, nil
 		}
-		return nil, errors.New("DynamicPseudoType conversion is not supported")
+		return nil, errDynamicConversionNotSupported
 	default:
 		return nil, fmt.Errorf("input value has unknown type: %s", valType.String())
 	}

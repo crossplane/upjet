@@ -5,9 +5,11 @@
 package controller
 
 import (
+	"fmt"
 	"math/big"
 	"testing"
 
+	"github.com/crossplane/crossplane-runtime/v2/pkg/test"
 	"github.com/google/go-cmp/cmp"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
@@ -16,6 +18,7 @@ func TestTFValueToGoValueDynamicPseudoType(t *testing.T) {
 	cases := map[string]struct {
 		input tftypes.Value
 		want  any
+		err   error
 	}{
 		"Null": {
 			input: tftypes.NewValue(tftypes.DynamicPseudoType, nil),
@@ -51,22 +54,23 @@ func TestTFValueToGoValueDynamicPseudoType(t *testing.T) {
 			}),
 			want: []any{"a", "nested"},
 		},
+		"Unknown": {
+			input: tftypes.NewValue(tftypes.DynamicPseudoType, tftypes.UnknownValue),
+			err:   fmt.Errorf("cannot convert unknown value"),
+		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			got, err := tfValueToGoValue(tc.input)
-			if err != nil {
-				t.Fatalf("tfValueToGoValue(...): %s", err)
+			if diff := cmp.Diff(tc.err, err, test.EquateErrors()); diff != "" {
+				t.Fatalf("tfValueToGoValue(...): -want error, +got error:\n%s", diff)
+			}
+			if tc.err != nil {
+				return
 			}
 			if diff := cmp.Diff(tc.want, got); diff != "" {
 				t.Errorf("tfValueToGoValue(...): -want, +got:\n%s", diff)
 			}
 		})
-	}
-}
-
-func TestTFValueToGoValueDynamicUnknown(t *testing.T) {
-	if _, err := tfValueToGoValue(tftypes.NewValue(tftypes.DynamicPseudoType, tftypes.UnknownValue)); err == nil {
-		t.Error("tfValueToGoValue(unknown dynamic): expected error, got nil")
 	}
 }
