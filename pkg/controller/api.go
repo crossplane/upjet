@@ -13,6 +13,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrl "sigs.k8s.io/controller-runtime/pkg/manager"
 
@@ -124,33 +125,47 @@ type APICallbacks struct {
 func (ac *APICallbacks) callbackFn(nn types.NamespacedName, op asyncOperation, requestReconcile bool) terraform.CallbackFn { //nolint:gocyclo // for better readability
 	return func(err error, ctx context.Context) error {
 		tr := ac.newTerraformed()
-		if kErr := ac.kube.Get(ctx, nn, tr); kErr != nil {
+		setConditions := func() {
+			// For the no-fork architecture, we will need to be able to report
+			// reconciliation errors. The proper place is the `Synced`
+			// status condition but we need changes in the managed reconciler
+			// to do so. So we keep the `LastAsyncOperation` condition.
+			// TODO: move this to the `Synced` condition.
+			tr.SetConditions(resource.LastAsyncOperationCondition(err))
+			if err != nil {
+				wrapMsg := ""
+				switch op {
+				case opCreate:
+					wrapMsg = errXPReconcileCreate
+				case opUpdate:
+					wrapMsg = errXPReconcileUpdate
+				case opDestroy:
+					wrapMsg = errXPReconcileDelete
+				}
+				tr.SetConditions(xpv2.ReconcileError(errors.Wrap(err, wrapMsg)))
+			} else {
+				tr.SetConditions(xpv2.ReconcileSuccess())
+			}
+			if ac.enableStatusUpdates {
+				tr.SetConditions(resource.AsyncOperationFinishedCondition())
+			}
+		}
+		// The managed reconciler concurrently updates the status of the same
+		// resource, so this status update can lose an optimistic concurrency
+		// race. Re-read the resource and set the conditions again on conflict,
+		// otherwise the result of the async operation is lost.
+		var kErr error
+		sErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			if kErr = ac.kube.Get(ctx, nn, tr); kErr != nil {
+				return kErr
+			}
+			setConditions()
+			return ac.kube.Status().Update(ctx, tr)
+		})
+		if kErr != nil {
 			return errors.Wrapf(kErr, errGetFmt, tr.GetObjectKind().GroupVersionKind().String(), nn, op)
 		}
-		// For the no-fork architecture, we will need to be able to report
-		// reconciliation errors. The proper place is the `Synced`
-		// status condition but we need changes in the managed reconciler
-		// to do so. So we keep the `LastAsyncOperation` condition.
-		// TODO: move this to the `Synced` condition.
-		tr.SetConditions(resource.LastAsyncOperationCondition(err))
-		if err != nil {
-			wrapMsg := ""
-			switch op {
-			case opCreate:
-				wrapMsg = errXPReconcileCreate
-			case opUpdate:
-				wrapMsg = errXPReconcileUpdate
-			case opDestroy:
-				wrapMsg = errXPReconcileDelete
-			}
-			tr.SetConditions(xpv2.ReconcileError(errors.Wrap(err, wrapMsg)))
-		} else {
-			tr.SetConditions(xpv2.ReconcileSuccess())
-		}
-		if ac.enableStatusUpdates {
-			tr.SetConditions(resource.AsyncOperationFinishedCondition())
-		}
-		uErr := errors.Wrapf(ac.kube.Status().Update(ctx, tr), errUpdateStatusFmt, tr.GetObjectKind().GroupVersionKind().String(), nn, op)
+		uErr := errors.Wrapf(sErr, errUpdateStatusFmt, tr.GetObjectKind().GroupVersionKind().String(), nn, op)
 		if ac.eventHandler != nil && requestReconcile {
 			rateLimiter := handler.NoRateLimiter
 			switch {
