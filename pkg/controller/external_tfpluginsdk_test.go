@@ -14,6 +14,7 @@ import (
 	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/test"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/hashicorp/go-cty/cty"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -84,6 +85,35 @@ var (
 		},
 	}
 )
+
+// cfgOptionalComputedForceNewList returns cfg with an Optional, Computed and
+// ForceNew nested block. When the block is empty in both the state and the
+// configuration, the SDK reports its count as a computed diff that requires
+// replacement although nothing changes.
+func cfgOptionalComputedForceNewList() *config.Resource {
+	c := *cfg
+	r := *cfg.TerraformResource
+	r.Schema = make(map[string]*schema.Schema, len(cfg.TerraformResource.Schema)+1)
+	for k, v := range cfg.TerraformResource.Schema {
+		r.Schema[k] = v
+	}
+	r.Schema["filter"] = &schema.Schema{
+		Type:     schema.TypeList,
+		Optional: true,
+		Computed: true,
+		ForceNew: true,
+		Elem: &schema.Resource{
+			Schema: map[string]*schema.Schema{
+				"mode": {
+					Type:     schema.TypeString,
+					Optional: true,
+				},
+			},
+		},
+	}
+	c.TerraformResource = &r
+	return &c
+}
 
 func prepareTerraformPluginSDKExternal(r Resource, cfg *config.Resource) *terraformPluginSDKExternal {
 	schemaBlock := cfg.TerraformResource.CoreConfigSchema()
@@ -219,6 +249,26 @@ func TestTerraformPluginSDKObserve(t *testing.T) {
 					},
 				},
 				cfg: cfg,
+				obj: obj,
+			},
+			want: want{
+				obs: managed.ExternalObservation{
+					ResourceExists:          true,
+					ResourceUpToDate:        true,
+					ResourceLateInitialized: true,
+					ConnectionDetails:       nil,
+					Diff:                    "",
+				},
+			},
+		},
+		"EmptyOptionalComputedForceNewList": {
+			args: args{
+				r: mockResource{
+					RefreshWithoutUpgradeFn: func(ctx context.Context, s *tf.InstanceState, meta interface{}) (*tf.InstanceState, diag.Diagnostics) {
+						return &tf.InstanceState{ID: "example-id", Attributes: map[string]string{"name": "example"}}, nil
+					},
+				},
+				cfg: cfgOptionalComputedForceNewList(),
 				obj: obj,
 			},
 			want: want{
@@ -601,4 +651,28 @@ func TestTerraformPluginSDKDelete(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestFilterNoOpComputedCollectionDiffs(t *testing.T) {
+	d := &tf.InstanceDiff{Attributes: map[string]*tf.ResourceAttrDiff{
+		"filter.#":        {NewComputed: true, RequiresNew: true},
+		"tags.%":          {NewComputed: true},
+		"rule.0.target.#": {NewComputed: true},
+		"list.#":          {Old: "0", New: "1", RequiresNew: true},
+		"computed.#":      {Old: "2", NewComputed: true},
+		"removed.#":       {NewComputed: true, NewRemoved: true},
+		"name":            {NewComputed: true},
+		"nil.#":           nil,
+	}}
+	filterNoOpComputedCollectionDiffs(d)
+
+	got := make([]string, 0, len(d.Attributes))
+	for k := range d.Attributes {
+		got = append(got, k)
+	}
+	want := []string{"list.#", "computed.#", "removed.#", "name", "nil.#"}
+	if diff := cmp.Diff(want, got, cmpopts.SortSlices(func(a, b string) bool { return a < b })); diff != "" {
+		t.Errorf("filterNoOpComputedCollectionDiffs(...): -want attributes, +got attributes:\n%s", diff)
+	}
+	filterNoOpComputedCollectionDiffs(nil)
 }
