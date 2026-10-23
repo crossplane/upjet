@@ -181,6 +181,12 @@ func NewField(g *Builder, cfg *config.Resource, r *resource, sch *schema.Schema,
 	f.FieldType = fieldType
 	f.InitType = initType
 
+	if (f.Schema.Type == schema.TypeList || f.Schema.Type == schema.TypeSet) && f.Schema.MaxItems > 0 {
+		if _, ok := f.FieldType.Underlying().(*types.Slice); ok {
+			f.Comment.KubebuilderOptions.MaxItems = ptr.To(f.Schema.MaxItems)
+		}
+	}
+
 	AddServerSideApplyMarkers(f)
 	return f, errors.Wrapf(AddServerSideApplyMarkersFromConfig(f, cfg), "cannot add the server-side apply merge strategy markers for the field")
 }
@@ -440,7 +446,9 @@ func (f *Field) AddToResource(g *Builder, r *resource, typeNames *TypeNames, opt
 			f.Comment.ServerSideApplyOptions.ListMapKey = nil
 		}
 		f.Comment.KubebuilderOptions.Default = nil
-		g.comments.AddFieldComment(typeNames.ObservationTypeName, f.FieldNameCamel, f.Comment.Build())
+		observationComment := *f.Comment
+		observationComment.KubebuilderOptions.MaxItems = nil
+		g.comments.AddFieldComment(typeNames.ObservationTypeName, f.FieldNameCamel, observationComment.Build())
 	}
 }
 

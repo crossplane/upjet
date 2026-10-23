@@ -26,6 +26,10 @@ type Options struct {
 	// +kubebuilder:validation:Maximum=<val>
 	// marker.
 	Maximum *int
+	// MaxItems generates the
+	// +kubebuilder:validation:MaxItems=<val>
+	// marker.
+	MaxItems *int
 	// Default generates the
 	// +kubebuilder:default:=<val>
 	// marker. Please note that you will need to include the quotes when setting
@@ -42,6 +46,9 @@ func (o *Options) setFrom(opt *Options) {
 	}
 	if opt.Maximum != nil {
 		o.Maximum = ptr.To(*opt.Maximum)
+	}
+	if opt.MaxItems != nil {
+		o.MaxItems = ptr.To(*opt.MaxItems)
 	}
 	if opt.Default != nil {
 		o.Default = ptr.To(*opt.Default)
@@ -79,6 +86,9 @@ func (o *Options) String() string {
 	}
 	if o.Maximum != nil {
 		m += fmt.Sprintf("+kubebuilder:validation:Maximum=%d\n", *o.Maximum)
+	}
+	if o.MaxItems != nil {
+		m += fmt.Sprintf("+kubebuilder:validation:MaxItems=%d\n", *o.MaxItems)
 	}
 	if o.Default != nil {
 		m += fmt.Sprintf("+kubebuilder:default:=%s\n", *o.Default)
