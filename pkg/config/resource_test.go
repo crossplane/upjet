@@ -15,8 +15,13 @@ import (
 	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource/fake"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/test"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	"github.com/google/go-cmp/cmp"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	k8sschema "k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -26,45 +31,165 @@ const (
 	provider = "ACoolProvider"
 )
 
+// taggedManaged is a managed resource with a spec.forProvider.tags field, i.e.
+// what the Tagger initializer is actually used with. fake.Managed alone has no
+// such field, so unmarshalling the tags into it would be a no-op.
+type taggedManaged struct {
+	metav1.TypeMeta
+	fake.Managed
+	fake.TypedProviderConfigReferencer
+
+	Spec taggedSpec `json:"spec"`
+}
+
+type taggedSpec struct {
+	ForProvider taggedParameters `json:"forProvider"`
+}
+
+type taggedParameters struct {
+	Tags map[string]*string `json:"tags,omitempty"`
+}
+
+// GetObjectKind disambiguates between the embedded TypeMeta and fake.Managed,
+// and makes the resource report a real kind so that the external tags have
+// realistic values.
+func (t *taggedManaged) GetObjectKind() k8sschema.ObjectKind { return &t.TypeMeta }
+
+// DeepCopyObject is what the fix relies on, so it has to actually deep copy the
+// tags map, just like the generated DeepCopyObject of a real managed resource.
+func (t *taggedManaged) DeepCopyObject() runtime.Object {
+	out := *t
+	if t.Spec.ForProvider.Tags != nil {
+		out.Spec.ForProvider.Tags = make(map[string]*string, len(t.Spec.ForProvider.Tags))
+		for k, v := range t.Spec.ForProvider.Tags {
+			if v == nil {
+				out.Spec.ForProvider.Tags[k] = nil
+				continue
+			}
+			out.Spec.ForProvider.Tags[k] = ptr.To(*v)
+		}
+	}
+	return &out
+}
+
 func TestTaggerInitialize(t *testing.T) {
 	errBoom := errors.New("boom")
 
+	// The tags the Tagger will want to see in spec.forProvider.tags, given the
+	// kind, name and provider config reference set by newTagged below.
+	externalTags := func() map[string]*string {
+		return map[string]*string{
+			xpresource.ExternalResourceTagKeyKind:     ptr.To("acoolservice"),
+			xpresource.ExternalResourceTagKeyName:     ptr.To(name),
+			xpresource.ExternalResourceTagKeyProvider: ptr.To(provider),
+		}
+	}
+	withTags := func(extra map[string]*string) map[string]*string {
+		tags := externalTags()
+		for k, v := range extra {
+			tags[k] = v
+		}
+		return tags
+	}
+	newTagged := func(tags map[string]*string, policies ...xpv2.ManagementAction) *taggedManaged {
+		mg := &taggedManaged{}
+		mg.TypeMeta = metav1.TypeMeta{Kind: kind, APIVersion: "v1beta1"}
+		mg.SetName(name)
+		mg.SetProviderConfigReference(&xpv2.ProviderConfigReference{Name: provider})
+		mg.SetManagementPolicies(policies)
+		mg.Spec.ForProvider.Tags = tags
+		return mg
+	}
+
 	type args struct {
-		mg   xpresource.Managed
-		kube client.Client
+		mg        *taggedManaged
+		updateErr error
 	}
 	type want struct {
 		err error
+		// updates is the number of calls the Tagger is expected to make to
+		// kube.Update.
+		updates int
+		// tags, if set, is the expected spec.forProvider.tags after Initialize.
+		tags map[string]*string
 	}
 	cases := map[string]struct {
+		reason string
 		args
 		want
 	}{
-		"Successful": {
-			args: args{
-				mg:   &fake.Managed{},
-				kube: &test.MockClient{MockUpdate: test.NewMockUpdateFn(nil)},
-			},
+		"FirstReconcileTagsAbsent": {
+			reason: "The external tags are missing, so they should be set and persisted.",
+			args:   args{mg: newTagged(nil)},
 			want: want{
-				err: nil,
+				updates: 1,
+				tags:    externalTags(),
 			},
 		},
-		"Failure": {
-			args: args{
-				mg:   &fake.Managed{},
-				kube: &test.MockClient{MockUpdate: test.NewMockUpdateFn(errBoom)},
-			},
+		"FirstReconcileUpdateFailed": {
+			reason: "An error from the API server should be returned to the caller.",
+			args:   args{mg: newTagged(nil), updateErr: errBoom},
 			want: want{
-				err: errBoom,
+				err:     errBoom,
+				updates: 1,
+				tags:    externalTags(),
+			},
+		},
+		"SteadyStateTagsAlreadySet": {
+			reason: "The external tags are already in the spec, so there is nothing to update.",
+			args:   args{mg: newTagged(externalTags())},
+			want: want{
+				updates: 0,
+				tags:    externalTags(),
+			},
+		},
+		"SteadyStateWithUserTags": {
+			reason: "Tags the user set themselves must not trigger an update, and must survive it.",
+			args:   args{mg: newTagged(withTags(map[string]*string{"owner": ptr.To("team-a")}))},
+			want: want{
+				updates: 0,
+				tags:    withTags(map[string]*string{"owner": ptr.To("team-a")}),
+			},
+		},
+		"ExternalTagChanged": {
+			reason: "An external tag with a stale value should be corrected and persisted.",
+			args: args{mg: newTagged(withTags(map[string]*string{
+				xpresource.ExternalResourceTagKeyName: ptr.To("some-old-name"),
+			}))},
+			want: want{
+				updates: 1,
+				tags:    externalTags(),
+			},
+		},
+		"ObserveOnly": {
+			reason: "Observe-only resources should not have their spec touched at all.",
+			args:   args{mg: newTagged(nil, xpv2.ManagementActionObserve)},
+			want: want{
+				updates: 0,
+				tags:    nil,
 			},
 		},
 	}
 	for n, tc := range cases {
 		t.Run(n, func(t *testing.T) {
-			tagger := NewTagger(tc.kube, "tags")
-			gotErr := tagger.Initialize(context.TODO(), tc.mg)
+			updates := 0
+			kube := &test.MockClient{
+				MockUpdate: func(_ context.Context, _ client.Object, _ ...client.UpdateOption) error {
+					updates++
+					return tc.args.updateErr
+				},
+			}
+
+			tagger := NewTagger(kube, "tags")
+			gotErr := tagger.Initialize(context.TODO(), tc.args.mg)
 			if diff := cmp.Diff(tc.want.err, gotErr, test.EquateErrors()); diff != "" {
-				t.Fatalf("generateTypeName(...): -want error, +got error: %s", diff)
+				t.Errorf("Initialize(...): %s: -want error, +got error: %s", tc.reason, diff)
+			}
+			if diff := cmp.Diff(tc.want.updates, updates); diff != "" {
+				t.Errorf("Initialize(...): %s: -want update calls, +got update calls: %s", tc.reason, diff)
+			}
+			if diff := cmp.Diff(tc.want.tags, tc.args.mg.Spec.ForProvider.Tags); diff != "" {
+				t.Errorf("Initialize(...): %s: -want tags, +got tags: %s", tc.reason, diff)
 			}
 		})
 	}
