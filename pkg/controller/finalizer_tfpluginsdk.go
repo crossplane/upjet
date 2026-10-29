@@ -29,8 +29,8 @@ func NewOperationTrackerFinalizer(tc TrackerCleaner, af xpresource.Finalizer) *O
 	}
 }
 
-// OperationTrackerFinalizer removes the operation tracker from the workspace store and only
-// then calls RemoveFinalizer of the underlying Finalizer.
+// OperationTrackerFinalizer calls RemoveFinalizer of the underlying Finalizer
+// and only then removes the operation tracker from the workspace store.
 type OperationTrackerFinalizer struct {
 	xpresource.Finalizer
 	OperationStore TrackerCleaner
@@ -41,11 +41,13 @@ func (nf *OperationTrackerFinalizer) AddFinalizer(ctx context.Context, obj xpres
 	return nf.Finalizer.AddFinalizer(ctx, obj)
 }
 
-// RemoveFinalizer removes the workspace from workspace store before removing
-// the finalizer.
+// RemoveFinalizer removes the finalizer and, only if that succeeds, removes
+// the operation tracker from the store. If the finalizer update fails (e.g.,
+// with a conflict), the tracker is retained so that the next reconciliation
+// still observes the completed deletion.
 func (nf *OperationTrackerFinalizer) RemoveFinalizer(ctx context.Context, obj xpresource.Object) error {
-	if err := nf.OperationStore.RemoveTracker(obj); err != nil {
-		return errors.Wrap(err, errRemoveTracker)
+	if err := nf.Finalizer.RemoveFinalizer(ctx, obj); err != nil {
+		return err
 	}
-	return nf.Finalizer.RemoveFinalizer(ctx, obj)
+	return errors.Wrap(nf.OperationStore.RemoveTracker(obj), errRemoveTracker)
 }
