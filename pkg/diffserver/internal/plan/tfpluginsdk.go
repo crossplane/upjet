@@ -368,6 +368,8 @@ func fieldPath(key string, cfg *config.Resource) string {
 			// A singleton list the CRD models as an embedded object.
 		case s.kind == stepIndex:
 			p += "[" + s.crd + "]"
+		case s.kind == stepMapKey:
+			p += mapKeySegment(s.crd)
 		default:
 			p += "." + s.crd
 		}
