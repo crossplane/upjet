@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/crossplane/crossplane-runtime/v2/pkg/fieldpath"
@@ -309,9 +310,66 @@ func transformFields(r *config.Resource, params map[string]any, omittedFields []
 				params[sel.LowerCamelComputed] = getSelectorField(v)
 			}
 		default:
-			params[fn.LowerCamelComputed] = v
+			params[fn.LowerCamelComputed] = convertToSchemaType(sch, v)
 		}
 	}
+}
+
+// convertToSchemaType converts string values in v to the primitive type that
+// sch declares for them. Terraform registry examples may quote numbers and
+// booleans (e.g. `size = "30"`), which is valid HCL because Terraform
+// converts them at plan time, but the CRD types the field as a number or a
+// boolean, so the quoted value fails validation. Lists, sets and maps of
+// primitives are converted element by element. Values that do not parse,
+// such as interpolations, are returned unchanged.
+func convertToSchemaType(sch *schema.Schema, v any) any {
+	switch sch.Type { //nolint:exhaustive // strings and nested blocks are left as they are
+	case schema.TypeInt, schema.TypeFloat, schema.TypeBool:
+		return convertPrimitive(sch.Type, v)
+	case schema.TypeList, schema.TypeSet, schema.TypeMap:
+		elem, ok := sch.Elem.(*schema.Schema)
+		if !ok {
+			return v
+		}
+		switch vt := v.(type) {
+		case []any:
+			for i, e := range vt {
+				vt[i] = convertPrimitive(elem.Type, e)
+			}
+		case map[string]any:
+			for k, e := range vt {
+				vt[k] = convertPrimitive(elem.Type, e)
+			}
+		}
+	}
+	return v
+}
+
+func convertPrimitive(t schema.ValueType, v any) any {
+	s, ok := v.(string)
+	if !ok {
+		return v
+	}
+	switch t { //nolint:exhaustive // only primitives other than strings are converted
+	case schema.TypeInt:
+		if i, err := strconv.ParseInt(s, 10, 64); err == nil {
+			return i
+		}
+	case schema.TypeFloat:
+		if f, err := strconv.ParseFloat(s, 64); err == nil {
+			return f
+		}
+	case schema.TypeBool:
+		// strconv.ParseBool also accepts "1", "t", "T" and others, which
+		// Terraform does not convert to a bool.
+		switch s {
+		case "true":
+			return true
+		case "false":
+			return false
+		}
+	}
+	return v
 }
 
 func getNameRefField(v any) any {
