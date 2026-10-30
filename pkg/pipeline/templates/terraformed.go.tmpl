@@ -43,7 +43,13 @@ func (tr *{{ .CRD.Kind }}) SetObservation(obs map[string]any) error {
     if err != nil {
         return err
     }
-    return json.TFParser.Unmarshal(p, &tr.Status.AtProvider)
+    // Decode into a zero value so that keys absent from obs are dropped.
+    observation := {{ .CRD.ObservationTypeName }}{}
+    if err := json.TFParser.Unmarshal(p, &observation); err != nil {
+        return err
+    }
+    tr.Status.AtProvider = observation
+    return nil
 }
 
 // GetID returns ID of underlying Terraform resource of this {{ .CRD.Kind }}
