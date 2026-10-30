@@ -139,6 +139,11 @@ func TestFrameworkFieldPath(t *testing.T) {
 			path:   tftypes.NewAttributePath().WithAttributeName("tags").WithElementKeyString("Team_Name"),
 			want:   "spec.forProvider.tags.Team_Name",
 		},
+		"DottedMapKey": {
+			reason: "A map key that contains a period is written in brackets, so the path reads back as the one map key rather than as nested fields.",
+			path:   tftypes.NewAttributePath().WithAttributeName("tags").WithElementKeyString("kubernetes.io/cluster/x"),
+			want:   "spec.forProvider.tags[kubernetes.io/cluster/x]",
+		},
 		"ListIndex": {
 			reason: "A list element keeps its position.",
 			path:   tftypes.NewAttributePath().WithAttributeName("subnet_ids").WithElementKeyInt(2),

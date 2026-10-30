@@ -383,7 +383,7 @@ func frameworkFieldPath(ctx context.Context, sch rschema.Schema, p *tftypes.Attr
 			tfPath = append(tfPath, string(s))
 			path += "." + name.NewFromSnake(string(s)).LowerCamelComputed
 		case tftypes.ElementKeyString:
-			path += "." + string(s)
+			path += mapKeySegment(string(s))
 		case tftypes.ElementKeyInt:
 			if !cfg.SchemaElementOptions.EmbeddedObject(strings.Join(tfPath, ".")) {
 				// A singleton list the CRD models as an embedded object has
