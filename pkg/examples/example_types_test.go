@@ -95,6 +95,17 @@ func TestTransformFieldsConvertsToSchemaTypes(t *testing.T) {
 				"enabled": "1",
 			},
 		},
+		"NonFiniteFloats": {
+			reason: "NaN and infinities parse as floats but can't be marshaled to JSON, so they should stay strings.",
+			params: map[string]any{
+				"ratio":   "NaN",
+				"weights": map[string]any{"a": "Inf", "b": "-Inf"},
+			},
+			want: map[string]any{
+				"ratio":   "NaN",
+				"weights": map[string]any{"a": "Inf", "b": "-Inf"},
+			},
+		},
 		"AlreadyTyped": {
 			reason: "Values that already have the right type should be unchanged.",
 			params: map[string]any{

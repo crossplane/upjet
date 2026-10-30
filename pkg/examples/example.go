@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -356,7 +357,7 @@ func convertPrimitive(t schema.ValueType, v any) any {
 			return i
 		}
 	case schema.TypeFloat:
-		if f, err := strconv.ParseFloat(s, 64); err == nil {
+		if f, ok := parseFiniteFloat(s); ok {
 			return f
 		}
 	case schema.TypeBool:
@@ -370,6 +371,14 @@ func convertPrimitive(t schema.ValueType, v any) any {
 		}
 	}
 	return v
+}
+
+// parseFiniteFloat parses s as a float64. strconv.ParseFloat also accepts
+// "NaN" and "Inf", which a manifest can't hold because JSON has no non-finite
+// numbers, so those are reported as not parsed.
+func parseFiniteFloat(s string) (float64, bool) {
+	f, err := strconv.ParseFloat(s, 64)
+	return f, err == nil && !math.IsNaN(f) && !math.IsInf(f, 0)
 }
 
 func getNameRefField(v any) any {
