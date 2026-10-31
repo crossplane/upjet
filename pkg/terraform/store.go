@@ -7,6 +7,7 @@ package terraform
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -339,11 +340,40 @@ func (ws *WorkspaceStore) initMetrics() {
 
 func (ts Setup) filterSensitiveInformation(s string) string {
 	for _, v := range ts.Configuration {
-		if str, ok := v.(string); ok && str != "" {
-			s = strings.ReplaceAll(s, str, "REDACTED")
+		str, ok := v.(string)
+		if !ok || str == "" {
+			continue
+		}
+		for _, form := range jsonEncodedForms(str) {
+			s = strings.ReplaceAll(s, form, "REDACTED")
 		}
 	}
 	return s
+}
+
+// jsonEncodedForms returns v along with the forms it takes once JSON encoded.
+// Terraform quotes main.tf.json back in its diagnostics, so a value that
+// needed escaping (a PEM key, anything multiline) reaches the filter escaped
+// rather than raw, and apply, plan and destroy add a second level because they
+// are run with -json. Longest form first, so that replacing one cannot leave
+// part of another behind.
+func jsonEncodedForms(v string) []string {
+	forms := []string{}
+	cur := v
+	for i := 0; i < 2; i++ {
+		b, err := json.Marshal(cur)
+		if err != nil {
+			break
+		}
+		encoded := strings.TrimSuffix(strings.TrimPrefix(string(b), `"`), `"`)
+		if encoded == cur {
+			// The value needs no escaping, so there is no extra form to redact.
+			break
+		}
+		forms = append([]string{encoded}, forms...)
+		cur = encoded
+	}
+	return append(forms, v)
 }
 
 func (ws *WorkspaceStore) reportTFProcesses(interval time.Duration) {
