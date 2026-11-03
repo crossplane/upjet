@@ -4,7 +4,7 @@
 
 module github.com/crossplane/upjet/v2
 
-go 1.26.8
+go 1.26.10
 
 require (
 	dario.cat/mergo v1.0.2
