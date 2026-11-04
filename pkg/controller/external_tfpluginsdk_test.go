@@ -6,6 +6,7 @@ package controller
 
 import (
 	"context"
+	"sort"
 	"testing"
 	"time"
 
@@ -598,6 +599,165 @@ func TestTerraformPluginSDKDelete(t *testing.T) {
 			_, err := terraformPluginSDKExternal.Delete(t.Context(), &tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nConnect(...): -want error, +got error:\n", diff)
+			}
+		})
+	}
+}
+
+func TestFilterInitExclusiveDiffs(t *testing.T) {
+	// The schema and spec follow azurerm_postgresql_flexible_server: Azure
+	// picks both availability zones and swaps them on a failover, so they
+	// are set only in initProvider. high_availability is a singleton list in
+	// Terraform that the reconciled CRD version serves as an embedded object.
+	newCfg := func() *config.Resource {
+		r := config.DefaultResource("test_flexible_server", &schema.Resource{
+			Schema: map[string]*schema.Schema{
+				"name": {
+					Type:     schema.TypeString,
+					Required: true,
+				},
+				"zone": {
+					Type:     schema.TypeString,
+					Optional: true,
+				},
+				"high_availability": {
+					Type:     schema.TypeList,
+					Optional: true,
+					MaxItems: 1,
+					Elem: &schema.Resource{
+						Schema: map[string]*schema.Schema{
+							"mode": {
+								Type:     schema.TypeString,
+								Required: true,
+							},
+							"standby_availability_zone": {
+								Type:     schema.TypeString,
+								Optional: true,
+							},
+						},
+					},
+				},
+			},
+		}, nil, nil)
+		r.AddSingletonListConversion("high_availability", "highAvailability")
+		r.TerraformConversions = []config.TerraformConversion{config.NewTFSingletonConversion()}
+		return r
+	}
+	// The zones after a failover: Azure swapped them.
+	failedOver := &tf.InstanceState{
+		ID: "example",
+		Attributes: map[string]string{
+			"id":                       "example",
+			"name":                     "example",
+			"zone":                     "1",
+			"high_availability.#":      "1",
+			"high_availability.0.mode": "ZoneRedundant",
+			"high_availability.0.standby_availability_zone": "2",
+		},
+	}
+	type args struct {
+		forProvider  map[string]any
+		initProvider map[string]any
+		// tfConfig is what the provider applies: initProvider merged into
+		// forProvider, converted to the Terraform schema.
+		tfConfig map[string]any
+	}
+	cases := map[string]struct {
+		reason string
+		args
+		want []string
+	}{
+		"InitProviderOnlyFieldsOfEmbeddedObject": {
+			reason: "Fields set only in initProvider should not diff, including a field of a singleton list served as an embedded object.",
+			args: args{
+				forProvider: map[string]any{
+					"name":              "example",
+					"high_availability": map[string]any{"mode": "ZoneRedundant"},
+				},
+				initProvider: map[string]any{
+					"zone":              "2",
+					"high_availability": map[string]any{"standby_availability_zone": "1"},
+				},
+				tfConfig: map[string]any{
+					"name": "example",
+					"zone": "2",
+					"high_availability": []any{map[string]any{
+						"mode":                      "ZoneRedundant",
+						"standby_availability_zone": "1",
+					}},
+				},
+			},
+			want: []string{},
+		},
+		"ForProviderFieldOfEmbeddedObject": {
+			reason: "A forProvider field of the embedded object should still diff when its initProvider-only sibling is filtered.",
+			args: args{
+				forProvider: map[string]any{
+					"name":              "example",
+					"high_availability": map[string]any{"mode": "SameZone"},
+				},
+				initProvider: map[string]any{
+					"zone":              "2",
+					"high_availability": map[string]any{"standby_availability_zone": "1"},
+				},
+				tfConfig: map[string]any{
+					"name": "example",
+					"zone": "2",
+					"high_availability": []any{map[string]any{
+						"mode":                      "SameZone",
+						"standby_availability_zone": "1",
+					}},
+				},
+			},
+			want: []string{"high_availability.0.mode"},
+		},
+		"FieldInForProviderAndInitProvider": {
+			reason: "A field set in forProvider should diff even when initProvider also sets it.",
+			args: args{
+				forProvider: map[string]any{
+					"name":              "example",
+					"zone":              "2",
+					"high_availability": map[string]any{"mode": "ZoneRedundant"},
+				},
+				initProvider: map[string]any{
+					"zone":              "2",
+					"high_availability": map[string]any{"standby_availability_zone": "1"},
+				},
+				tfConfig: map[string]any{
+					"name": "example",
+					"zone": "2",
+					"high_availability": []any{map[string]any{
+						"mode":                      "ZoneRedundant",
+						"standby_availability_zone": "1",
+					}},
+				},
+			},
+			want: []string{"zone"},
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			cfg := newCfg()
+			tr := &fake.Terraformed{
+				Parameterizable: fake.Parameterizable{
+					Parameters:     tc.args.forProvider,
+					InitParameters: tc.args.initProvider,
+				},
+			}
+			diff, err := schema.InternalMap(cfg.TerraformResource.Schema).Diff(context.TODO(), failedOver, tf.NewResourceConfigRaw(tc.args.tfConfig), nil, nil, false)
+			if err != nil {
+				t.Fatalf("cannot compute the instance diff: %v", err)
+			}
+			if err := filterInitExclusiveDiffs(tr, diff, cfg); err != nil {
+				t.Fatalf("\n%s\nfilterInitExclusiveDiffs(...): unexpected error: %v", tc.reason, err)
+			}
+			got := make([]string, 0, len(diff.Attributes))
+			for k := range diff.Attributes {
+				got = append(got, k)
+			}
+			sort.Strings(got)
+			if d := cmp.Diff(tc.want, got); d != "" {
+				t.Errorf("\n%s\nfilterInitExclusiveDiffs(...): -want remaining diff keys, +got:\n%s", tc.reason, d)
 			}
 		})
 	}

@@ -555,6 +555,57 @@ func TestWriteMainTF(t *testing.T) {
 				maintf: `{"provider":{"provider-test":null},"resource":{"":{"":{"array":[{"key":"val3","other":"val1"}],"ignored":"ignoredval","lifecycle":{"ignore_changes":["array[0].key","ignored","map[\"ignoredKey\"]"],"prevent_destroy":true},"map":{"ignoredKey":"should-be-ignored","mapKey":"val2"},"name":"some-id","param":"paramval"}}},"terraform":{"required_providers":{"provider-test":{"source":"hashicorp/provider-test","version":"1.2.3"}}}}`,
 			},
 		},
+		"SuccessManagementPoliciesSingletonListConversion": {
+			reason: "An initProvider-only field of a singleton list served as an embedded object should be ignored at its Terraform path, block[0].field",
+			args: args{
+				tr: &fake.LegacyTerraformed{
+					LegacyManaged: xpfake.LegacyManaged{
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: map[string]string{
+								resource.AnnotationKeyPrivateRawAttribute: "privateraw",
+								meta.AnnotationKeyExternalName:            "some-id",
+							},
+						},
+					},
+					Parameterizable: fake.Parameterizable{Parameters: map[string]any{
+						"block": map[string]any{
+							"mode": "val1",
+						},
+					},
+						InitParameters: map[string]any{
+							"zone": "val2",
+							"block": map[string]any{
+								"mode":         "should-not-overwrite",
+								"standby_zone": "val3",
+							},
+						}},
+					Observable: fake.Observable{Observation: map[string]any{
+						"obs": "obsval",
+					}},
+				},
+				cfg: func() *config.Resource {
+					r := config.DefaultResource("upjet_resource", nil, nil, nil)
+					r.AddSingletonListConversion("block", "block")
+					r.TerraformConversions = []config.TerraformConversion{config.NewTFSingletonConversion()}
+					return r
+				}(),
+				s: Setup{
+					Requirement: ProviderRequirement{
+						Source:  "hashicorp/provider-test",
+						Version: "1.2.3",
+					},
+					Configuration: nil,
+				},
+				f: func() *feature.Flags {
+					f := &feature.Flags{}
+					f.Enable(feature.EnableBetaManagementPolicies)
+					return f
+				}(),
+			},
+			want: want{
+				maintf: `{"provider":{"provider-test":null},"resource":{"":{"":{"block":[{"mode":"val1","standby_zone":"val3"}],"lifecycle":{"ignore_changes":["block[0].standby_zone","zone"],"prevent_destroy":true},"name":"some-id","zone":"val2"}}},"terraform":{"required_providers":{"provider-test":{"source":"hashicorp/provider-test","version":"1.2.3"}}}}`,
+			},
+		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {

@@ -95,7 +95,10 @@ func NewFileProducer(ctx context.Context, client resource.SecretClient, dir stri
 		}
 
 		// get fields which should be in the ignore_changes lifecycle block
-		fp.ignored = resource.GetTerraformIgnoreChanges(params, initParams)
+		fp.ignored, err = terraformIgnoreChanges(cfg, params, initParams)
+		if err != nil {
+			return nil, errors.Wrapf(err, "cannot compute the ignore_changes paths for the resource \"%s/%s\"", tr.GetNamespace(), tr.GetName())
+		}
 
 		// Note(lsviben): mergo.WithSliceDeepCopy is needed to merge the
 		// slices from the initProvider to forProvider. As it also sets
@@ -142,6 +145,39 @@ func NewFileProducer(ctx context.Context, client resource.SecretClient, dir stri
 	fp.observation = obs
 
 	return fp, nil
+}
+
+// terraformIgnoreChanges returns the ignore_changes paths of the fields that
+// are set in initProvider but not in forProvider. The paths are computed on
+// the Terraform-shaped parameters, so that a field of a singleton list block
+// that the CRD serves as an embedded object is addressed as block[0].field,
+// which is the path Terraform resolves. ApplyTFConversions converts in place,
+// so it runs on copies: the caller still merges and converts params and
+// initParams afterwards.
+func terraformIgnoreChanges(cfg *config.Resource, params, initParams map[string]any) ([]string, error) {
+	tfParams, err := toTerraformCopy(cfg, params)
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot convert spec.forProvider parameters to Terraform")
+	}
+	tfInitParams, err := toTerraformCopy(cfg, initParams)
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot convert spec.initProvider parameters to Terraform")
+	}
+	return resource.GetTerraformIgnoreChanges(tfParams, tfInitParams), nil
+}
+
+// toTerraformCopy returns a deep copy of params with the Terraform
+// conversions of cfg applied, leaving params unchanged.
+func toTerraformCopy(cfg *config.Resource, params map[string]any) (map[string]any, error) {
+	b, err := json.TFParser.Marshal(params)
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot marshal parameters")
+	}
+	c := map[string]any{}
+	if err := json.TFParser.Unmarshal(b, &c); err != nil {
+		return nil, errors.Wrap(err, "cannot unmarshal parameters")
+	}
+	return cfg.ApplyTFConversions(c, config.ToTerraform)
 }
 
 func getConnectionSecretRef(tr resource.Terraformed) (*xpv2.SecretReference, error) {
