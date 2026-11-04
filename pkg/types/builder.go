@@ -414,9 +414,18 @@ func (r *resource) addParameterField(f *Field, field *types.Var) {
 	// https://github.com/crossplane/upjet/issues/239
 	if requiredBySchema && !f.Identifier && len(f.CanonicalPaths) == 1 {
 		requiredBySchema = false
-		// If the field is not a terraform field, we should not require it in init,
-		// as it is not an initProvider field.
-		r.topLevelRequiredParams = append(r.topLevelRequiredParams, newTopLevelRequiredParam(f.TransformedName, !f.TFTag.AlwaysOmitted()))
+		// Note(wildbit): Dynamically typed fields are generated as
+		// *apiextensionsv1.JSON, which controller-gen renders as
+		// x-kubernetes-preserve-unknown-fields with no OpenAPI type. Kubernetes
+		// cannot declare such a field in the CEL type system, so a rule that
+		// references it fails to compile with "undefined field" and the API
+		// server rejects the whole CRD. Skip the rule: the field stays optional
+		// at the schema level and Terraform still enforces it at apply time.
+		if f.Schema.Type != conversiontfjson.SchemaTypeDynamic {
+			// If the field is not a terraform field, we should not require it in init,
+			// as it is not an initProvider field.
+			r.topLevelRequiredParams = append(r.topLevelRequiredParams, newTopLevelRequiredParam(f.TransformedName, !f.TFTag.AlwaysOmitted()))
+		}
 	}
 
 	// Note(lsviben): Only fields which are not also initProvider fields should have a required kubebuilder comment.
