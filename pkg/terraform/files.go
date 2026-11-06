@@ -248,13 +248,24 @@ func (fp *FileProducer) EnsureTFState(_ context.Context, tfID string) error { //
 	if err != nil {
 		return errors.Wrap(err, errCheckIfStateEmpty)
 	}
+	if !empty {
+		return nil
+	}
 	// We don't fill up the TF state during deletion because Terraform's removal
 	// of them from the TF state file signals that the deletion was successful.
 	// This is especially useful for resources whose deletion are scheduled for
 	// a long period of time, where if we fill the ID, the queries would actually
-	// succeed, i.e. GCP KMS KeyRing.
-	if !empty || meta.WasDeleted(fp.Resource) {
-		return nil
+	// succeed, i.e. GCP KMS KeyRing. A missing state file is not such a signal:
+	// the workspace was lost, e.g. the provider restarted, and the state has to
+	// be rebuilt so that the deletion can still run.
+	if meta.WasDeleted(fp.Resource) {
+		exists, err := fp.fs.Exists(filepath.Join(fp.Dir, "terraform.tfstate"))
+		if err != nil {
+			return errors.Wrap(err, errCheckIfStateEmpty)
+		}
+		if exists {
+			return nil
+		}
 	}
 	base := make(map[string]any)
 	// NOTE(muvaf): Since we try to produce the current state, observation
