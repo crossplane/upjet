@@ -27,6 +27,29 @@ import (
 
 var defaultAsyncTimeout = 1 * time.Hour
 
+// asyncTimeout returns the deadline duration for the given async operation
+// ("create", "update" or "delete"). It returns the corresponding
+// config.Resource.OperationTimeouts value if configured (non-zero),
+// and defaultAsyncTimeout otherwise.
+func asyncTimeout(cfg *config.Resource, op string) time.Duration {
+	if cfg == nil {
+		return defaultAsyncTimeout
+	}
+	var d time.Duration
+	switch op {
+	case "create":
+		d = cfg.OperationTimeouts.Create
+	case "update":
+		d = cfg.OperationTimeouts.Update
+	case "delete":
+		d = cfg.OperationTimeouts.Delete
+	}
+	if d <= 0 {
+		return defaultAsyncTimeout
+	}
+	return d
+}
+
 // TerraformPluginSDKAsyncConnector is a managed reconciler Connecter
 // implementation for reconciling Terraform plugin SDK v2 based
 // resources.
@@ -142,7 +165,7 @@ func (n *terraformPluginSDKAsyncExternal) Create(_ context.Context, mg xpresourc
 		return managed.ExternalCreation{}, errors.Errorf("%s operation that started at %s is still running", n.opTracker.LastOperation.Type, n.opTracker.LastOperation.StartTime().String())
 	}
 
-	ctx, cancel := context.WithDeadline(context.Background(), n.opTracker.LastOperation.StartTime().Add(defaultAsyncTimeout))
+	ctx, cancel := context.WithDeadline(context.Background(), n.opTracker.LastOperation.StartTime().Add(asyncTimeout(n.config, "create")))
 	// We deep-copy the managed resource to prevent a data race between the
 	// goroutine we are about to start below and the managed reconciler.
 	// Please see: https://github.com/crossplane/upjet/issues/472
@@ -188,7 +211,7 @@ func (n *terraformPluginSDKAsyncExternal) Update(_ context.Context, mg xpresourc
 		return managed.ExternalUpdate{}, errors.Errorf("%s operation that started at %s is still running", n.opTracker.LastOperation.Type, n.opTracker.LastOperation.StartTime().String())
 	}
 
-	ctx, cancel := context.WithDeadline(context.Background(), n.opTracker.LastOperation.StartTime().Add(defaultAsyncTimeout))
+	ctx, cancel := context.WithDeadline(context.Background(), n.opTracker.LastOperation.StartTime().Add(asyncTimeout(n.config, "update")))
 	// We deep-copy the managed resource to prevent a data race between the
 	// goroutine we are about to start below and the managed reconciler.
 	// Please see: https://github.com/crossplane/upjet/issues/472
@@ -238,7 +261,7 @@ func (n *terraformPluginSDKAsyncExternal) Delete(_ context.Context, mg xpresourc
 		return managed.ExternalDelete{}, errors.Errorf("%s operation that started at %s is still running", n.opTracker.LastOperation.Type, n.opTracker.LastOperation.StartTime().String())
 	}
 
-	ctx, cancel := context.WithDeadline(context.Background(), n.opTracker.LastOperation.StartTime().Add(defaultAsyncTimeout))
+	ctx, cancel := context.WithDeadline(context.Background(), n.opTracker.LastOperation.StartTime().Add(asyncTimeout(n.config, "delete")))
 	go func() {
 		// The order of deferred functions, executed last-in-first-out, is
 		// significant. The context should be canceled last, because it is
