@@ -6,6 +6,7 @@ package controller
 
 import (
 	"context"
+	"go/types"
 	"testing"
 	"time"
 
@@ -598,6 +599,116 @@ func TestTerraformPluginSDKDelete(t *testing.T) {
 			_, err := terraformPluginSDKExternal.Delete(t.Context(), &tc.args.obj)
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
 				t.Errorf("\n%s\nConnect(...): -want error, +got error:\n", diff)
+			}
+		})
+	}
+}
+
+func TestTerraformPluginSDKFromInstanceStateToJSONMap(t *testing.T) {
+	// 2^63 - 1 and a typical Compute resource ID: both are above 2^53, so a
+	// float64 cannot represent them exactly.
+	const maxInt64 = "9223372036854775807"
+	const resourceID = "8071108885042506151"
+	sch := &schema.Resource{
+		Schema: map[string]*schema.Schema{
+			"name":         {Type: schema.TypeString, Required: true},
+			"generated_id": {Type: schema.TypeInt, Computed: true},
+			"ratio":        {Type: schema.TypeFloat, Computed: true},
+			"count":        {Type: schema.TypeInt, Computed: true},
+			"block": {
+				Type:     schema.TypeList,
+				Computed: true,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"numeric_id": {Type: schema.TypeInt, Computed: true},
+					},
+				},
+			},
+		},
+	}
+	stringType := types.NewPointer(types.Universe.Lookup("string").Type())
+	attrs := map[string]string{
+		"id":                 "example",
+		"name":               "example",
+		"generated_id":       resourceID,
+		"ratio":              "0.1",
+		"count":              resourceID,
+		"block.#":            "2",
+		"block.0.numeric_id": maxInt64,
+		"block.1.numeric_id": resourceID,
+	}
+
+	type want struct {
+		m   map[string]any
+		err error
+	}
+	cases := map[string]struct {
+		reason    string
+		overrides []string
+		want      want
+	}{
+		"NoOverrides": {
+			reason: "Without a string override, numbers keep the float64 representation of StateValueToJSONMap.",
+			want: want{
+				m: map[string]any{
+					"id":           "example",
+					"name":         "example",
+					"generated_id": float64(8071108885042506151),
+					"ratio":        0.1,
+					"count":        float64(8071108885042506151),
+					"block": []any{
+						map[string]any{"numeric_id": float64(9223372036854775807)},
+						map[string]any{"numeric_id": float64(8071108885042506151)},
+					},
+				},
+			},
+		},
+		"StringOverrides": {
+			reason:    "Numbers whose generated type is overridden to string are rendered exactly from the Terraform state, at the top level and in nested blocks.",
+			overrides: []string{"generated_id", "ratio", "block.numeric_id"},
+			want: want{
+				m: map[string]any{
+					"id":           "example",
+					"name":         "example",
+					"generated_id": resourceID,
+					"ratio":        "0.1",
+					"count":        float64(8071108885042506151),
+					"block": []any{
+						map[string]any{"numeric_id": maxInt64},
+						map[string]any{"numeric_id": resourceID},
+					},
+				},
+			},
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			cfg := config.DefaultResource("test_resource", sch, nil, nil)
+			for _, p := range tc.overrides {
+				if err := cfg.OverrideScalarFieldType(p, stringType); err != nil {
+					t.Fatalf("OverrideScalarFieldType(%q): %v", p, err)
+				}
+			}
+			n := &terraformPluginSDKExternal{config: cfg, logger: logTest}
+			got, _, err := n.fromInstanceStateToJSONMap(&tf.InstanceState{ID: "example", Attributes: attrs})
+			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {
+				t.Errorf("\n%s\nfromInstanceStateToJSONMap(...): -want error, +got error:\n%s", tc.reason, diff)
+			}
+			if diff := cmp.Diff(tc.want.m, got); diff != "" {
+				t.Errorf("\n%s\nfromInstanceStateToJSONMap(...): -want, +got:\n%s", tc.reason, diff)
+			}
+			if tc.overrides == nil {
+				return
+			}
+			// The status is turned back into Terraform state when the
+			// in-memory state is lost, e.g. after a provider restart: an exact
+			// string must parse back into the exact number.
+			back, err := schema.JSONMapToStateValue(got, sch.CoreConfigSchema())
+			if err != nil {
+				t.Fatalf("JSONMapToStateValue(...): %v", err)
+			}
+			if got, want := back.GetAttr("generated_id"), cty.MustParseNumberVal(resourceID); !got.RawEquals(want) {
+				t.Errorf("\n%s\nJSONMapToStateValue(...): generated_id = %#v, want %#v", tc.reason, got, want)
 			}
 		})
 	}

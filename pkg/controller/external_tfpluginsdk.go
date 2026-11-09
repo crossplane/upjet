@@ -918,5 +918,58 @@ func (n *terraformPluginSDKExternal) fromInstanceStateToJSONMap(newState *tf.Ins
 	if err != nil {
 		return nil, cty.NilVal, errors.Wrap(err, "could not convert instance state value to JSON")
 	}
+	// StateValueToJSONMap decodes numbers into float64s, which round integers
+	// above 2^53. Fields whose generated type is overridden to string get the
+	// exact value from the cty value instead.
+	for _, p := range n.config.NumberAsStringPaths() {
+		setExactNumberStrings(stateValueMap, attrsAsCtyValue, strings.Split(p, "."))
+	}
 	return stateValueMap, attrsAsCtyValue, nil
+}
+
+// setExactNumberStrings replaces the numbers at the specified Terraform path
+// in data, the JSON representation of v, with their exact decimal strings
+// from v. Lists and sets along the path are traversed element-wise, relying
+// on the JSON representation preserving the element order of v.
+func setExactNumberStrings(data any, v cty.Value, path []string) {
+	if v.IsNull() || !v.IsKnown() {
+		return
+	}
+	switch t := v.Type(); {
+	case t.IsListType() || t.IsSetType():
+		setExactNumberStringsInElements(data, v, path)
+	case t.IsObjectType():
+		obj, ok := data.(map[string]any)
+		if !ok || len(path) == 0 || !t.HasAttribute(path[0]) {
+			return
+		}
+		if len(path) > 1 {
+			setExactNumberStrings(obj[path[0]], v.GetAttr(path[0]), path[1:])
+			return
+		}
+		setExactNumberString(obj, path[0], v.GetAttr(path[0]))
+	}
+}
+
+// setExactNumberStringsInElements calls setExactNumberStrings for each element
+// of the list or set v and its counterpart in data.
+func setExactNumberStringsInElements(data any, v cty.Value, path []string) {
+	elems, ok := data.([]any)
+	if !ok || len(elems) != v.LengthInt() {
+		return
+	}
+	i := 0
+	for it := v.ElementIterator(); it.Next(); i++ {
+		_, ev := it.Element()
+		setExactNumberStrings(elems[i], ev, path)
+	}
+}
+
+// setExactNumberString sets obj[key], if present, to the exact decimal string
+// of the known, non-null number v.
+func setExactNumberString(obj map[string]any, key string, v cty.Value) {
+	if _, ok := obj[key]; !ok || v.IsNull() || !v.IsKnown() || !v.Type().Equals(cty.Number) {
+		return
+	}
+	obj[key] = v.AsBigFloat().Text('f', -1)
 }

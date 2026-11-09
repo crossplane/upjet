@@ -497,3 +497,65 @@ func TestFieldTypeOverride(t *testing.T) {
 		})
 	}
 }
+
+func TestNumberAsStringPaths(t *testing.T) {
+	strPtr := types.NewPointer(types.Typ[types.String])
+	namedStr := types.NewNamed(types.NewTypeName(0, nil, "IntOrString", nil), types.Typ[types.String], nil)
+	sch := &schema.Resource{
+		Schema: map[string]*schema.Schema{
+			"int":    {Type: schema.TypeInt, Computed: true},
+			"float":  {Type: schema.TypeFloat, Computed: true},
+			"bool":   {Type: schema.TypeBool, Computed: true},
+			"string": {Type: schema.TypeString, Computed: true},
+			"block": {
+				Type:     schema.TypeList,
+				Computed: true,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"int": {Type: schema.TypeInt, Computed: true},
+					},
+				},
+			},
+		},
+	}
+	cases := map[string]struct {
+		reason    string
+		overrides map[string]types.Type
+		want      []string
+	}{
+		"NoOverrides": {
+			reason: "A resource without type overrides has no numeric fields rendered as strings.",
+		},
+		"StringOverridesOfNumbers": {
+			reason: "Numeric fields overridden to string, *string or a named string type are returned in sorted order, including nested ones.",
+			overrides: map[string]types.Type{
+				"int":       strPtr,
+				"float":     types.Typ[types.String],
+				"block.int": types.NewPointer(namedStr),
+			},
+			want: []string{"block.int", "float", "int"},
+		},
+		"OtherOverrides": {
+			reason: "Non-string overrides, overrides of non-numeric fields and nil overrides are not returned.",
+			overrides: map[string]types.Type{
+				"int":    types.NewPointer(types.Typ[types.Int64]),
+				"float":  nil,
+				"bool":   strPtr,
+				"string": strPtr,
+			},
+		},
+	}
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			r := DefaultResource("test_resource", sch, nil, nil)
+			for p, typ := range tc.overrides {
+				if err := r.OverrideScalarFieldType(p, typ); err != nil {
+					t.Fatalf("OverrideScalarFieldType(%q): %v", p, err)
+				}
+			}
+			if diff := cmp.Diff(tc.want, r.NumberAsStringPaths()); diff != "" {
+				t.Errorf("%s\nNumberAsStringPaths(): -want, +got:\n%s", tc.reason, diff)
+			}
+		})
+	}
+}
