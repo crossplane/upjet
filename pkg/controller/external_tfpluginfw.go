@@ -184,7 +184,14 @@ func getFrameworkExtendedParameters(ctx context.Context, tr resource.Terraformed
 		if err != nil {
 			return nil, errors.Wrap(err, "cannot get ID")
 		}
-		params["id"] = tfID
+		// There is no ID before the resource is created. Drop any id rather
+		// than leaving "" (or a value set by an injector or the identifier
+		// setter): a numeric id attribute cannot decode "".
+		if tfID == "" {
+			delete(params, "id")
+		} else {
+			params["id"] = tfID
+		}
 	}
 
 	return params, nil
