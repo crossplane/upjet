@@ -11,6 +11,7 @@ import (
 	"maps"
 	"math"
 	"math/big"
+	"strconv"
 	"strings"
 	"time"
 
@@ -671,6 +672,7 @@ func (n *terraformPluginFrameworkExternalClient) recoverExternalName(mg xpresour
 	if !ok {
 		return false
 	}
+	normalizeNumericID(tfStateMap)
 	changed, err := n.setExternalName(mg, tfStateMap)
 	if err != nil {
 		return false
@@ -841,6 +843,7 @@ func (n *terraformPluginFrameworkExternalClient) Observe(ctx context.Context, mg
 		} else {
 			stateValueMap = conv.(map[string]any)
 		}
+		normalizeNumericID(stateValueMap)
 	} else if n.supportsIdentity() {
 		// For FW resources that use stub/placeholder identifiers
 		// in their external name, the initial Observe returns a
@@ -1023,6 +1026,7 @@ func (n *terraformPluginFrameworkExternalClient) Create(ctx context.Context, mg 
 	} else {
 		stateValueMap = goval.(map[string]any)
 	}
+	normalizeNumericID(stateValueMap)
 
 	n.opTracker.SetFrameworkTFState(applyResponse.NewState)
 	if n.supportsIdentity() {
@@ -1128,6 +1132,7 @@ func (n *terraformPluginFrameworkExternalClient) Update(ctx context.Context, mg 
 	} else {
 		stateValueMap = goval.(map[string]any)
 	}
+	normalizeNumericID(stateValueMap)
 
 	stateValueMap, err = n.config.ApplyTFConversions(stateValueMap, config.FromTerraform)
 	if err != nil {
@@ -1209,6 +1214,19 @@ func (n *terraformPluginFrameworkExternalClient) setExternalName(mg xpresource.M
 	// we have to make sure the newly set external-name is recorded
 	meta.SetExternalName(mg, newName)
 	return oldName != newName, nil
+}
+
+// normalizeNumericID converts a numeric "id" in a state map produced by
+// tfValueToGoValue (int64 for integers, float64 otherwise) to its decimal
+// string, in place: the observation types and the external name expect a
+// string. It cannot fail, so Create never errors after the resource exists.
+func normalizeNumericID(state map[string]any) {
+	switch id := state["id"].(type) {
+	case int64:
+		state["id"] = strconv.FormatInt(id, 10)
+	case float64:
+		state["id"] = strconv.FormatFloat(id, 'f', -1, 64)
+	}
 }
 
 // tfValueToGoValue converts a given tftypes.Value to Go-native any type.
