@@ -834,6 +834,44 @@ func (n *terraformPluginSDKExternal) assertNoForceNew() error {
 	return nil
 }
 
+// updateApplyDiff returns the diff to apply for an update: a copy of d without
+// the top-level scalar attributes marked unknown (NewComputed). The provider's
+// CustomizeDiff marks them when the diff is computed, and it can only mark
+// top-level attributes (ResourceDiff.SetNewComputed). Terraform does not apply
+// that planning diff: ApplyResourceChange recomputes it without CustomizeDiff,
+// and the recomputed diff has no entry for such an attribute, so it keeps its
+// prior value during Update. Applying d as is makes d.Get return "" for it;
+// aws_ssm_document, for example, then sends an empty DocumentVersion on every
+// content change.
+//
+// Lists, sets and maps are left alone: Terraform's recomputed diff keeps their
+// unknown count (key suffix ".#" or ".%"), so Update sees them as empty there
+// too. d itself is left unchanged.
+func updateApplyDiff(d *tf.InstanceDiff) *tf.InstanceDiff {
+	if d == nil {
+		return nil
+	}
+	out := &tf.InstanceDiff{
+		Attributes:     make(map[string]*tf.ResourceAttrDiff, len(d.Attributes)),
+		Destroy:        d.Destroy,
+		DestroyDeposed: d.DestroyDeposed,
+		DestroyTainted: d.DestroyTainted,
+		RawConfig:      d.RawConfig,
+		RawState:       d.RawState,
+		RawPlan:        d.RawPlan,
+		Meta:           d.Meta,
+		Identity:       d.Identity,
+	}
+	for k, a := range d.Attributes {
+		// A key without a dot is a top-level scalar attribute.
+		if a != nil && a.NewComputed && !strings.Contains(k, ".") {
+			continue
+		}
+		out.Attributes[k] = a
+	}
+	return out
+}
+
 func (n *terraformPluginSDKExternal) Update(ctx context.Context, mg xpresource.Managed) (managed.ExternalUpdate, error) { //nolint:gocyclo
 	if n.config.UpdateLoopPrevention != nil {
 		preventResult, err := n.config.UpdateLoopPrevention.UpdateLoopPreventionFunc(n.instanceDiff, mg)
@@ -852,7 +890,7 @@ func (n *terraformPluginSDKExternal) Update(ctx context.Context, mg xpresource.M
 	}
 
 	start := time.Now()
-	newState, diag := n.resourceSchema.Apply(ctx, n.opTracker.GetTfState(), n.instanceDiff, n.ts.Meta)
+	newState, diag := n.resourceSchema.Apply(ctx, n.opTracker.GetTfState(), updateApplyDiff(n.instanceDiff), n.ts.Meta)
 	metrics.ExternalAPITime.WithLabelValues("update").Observe(time.Since(start).Seconds())
 	if diag != nil && diag.HasError() {
 		return managed.ExternalUpdate{}, errors.Errorf("failed to update the resource: %v", diag)

@@ -602,3 +602,146 @@ func TestTerraformPluginSDKDelete(t *testing.T) {
 		})
 	}
 }
+
+// TestTerraformPluginSDKUpdateCustomizeDiffNewComputed checks what a resource's
+// Update sees for an attribute that its CustomizeDiff marked unknown, as
+// aws_ssm_document does for default_version when content changes. Terraform
+// applies a diff recomputed without CustomizeDiff, so the attribute keeps its
+// prior value. The SDKv2 external client must give Update the same view.
+func TestTerraformPluginSDKUpdateCustomizeDiffNewComputed(t *testing.T) {
+	const attr = "computed"
+	object := func(content string, computed cty.Value) cty.Value {
+		return cty.ObjectVal(map[string]cty.Value{
+			"id":      cty.StringVal("doc"),
+			"content": cty.StringVal(content),
+			attr:      computed,
+		})
+	}
+
+	cases := map[string]struct {
+		reason string
+		schema *schema.Schema
+		// prior is the flatmap form of the attribute in the prior state.
+		prior map[string]string
+		// priorVal is the prior value, and unknown the planned (unknown) one.
+		priorVal cty.Value
+		unknown  cty.Value
+		// want is the value Update must see through d.Get.
+		want any
+	}{
+		"Scalar": {
+			reason:   "A computed string is dropped from the diff and keeps its prior value.",
+			schema:   &schema.Schema{Type: schema.TypeString, Computed: true},
+			prior:    map[string]string{attr: "1"},
+			priorVal: cty.StringVal("1"),
+			unknown:  cty.UnknownVal(cty.String),
+			want:     "1",
+		},
+		"List": {
+			reason:   "A computed list stays unknown, so Update sees it empty, as under Terraform.",
+			schema:   &schema.Schema{Type: schema.TypeList, Computed: true, Elem: &schema.Schema{Type: schema.TypeString}},
+			prior:    map[string]string{attr + ".#": "1", attr + ".0": "p"},
+			priorVal: cty.ListVal([]cty.Value{cty.StringVal("p")}),
+			unknown:  cty.UnknownVal(cty.List(cty.String)),
+			want:     []any{},
+		},
+		"Map": {
+			reason:   "A computed map stays unknown, so Update sees it empty, as under Terraform.",
+			schema:   &schema.Schema{Type: schema.TypeMap, Computed: true, Elem: &schema.Schema{Type: schema.TypeString}},
+			prior:    map[string]string{attr + ".%": "1", attr + ".k": "v"},
+			priorVal: cty.MapVal(map[string]cty.Value{"k": cty.StringVal("v")}),
+			unknown:  cty.UnknownVal(cty.Map(cty.String)),
+			want:     map[string]any{},
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			var got any
+			r := &schema.Resource{
+				Schema: map[string]*schema.Schema{
+					"content": {Type: schema.TypeString, Required: true},
+					attr:      tc.schema,
+				},
+				CustomizeDiff: func(_ context.Context, d *schema.ResourceDiff, _ any) error {
+					if d.HasChange("content") {
+						return d.SetNewComputed(attr)
+					}
+					return nil
+				},
+				UpdateContext: func(_ context.Context, d *schema.ResourceData, _ any) diag.Diagnostics {
+					got = d.Get(attr)
+					return nil
+				},
+			}
+			prior := func() *tf.InstanceState {
+				attrs := map[string]string{"id": "doc", "content": "old"}
+				for k, v := range tc.prior {
+					attrs[k] = v
+				}
+				return &tf.InstanceState{ID: "doc", Attributes: attrs}
+			}
+
+			// Terraform: the apply-time diff is recomputed without CustomizeDiff.
+			stripped := *r
+			stripped.CustomizeDiff = nil
+			applyDiff, err := schema.DiffFromValues(t.Context(),
+				object("old", tc.priorVal), object("new", tc.unknown), object("new", cty.NullVal(tc.unknown.Type())), &stripped)
+			if err != nil {
+				t.Fatalf("\n%s\nDiffFromValues(...): %v", tc.reason, err)
+			}
+			if _, diags := r.Apply(t.Context(), prior(), applyDiff, nil); diags.HasError() {
+				t.Fatalf("\n%s\nApply(...): %v", tc.reason, diags)
+			}
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Fatalf("\n%s\nTerraform reference: -want, +got:\n%s", tc.reason, diff)
+			}
+
+			// upjet: the diff computed with CustomizeDiff, as in getResourceDataDiff.
+			got = nil
+			params := map[string]any{"content": "new"}
+			observed, err := schema.InternalMap(r.Schema).Diff(t.Context(), prior(), tf.NewResourceConfigRaw(params), r.CustomizeDiff, nil, false)
+			if err != nil {
+				t.Fatalf("\n%s\nDiff(...): %v", tc.reason, err)
+			}
+			if a := observed.Attributes[attr]; a == nil && len(observed.Attributes) < 2 {
+				t.Fatalf("\n%s\nprecondition: the observed diff has no unknown %q: %+v", tc.reason, attr, observed.Attributes)
+			}
+			wantAttrs := len(observed.Attributes)
+			rawConfig, err := schema.JSONMapToStateValue(params, r.CoreConfigSchema())
+			if err != nil {
+				t.Fatalf("\n%s\nJSONMapToStateValue(...): %v", tc.reason, err)
+			}
+			n := &terraformPluginSDKExternal{
+				ts:             terraform.Setup{},
+				resourceSchema: r,
+				config: &config.Resource{
+					TerraformResource: r,
+					ExternalName:      config.IdentifierFromProvider,
+					Sensitive: config.Sensitive{AdditionalConnectionDetailsFn: func(map[string]any) (map[string][]byte, error) {
+						return nil, nil
+					}},
+				},
+				params:       params,
+				rawConfig:    rawConfig,
+				logger:       logTest,
+				opTracker:    NewAsyncTracker(),
+				instanceDiff: observed,
+			}
+			n.opTracker.SetTfState(prior())
+			obj := fake.Terraformed{
+				Parameterizable: fake.Parameterizable{Parameters: params},
+				Observable:      fake.Observable{Observation: map[string]any{}},
+			}
+			if _, err := n.Update(t.Context(), &obj); err != nil {
+				t.Fatalf("\n%s\nUpdate(...): %v", tc.reason, err)
+			}
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("\n%s\nUpdate(...): what the resource sees, -want, +got:\n%s", tc.reason, diff)
+			}
+			if len(n.instanceDiff.Attributes) != wantAttrs {
+				t.Errorf("\n%s\nUpdate(...) must not modify the observed diff: had %d attributes, now %d", tc.reason, wantAttrs, len(n.instanceDiff.Attributes))
+			}
+		})
+	}
+}
