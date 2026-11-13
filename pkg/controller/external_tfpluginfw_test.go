@@ -8,6 +8,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/test"
@@ -2026,5 +2027,76 @@ func TestNullCollectionsAsEmpty(t *testing.T) {
 				t.Errorf("%s\nnullCollectionsAsEmpty(...):\nwant: %s\ngot:  %s", tc.reason, tc.want, got)
 			}
 		})
+	}
+}
+
+func TestTPFConnectReconstructedState(t *testing.T) {
+	setupFn := func(_ context.Context, _ client.Client, _ xpresource.Managed) (terraform.Setup, error) {
+		return terraform.Setup{FrameworkProvider: &mockTPFProvider{}}, nil
+	}
+	cases := map[string]struct {
+		externalName string
+		wantNull     bool
+	}{
+		// Not created yet: nothing to read.
+		"NoExternalName": {wantNull: true},
+		"ExternalName":   {externalName: "example-id", wantNull: false},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			obj := newBaseObject()
+			if tc.externalName != "" {
+				meta.SetExternalName(&obj, tc.externalName)
+			}
+			store := NewOperationStore(logTest)
+			c := NewTerraformPluginFrameworkConnector(nil, setupFn, newBaseUpjetConfig(), store, WithTerraformPluginFrameworkLogger(logTest))
+			if _, err := c.Connect(context.TODO(), &obj); err != nil {
+				t.Fatalf("Connect(...): unexpected error: %v", err)
+			}
+			state := store.Tracker(&obj).GetFrameworkTFState()
+			if state == nil {
+				t.Fatal("Connect(...): no reconstructed state")
+			}
+			isNull, err := state.IsNull()
+			if err != nil {
+				t.Fatalf("IsNull(): unexpected error: %v", err)
+			}
+			if isNull != tc.wantNull {
+				t.Errorf("Connect(...): reconstructed state is null: %v, want %v", isNull, tc.wantNull)
+			}
+		})
+	}
+}
+
+func TestTPFObserveNullStateIsNotRead(t *testing.T) {
+	var readRequest *tfprotov6.ReadResourceRequest
+	tpfExternal := prepareTPFExternalWithTestConfig(testConfiguration{
+		r:   newMockBaseTPFResource(),
+		cfg: newBaseUpjetConfig(),
+		obj: newBaseObject(),
+		params: map[string]any{
+			"name": "example",
+		},
+		plannedStateMap: map[string]any{
+			"name": "example",
+		},
+		capturedReadRequest: &readRequest,
+	})
+	nullState, err := tfprotov6.NewDynamicValue(tpfExternal.resourceValueTerraformType, tftypes.NewValue(tpfExternal.resourceValueTerraformType, nil))
+	if err != nil {
+		t.Fatalf("cannot construct null state: %v", err)
+	}
+	tpfExternal.opTracker.SetReconstructedFrameworkTFState(&nullState)
+
+	obj := newBaseObject()
+	obs, err := tpfExternal.Observe(context.TODO(), &obj)
+	if err != nil {
+		t.Fatalf("Observe(...): unexpected error: %v", err)
+	}
+	if obs.ResourceExists {
+		t.Error("Observe(...): ResourceExists is true for a null state")
+	}
+	if readRequest != nil {
+		t.Error("Observe(...): ReadResource was called with a null state")
 	}
 }
