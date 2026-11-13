@@ -378,6 +378,20 @@ func unresolvedChange(tfPath string, cfg *config.Resource, exists bool) *diffv1a
 	return c
 }
 
+// mapKeySegment renders a map key as the next segment of a CRD field path. A
+// map key is user data and may itself contain a period, e.g. the AWS tag
+// "kubernetes.io/cluster/x", which written as ".kubernetes.io/cluster/x" would
+// read back as three nested fields. Such a key is written in brackets instead,
+// the way crossplane-runtime's fieldpath spells it, so the path round-trips
+// through fieldpath.Parse; any other key keeps the plain ".key" form.
+func mapKeySegment(k string) string {
+	s := fieldpath.Segments{{Type: fieldpath.SegmentField, Field: k}}.String()
+	if strings.HasPrefix(s, "[") {
+		return s
+	}
+	return "." + s
+}
+
 // crdFieldPath renders a Terraform attribute path the way the CRD spells it,
 // lower camel casing each field name segment. An index is left alone, unless
 // it addresses a singleton list the CRD models as an embedded object, in

@@ -562,6 +562,19 @@ func TestPlanResponseOrigin(t *testing.T) {
 				Planned: str("prod"),
 			}},
 		},
+		"DottedMapKeyBracketed": {
+			reason: "A map key that contains a period is written in brackets, so the path reads back as the one map key rather than as nested fields.",
+			d: &tf.InstanceDiff{Attributes: map[string]*tf.ResourceAttrDiff{
+				"tags.kubernetes.io/cluster/x": {Old: "owned", New: "shared"},
+			}},
+			declared: map[string]any{"tags": map[string]any{"kubernetes.io/cluster/x": "shared"}},
+			want: []*diffv1alpha1.FieldChange{{
+				Field:   "spec.forProvider.tags[kubernetes.io/cluster/x]",
+				Origin:  diffv1alpha1.Origin_ORIGIN_DESIRED_STATE,
+				Actual:  str("owned"),
+				Planned: str("shared"),
+			}},
+		},
 		"SetElementAddressedByHash": {
 			reason: "A set element is addressed by Terraform's hash rather than by a position, so it cannot be located in the declared list and the declared collection is as much as can be established.",
 			d: &tf.InstanceDiff{Attributes: map[string]*tf.ResourceAttrDiff{
