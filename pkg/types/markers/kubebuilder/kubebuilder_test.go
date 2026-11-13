@@ -15,12 +15,14 @@ func TestOptionsString(t *testing.T) {
 	optional := false
 	minVal := 1
 	maxVal := 3
+	maxItems := 1
 	default10 := `"10"`
 
 	type args struct {
 		required   *bool
 		minimum    *int
 		maximum    *int
+		maxItems   *int
 		defaultVal *string
 	}
 	type want struct {
@@ -68,6 +70,14 @@ func TestOptionsString(t *testing.T) {
 `,
 			},
 		},
+		"MaxItems": {
+			args: args{
+				maxItems: &maxItems,
+			},
+			want: want{
+				out: "+kubebuilder:validation:MaxItems=1\n",
+			},
+		},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -75,6 +85,7 @@ func TestOptionsString(t *testing.T) {
 				Required: tc.required,
 				Minimum:  tc.minimum,
 				Maximum:  tc.maximum,
+				MaxItems: tc.maxItems,
 				Default:  tc.defaultVal,
 			}
 			got := o.String()

@@ -240,6 +240,32 @@ func TestTfJSONBlockTypeToV2Schema(t *testing.T) {
 				},
 			},
 		},
+		"SchemaNestingModeListWithMaxItemsOne": {
+			reason: "A list block with MaxItems=1 should preserve its maximum item constraint.",
+			args: args{
+				nb: &tfjson.SchemaBlockType{
+					NestingMode: tfjson.SchemaNestingModeList,
+					MaxItems:    1,
+					Block: &tfjson.SchemaBlock{
+						Attributes: map[string]*tfjson.SchemaAttribute{
+							"name": {Optional: true},
+						},
+					},
+				},
+			},
+			want: want{
+				schema: &schemav2.Schema{
+					Type:     schemav2.TypeList,
+					Optional: true,
+					MaxItems: 1,
+					Elem: &schemav2.Resource{
+						Schema: map[string]*schemav2.Schema{
+							"name": {Optional: true},
+						},
+					},
+				},
+			},
+		},
 		"SchemaNestingModeListWithMinItems": {
 			reason: "SDK v2 list block with MinItems=1 should not be Computed.",
 			args: args{
