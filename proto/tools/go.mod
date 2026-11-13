@@ -4,7 +4,7 @@
 
 module github.com/crossplane/upjet/v2/proto/tools
 
-go 1.26.11
+go 1.27.4
 
 tool (
 	github.com/bufbuild/buf/cmd/buf
