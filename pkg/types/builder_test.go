@@ -909,6 +909,29 @@ func TestBuildFieldTypeOverride(t *testing.T) {
 				observation:  `type example.Observation struct{Enabled *github.com/crossplane/upjet/v2/pkg/types.StringOrBool "json:\"enabled,omitempty\" tf:\"enabled,omitempty\""}`,
 			},
 		},
+		"ComputedNumberOverriddenToString": {
+			reason: "Overriding the type of a computed number replaces it in the observation, e.g. to keep 64-bit IDs exact as strings.",
+			cfg: func(t *testing.T) *config.Resource {
+				r := config.DefaultResource("test_resource", &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"generated_id": {
+							Type:     schema.TypeInt,
+							Computed: true,
+						},
+					},
+				}, nil, nil)
+				r.Kind = ""
+				if err := r.OverrideScalarFieldType("generated_id", types.NewPointer(types.Universe.Lookup("string").Type())); err != nil {
+					t.Fatalf("cannot override the type of the scalar field at path %q: %v", "generated_id", err)
+				}
+				return r
+			},
+			want: want{
+				forProvider:  `type example.Parameters struct{}`,
+				initProvider: `type example.InitParameters struct{}`,
+				observation:  `type example.Observation struct{GeneratedID *string "json:\"generatedId,omitempty\" tf:\"generated_id,omitempty\""}`,
+			},
+		},
 		"NonScalarOverrideErrors": {
 			reason: "Overriding a non-scalar (collection) field's type is a generation-time error.",
 			cfg: func(t *testing.T) *config.Resource {

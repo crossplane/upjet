@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"go/types"
+	"slices"
 	"strings"
 	"time"
 
@@ -1278,6 +1279,31 @@ func (r *Resource) FieldTypeOverride(path string) FieldTypeOverrideConfiguration
 	return FieldTypeOverrideConfiguration{
 		ParameterTypeOverride: r.overrideGeneratedFieldType[path],
 	}
+}
+
+// NumberAsStringPaths returns the sorted Terraform field paths of the numeric
+// (TypeInt or TypeFloat) fields whose generated type is overridden to a string
+// type with OverrideScalarFieldType. The runtime renders the values of these
+// fields as exact decimal strings from the Terraform state instead of
+// float64s, which cannot represent integers above 2^53 exactly.
+func (r *Resource) NumberAsStringPaths() []string {
+	var paths []string
+	for p, t := range r.overrideGeneratedFieldType {
+		if pt, ok := t.(*types.Pointer); ok {
+			t = pt.Elem()
+		}
+		if t == nil {
+			continue
+		}
+		if b, ok := t.Underlying().(*types.Basic); !ok || b.Kind() != types.String {
+			continue
+		}
+		if s := GetSchema(r.TerraformResource, p); s != nil && (s.Type == schema.TypeInt || s.Type == schema.TypeFloat) {
+			paths = append(paths, p)
+		}
+	}
+	slices.Sort(paths)
+	return paths
 }
 
 // SetEmbeddedObject sets the EmbeddedObject for the specified key.
