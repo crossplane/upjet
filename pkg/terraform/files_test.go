@@ -109,6 +109,35 @@ func TestEnsureTFState(t *testing.T) {
 				tfstate: `{"version":4,"terraform_version":"","serial":1,"lineage":"","outputs":null,"resources":[{"mode":"managed","type":"","name":"","provider":"provider[\"registry.terraform.io/\"]","instances":[{"schema_version":0,"attributes":{"id":"some-id","name":"some-id","obs":"obsval","param":"paramval"},"private":"eyJlMmJmYjczMC1lY2FhLTExZTYtOGY4OC0zNDM2M2JjN2M0YzAiOnsicmVhZCI6MTIwMDAwMDAwMDAwfX0="}]}]}`,
 			},
 		},
+		"SuccessWriteDuringDeletionWithoutStateFile": {
+			reason: "A deleted resource whose workspace has no tfstate file at all lost its state, e.g. after a provider restart, and should get it rebuilt so that the deletion can run",
+			args: args{
+				tr: &fake.LegacyTerraformed{
+					LegacyManaged: xpfake.LegacyManaged{
+						ObjectMeta: metav1.ObjectMeta{
+							DeletionTimestamp: &now,
+							Annotations: map[string]string{
+								resource.AnnotationKeyPrivateRawAttribute: "privateraw",
+								meta.AnnotationKeyExternalName:            "some-id",
+							},
+						},
+					},
+					Parameterizable: fake.Parameterizable{Parameters: map[string]any{
+						"param": "paramval",
+					}},
+					Observable: fake.Observable{Observation: map[string]any{
+						"obs": "obsval",
+					}},
+				},
+				cfg: config.DefaultResource("upjet_resource", nil, nil, nil),
+				fs: func() afero.Afero {
+					return afero.Afero{Fs: afero.NewMemMapFs()}
+				},
+			},
+			want: want{
+				tfstate: `{"version":4,"terraform_version":"","serial":1,"lineage":"","outputs":null,"resources":[{"mode":"managed","type":"","name":"","provider":"provider[\"registry.terraform.io/\"]","instances":[{"schema_version":0,"attributes":{"id":"some-id","name":"some-id","obs":"obsval","param":"paramval"},"private":"cHJpdmF0ZXJhdw=="}]}]}`,
+			},
+		},
 		"SuccessSkipDuringDeletion": {
 			reason: "During an ongoing deletion, tfstate file should not be touched since its emptiness signals success.",
 			args: args{
