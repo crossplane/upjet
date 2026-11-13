@@ -68,8 +68,9 @@ func (tg *TerraformedGenerator) Generate(cfgs []*terraformedInput, apiVersion st
 			"APIVersion": apiVersion,
 		}
 		vars["CRD"] = map[string]string{
-			"Kind":               cfg.Kind,
-			"ParametersTypeName": cfg.ParametersTypeName,
+			"Kind":                cfg.Kind,
+			"ParametersTypeName":  cfg.ParametersTypeName,
+			"ObservationTypeName": cfg.ObservationTypeName,
 		}
 		vars["Terraform"] = map[string]any{
 			"ResourceType":   cfg.Name,
