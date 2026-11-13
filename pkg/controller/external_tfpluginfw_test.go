@@ -98,6 +98,18 @@ func newBaseUpjetConfig() *config.Resource {
 	}
 }
 
+func newNumericIDUpjetConfig() *config.Resource {
+	cfg := newBaseUpjetConfig()
+	cfg.TerraformPluginFrameworkResource = &mockTPFResource{
+		SchemaMethod: func(ctx context.Context, request resource.SchemaRequest, response *resource.SchemaResponse) {
+			s := newBaseSchema()
+			s.Attributes["id"] = rschema.Int64Attribute{Computed: true}
+			response.Schema = s
+		},
+	}
+	return cfg
+}
+
 type testConfiguration struct {
 	r               resource.Resource
 	cfg             *config.Resource
@@ -217,6 +229,20 @@ func TestTPFConnect(t *testing.T) {
 					}, nil
 				},
 				cfg: newBaseUpjetConfig(),
+				obj: newBaseObject(),
+				ots: ots,
+			},
+		},
+		"NumericIDNoExternalNameYet": {
+			// The resource config is built before Create, without an ID:
+			// a numeric id must be left out, not set to "".
+			args: args{
+				setupFn: func(_ context.Context, _ client.Client, _ xpresource.Managed) (terraform.Setup, error) {
+					return terraform.Setup{
+						FrameworkProvider: &mockTPFProvider{},
+					}, nil
+				},
+				cfg: newNumericIDUpjetConfig(),
 				obj: newBaseObject(),
 				ots: ots,
 			},
@@ -2024,6 +2050,60 @@ func TestNullCollectionsAsEmpty(t *testing.T) {
 			}
 			if !got.Equal(tc.want) {
 				t.Errorf("%s\nnullCollectionsAsEmpty(...):\nwant: %s\ngot:  %s", tc.reason, tc.want, got)
+			}
+		})
+	}
+}
+
+func TestGetFrameworkExtendedParametersID(t *testing.T) {
+	type want struct {
+		id    string
+		hasID bool
+	}
+	cases := map[string]struct {
+		reason       string
+		params       map[string]any
+		externalName string
+		want         want
+	}{
+		"NoExternalNameYet": {
+			reason: "Before the resource is created there is no ID: id must be absent rather than \"\", which a numeric id attribute cannot decode.",
+			want:   want{hasID: false},
+		},
+		"NoExternalNameYetWithExistingID": {
+			reason: "An id already in the parameters (e.g. set by an injector or the identifier setter) must not survive as \"\" or as a non-string.",
+			params: map[string]any{"id": 42},
+			want:   want{hasID: false},
+		},
+		"ExternalNameSet": {
+			reason:       "Once the external name is known it is passed as the id.",
+			externalName: "42",
+			want:         want{id: "42", hasID: true},
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			obj := newBaseObject()
+			for k, v := range tc.params {
+				obj.Parameters[k] = v
+			}
+			params, err := getFrameworkExtendedParameters(context.TODO(), &obj, tc.externalName, newBaseUpjetConfig(), terraform.Setup{}, false, nil, newBaseSchema())
+			if err != nil {
+				t.Fatalf("\n%s\ngetFrameworkExtendedParameters(...): unexpected error: %v", tc.reason, err)
+			}
+			id, hasID := params["id"]
+			if hasID != tc.want.hasID {
+				t.Fatalf("\n%s\ngetFrameworkExtendedParameters(...): want id present %t, got %t (%v)", tc.reason, tc.want.hasID, hasID, id)
+			}
+			if !hasID {
+				return
+			}
+			got, ok := id.(string)
+			if !ok {
+				t.Fatalf("\n%s\ngetFrameworkExtendedParameters(...): id has type %T, want string", tc.reason, id)
+			}
+			if diff := cmp.Diff(tc.want.id, got); diff != "" {
+				t.Errorf("\n%s\ngetFrameworkExtendedParameters(...): -want, +got:\n%s", tc.reason, diff)
 			}
 		})
 	}
