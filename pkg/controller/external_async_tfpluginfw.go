@@ -208,7 +208,7 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Create(_ context.Context, 
 		return managed.ExternalCreation{}, errors.Errorf("%s operation that started at %s is still running", n.opTracker.LastOperation.Type, n.opTracker.LastOperation.StartTime().String())
 	}
 
-	ctx, cancel := context.WithDeadline(context.Background(), n.opTracker.LastOperation.StartTime().Add(defaultAsyncTimeout))
+	ctx, cancel := context.WithDeadline(context.Background(), n.opTracker.LastOperation.StartTime().Add(asyncTimeout(n.config, "create")))
 	// We deep-copy the managed resource to prevent a data race between the
 	// goroutine we are about to start below and the managed reconciler.
 	// Please see: https://github.com/crossplane/upjet/issues/472
@@ -254,7 +254,7 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Update(_ context.Context, 
 		return managed.ExternalUpdate{}, errors.Errorf("%s operation that started at %s is still running", n.opTracker.LastOperation.Type, n.opTracker.LastOperation.StartTime().String())
 	}
 
-	ctx, cancel := context.WithDeadline(context.Background(), n.opTracker.LastOperation.StartTime().Add(defaultAsyncTimeout))
+	ctx, cancel := context.WithDeadline(context.Background(), n.opTracker.LastOperation.StartTime().Add(asyncTimeout(n.config, "update")))
 	// We deep-copy the managed resource to prevent a data race between the
 	// goroutine we are about to start below and the managed reconciler.
 	// Please see: https://github.com/crossplane/upjet/issues/472
@@ -304,7 +304,7 @@ func (n *terraformPluginFrameworkAsyncExternalClient) Delete(_ context.Context, 
 		return managed.ExternalDelete{}, errors.Errorf("%s operation that started at %s is still running", n.opTracker.LastOperation.Type, n.opTracker.LastOperation.StartTime().String())
 	}
 
-	ctx, cancel := context.WithDeadline(context.Background(), n.opTracker.LastOperation.StartTime().Add(defaultAsyncTimeout))
+	ctx, cancel := context.WithDeadline(context.Background(), n.opTracker.LastOperation.StartTime().Add(asyncTimeout(n.config, "delete")))
 	go func() {
 		// The order of deferred functions, executed last-in-first-out, is
 		// significant. The context should be canceled last, because it is
