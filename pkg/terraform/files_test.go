@@ -161,6 +161,34 @@ func TestEnsureTFState(t *testing.T) {
 	}
 }
 
+func TestEnsureTFStateSkipsEmptyID(t *testing.T) {
+	ctx := context.TODO()
+	files := afero.Afero{Fs: afero.NewMemMapFs()}
+	tr := &fake.LegacyTerraformed{
+		LegacyManaged: xpfake.LegacyManaged{
+			ObjectMeta: metav1.ObjectMeta{
+				Annotations: map[string]string{
+					resource.AnnotationKeyPrivateRawAttribute: "privateraw",
+				},
+			},
+		},
+		Parameterizable: fake.Parameterizable{Parameters: map[string]any{
+			"param": "paramval",
+		}},
+	}
+	fp, err := NewFileProducer(ctx, nil, dir, tr, Setup{}, config.DefaultResource("upjet_resource", nil, nil, nil), WithFileSystem(files))
+	if err != nil {
+		t.Fatalf("cannot initialize a file producer: %s", err)
+	}
+	if err := fp.EnsureTFState(ctx, ""); err != nil {
+		t.Fatalf("EnsureTFState with an empty id: %s", err)
+	}
+	s, _ := files.ReadFile(filepath.Join(dir, "terraform.tfstate"))
+	if len(s) != 0 {
+		t.Errorf("synthetic tfstate was written for a resource with no external id yet: %s", s)
+	}
+}
+
 func TestIsStateEmpty(t *testing.T) {
 	type args struct {
 		fs     func() afero.Afero
