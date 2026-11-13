@@ -189,6 +189,26 @@ func TestMoveToStatus(t *testing.T) {
 				},
 			},
 		},
+		"DoesNotExistFollowedByExisting": {
+			reason: "A field path that does not exist should not prevent the remaining field paths from being moved.",
+			args: args{
+				fields: []string{"topD", "topA"},
+				sch: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"topA": {Type: schema.TypeString, Optional: true},
+						"topB": {Type: schema.TypeString, Optional: true},
+					},
+				},
+			},
+			want: want{
+				sch: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"topA": {Type: schema.TypeString, Computed: true},
+						"topB": {Type: schema.TypeString, Optional: true},
+					},
+				},
+			},
+		},
 		"TopLevelBasicFields": {
 			args: args{
 				fields: []string{"topA", "topB"},

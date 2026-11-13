@@ -112,7 +112,7 @@ func MoveToStatus(sch *schema.Resource, fieldpaths ...string) {
 	for _, f := range fieldpaths {
 		s := GetSchema(sch, f)
 		if s == nil {
-			return
+			continue
 		}
 		s.Optional = false
 		s.Computed = true
