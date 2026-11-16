@@ -502,6 +502,36 @@ func getTimeoutParameters(config *config.Resource) map[string]any { //nolint:goc
 	return timeouts
 }
 
+// filterNoOpComputedCollectionDiffs removes from d, in place, the count diffs
+// of Optional and Computed lists, sets and maps that are empty in both the
+// state and the configuration. Other diffs are kept.
+//
+// The SDK reports such a count as computed, with an empty Old and New, and
+// marks it RequiresNew if the collection is ForceNew.
+// Terraform core plans the prior value instead, so the diff never reaches the
+// provider there.
+// Applied as is, it causes, for a ForceNew collection, a refused update.
+// On create the count is legitimately unknown, so only call this for
+// existing resources. The diff server's SDKv2 path reads the same diff.
+func filterNoOpComputedCollectionDiffs(d *tf.InstanceDiff) {
+	if d == nil {
+		return
+	}
+	for k, a := range d.Attributes {
+		if isNoOpComputedCount(k, a) {
+			delete(d.Attributes, k)
+		}
+	}
+}
+
+// isNoOpComputedCount reports whether a is the diff of the flatmap key k that
+// addresses the size of a collection ("#" for lists and sets, "%" for maps),
+// with the size computed and both its old and new values empty.
+func isNoOpComputedCount(k string, a *tf.ResourceAttrDiff) bool {
+	return a != nil && a.NewComputed && !a.NewRemoved && a.Old == "" && a.New == "" &&
+		(strings.HasSuffix(k, ".#") || strings.HasSuffix(k, ".%"))
+}
+
 func (n *terraformPluginSDKExternal) getResourceDataDiff(tr resource.Terraformed, ctx context.Context, s *tf.InstanceState, resourceExists bool) (*tf.InstanceDiff, error) { //nolint:gocyclo
 	resourceConfig := tf.NewResourceConfigRaw(n.params)
 	instanceDiff, err := schema.InternalMap(n.config.TerraformResource.Schema).Diff(ctx, s, resourceConfig, n.config.TerraformResource.CustomizeDiff, n.ts.Meta, false)
@@ -524,6 +554,7 @@ func (n *terraformPluginSDKExternal) getResourceDataDiff(tr resource.Terraformed
 		if err := filterInitExclusiveDiffs(tr, instanceDiff, n.config); err != nil {
 			return nil, errors.Wrap(err, "failed to filter the diffs exclusive to spec.initProvider in the terraform.InstanceDiff")
 		}
+		filterNoOpComputedCollectionDiffs(instanceDiff)
 	}
 	if instanceDiff != nil {
 		v := cty.EmptyObjectVal
