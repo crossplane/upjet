@@ -17,6 +17,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 
 	"github.com/crossplane/upjet/v2/pkg/config"
+	conversiontfjson "github.com/crossplane/upjet/v2/pkg/types/conversion/tfjson"
 )
 
 func TestBuilder_generateTypeName(t *testing.T) {
@@ -357,6 +358,37 @@ func TestBuild(t *testing.T) {
 				validationRules: `
 // +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.id) || (has(self.initProvider) && has(self.initProvider.id))",message="spec.forProvider.id is a required parameter"
 // +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.name) || (has(self.initProvider) && has(self.initProvider.name))",message="spec.forProvider.name is a required parameter"`,
+			},
+		},
+		// A required dynamically typed parameter must not get a CEL rule: it is
+		// generated as *apiextensionsv1.JSON, i.e. x-kubernetes-preserve-unknown-fields
+		// with no OpenAPI type, and Kubernetes cannot reference such a field from
+		// CEL ("undefined field"), which makes the API server reject the whole CRD.
+		// Mirrors cloudflare_zone_setting, where `value` is dynamic and required.
+		"Required_Dynamic_Param_Gets_No_CEL_Rule": {
+			args: args{
+				crdScope: CRDScopeCluster,
+				cfg: &config.Resource{
+					TerraformResource: &schema.Resource{
+						Schema: map[string]*schema.Schema{
+							"setting_id": {
+								Type:     schema.TypeString,
+								Required: true,
+							},
+							"value": {
+								Type:     conversiontfjson.SchemaTypeDynamic,
+								Required: true,
+							},
+						},
+					},
+				},
+			},
+			want: want{
+				forProvider: `type example.Parameters struct{SettingID *string "json:\"settingId,omitempty\" tf:\"setting_id,omitempty\""; Value *k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1.JSON "json:\"value,omitempty\" tf:\"value,omitempty\""}`,
+				atProvider:  `type example.Observation struct{SettingID *string "json:\"settingId,omitempty\" tf:\"setting_id,omitempty\""; Value *k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1.JSON "json:\"value,omitempty\" tf:\"value,omitempty\""}`,
+				// Only setting_id is here; value is deliberately absent.
+				validationRules: `
+// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.settingId) || (has(self.initProvider) && has(self.initProvider.settingId))",message="spec.forProvider.settingId is a required parameter"`,
 			},
 		},
 		"Resource_Types": {
