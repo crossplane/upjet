@@ -305,9 +305,13 @@ func storeSensitiveData(ctx context.Context, client SecretClient, tfPath, jsonPa
 				if resource.IgnoreNotFound(err) != nil {
 					return errors.Wrapf(err, errFmtCannotGetSecretValue, ref)
 				}
+				expTF, err := expandedTFPath(expandedJSONPath, mapping)
+				if err != nil {
+					return err
+				}
 				for key, value := range data {
-					if err = pavedTF.SetValue(fmt.Sprintf("%s[%s]", tfPath, key), string(value)); err != nil {
-						return errors.Wrapf(err, "cannot set string as terraform attribute for fieldpath %q", fmt.Sprintf("%s[%s]", tfPath, key))
+					if err = pavedTF.SetValue(fmt.Sprintf("%s[%s]", expTF, key), string(value)); err != nil {
+						return errors.Wrapf(err, "cannot set string as terraform attribute for fieldpath %q", fmt.Sprintf("%s[%s]", expTF, key))
 					}
 				}
 				continue
