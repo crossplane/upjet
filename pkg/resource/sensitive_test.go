@@ -652,6 +652,65 @@ func TestGetSensitiveParameters(t *testing.T) {
 				},
 			},
 		},
+		"WildcardWithSecretReference": {
+			args: args{
+				clientFn: func(client *mocks.MockSecretClient) {
+					client.EXPECT().GetSecretData(gomock.Any(), gomock.Eq(&xpv2.SecretReference{
+						Name:      "mcp-headers",
+						Namespace: "crossplane-system",
+					})).Return(map[string][]byte{"Authorization": []byte("Bearer test")}, nil)
+				},
+				from: &fakeManaged{
+					Unstructured: &unstructured.Unstructured{
+						Object: map[string]any{
+							"spec": map[string]any{
+								"forProvider": map[string]any{
+									"tool": []any{
+										map[string]any{
+											"config": []any{
+												map[string]any{
+													"remoteMcp": []any{
+														map[string]any{
+															"headersSecretRef": map[string]any{
+																"name":      "mcp-headers",
+																"namespace": "crossplane-system",
+															},
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				into: map[string]any{},
+				mapping: map[string]string{
+					"tool[*].config[*].remote_mcp[*].headers": "spec.forProvider.tool[*].config[*].remoteMcp[*].headersSecretRef",
+				},
+			},
+			want: want{
+				out: map[string]any{
+					"tool": []any{
+						map[string]any{
+							"config": []any{
+								map[string]any{
+									"remote_mcp": []any{
+										map[string]any{
+											"headers": map[string]any{
+												"Authorization": "Bearer test",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 		"MultipleNoWildcard": {
 			args: args{
 				clientFn: func(client *mocks.MockSecretClient) {
