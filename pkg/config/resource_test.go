@@ -21,9 +21,11 @@ import (
 )
 
 const (
-	kind     = "ACoolService"
-	name     = "example-service"
-	provider = "ACoolProvider"
+	kind         = "ACoolService"
+	name         = "example-service"
+	namespace    = "a-cool-namespace"
+	provider     = "ACoolProvider"
+	providerKind = "ClusterProviderConfig"
 )
 
 func TestTaggerInitialize(t *testing.T) {
@@ -84,6 +86,8 @@ func TestSetExternalTagsWithPaved(t *testing.T) {
 		args
 		want
 	}{
+		// The v1 shape: cluster-scoped, untyped reference. Pins that the keys
+		// missing from externalTags are not written empty.
 		"Successful": {
 			args: args{
 				externalTags: map[string]string{
@@ -99,6 +103,28 @@ func TestSetExternalTagsWithPaved(t *testing.T) {
 					xpresource.ExternalResourceTagKeyKind, kind,
 					xpresource.ExternalResourceTagKeyName, name,
 					xpresource.ExternalResourceTagKeyProvider, provider),
+			},
+		},
+		// Namespaced with a typed reference, where GetExternalTags fills all five.
+		"NamespacedResource": {
+			args: args{
+				externalTags: map[string]string{
+					xpresource.ExternalResourceTagKeyKind:               kind,
+					xpresource.ExternalResourceTagKeyName:               name,
+					xpresource.ExternalResourceTagKeyNamespace:          namespace,
+					xpresource.ExternalResourceTagKeyProvider:           provider,
+					xpresource.ExternalResourceTagKeyProviderConfigKind: providerKind,
+				},
+				paved:     fieldpath.Pave(map[string]any{}),
+				fieldName: "tags",
+			},
+			want: want{
+				pavedString: fmt.Sprintf(`{"spec":{"forProvider":{"tags":{"%s":"%s","%s":"%s","%s":"%s","%s":"%s","%s":"%s"}}}}`,
+					xpresource.ExternalResourceTagKeyKind, kind,
+					xpresource.ExternalResourceTagKeyName, name,
+					xpresource.ExternalResourceTagKeyNamespace, namespace,
+					xpresource.ExternalResourceTagKeyProvider, provider,
+					xpresource.ExternalResourceTagKeyProviderConfigKind, providerKind),
 			},
 		},
 	}

@@ -392,11 +392,14 @@ func (t *Tagger) Initialize(ctx context.Context, mg xpresource.Managed) error {
 	return nil
 }
 
+// setExternalTagsWithPaved writes every key of externalTags to the tags field.
+// The set varies: GetExternalTags skips crossplane-namespace on cluster-scoped
+// resources and crossplane-providerconfig-kind on untyped provider config
+// references. Listing the keys here would write those empty.
 func setExternalTagsWithPaved(externalTags map[string]string, paved *fieldpath.Paved, fieldName string) ([]byte, error) {
-	tags := map[string]*string{
-		xpresource.ExternalResourceTagKeyKind:     ptr.To(externalTags[xpresource.ExternalResourceTagKeyKind]),
-		xpresource.ExternalResourceTagKeyName:     ptr.To(externalTags[xpresource.ExternalResourceTagKeyName]),
-		xpresource.ExternalResourceTagKeyProvider: ptr.To(externalTags[xpresource.ExternalResourceTagKeyProvider]),
+	tags := make(map[string]*string, len(externalTags))
+	for key, value := range externalTags {
+		tags[key] = ptr.To(value)
 	}
 
 	if err := paved.SetValue(fmt.Sprintf("spec.forProvider.%s", fieldName), tags); err != nil {
